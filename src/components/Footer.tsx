@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Facebook, Twitter, Instagram, LinkedIn, Mail, Phone } from 'lucide-react';
+import { Facebook, Twitter, Instagram, Linkedin, Mail, Phone } from 'lucide-react';
 
 const Footer = () => {
   const { t } = useLanguage();
@@ -25,7 +25,7 @@ const Footer = () => {
               <Facebook className="w-5 h-5 text-gray-400 hover:text-white cursor-pointer transition-colors" />
               <Twitter className="w-5 h-5 text-gray-400 hover:text-white cursor-pointer transition-colors" />
               <Instagram className="w-5 h-5 text-gray-400 hover:text-white cursor-pointer transition-colors" />
-              <LinkedIn className="w-5 h-5 text-gray-400 hover:text-white cursor-pointer transition-colors" />
+              <Linkedin className="w-5 h-5 text-gray-400 hover:text-white cursor-pointer transition-colors" />
             </div>
           </div>
 
