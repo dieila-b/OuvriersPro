@@ -121,7 +121,7 @@ const SearchSection = () => {
                       <SelectValue placeholder="Tous les métiers" />
                     </SelectTrigger>
                     <SelectContent className="bg-white">
-                      <SelectItem value="">Tous les métiers</SelectItem>
+                      <SelectItem value="all">Tous les métiers</SelectItem>
                       {trades.map((trade) => (
                         <SelectItem key={trade.value} value={trade.value}>
                           <div className="flex items-center space-x-2">
