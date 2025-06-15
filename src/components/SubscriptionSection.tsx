@@ -1,0 +1,143 @@
+
+import React from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Check, Star, BarChart3, Headphones, User } from 'lucide-react';
+
+const SubscriptionSection = () => {
+  const { t } = useLanguage();
+
+  const plans = [
+    {
+      name: t('subscription.monthly'),
+      price: 29,
+      period: t('subscription.month'),
+      popular: false,
+      features: [
+        t('subscription.features.profile'),
+        t('subscription.features.unlimited'),
+        t('subscription.features.stats'),
+        t('subscription.features.support')
+      ]
+    },
+    {
+      name: t('subscription.yearly'),
+      price: 290,
+      period: t('subscription.year'),
+      popular: true,
+      features: [
+        t('subscription.features.profile'),
+        t('subscription.features.unlimited'),
+        t('subscription.features.stats'),
+        t('subscription.features.support')
+      ],
+      savings: '2 mois offerts'
+    }
+  ];
+
+  return (
+    <section id="subscription" className="py-20 bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="container mx-auto px-4">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl md:text-4xl font-bold text-pro-gray mb-4">
+            {t('subscription.title')}
+          </h2>
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            {t('subscription.subtitle')}
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          {plans.map((plan, index) => (
+            <Card
+              key={index}
+              className={`relative overflow-hidden transition-transform hover:scale-105 ${
+                plan.popular ? 'ring-2 ring-pro-blue shadow-xl' : 'shadow-lg'
+              }`}
+            >
+              {plan.popular && (
+                <div className="absolute top-0 left-0 right-0 bg-pro-blue text-white text-center py-2">
+                  <Badge className="bg-white text-pro-blue">
+                    <Star className="w-3 h-3 mr-1" />
+                    Populaire
+                  </Badge>
+                </div>
+              )}
+
+              <CardHeader className={`text-center ${plan.popular ? 'pt-12' : 'pt-6'}`}>
+                <CardTitle className="text-2xl font-bold text-pro-gray">
+                  {plan.name}
+                </CardTitle>
+                <div className="mt-4">
+                  <span className="text-4xl font-bold text-pro-blue">
+                    {plan.price}{t('common.euro')}
+                  </span>
+                  <span className="text-gray-600">/{plan.period}</span>
+                </div>
+                {plan.savings && (
+                  <Badge variant="secondary" className="mt-2 bg-green-100 text-green-700">
+                    {plan.savings}
+                  </Badge>
+                )}
+              </CardHeader>
+
+              <CardContent className="pt-0">
+                <ul className="space-y-4 mb-8">
+                  {plan.features.map((feature, featureIndex) => (
+                    <li key={featureIndex} className="flex items-center">
+                      <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                      <span className="text-gray-700">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <Button
+                  className={`w-full py-3 ${
+                    plan.popular
+                      ? 'bg-pro-blue hover:bg-blue-700'
+                      : 'bg-gray-800 hover:bg-gray-900'
+                  }`}
+                >
+                  {t('subscription.choose')}
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Additional Benefits */}
+        <div className="grid md:grid-cols-3 gap-8 mt-16 max-w-4xl mx-auto">
+          {[
+            {
+              icon: User,
+              title: 'Profil vérifié',
+              description: 'Badge de confiance sur votre profil'
+            },
+            {
+              icon: BarChart3,
+              title: 'Analytics détaillés',
+              description: 'Suivez vos performances et optimisez'
+            },
+            {
+              icon: Headphones,
+              title: 'Support dédié',
+              description: 'Assistance prioritaire 7j/7'
+            }
+          ].map((benefit, index) => (
+            <div key={index} className="text-center">
+              <div className="w-12 h-12 bg-pro-blue/10 rounded-lg flex items-center justify-center mx-auto mb-4">
+                <benefit.icon className="w-6 h-6 text-pro-blue" />
+              </div>
+              <h3 className="font-semibold text-pro-gray mb-2">{benefit.title}</h3>
+              <p className="text-gray-600 text-sm">{benefit.description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+export default SubscriptionSection;
