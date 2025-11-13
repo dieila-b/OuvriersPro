@@ -5,6 +5,7 @@ import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Star, MapPin, Search } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 type DbWorker = {
   id: string;
@@ -42,6 +43,7 @@ interface WorkerCard {
 
 const SearchSection: React.FC = () => {
   const { language } = useLanguage();
+  const navigate = useNavigate();
 
   // Données depuis Supabase
   const [workers, setWorkers] = useState<WorkerCard[]>([]);
@@ -104,8 +106,7 @@ const SearchSection: React.FC = () => {
           id: w.id,
           name:
             (w.first_name || "") +
-            (w.last_name ? ` ${w.last_name}` : "") ||
-            "Ouvrier",
+              (w.last_name ? ` ${w.last_name}` : "") || "Ouvrier",
           job: w.profession ?? "",
           country: w.country ?? "",
           region: w.region ?? "",
@@ -256,23 +257,17 @@ const SearchSection: React.FC = () => {
         ? "Trouvez votre professionnel"
         : "Find your professional",
     filters: language === "fr" ? "Filtres" : "Filters",
-    keywordLabel:
-      language === "fr" ? "Rechercher" : "Search",
+    keywordLabel: language === "fr" ? "Rechercher" : "Search",
     job: language === "fr" ? "Métier" : "Job",
     searchPlaceholder:
       language === "fr"
         ? "Rechercher un métier, un service ou un nom…"
         : "Search a trade, service or name…",
-    allJobs:
-      language === "fr" ? "Tous les métiers" : "All trades",
+    allJobs: language === "fr" ? "Tous les métiers" : "All trades",
     priceLabel:
-      language === "fr"
-        ? "Prix max par heure"
-        : "Max hourly rate",
+      language === "fr" ? "Prix max par heure" : "Max hourly rate",
     ratingLabel:
-      language === "fr"
-        ? "Note minimum"
-        : "Minimum rating",
+      language === "fr" ? "Note minimum" : "Minimum rating",
     region: language === "fr" ? "Région" : "Region",
     city: language === "fr" ? "Ville" : "City",
     commune: language === "fr" ? "Commune" : "Commune",
@@ -551,12 +546,7 @@ const SearchSection: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-3 mt-1 text-xs md:text-sm text-gray-600">
                     <span className="flex items-center gap-1">
                       <MapPin className="w-3 h-3" />
-                      {[
-                        w.region,
-                        w.city,
-                        w.commune,
-                        w.district,
-                      ]
+                      {[w.region, w.city, w.commune, w.district]
                         .filter(Boolean)
                         .join(" • ")}
                     </span>
@@ -580,6 +570,7 @@ const SearchSection: React.FC = () => {
                   <Button
                     size="sm"
                     className="bg-pro-blue hover:bg-blue-700 text-xs md:text-sm"
+                    onClick={() => navigate(`/ouvrier/${w.id}`)}
                   >
                     {text.contact}
                   </Button>
