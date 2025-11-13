@@ -28,10 +28,7 @@ const Index = () => {
         </section>
 
         {/* Formules d’abonnement */}
-        <section
-          id="subscription"
-          className="w-full bg-gradient-to-br from-gray-50 to-gray-100"
-        >
+        <section id="subscription" className="w-full bg-gradient-to-br from-gray-50 to-gray-100">
           <SubscriptionSection />
         </section>
       </main>

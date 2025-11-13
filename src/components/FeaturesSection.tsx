@@ -1,45 +1,75 @@
-import React from "react";
-import { ShieldCheck, MapPin, MessageCircle } from "lucide-react";
 
-const FeaturesSection: React.FC = () => {
-  const items = [
+import React from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { Shield, MapPin, MessageCircle, Star, Users, Clock } from 'lucide-react';
+
+const FeaturesSection = () => {
+  const { t } = useLanguage();
+
+  const features = [
     {
-      icon: ShieldCheck,
-      title: "Professionnels vérifiés",
-      text: "Tous nos ouvriers sont contrôlés et certifiés",
+      icon: Shield,
+      title: t('home.features.quality.title'),
+      description: t('home.features.quality.desc'),
+      color: 'text-green-600'
     },
     {
       icon: MapPin,
-      title: "Proximité garantie",
-      text: "Trouvez des professionnels dans votre région",
+      title: t('home.features.local.title'),
+      description: t('home.features.local.desc'),
+      color: 'text-blue-600'
     },
     {
       icon: MessageCircle,
-      title: "Contact direct",
-      text: "Échangez directement avec les artisans",
-    },
+      title: t('home.features.contact.title'),
+      description: t('home.features.contact.desc'),
+      color: 'text-purple-600'
+    }
   ];
 
   return (
-    <section className="w-full py-16 bg-white">
-      <div className="w-full max-w-6xl mx-auto px-4 md:px-8">
-        <h2 className="text-2xl md:text-3xl font-bold text-center text-pro-gray mb-10">
-          Pourquoi choisir OuvriersPro ?
-        </h2>
+    <section className="py-20 bg-pro-light">
+      <div className="container mx-auto px-4">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl md:text-4xl font-bold text-pro-gray mb-4">
+            {t('home.features.title')}
+          </h2>
+        </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
-          {items.map((item, idx) => (
+        <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          {features.map((feature, index) => (
             <div
-              key={idx}
-              className="bg-white rounded-2xl shadow-md p-6 flex flex-col items-center text-center"
+              key={index}
+              className="bg-white rounded-xl p-8 shadow-sm hover:shadow-md transition-shadow animate-fade-in"
+              style={{ animationDelay: `${index * 0.2}s` }}
             >
-              <div className="w-12 h-12 rounded-full bg-pro-blue/10 flex items-center justify-center mb-4">
-                <item.icon className="w-6 h-6 text-pro-blue" />
+              <div className="flex flex-col items-center text-center">
+                <div className={`w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4`}>
+                  <feature.icon className={`w-8 h-8 ${feature.color}`} />
+                </div>
+                <h3 className="text-xl font-semibold text-pro-gray mb-3">
+                  {feature.title}
+                </h3>
+                <p className="text-gray-600 leading-relaxed">
+                  {feature.description}
+                </p>
               </div>
-              <h3 className="font-semibold text-lg text-pro-gray mb-2">
-                {item.title}
-              </h3>
-              <p className="text-sm text-gray-600">{item.text}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Stats Section */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-16 max-w-4xl mx-auto">
+          {[
+            { icon: Users, number: '2,500+', label: 'Professionnels' },
+            { icon: Star, number: '4.8/5', label: 'Note moyenne' },
+            { icon: Clock, number: '24h', label: 'Temps de réponse' },
+            { icon: Shield, number: '100%', label: 'Vérifiés' }
+          ].map((stat, index) => (
+            <div key={index} className="text-center">
+              <stat.icon className="w-8 h-8 text-pro-blue mx-auto mb-2" />
+              <div className="text-2xl font-bold text-pro-gray">{stat.number}</div>
+              <div className="text-gray-600">{stat.label}</div>
             </div>
           ))}
         </div>
