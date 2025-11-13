@@ -1,12 +1,12 @@
-import React, { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { supabase } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import React, { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { supabase } from "@/lib/supabaseClient";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
-type PlanCode = 'FREE' | 'MONTHLY' | 'YEARLY';
+type PlanCode = "FREE" | "MONTHLY" | "YEARLY";
 
 interface WorkerFormState {
   firstName: string;
@@ -46,181 +46,181 @@ interface GuineaRegion {
 }
 
 /**
- * Région -> Ville -> Commune -> Quartier (simplifié, à compléter si besoin)
+ * Région -> Ville -> Commune -> Quartier (simplifié, extensible)
  */
 const GUINEA_REGIONS: GuineaRegion[] = [
   {
-    name: 'Conakry',
+    name: "Conakry",
     cities: [
       {
-        name: 'Conakry',
+        name: "Conakry",
         communes: [
           {
-            name: 'Kaloum',
-            districts: ['Sandervalia', 'Tombo', 'Boulbinet', 'Coronthie', 'Almamya'],
+            name: "Kaloum",
+            districts: ["Sandervalia", "Tombo", "Boulbinet", "Coronthie", "Almamya"],
           },
           {
-            name: 'Dixinn',
-            districts: ['Dixinn Centre', 'Taouyah', 'Belle-vue', 'Minière', 'Hamdallaye'],
+            name: "Dixinn",
+            districts: ["Dixinn Centre", "Taouyah", "Belle-vue", "Minière", "Hamdallaye"],
           },
           {
-            name: 'Matam',
-            districts: ['Matam Centre', 'Bonfi', 'Boussoura', 'Carrière', 'Hafia'],
+            name: "Matam",
+            districts: ["Matam Centre", "Bonfi", "Boussoura", "Carrière", "Hafia"],
           },
           {
-            name: 'Ratoma',
-            districts: ['Ratoma Centre', 'Kipé', 'Nongo', 'Lambanyi', 'Sonfonia', 'Cosa'],
+            name: "Ratoma",
+            districts: ["Ratoma Centre", "Kipé", "Nongo", "Lambanyi", "Sonfonia", "Cosa"],
           },
           {
-            name: 'Matoto',
-            districts: ['Matoto Centre', 'Enta', 'Yimbaya', 'Gbessia', 'Sangoyah'],
+            name: "Matoto",
+            districts: ["Matoto Centre", "Enta", "Yimbaya", "Gbessia", "Sangoyah"],
           },
         ],
       },
     ],
   },
   {
-    name: 'Kindia',
+    name: "Kindia",
     cities: [
       {
-        name: 'Kindia',
+        name: "Kindia",
         communes: [
           {
-            name: 'Kindia Centre',
-            districts: ['Koliady', 'Banlieue', 'Manquepas', 'Féréfou'],
+            name: "Kindia Centre",
+            districts: ["Koliady", "Banlieue", "Manquepas", "Féréfou"],
           },
           {
-            name: 'Friguiagbé',
-            districts: ['Friguiagbé Centre', 'Sinta', 'Damakania'],
+            name: "Friguiagbé",
+            districts: ["Friguiagbé Centre", "Sinta", "Damakania"],
           },
         ],
       },
     ],
   },
   {
-    name: 'Mamou',
+    name: "Mamou",
     cities: [
       {
-        name: 'Mamou',
+        name: "Mamou",
         communes: [
           {
-            name: 'Mamou Centre',
-            districts: ['Poudrière', 'Petel', 'Horé Fello'],
+            name: "Mamou Centre",
+            districts: ["Poudrière", "Petel", "Horé Fello"],
           },
         ],
       },
       {
-        name: 'Pita',
+        name: "Pita",
         communes: [
           {
-            name: 'Pita Centre',
-            districts: ['Timbi Madina', 'Ley Miro'],
+            name: "Pita Centre",
+            districts: ["Timbi Madina", "Ley Miro"],
           },
         ],
       },
     ],
   },
   {
-    name: 'Labé',
+    name: "Labé",
     cities: [
       {
-        name: 'Labé',
+        name: "Labé",
         communes: [
           {
-            name: 'Labé Centre',
-            districts: ['Kouroula', 'Daka', 'Pounthioun'],
+            name: "Labé Centre",
+            districts: ["Kouroula", "Daka", "Pounthioun"],
           },
         ],
       },
       {
-        name: 'Koubia',
+        name: "Koubia",
         communes: [
           {
-            name: 'Koubia Centre',
-            districts: ['Fafaya', 'Tougué'],
+            name: "Koubia Centre",
+            districts: ["Fafaya", "Tougué"],
           },
         ],
       },
     ],
   },
   {
-    name: 'Boké',
+    name: "Boké",
     cities: [
       {
-        name: 'Boké',
+        name: "Boké",
         communes: [
           {
-            name: 'Boké Centre',
-            districts: ['Boké Ville', 'Tanmangué', 'Dibiya'],
+            name: "Boké Centre",
+            districts: ["Boké Ville", "Tanmangué", "Dibiya"],
           },
         ],
       },
       {
-        name: 'Kamsar',
+        name: "Kamsar",
         communes: [
           {
-            name: 'Kamsar Centre',
-            districts: ['Filima', 'Kakandé'],
+            name: "Kamsar Centre",
+            districts: ["Filima", "Kakandé"],
           },
         ],
       },
     ],
   },
   {
-    name: 'Kankan',
+    name: "Kankan",
     cities: [
       {
-        name: 'Kankan',
+        name: "Kankan",
         communes: [
           {
-            name: 'Kankan Centre',
-            districts: ['Kabada', 'Bordo', 'Timbo', 'Missira'],
+            name: "Kankan Centre",
+            districts: ["Kabada", "Bordo", "Timbo", "Missira"],
           },
         ],
       },
       {
-        name: 'Kérouané',
+        name: "Kérouané",
         communes: [
           {
-            name: 'Kérouané Centre',
-            districts: ['Banankoro'],
+            name: "Kérouané Centre",
+            districts: ["Banankoro"],
           },
         ],
       },
     ],
   },
   {
-    name: 'Faranah',
+    name: "Faranah",
     cities: [
       {
-        name: 'Faranah',
+        name: "Faranah",
         communes: [
           {
-            name: 'Faranah Centre',
-            districts: ['Faranah Ville', 'Syli', 'Hérémakono'],
+            name: "Faranah Centre",
+            districts: ["Faranah Ville", "Syli", "Hérémakono"],
           },
         ],
       },
     ],
   },
   {
-    name: 'N’Zérékoré',
+    name: "N'Zérékoré",
     cities: [
       {
-        name: 'N’Zérékoré',
+        name: "N'Zérékoré",
         communes: [
           {
-            name: 'N’Zérékoré Centre',
-            districts: ['Mohomou', 'Dorota', 'Gonia'],
+            name: "N'Zérékoré Centre",
+            districts: ["Mohomou", "Dorota", "Gonia"],
           },
         ],
       },
       {
-        name: 'Lola',
+        name: "Lola",
         communes: [
           {
-            name: 'Lola Centre',
-            districts: ['Bossou'],
+            name: "Lola Centre",
+            districts: ["Bossou"],
           },
         ],
       },
@@ -231,30 +231,30 @@ const GUINEA_REGIONS: GuineaRegion[] = [
 // mapping pays → monnaie
 const getCurrencyForCountry = (countryCode: string): CurrencyInfo => {
   switch (countryCode) {
-    case 'GN':
-      return { code: 'GNF', symbol: 'FG' };
-    case 'SN':
-    case 'ML':
-    case 'CI':
-    case 'BJ':
-    case 'BF':
-    case 'NE':
-      return { code: 'XOF', symbol: 'CFA' };
-    case 'MA':
-    case 'TN':
-      return { code: 'MAD', symbol: 'MAD' };
-    case 'CH':
-      return { code: 'CHF', symbol: 'CHF' };
-    case 'GB':
-      return { code: 'GBP', symbol: '£' };
-    case 'US':
-      return { code: 'USD', symbol: '$' };
-    case 'FR':
-    case 'BE':
-    case 'ES':
-    case 'DE':
+    case "GN":
+      return { code: "GNF", symbol: "FG" };
+    case "SN":
+    case "ML":
+    case "CI":
+    case "BJ":
+    case "BF":
+    case "NE":
+      return { code: "XOF", symbol: "CFA" };
+    case "MA":
+    case "TN":
+      return { code: "MAD", symbol: "MAD" };
+    case "CH":
+      return { code: "CHF", symbol: "CHF" };
+    case "GB":
+      return { code: "GBP", symbol: "£" };
+    case "US":
+      return { code: "USD", symbol: "$" };
+    case "FR":
+    case "BE":
+    case "ES":
+    case "DE":
     default:
-      return { code: 'EUR', symbol: '€' };
+      return { code: "EUR", symbol: "€" };
   }
 };
 
@@ -262,25 +262,25 @@ const InscriptionOuvrier: React.FC = () => {
   const { language, t } = useLanguage();
   const [searchParams] = useSearchParams();
 
-  const rawPlan = (searchParams.get('plan') || '').toUpperCase();
+  const rawPlan = (searchParams.get("plan") || "").toUpperCase();
   const plan: PlanCode =
-    rawPlan === 'MONTHLY' || rawPlan === 'YEARLY' ? (rawPlan as PlanCode) : 'FREE';
+    rawPlan === "MONTHLY" || rawPlan === "YEARLY" ? (rawPlan as PlanCode) : "FREE";
 
   const [form, setForm] = useState<WorkerFormState>({
-    firstName: '',
-    lastName: '',
-    email: '',
-    password: '',
-    phone: '',
-    country: 'GN', // Guinée par défaut
-    region: '',
-    city: '',
-    commune: '',
-    district: '',
-    postalCode: '',
-    profession: '',
-    description: '',
-    hourlyRate: '',
+    firstName: "",
+    lastName: "",
+    email: "",
+    password: "",
+    phone: "",
+    country: "GN", // Guinée par défaut
+    region: "",
+    city: "",
+    commune: "",
+    district: "",
+    postalCode: "",
+    profession: "",
+    description: "",
+    hourlyRate: "",
   });
 
   const [profileFile, setProfileFile] = useState<File | null>(null);
@@ -290,46 +290,40 @@ const InscriptionOuvrier: React.FC = () => {
   const [success, setSuccess] = useState(false);
 
   const planMeta = useMemo(() => {
-    if (plan === 'MONTHLY') {
+    if (plan === "MONTHLY") {
       return {
-        label: t('subscription.monthly'),
-        price: '29€ / mois',
-        badge: language === 'fr' ? 'Sans engagement' : 'No commitment',
+        label: t("subscription.monthly"),
+        price: "29€ / mois",
+        badge: language === "fr" ? "Sans engagement" : "No commitment",
         description:
-          language === 'fr'
-            ? 'Accès complet à toutes les fonctionnalités, renouvelable chaque mois.'
-            : 'Full access to all features, renewed monthly.',
+          language === "fr"
+            ? "Accès complet à toutes les fonctionnalités, renouvelable chaque mois."
+            : "Full access to all features, renewed monthly.",
       };
     }
-    if (plan === 'YEARLY') {
+    if (plan === "YEARLY") {
       return {
-        label: t('subscription.yearly'),
-        price: '290€ / an',
-        badge: language === 'fr' ? '2 mois offerts' : '2 months free',
+        label: t("subscription.yearly"),
+        price: "290€ / an",
+        badge: language === "fr" ? "2 mois offerts" : "2 months free",
         description:
-          language === 'fr'
-            ? 'La meilleure valeur : toutes les fonctionnalités avec réduction annuelle.'
-            : 'Best value: all features with yearly discount.',
+          language === "fr"
+            ? "La meilleure valeur : toutes les fonctionnalités avec réduction annuelle."
+            : "Best value: all features with yearly discount.",
       };
     }
     return {
-      label: language === 'fr' ? 'Gratuit' : 'Free',
-      price: '0€ / mois',
-      badge:
-        language === 'fr'
-          ? 'Fonctionnalités limitées'
-          : 'Limited features',
+      label: language === "fr" ? "Gratuit" : "Free",
+      price: "0€ / mois",
+      badge: language === "fr" ? "Fonctionnalités limitées" : "Limited features",
       description:
-        language === 'fr'
-          ? 'Idéal pour tester la plateforme avec une visibilité limitée.'
-          : 'Perfect to test the platform with limited visibility.',
+        language === "fr"
+          ? "Idéal pour tester la plateforme avec une visibilité limitée."
+          : "Perfect to test the platform with limited visibility.",
     };
   }, [plan, t, language]);
 
-  const currency = useMemo(
-    () => getCurrencyForCountry(form.country),
-    [form.country]
-  );
+  const currency = useMemo(() => getCurrencyForCountry(form.country), [form.country]);
 
   // Sélection actuelle pour la Guinée : région → ville → commune → quartier
   const selectedRegion = useMemo(
@@ -338,7 +332,7 @@ const InscriptionOuvrier: React.FC = () => {
   );
 
   const availableCities: GuineaCity[] =
-    form.country === 'GN' && selectedRegion ? selectedRegion.cities : [];
+    form.country === "GN" && selectedRegion ? selectedRegion.cities : [];
 
   const selectedCity = useMemo(
     () => availableCities.find((c) => c.name === form.city) || null,
@@ -346,18 +340,15 @@ const InscriptionOuvrier: React.FC = () => {
   );
 
   const availableCommunes: GuineaCommune[] =
-    form.country === 'GN' && selectedCity ? selectedCity.communes : [];
+    form.country === "GN" && selectedCity ? selectedCity.communes : [];
 
   const selectedCommune = useMemo(
-    () =>
-      availableCommunes.find((c) => c.name === form.commune) || null,
+    () => availableCommunes.find((c) => c.name === form.commune) || null,
     [availableCommunes, form.commune]
   );
 
   const availableDistricts: string[] =
-    form.country === 'GN' && selectedCommune
-      ? selectedCommune.districts
-      : [];
+    form.country === "GN" && selectedCommune ? selectedCommune.districts : [];
 
   const handleChange =
     (field: keyof WorkerFormState) =>
@@ -385,7 +376,7 @@ const InscriptionOuvrier: React.FC = () => {
           data: {
             first_name: form.firstName,
             last_name: form.lastName,
-            role: 'worker',
+            role: "worker",
           },
         },
       });
@@ -395,25 +386,26 @@ const InscriptionOuvrier: React.FC = () => {
       const user = authData.user;
       if (!user) {
         throw new Error(
-          language === 'fr'
+          language === "fr"
             ? "Impossible de créer le compte. Veuillez réessayer."
-            : 'Could not create account. Please try again.'
+            : "Could not create account. Please try again."
         );
       }
 
       // 2) Upload avatar (optionnel)
       let avatarUrl: string | null = null;
       if (profileFile) {
-        const fileExt = profileFile.name.split('.').pop();
+        const fileExt = profileFile.name.split(".").pop();
         const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-        const { data: storageData, error: storageError } =
-          await supabase.storage.from('op_avatars').upload(fileName, profileFile);
+        const { data: storageData, error: storageError } = await supabase.storage
+          .from("op_avatars")
+          .upload(fileName, profileFile);
 
         if (storageError) {
-          console.warn('Erreur upload avatar:', storageError.message);
+          console.warn("Erreur upload avatar:", storageError.message);
         } else if (storageData) {
           const { data: publicUrlData } = supabase.storage
-            .from('op_avatars')
+            .from("op_avatars")
             .getPublicUrl(storageData.path);
           avatarUrl = publicUrlData.publicUrl;
         }
@@ -421,9 +413,9 @@ const InscriptionOuvrier: React.FC = () => {
 
       // 3) Insert profil ouvrier
       const hourlyRateNumber =
-        form.hourlyRate.trim() === '' ? null : Number(form.hourlyRate);
+        form.hourlyRate.trim() === "" ? null : Number(form.hourlyRate);
 
-      const { error: insertError } = await supabase.from('op_ouvriers').insert({
+      const { error: insertError } = await supabase.from("op_ouvriers").insert({
         user_id: user.id,
         first_name: form.firstName,
         last_name: form.lastName,
@@ -438,7 +430,7 @@ const InscriptionOuvrier: React.FC = () => {
         profession: form.profession,
         description: form.description,
         plan_code: plan,
-        status: 'pending',
+        status: "pending", // en attente validation admin
         hourly_rate: hourlyRateNumber,
         currency: currency.code,
         avatar_url: avatarUrl,
@@ -449,42 +441,42 @@ const InscriptionOuvrier: React.FC = () => {
 
       setSuccess(true);
       setForm({
-        firstName: '',
-        lastName: '',
-        email: '',
-        password: '',
-        phone: '',
-        country: 'GN',
-        region: '',
-        city: '',
-        commune: '',
-        district: '',
-        postalCode: '',
-        profession: '',
-        description: '',
-        hourlyRate: '',
+        firstName: "",
+        lastName: "",
+        email: "",
+        password: "",
+        phone: "",
+        country: "GN",
+        region: "",
+        city: "",
+        commune: "",
+        district: "",
+        postalCode: "",
+        profession: "",
+        description: "",
+        hourlyRate: "",
       });
       setProfileFile(null);
     } catch (err: any) {
       console.error(err);
-      setError(err.message ?? 'Unknown error');
+      setError(err.message ?? "Unknown error");
     } finally {
       setLoading(false);
     }
   };
 
   const countryOptions = [
-    { code: 'GN', label: 'Guinée' },
-    { code: 'FR', label: 'France' },
-    { code: 'BE', label: 'Belgique' },
-    { code: 'SN', label: 'Sénégal' },
-    { code: 'ML', label: 'Mali' },
-    { code: 'CI', label: "Côte d’Ivoire" },
-    { code: 'CH', label: 'Suisse' },
-    { code: 'ES', label: 'Espagne' },
-    { code: 'DE', label: 'Allemagne' },
-    { code: 'GB', label: 'Royaume-Uni' },
-    { code: 'US', label: 'États-Unis' },
+    { code: "GN", label: "Guinée" },
+    { code: "FR", label: "France" },
+    { code: "BE", label: "Belgique" },
+    { code: "SN", label: "Sénégal" },
+    { code: "ML", label: "Mali" },
+    { code: "CI", label: "Côte d’Ivoire" },
+    { code: "CH", label: "Suisse" },
+    { code: "ES", label: "Espagne" },
+    { code: "DE", label: "Allemagne" },
+    { code: "GB", label: "Royaume-Uni" },
+    { code: "US", label: "États-Unis" },
   ];
 
   return (
@@ -493,14 +485,12 @@ const InscriptionOuvrier: React.FC = () => {
         {/* En-tête */}
         <div className="mb-8 text-center">
           <h1 className="text-3xl md:text-4xl font-bold text-pro-gray mb-2">
-            {language === 'fr'
-              ? 'Devenir Ouvrier Pro'
-              : 'Become a Pro Worker'}
+            {language === "fr" ? "Devenir Ouvrier Pro" : "Become a Pro Worker"}
           </h1>
           <p className="text-gray-600 max-w-2xl mx-auto">
-            {language === 'fr'
-              ? 'Complétez votre profil pour être visible auprès des particuliers et professionnels près de chez vous.'
-              : 'Complete your profile to be visible to clients near you.'}
+            {language === "fr"
+              ? "Complétez votre profil pour être visible auprès des particuliers et professionnels près de chez vous."
+              : "Complete your profile to be visible to clients near you."}
           </p>
         </div>
 
@@ -509,16 +499,12 @@ const InscriptionOuvrier: React.FC = () => {
           <Card className="md:col-span-1 shadow-lg">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-pro-gray">
-                {language === 'fr'
-                  ? 'Plan sélectionné'
-                  : 'Selected plan'}
+                {language === "fr" ? "Plan sélectionné" : "Selected plan"}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="mb-3">
-                <div className="text-xl font-bold text-pro-blue">
-                  {planMeta.label}
-                </div>
+                <div className="text-xl font-bold text-pro-blue">{planMeta.label}</div>
                 <div className="text-gray-700">{planMeta.price}</div>
                 <div className="inline-block mt-2 px-3 py-1 text-xs rounded-full bg-green-100 text-green-700">
                   {planMeta.badge}
@@ -527,38 +513,38 @@ const InscriptionOuvrier: React.FC = () => {
               <p className="text-sm text-gray-600">{planMeta.description}</p>
 
               <ul className="mt-4 text-sm text-gray-700 list-disc list-inside space-y-1">
-                {plan === 'FREE' && (
+                {plan === "FREE" && (
                   <>
                     <li>
-                      {language === 'fr'
-                        ? '1 métier affiché, contacts limités'
-                        : '1 listed trade, limited contacts'}
+                      {language === "fr"
+                        ? "1 métier affiché, contacts limités"
+                        : "1 listed trade, limited contacts"}
                     </li>
                     <li>
-                      {language === 'fr'
-                        ? 'Profil simplifié'
-                        : 'Simplified profile'}
+                      {language === "fr"
+                        ? "Profil simplifié"
+                        : "Simplified profile"}
                     </li>
                   </>
                 )}
-                {plan !== 'FREE' && (
+                {plan !== "FREE" && (
                   <>
                     <li>
-                      {language === 'fr'
-                        ? 'Profil complet et mise en avant'
-                        : 'Full profile and highlight in search'}
+                      {language === "fr"
+                        ? "Profil complet et mise en avant"
+                        : "Full profile and highlight in search"}
                     </li>
                     <li>
-                      {language === 'fr'
-                        ? 'Contacts clients illimités'
-                        : 'Unlimited client contacts'}
+                      {language === "fr"
+                        ? "Contacts clients illimités"
+                        : "Unlimited client contacts"}
                     </li>
                   </>
                 )}
                 <li>
-                  {language === 'fr'
-                    ? 'Votre inscription sera vérifiée par notre équipe.'
-                    : 'Your registration will be reviewed by our team.'}
+                  {language === "fr"
+                    ? "Votre inscription sera vérifiée par notre équipe."
+                    : "Your registration will be reviewed by our team."}
                 </li>
               </ul>
             </CardContent>
@@ -568,9 +554,9 @@ const InscriptionOuvrier: React.FC = () => {
           <Card className="md:col-span-2 shadow-lg">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-pro-gray">
-                {language === 'fr'
-                  ? 'Informations professionnelles'
-                  : 'Professional information'}
+                {language === "fr"
+                  ? "Informations professionnelles"
+                  : "Professional information"}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -579,28 +565,24 @@ const InscriptionOuvrier: React.FC = () => {
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === 'fr' ? 'Prénom' : 'First name'}
+                      {language === "fr" ? "Prénom" : "First name"}
                     </label>
                     <Input
                       required
                       value={form.firstName}
-                      onChange={handleChange('firstName')}
-                      placeholder={
-                        language === 'fr' ? 'Votre prénom' : 'First name'
-                      }
+                      onChange={handleChange("firstName")}
+                      placeholder={language === "fr" ? "Votre prénom" : "First name"}
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === 'fr' ? 'Nom' : 'Last name'}
+                      {language === "fr" ? "Nom" : "Last name"}
                     </label>
                     <Input
                       required
                       value={form.lastName}
-                      onChange={handleChange('lastName')}
-                      placeholder={
-                        language === 'fr' ? 'Votre nom' : 'Last name'
-                      }
+                      onChange={handleChange("lastName")}
+                      placeholder={language === "fr" ? "Votre nom" : "Last name"}
                     />
                   </div>
                 </div>
@@ -615,24 +597,24 @@ const InscriptionOuvrier: React.FC = () => {
                       type="email"
                       required
                       value={form.email}
-                      onChange={handleChange('email')}
+                      onChange={handleChange("email")}
                       placeholder="vous@exemple.com"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === 'fr' ? 'Mot de passe' : 'Password'}
+                      {language === "fr" ? "Mot de passe" : "Password"}
                     </label>
                     <Input
                       type="password"
                       required
                       minLength={6}
                       value={form.password}
-                      onChange={handleChange('password')}
+                      onChange={handleChange("password")}
                       placeholder={
-                        language === 'fr'
-                          ? 'Au moins 6 caractères'
-                          : 'At least 6 characters'
+                        language === "fr"
+                          ? "Au moins 6 caractères"
+                          : "At least 6 characters"
                       }
                     />
                   </div>
@@ -641,12 +623,12 @@ const InscriptionOuvrier: React.FC = () => {
                 {/* Téléphone */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {language === 'fr' ? 'Téléphone' : 'Phone'}
+                    {language === "fr" ? "Téléphone" : "Phone"}
                   </label>
                   <Input
                     required
                     value={form.phone}
-                    onChange={handleChange('phone')}
+                    onChange={handleChange("phone")}
                     placeholder="+224 6X XX XX XX"
                   />
                 </div>
@@ -654,7 +636,7 @@ const InscriptionOuvrier: React.FC = () => {
                 {/* Pays */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {language === 'fr' ? 'Pays' : 'Country'}
+                    {language === "fr" ? "Pays" : "Country"}
                   </label>
                   <select
                     value={form.country}
@@ -663,10 +645,10 @@ const InscriptionOuvrier: React.FC = () => {
                         ...prev,
                         country: e.target.value,
                         // reset localisation si on change de pays
-                        region: '',
-                        city: '',
-                        commune: '',
-                        district: '',
+                        region: "",
+                        city: "",
+                        commune: "",
+                        district: "",
                       }))
                     }
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
@@ -680,12 +662,12 @@ const InscriptionOuvrier: React.FC = () => {
                 </div>
 
                 {/* Localisation – Mode Guinée avec Région -> Ville -> Commune -> Quartier */}
-                {form.country === 'GN' ? (
+                {form.country === "GN" ? (
                   <>
                     {/* Région */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {language === 'fr' ? 'Région' : 'Region'}
+                        {language === "fr" ? "Région" : "Region"}
                       </label>
                       <select
                         value={form.region}
@@ -693,17 +675,17 @@ const InscriptionOuvrier: React.FC = () => {
                           setForm((prev) => ({
                             ...prev,
                             region: e.target.value,
-                            city: '',
-                            commune: '',
-                            district: '',
+                            city: "",
+                            commune: "",
+                            district: "",
                           }))
                         }
                         className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
                       >
                         <option value="">
-                          {language === 'fr'
-                            ? 'Choisissez une région'
-                            : 'Select a region'}
+                          {language === "fr"
+                            ? "Choisissez une région"
+                            : "Select a region"}
                         </option>
                         {GUINEA_REGIONS.map((r) => (
                           <option key={r.name} value={r.name}>
@@ -717,7 +699,7 @@ const InscriptionOuvrier: React.FC = () => {
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === 'fr' ? 'Ville' : 'City'}
+                          {language === "fr" ? "Ville" : "City"}
                         </label>
                         <select
                           value={form.city}
@@ -725,17 +707,17 @@ const InscriptionOuvrier: React.FC = () => {
                             setForm((prev) => ({
                               ...prev,
                               city: e.target.value,
-                              commune: '',
-                              district: '',
+                              commune: "",
+                              district: "",
                             }))
                           }
                           disabled={!form.region}
                           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
                         >
                           <option value="">
-                            {language === 'fr'
-                              ? 'Choisissez une ville'
-                              : 'Select a city'}
+                            {language === "fr"
+                              ? "Choisissez une ville"
+                              : "Select a city"}
                           </option>
                           {availableCities.map((city) => (
                             <option key={city.name} value={city.name}>
@@ -746,11 +728,11 @@ const InscriptionOuvrier: React.FC = () => {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === 'fr' ? 'Code postal' : 'Postal code'}
+                          {language === "fr" ? "Code postal" : "Postal code"}
                         </label>
                         <Input
                           value={form.postalCode}
-                          onChange={handleChange('postalCode')}
+                          onChange={handleChange("postalCode")}
                           placeholder="1000"
                         />
                       </div>
@@ -760,7 +742,7 @@ const InscriptionOuvrier: React.FC = () => {
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === 'fr' ? 'Commune' : 'Commune'}
+                          {language === "fr" ? "Commune" : "Commune"}
                         </label>
                         <select
                           value={form.commune}
@@ -768,16 +750,16 @@ const InscriptionOuvrier: React.FC = () => {
                             setForm((prev) => ({
                               ...prev,
                               commune: e.target.value,
-                              district: '',
+                              district: "",
                             }))
                           }
                           disabled={!form.city}
                           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
                         >
                           <option value="">
-                            {language === 'fr'
-                              ? 'Choisissez une commune'
-                              : 'Select a commune'}
+                            {language === "fr"
+                              ? "Choisissez une commune"
+                              : "Select a commune"}
                           </option>
                           {availableCommunes.map((commune) => (
                             <option key={commune.name} value={commune.name}>
@@ -788,7 +770,7 @@ const InscriptionOuvrier: React.FC = () => {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === 'fr' ? 'Quartier' : 'Neighborhood'}
+                          {language === "fr" ? "Quartier" : "Neighborhood"}
                         </label>
                         <select
                           value={form.district}
@@ -802,9 +784,9 @@ const InscriptionOuvrier: React.FC = () => {
                           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
                         >
                           <option value="">
-                            {language === 'fr'
-                              ? 'Choisissez un quartier'
-                              : 'Select a neighborhood'}
+                            {language === "fr"
+                              ? "Choisissez un quartier"
+                              : "Select a neighborhood"}
                           </option>
                           {availableDistricts.map((q) => (
                             <option key={q} value={q}>
@@ -821,24 +803,24 @@ const InscriptionOuvrier: React.FC = () => {
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === 'fr' ? 'Ville' : 'City'}
+                          {language === "fr" ? "Ville" : "City"}
                         </label>
                         <Input
                           required
                           value={form.city}
-                          onChange={handleChange('city')}
+                          onChange={handleChange("city")}
                           placeholder={
-                            language === 'fr' ? 'Votre ville' : 'Your city'
+                            language === "fr" ? "Votre ville" : "Your city"
                           }
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === 'fr' ? 'Code postal' : 'Postal code'}
+                          {language === "fr" ? "Code postal" : "Postal code"}
                         </label>
                         <Input
                           value={form.postalCode}
-                          onChange={handleChange('postalCode')}
+                          onChange={handleChange("postalCode")}
                           placeholder="75001"
                         />
                       </div>
@@ -847,22 +829,22 @@ const InscriptionOuvrier: React.FC = () => {
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === 'fr'
-                            ? 'Commune / Région'
-                            : 'District / Region'}
+                          {language === "fr"
+                            ? "Commune / Région"
+                            : "District / Region"}
                         </label>
                         <Input
                           value={form.commune}
-                          onChange={handleChange('commune')}
+                          onChange={handleChange("commune")}
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === 'fr' ? 'Quartier' : 'Neighborhood'}
+                          {language === "fr" ? "Quartier" : "Neighborhood"}
                         </label>
                         <Input
                           value={form.district}
-                          onChange={handleChange('district')}
+                          onChange={handleChange("district")}
                         />
                       </div>
                     </div>
@@ -872,25 +854,23 @@ const InscriptionOuvrier: React.FC = () => {
                 {/* Métier principal */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {language === 'fr'
-                      ? 'Métier principal'
-                      : 'Main trade'}
+                    {language === "fr" ? "Métier principal" : "Main trade"}
                   </label>
                   <Input
                     required
                     value={form.profession}
-                    onChange={handleChange('profession')}
+                    onChange={handleChange("profession")}
                     placeholder={
-                      language === 'fr'
-                        ? 'Plombier, électricien, maçon...'
-                        : 'Plumber, electrician, builder...'
+                      language === "fr"
+                        ? "Plombier, électricien, maçon..."
+                        : "Plumber, electrician, builder..."
                     }
                   />
-                  {plan === 'FREE' && (
+                  {plan === "FREE" && (
                     <p className="mt-1 text-xs text-gray-500">
-                      {language === 'fr'
-                        ? 'Avec le plan Gratuit, un seul métier peut être affiché.'
-                        : 'With the Free plan, only one trade can be listed.'}
+                      {language === "fr"
+                        ? "Avec le plan Gratuit, un seul métier peut être affiché."
+                        : "With the Free plan, only one trade can be listed."}
                     </p>
                   )}
                 </div>
@@ -898,19 +878,19 @@ const InscriptionOuvrier: React.FC = () => {
                 {/* Description */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {language === 'fr'
-                      ? 'Description de vos services'
-                      : 'Description of your services'}
+                    {language === "fr"
+                      ? "Description de vos services"
+                      : "Description of your services"}
                   </label>
                   <textarea
                     required
                     value={form.description}
-                    onChange={handleChange('description')}
+                    onChange={handleChange("description")}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue min-h-[100px]"
                     placeholder={
-                      language === 'fr'
-                        ? 'Décrivez votre expérience, vos services, vos zones d’intervention...'
-                        : 'Describe your experience, services and working area...'
+                      language === "fr"
+                        ? "Décrivez votre expérience, vos services, vos zones d’intervention..."
+                        : "Describe your experience, services and working area..."
                     }
                   />
                 </div>
@@ -918,7 +898,7 @@ const InscriptionOuvrier: React.FC = () => {
                 {/* Tarif horaire (optionnel) */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {language === 'fr'
+                    {language === "fr"
                       ? `Tarif horaire (${currency.symbol} / h) (optionnel)`
                       : `Hourly rate (${currency.symbol} / h) (optional)`}
                   </label>
@@ -926,10 +906,10 @@ const InscriptionOuvrier: React.FC = () => {
                     type="number"
                     min={0}
                     value={form.hourlyRate}
-                    onChange={handleChange('hourlyRate')}
+                    onChange={handleChange("hourlyRate")}
                     placeholder={
-                      language === 'fr'
-                        ? `Ex : 250 000 ${currency.symbol}`
+                      language === "fr"
+                        ? `Ex : 250000 ${currency.symbol}`
                         : `e.g. 20 ${currency.symbol}`
                     }
                   />
@@ -938,9 +918,9 @@ const InscriptionOuvrier: React.FC = () => {
                 {/* Photo de profil (optionnelle) */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {language === 'fr'
-                      ? 'Photo de profil (optionnel)'
-                      : 'Profile picture (optional)'}
+                    {language === "fr"
+                      ? "Photo de profil (optionnel)"
+                      : "Profile picture (optional)"}
                   </label>
                   <input
                     type="file"
@@ -949,9 +929,9 @@ const InscriptionOuvrier: React.FC = () => {
                     className="block w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-pro-blue file:text-white hover:file:bg-blue-700"
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    {language === 'fr'
-                      ? 'Format JPG ou PNG recommandé, taille max ~2 Mo.'
-                      : 'JPG or PNG recommended, max size ~2MB.'}
+                    {language === "fr"
+                      ? "Format JPG ou PNG recommandé, taille max ~2 Mo."
+                      : "JPG or PNG recommended, max size ~2MB."}
                   </p>
                 </div>
 
@@ -963,9 +943,9 @@ const InscriptionOuvrier: React.FC = () => {
                 )}
                 {success && (
                   <div className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-md px-3 py-2">
-                    {language === 'fr'
+                    {language === "fr"
                       ? "Votre inscription a bien été enregistrée. Un email de confirmation vous a été envoyé et votre profil sera validé par un administrateur."
-                      : 'Your registration has been saved. A confirmation email has been sent and your profile will be reviewed by an administrator.'}
+                      : "Your registration has been saved. A confirmation email has been sent and your profile will be reviewed by an administrator."}
                   </div>
                 )}
 
@@ -977,12 +957,12 @@ const InscriptionOuvrier: React.FC = () => {
                     className="w-full bg-pro-blue hover:bg-blue-700"
                   >
                     {loading
-                      ? language === 'fr'
-                        ? 'Enregistrement...'
-                        : 'Saving...'
-                      : language === 'fr'
-                      ? 'Valider mon inscription'
-                      : 'Submit my registration'}
+                      ? language === "fr"
+                        ? "Enregistrement..."
+                        : "Saving..."
+                      : language === "fr"
+                      ? "Valider mon inscription"
+                      : "Submit my registration"}
                   </Button>
                 </div>
               </form>
