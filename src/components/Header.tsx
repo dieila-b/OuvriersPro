@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
@@ -9,9 +8,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useNavigate } from 'react-router-dom';
 
 const Header = () => {
   const { language, setLanguage, t } = useLanguage();
+  const navigate = useNavigate();
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -27,22 +28,43 @@ const Header = () => {
 
           {/* Navigation Desktop */}
           <nav className="hidden md:flex items-center space-x-6">
-            <a href="#search" className="text-pro-gray hover:text-pro-blue transition-colors">
+            <a
+              href="#search"
+              className="text-pro-gray hover:text-pro-blue transition-colors"
+            >
               {t('nav.search')}
             </a>
-            <a href="#subscription" className="text-pro-gray hover:text-pro-blue transition-colors">
+            <a
+              href="#subscription"
+              className="text-pro-gray hover:text-pro-blue transition-colors"
+            >
               {t('nav.subscribe')}
             </a>
-            <a href="#faq" className="text-pro-gray hover:text-pro-blue transition-colors">
+            <a
+              href="#faq"
+              className="text-pro-gray hover:text-pro-blue transition-colors"
+            >
               {t('nav.faq')}
             </a>
-            <a href="#contact" className="text-pro-gray hover:text-pro-blue transition-colors">
+            <a
+              href="#contact"
+              className="text-pro-gray hover:text-pro-blue transition-colors"
+            >
               {t('nav.contact')}
             </a>
           </nav>
 
           {/* Actions */}
           <div className="flex items-center space-x-3">
+            {/* CTA Devenir Ouvrier Pro (desktop) */}
+            <Button
+              size="sm"
+              className="hidden md:inline-flex bg-pro-blue text-white hover:bg-pro-blue/90"
+              onClick={() => navigate('/inscription-ouvrier')}
+            >
+              Devenir Ouvrier Pro
+            </Button>
+
             {/* Language Switcher */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -69,13 +91,17 @@ const Header = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white">
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('#search')}>
                   <Search className="w-4 h-4 mr-2" />
                   {t('nav.search')}
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                {/* CTA Devenir Ouvrier Pro (mobile) */}
+                <DropdownMenuItem
+                  onClick={() => navigate('/inscription-ouvrier')}
+                  className="cursor-pointer"
+                >
                   <User className="w-4 h-4 mr-2" />
-                  {t('nav.subscribe')}
+                  Devenir Ouvrier Pro
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
