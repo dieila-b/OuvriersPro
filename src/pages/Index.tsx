@@ -1,9 +1,8 @@
-
 import React from 'react';
 import Header from '@/components/Header';
 import HeroSection from '@/components/HeroSection';
 import FeaturesSection from '@/components/FeaturesSection';
-import SearchSection from '@/components/SearchSection';
+import WorkerSearchSection from '@/components/WorkerSearchSection'; 
 import SubscriptionSection from '@/components/SubscriptionSection';
 import Footer from '@/components/Footer';
 
@@ -14,7 +13,10 @@ const Index = () => {
       <main>
         <HeroSection />
         <FeaturesSection />
-        <SearchSection />
+
+        {/* 🔎 Nouvelle section de recherche dynamique */}
+        <WorkerSearchSection />
+
         <SubscriptionSection />
       </main>
       <Footer />
