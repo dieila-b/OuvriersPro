@@ -21,13 +21,142 @@ interface WorkerFormState {
   postalCode: string;
   profession: string;
   description: string;
-  hourlyRate: string; // string pour l'input, converti en nombre avant l'insert
+  hourlyRate: string;
 }
 
 interface CurrencyInfo {
   code: string;
   symbol: string;
 }
+
+interface GuineaCommune {
+  name: string;
+  districts: string[];
+}
+
+interface GuineaCity {
+  name: string;
+  communes: GuineaCommune[];
+}
+
+/**
+ * Villes / Communes / Quartiers principaux de Guinée
+ * (base de travail – tu peux compléter la liste au besoin)
+ */
+const GUINEA_CITIES: GuineaCity[] = [
+  {
+    name: 'Conakry',
+    communes: [
+      {
+        name: 'Kaloum',
+        districts: ['Sandervalia', 'Tombo', 'Boulbinet', 'Coronthie', 'Almamya'],
+      },
+      {
+        name: 'Dixinn',
+        districts: ['Dixinn Centre', 'Taouyah', 'Belle-vue', 'Minière', 'Hamdallaye'],
+      },
+      {
+        name: 'Matam',
+        districts: ['Matam Centre', 'Bonfi', 'Boussoura', 'Carrière', 'Hafia'],
+      },
+      {
+        name: 'Ratoma',
+        districts: ['Ratoma Centre', 'Kipé', 'Nongo', 'Lambanyi', 'Sonfonia', 'Cosa'],
+      },
+      {
+        name: 'Matoto',
+        districts: ['Matoto Centre', 'Enta', 'Yimbaya', 'Gbessia', 'Sangoyah'],
+      },
+    ],
+  },
+  {
+    name: 'Kindia',
+    communes: [
+      {
+        name: 'Kindia Centre',
+        districts: ['Koliady', 'Banlieue', 'Manquepas', 'Féréfou'],
+      },
+      {
+        name: 'Friguiagbé',
+        districts: ['Friguiagbé Centre', 'Sinta', 'Damakania'],
+      },
+    ],
+  },
+  {
+    name: 'Mamou',
+    communes: [
+      {
+        name: 'Mamou Centre',
+        districts: ['Poudrière', 'Petel', 'Horé Fello'],
+      },
+      {
+        name: 'Pita',
+        districts: ['Pita Centre', 'Timbi Madina', 'Ley Miro'],
+      },
+    ],
+  },
+  {
+    name: 'Labé',
+    communes: [
+      {
+        name: 'Labé Centre',
+        districts: ['Kouroula', 'Daka', 'Pounthioun'],
+      },
+      {
+        name: 'Koubia',
+        districts: ['Koubia Centre', 'Fafaya', 'Tougué'],
+      },
+    ],
+  },
+  {
+    name: 'Boké',
+    communes: [
+      {
+        name: 'Boké Centre',
+        districts: ['Boké Ville', 'Tanmangué', 'Dibiya'],
+      },
+      {
+        name: 'Kamsar',
+        districts: ['Kamsar Centre', 'Filima', 'Kakandé'],
+      },
+    ],
+  },
+  {
+    name: 'Kankan',
+    communes: [
+      {
+        name: 'Kankan Centre',
+        districts: ['Kabada', 'Bordo', 'Timbo', 'Missira'],
+      },
+      {
+        name: 'Kérouané',
+        districts: ['Kérouané Centre', 'Banankoro'],
+      },
+    ],
+  },
+  {
+    name: 'Faranah',
+    communes: [
+      {
+        name: 'Faranah Centre',
+        districts: ['Faranah Ville', 'Syli', 'Hérémakono'],
+      },
+    ],
+  },
+  {
+    name: 'N’Zérékoré',
+    communes: [
+      {
+        name: 'N’Zérékoré Centre',
+        districts: ['Mohomou', 'Dorota', 'Gonia'],
+      },
+      {
+        name: 'Lola',
+        districts: ['Lola Centre', 'Bossou'],
+      },
+    ],
+  },
+];
 
 // mapping pays → monnaie
 const getCurrencyForCountry = (countryCode: string): CurrencyInfo => {
@@ -40,7 +169,7 @@ const getCurrencyForCountry = (countryCode: string): CurrencyInfo => {
     case 'BJ':
     case 'BF':
     case 'NE':
-      return { code: 'XOF', symbol: 'CFA' }; // Afrique de l’Ouest
+      return { code: 'XOF', symbol: 'CFA' };
     case 'MA':
     case 'TN':
       return { code: 'MAD', symbol: 'MAD' };
@@ -73,7 +202,7 @@ const InscriptionOuvrier: React.FC = () => {
     email: '',
     password: '',
     phone: '',
-    country: 'FR', // valeur par défaut
+    country: 'GN', // Guinée par défaut
     city: '',
     commune: '',
     district: '',
@@ -112,7 +241,6 @@ const InscriptionOuvrier: React.FC = () => {
             : 'Best value: all features with yearly discount.',
       };
     }
-    // FREE
     return {
       label: language === 'fr' ? 'Gratuit' : 'Free',
       price: '0€ / mois',
@@ -132,6 +260,26 @@ const InscriptionOuvrier: React.FC = () => {
     [form.country]
   );
 
+  // données dérivées pour la Guinée
+  const selectedGuineaCity = useMemo(
+    () => GUINEA_CITIES.find((c) => c.name === form.city) || null,
+    [form.city]
+  );
+
+  const availableGuineaCommunes: GuineaCommune[] =
+    form.country === 'GN' && selectedGuineaCity ? selectedGuineaCity.communes : [];
+
+  const selectedGuineaCommune = useMemo(
+    () =>
+      availableGuineaCommunes.find((c) => c.name === form.commune) || null,
+    [availableGuineaCommunes, form.commune]
+  );
+
+  const availableGuineaDistricts: string[] =
+    form.country === 'GN' && selectedGuineaCommune
+      ? selectedGuineaCommune.districts
+      : [];
+
   const handleChange =
     (field: keyof WorkerFormState) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -150,7 +298,7 @@ const InscriptionOuvrier: React.FC = () => {
     setLoading(true);
 
     try {
-      // 1) Création du compte auth Supabase
+      // 1) Auth Supabase
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
@@ -163,9 +311,7 @@ const InscriptionOuvrier: React.FC = () => {
         },
       });
 
-      if (authError) {
-        throw authError;
-      }
+      if (authError) throw authError;
 
       const user = authData.user;
       if (!user) {
@@ -176,7 +322,7 @@ const InscriptionOuvrier: React.FC = () => {
         );
       }
 
-      // 2) Upload de la photo de profil (optionnel)
+      // 2) Upload avatar (optionnel)
       let avatarUrl: string | null = null;
       if (profileFile) {
         const fileExt = profileFile.name.split('.').pop();
@@ -194,7 +340,7 @@ const InscriptionOuvrier: React.FC = () => {
         }
       }
 
-      // 3) Insertion du profil ouvrier
+      // 3) Insert profil ouvrier
       const hourlyRateNumber =
         form.hourlyRate.trim() === '' ? null : Number(form.hourlyRate);
 
@@ -212,16 +358,14 @@ const InscriptionOuvrier: React.FC = () => {
         profession: form.profession,
         description: form.description,
         plan_code: plan,
-        status: 'pending', // en attente de validation par l'admin
+        status: 'pending',
         hourly_rate: hourlyRateNumber,
         currency: currency.code,
         avatar_url: avatarUrl,
         created_at: new Date().toISOString(),
       });
 
-      if (insertError) {
-        throw insertError;
-      }
+      if (insertError) throw insertError;
 
       setSuccess(true);
       setForm({
@@ -230,7 +374,7 @@ const InscriptionOuvrier: React.FC = () => {
         email: '',
         password: '',
         phone: '',
-        country: 'FR',
+        country: 'GN',
         city: '',
         commune: '',
         district: '',
@@ -249,14 +393,13 @@ const InscriptionOuvrier: React.FC = () => {
   };
 
   const countryOptions = [
-    { code: 'FR', label: 'France' },
     { code: 'GN', label: 'Guinée' },
+    { code: 'FR', label: 'France' },
+    { code: 'BE', label: 'Belgique' },
     { code: 'SN', label: 'Sénégal' },
     { code: 'ML', label: 'Mali' },
     { code: 'CI', label: "Côte d’Ivoire" },
-    { code: 'BE', label: 'Belgique' },
     { code: 'CH', label: 'Suisse' },
-    { code: 'MA', label: 'Maroc' },
     { code: 'ES', label: 'Espagne' },
     { code: 'DE', label: 'Allemagne' },
     { code: 'GB', label: 'Royaume-Uni' },
@@ -281,7 +424,7 @@ const InscriptionOuvrier: React.FC = () => {
         </div>
 
         <div className="grid md:grid-cols-3 gap-8 items-start">
-          {/* Colonne Plan sélectionné */}
+          {/* Colonne Plan */}
           <Card className="md:col-span-1 shadow-lg">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-pro-gray">
@@ -423,7 +566,7 @@ const InscriptionOuvrier: React.FC = () => {
                     required
                     value={form.phone}
                     onChange={handleChange('phone')}
-                    placeholder="+33 6 12 34 56 78"
+                    placeholder="+224 6X XX XX XX"
                   />
                 </div>
 
@@ -435,7 +578,11 @@ const InscriptionOuvrier: React.FC = () => {
                   <select
                     value={form.country}
                     onChange={(e) =>
-                      setForm((prev) => ({ ...prev, country: e.target.value }))
+                      setForm((prev) => ({
+                        ...prev,
+                        country: e.target.value,
+                        // si on quitte la Guinée, on garde les valeurs texte
+                      }))
                     }
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
                   >
@@ -447,64 +594,162 @@ const InscriptionOuvrier: React.FC = () => {
                   </select>
                 </div>
 
-                {/* Ville / Commune / Quartier / Code postal */}
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === 'fr' ? 'Ville' : 'City'}
-                    </label>
-                    <Input
-                      required
-                      value={form.city}
-                      onChange={handleChange('city')}
-                      placeholder={
-                        language === 'fr' ? 'Votre ville' : 'Your city'
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === 'fr' ? 'Code postal' : 'Postal code'}
-                    </label>
-                    <Input
-                      required
-                      value={form.postalCode}
-                      onChange={handleChange('postalCode')}
-                      placeholder="75001"
-                    />
-                  </div>
-                </div>
+                {/* Ville / Code postal */}
+                {form.country === 'GN' ? (
+                  <>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          {language === 'fr' ? 'Ville' : 'City'}
+                        </label>
+                        <select
+                          value={form.city}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              city: e.target.value,
+                              commune: '',
+                              district: '',
+                            }))
+                          }
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
+                        >
+                          <option value="">
+                            {language === 'fr'
+                              ? 'Choisissez une ville'
+                              : 'Select a city'}
+                          </option>
+                          {GUINEA_CITIES.map((city) => (
+                            <option key={city.name} value={city.name}>
+                              {city.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          {language === 'fr' ? 'Code postal' : 'Postal code'}
+                        </label>
+                        <Input
+                          value={form.postalCode}
+                          onChange={handleChange('postalCode')}
+                          placeholder="1000"
+                        />
+                      </div>
+                    </div>
 
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === 'fr' ? 'Commune' : 'District / Borough'}
-                    </label>
-                    <Input
-                      value={form.commune}
-                      onChange={handleChange('commune')}
-                      placeholder={
-                        language === 'fr'
-                          ? 'Commune / Sous-préfecture'
-                          : 'District / Borough'
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === 'fr' ? 'Quartier' : 'Neighborhood'}
-                    </label>
-                    <Input
-                      value={form.district}
-                      onChange={handleChange('district')}
-                      placeholder={
-                        language === 'fr'
-                          ? 'Nom du quartier'
-                          : 'Neighborhood name'
-                      }
-                    />
-                  </div>
-                </div>
+                    {/* Commune / Quartier */}
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          {language === 'fr' ? 'Commune' : 'Commune'}
+                        </label>
+                        <select
+                          value={form.commune}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              commune: e.target.value,
+                              district: '',
+                            }))
+                          }
+                          disabled={!form.city}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
+                        >
+                          <option value="">
+                            {language === 'fr'
+                              ? 'Choisissez une commune'
+                              : 'Select a commune'}
+                          </option>
+                          {availableGuineaCommunes.map((commune) => (
+                            <option key={commune.name} value={commune.name}>
+                              {commune.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          {language === 'fr' ? 'Quartier' : 'Neighborhood'}
+                        </label>
+                        <select
+                          value={form.district}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              district: e.target.value,
+                            }))
+                          }
+                          disabled={!form.commune}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
+                        >
+                          <option value="">
+                            {language === 'fr'
+                              ? 'Choisissez un quartier'
+                              : 'Select a neighborhood'}
+                          </option>
+                          {availableGuineaDistricts.map((q) => (
+                            <option key={q} value={q}>
+                              {q}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Fallback pour les autres pays : champs texte */}
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          {language === 'fr' ? 'Ville' : 'City'}
+                        </label>
+                        <Input
+                          required
+                          value={form.city}
+                          onChange={handleChange('city')}
+                          placeholder={
+                            language === 'fr' ? 'Votre ville' : 'Your city'
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          {language === 'fr' ? 'Code postal' : 'Postal code'}
+                        </label>
+                        <Input
+                          value={form.postalCode}
+                          onChange={handleChange('postalCode')}
+                          placeholder="75001"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          {language === 'fr'
+                            ? 'Commune'
+                            : 'District / Borough'}
+                        </label>
+                        <Input
+                          value={form.commune}
+                          onChange={handleChange('commune')}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          {language === 'fr' ? 'Quartier' : 'Neighborhood'}
+                        </label>
+                        <Input
+                          value={form.district}
+                          onChange={handleChange('district')}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Métier principal */}
                 <div>
@@ -566,7 +811,7 @@ const InscriptionOuvrier: React.FC = () => {
                     onChange={handleChange('hourlyRate')}
                     placeholder={
                       language === 'fr'
-                        ? `Ex : 200 ${currency.symbol}`
+                        ? `Ex : 250 000 ${currency.symbol}`
                         : `e.g. 20 ${currency.symbol}`
                     }
                   />
@@ -592,7 +837,7 @@ const InscriptionOuvrier: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Messages erreur / succès */}
+                {/* Messages */}
                 {error && (
                   <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
                     {error}
