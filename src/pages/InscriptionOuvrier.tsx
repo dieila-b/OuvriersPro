@@ -14,14 +14,53 @@ interface WorkerFormState {
   email: string;
   password: string;
   phone: string;
+  country: string;
   city: string;
+  commune: string;
+  district: string;
   postalCode: string;
   profession: string;
   description: string;
+  hourlyRate: string; // string pour l'input, converti en nombre avant l'insert
 }
 
+interface CurrencyInfo {
+  code: string;
+  symbol: string;
+}
+
+// mapping pays → monnaie
+const getCurrencyForCountry = (countryCode: string): CurrencyInfo => {
+  switch (countryCode) {
+    case 'GN':
+      return { code: 'GNF', symbol: 'FG' }; // Guinée
+    case 'SN':
+    case 'ML':
+    case 'CI':
+    case 'BJ':
+    case 'BF':
+    case 'NE':
+      return { code: 'XOF', symbol: 'CFA' }; // Afrique de l’Ouest
+    case 'MA':
+    case 'TN':
+      return { code: 'MAD', symbol: 'MAD' };
+    case 'CH':
+      return { code: 'CHF', symbol: 'CHF' };
+    case 'GB':
+      return { code: 'GBP', symbol: '£' };
+    case 'US':
+      return { code: 'USD', symbol: '$' };
+    case 'FR':
+    case 'BE':
+    case 'ES':
+    case 'DE':
+    default:
+      return { code: 'EUR', symbol: '€' };
+  }
+};
+
 const InscriptionOuvrier: React.FC = () => {
-  const { t, language } = useLanguage();
+  const { language, t } = useLanguage();
   const [searchParams] = useSearchParams();
 
   const rawPlan = (searchParams.get('plan') || '').toUpperCase();
@@ -34,11 +73,17 @@ const InscriptionOuvrier: React.FC = () => {
     email: '',
     password: '',
     phone: '',
+    country: 'FR', // valeur par défaut
     city: '',
+    commune: '',
+    district: '',
     postalCode: '',
     profession: '',
     description: '',
+    hourlyRate: '',
   });
+
+  const [profileFile, setProfileFile] = useState<File | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,11 +127,21 @@ const InscriptionOuvrier: React.FC = () => {
     };
   }, [plan, t, language]);
 
+  const currency = useMemo(
+    () => getCurrencyForCountry(form.country),
+    [form.country]
+  );
+
   const handleChange =
     (field: keyof WorkerFormState) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
     };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setProfileFile(file);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,19 +176,46 @@ const InscriptionOuvrier: React.FC = () => {
         );
       }
 
-      // 2) Insertion du profil ouvrier
+      // 2) Upload de la photo de profil (optionnel)
+      let avatarUrl: string | null = null;
+      if (profileFile) {
+        const fileExt = profileFile.name.split('.').pop();
+        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+        const { data: storageData, error: storageError } =
+          await supabase.storage.from('op_avatars').upload(fileName, profileFile);
+
+        if (storageError) {
+          console.warn('Erreur upload avatar:', storageError.message);
+        } else if (storageData) {
+          const { data: publicUrlData } = supabase.storage
+            .from('op_avatars')
+            .getPublicUrl(storageData.path);
+          avatarUrl = publicUrlData.publicUrl;
+        }
+      }
+
+      // 3) Insertion du profil ouvrier
+      const hourlyRateNumber =
+        form.hourlyRate.trim() === '' ? null : Number(form.hourlyRate);
+
       const { error: insertError } = await supabase.from('op_ouvriers').insert({
         user_id: user.id,
         first_name: form.firstName,
         last_name: form.lastName,
         email: form.email,
         phone: form.phone,
+        country: form.country,
         city: form.city,
+        commune: form.commune,
+        district: form.district,
         postal_code: form.postalCode,
         profession: form.profession,
         description: form.description,
         plan_code: plan,
         status: 'pending', // en attente de validation par l'admin
+        hourly_rate: hourlyRateNumber,
+        currency: currency.code,
+        avatar_url: avatarUrl,
         created_at: new Date().toISOString(),
       });
 
@@ -148,11 +230,16 @@ const InscriptionOuvrier: React.FC = () => {
         email: '',
         password: '',
         phone: '',
+        country: 'FR',
         city: '',
+        commune: '',
+        district: '',
         postalCode: '',
         profession: '',
         description: '',
+        hourlyRate: '',
       });
+      setProfileFile(null);
     } catch (err: any) {
       console.error(err);
       setError(err.message ?? 'Unknown error');
@@ -160,6 +247,21 @@ const InscriptionOuvrier: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const countryOptions = [
+    { code: 'FR', label: 'France' },
+    { code: 'GN', label: 'Guinée' },
+    { code: 'SN', label: 'Sénégal' },
+    { code: 'ML', label: 'Mali' },
+    { code: 'CI', label: "Côte d’Ivoire" },
+    { code: 'BE', label: 'Belgique' },
+    { code: 'CH', label: 'Suisse' },
+    { code: 'MA', label: 'Maroc' },
+    { code: 'ES', label: 'Espagne' },
+    { code: 'DE', label: 'Allemagne' },
+    { code: 'GB', label: 'Royaume-Uni' },
+    { code: 'US', label: 'États-Unis' },
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-12">
@@ -325,7 +427,27 @@ const InscriptionOuvrier: React.FC = () => {
                   />
                 </div>
 
-                {/* Ville & Code postal */}
+                {/* Pays */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {language === 'fr' ? 'Pays' : 'Country'}
+                  </label>
+                  <select
+                    value={form.country}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, country: e.target.value }))
+                    }
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
+                  >
+                    {countryOptions.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Ville / Commune / Quartier / Code postal */}
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -342,15 +464,44 @@ const InscriptionOuvrier: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === 'fr'
-                        ? 'Code postal'
-                        : 'Postal code'}
+                      {language === 'fr' ? 'Code postal' : 'Postal code'}
                     </label>
                     <Input
                       required
                       value={form.postalCode}
                       onChange={handleChange('postalCode')}
                       placeholder="75001"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {language === 'fr' ? 'Commune' : 'District / Borough'}
+                    </label>
+                    <Input
+                      value={form.commune}
+                      onChange={handleChange('commune')}
+                      placeholder={
+                        language === 'fr'
+                          ? 'Commune / Sous-préfecture'
+                          : 'District / Borough'
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {language === 'fr' ? 'Quartier' : 'Neighborhood'}
+                    </label>
+                    <Input
+                      value={form.district}
+                      onChange={handleChange('district')}
+                      placeholder={
+                        language === 'fr'
+                          ? 'Nom du quartier'
+                          : 'Neighborhood name'
+                      }
                     />
                   </div>
                 </div>
@@ -399,6 +550,46 @@ const InscriptionOuvrier: React.FC = () => {
                         : 'Describe your experience, services and working area...'
                     }
                   />
+                </div>
+
+                {/* Tarif horaire (optionnel) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {language === 'fr'
+                      ? `Tarif horaire (${currency.symbol} / h) (optionnel)`
+                      : `Hourly rate (${currency.symbol} / h) (optional)`}
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.hourlyRate}
+                    onChange={handleChange('hourlyRate')}
+                    placeholder={
+                      language === 'fr'
+                        ? `Ex : 200 ${currency.symbol}`
+                        : `e.g. 20 ${currency.symbol}`
+                    }
+                  />
+                </div>
+
+                {/* Photo de profil (optionnelle) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {language === 'fr'
+                      ? 'Photo de profil (optionnel)'
+                      : 'Profile picture (optional)'}
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="block w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-pro-blue file:text-white hover:file:bg-blue-700"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    {language === 'fr'
+                      ? 'Format JPG ou PNG recommandé, taille max ~2 Mo.'
+                      : 'JPG or PNG recommended, max size ~2MB.'}
+                  </p>
                 </div>
 
                 {/* Messages erreur / succès */}
