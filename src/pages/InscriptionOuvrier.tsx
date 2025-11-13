@@ -15,6 +15,7 @@ interface WorkerFormState {
   password: string;
   phone: string;
   country: string;
+  region: string;
   city: string;
   commune: string;
   district: string;
@@ -39,120 +40,189 @@ interface GuineaCity {
   communes: GuineaCommune[];
 }
 
+interface GuineaRegion {
+  name: string;
+  cities: GuineaCity[];
+}
+
 /**
- * Villes / Communes / Quartiers principaux de Guinée
- * (base de travail – tu peux compléter la liste au besoin)
+ * Région -> Ville -> Commune -> Quartier (simplifié, à compléter si besoin)
  */
-const GUINEA_CITIES: GuineaCity[] = [
+const GUINEA_REGIONS: GuineaRegion[] = [
   {
     name: 'Conakry',
-    communes: [
+    cities: [
       {
-        name: 'Kaloum',
-        districts: ['Sandervalia', 'Tombo', 'Boulbinet', 'Coronthie', 'Almamya'],
-      },
-      {
-        name: 'Dixinn',
-        districts: ['Dixinn Centre', 'Taouyah', 'Belle-vue', 'Minière', 'Hamdallaye'],
-      },
-      {
-        name: 'Matam',
-        districts: ['Matam Centre', 'Bonfi', 'Boussoura', 'Carrière', 'Hafia'],
-      },
-      {
-        name: 'Ratoma',
-        districts: ['Ratoma Centre', 'Kipé', 'Nongo', 'Lambanyi', 'Sonfonia', 'Cosa'],
-      },
-      {
-        name: 'Matoto',
-        districts: ['Matoto Centre', 'Enta', 'Yimbaya', 'Gbessia', 'Sangoyah'],
+        name: 'Conakry',
+        communes: [
+          {
+            name: 'Kaloum',
+            districts: ['Sandervalia', 'Tombo', 'Boulbinet', 'Coronthie', 'Almamya'],
+          },
+          {
+            name: 'Dixinn',
+            districts: ['Dixinn Centre', 'Taouyah', 'Belle-vue', 'Minière', 'Hamdallaye'],
+          },
+          {
+            name: 'Matam',
+            districts: ['Matam Centre', 'Bonfi', 'Boussoura', 'Carrière', 'Hafia'],
+          },
+          {
+            name: 'Ratoma',
+            districts: ['Ratoma Centre', 'Kipé', 'Nongo', 'Lambanyi', 'Sonfonia', 'Cosa'],
+          },
+          {
+            name: 'Matoto',
+            districts: ['Matoto Centre', 'Enta', 'Yimbaya', 'Gbessia', 'Sangoyah'],
+          },
+        ],
       },
     ],
   },
   {
     name: 'Kindia',
-    communes: [
+    cities: [
       {
-        name: 'Kindia Centre',
-        districts: ['Koliady', 'Banlieue', 'Manquepas', 'Féréfou'],
-      },
-      {
-        name: 'Friguiagbé',
-        districts: ['Friguiagbé Centre', 'Sinta', 'Damakania'],
+        name: 'Kindia',
+        communes: [
+          {
+            name: 'Kindia Centre',
+            districts: ['Koliady', 'Banlieue', 'Manquepas', 'Féréfou'],
+          },
+          {
+            name: 'Friguiagbé',
+            districts: ['Friguiagbé Centre', 'Sinta', 'Damakania'],
+          },
+        ],
       },
     ],
   },
   {
     name: 'Mamou',
-    communes: [
+    cities: [
       {
-        name: 'Mamou Centre',
-        districts: ['Poudrière', 'Petel', 'Horé Fello'],
+        name: 'Mamou',
+        communes: [
+          {
+            name: 'Mamou Centre',
+            districts: ['Poudrière', 'Petel', 'Horé Fello'],
+          },
+        ],
       },
       {
         name: 'Pita',
-        districts: ['Pita Centre', 'Timbi Madina', 'Ley Miro'],
+        communes: [
+          {
+            name: 'Pita Centre',
+            districts: ['Timbi Madina', 'Ley Miro'],
+          },
+        ],
       },
     ],
   },
   {
     name: 'Labé',
-    communes: [
+    cities: [
       {
-        name: 'Labé Centre',
-        districts: ['Kouroula', 'Daka', 'Pounthioun'],
+        name: 'Labé',
+        communes: [
+          {
+            name: 'Labé Centre',
+            districts: ['Kouroula', 'Daka', 'Pounthioun'],
+          },
+        ],
       },
       {
         name: 'Koubia',
-        districts: ['Koubia Centre', 'Fafaya', 'Tougué'],
+        communes: [
+          {
+            name: 'Koubia Centre',
+            districts: ['Fafaya', 'Tougué'],
+          },
+        ],
       },
     ],
   },
   {
     name: 'Boké',
-    communes: [
+    cities: [
       {
-        name: 'Boké Centre',
-        districts: ['Boké Ville', 'Tanmangué', 'Dibiya'],
+        name: 'Boké',
+        communes: [
+          {
+            name: 'Boké Centre',
+            districts: ['Boké Ville', 'Tanmangué', 'Dibiya'],
+          },
+        ],
       },
       {
         name: 'Kamsar',
-        districts: ['Kamsar Centre', 'Filima', 'Kakandé'],
+        communes: [
+          {
+            name: 'Kamsar Centre',
+            districts: ['Filima', 'Kakandé'],
+          },
+        ],
       },
     ],
   },
   {
     name: 'Kankan',
-    communes: [
+    cities: [
       {
-        name: 'Kankan Centre',
-        districts: ['Kabada', 'Bordo', 'Timbo', 'Missira'],
+        name: 'Kankan',
+        communes: [
+          {
+            name: 'Kankan Centre',
+            districts: ['Kabada', 'Bordo', 'Timbo', 'Missira'],
+          },
+        ],
       },
       {
         name: 'Kérouané',
-        districts: ['Kérouané Centre', 'Banankoro'],
+        communes: [
+          {
+            name: 'Kérouané Centre',
+            districts: ['Banankoro'],
+          },
+        ],
       },
     ],
   },
   {
     name: 'Faranah',
-    communes: [
+    cities: [
       {
-        name: 'Faranah Centre',
-        districts: ['Faranah Ville', 'Syli', 'Hérémakono'],
+        name: 'Faranah',
+        communes: [
+          {
+            name: 'Faranah Centre',
+            districts: ['Faranah Ville', 'Syli', 'Hérémakono'],
+          },
+        ],
       },
     ],
   },
   {
     name: 'N’Zérékoré',
-    communes: [
+    cities: [
       {
-        name: 'N’Zérékoré Centre',
-        districts: ['Mohomou', 'Dorota', 'Gonia'],
+        name: 'N’Zérékoré',
+        communes: [
+          {
+            name: 'N’Zérékoré Centre',
+            districts: ['Mohomou', 'Dorota', 'Gonia'],
+          },
+        ],
       },
       {
         name: 'Lola',
-        districts: ['Lola Centre', 'Bossou'],
+        communes: [
+          {
+            name: 'Lola Centre',
+            districts: ['Bossou'],
+          },
+        ],
       },
     ],
   },
@@ -162,7 +232,7 @@ const GUINEA_CITIES: GuineaCity[] = [
 const getCurrencyForCountry = (countryCode: string): CurrencyInfo => {
   switch (countryCode) {
     case 'GN':
-      return { code: 'GNF', symbol: 'FG' }; // Guinée
+      return { code: 'GNF', symbol: 'FG' };
     case 'SN':
     case 'ML':
     case 'CI':
@@ -203,6 +273,7 @@ const InscriptionOuvrier: React.FC = () => {
     password: '',
     phone: '',
     country: 'GN', // Guinée par défaut
+    region: '',
     city: '',
     commune: '',
     district: '',
@@ -260,24 +331,32 @@ const InscriptionOuvrier: React.FC = () => {
     [form.country]
   );
 
-  // données dérivées pour la Guinée
-  const selectedGuineaCity = useMemo(
-    () => GUINEA_CITIES.find((c) => c.name === form.city) || null,
-    [form.city]
+  // Sélection actuelle pour la Guinée : région → ville → commune → quartier
+  const selectedRegion = useMemo(
+    () => GUINEA_REGIONS.find((r) => r.name === form.region) || null,
+    [form.region]
   );
 
-  const availableGuineaCommunes: GuineaCommune[] =
-    form.country === 'GN' && selectedGuineaCity ? selectedGuineaCity.communes : [];
+  const availableCities: GuineaCity[] =
+    form.country === 'GN' && selectedRegion ? selectedRegion.cities : [];
 
-  const selectedGuineaCommune = useMemo(
+  const selectedCity = useMemo(
+    () => availableCities.find((c) => c.name === form.city) || null,
+    [availableCities, form.city]
+  );
+
+  const availableCommunes: GuineaCommune[] =
+    form.country === 'GN' && selectedCity ? selectedCity.communes : [];
+
+  const selectedCommune = useMemo(
     () =>
-      availableGuineaCommunes.find((c) => c.name === form.commune) || null,
-    [availableGuineaCommunes, form.commune]
+      availableCommunes.find((c) => c.name === form.commune) || null,
+    [availableCommunes, form.commune]
   );
 
-  const availableGuineaDistricts: string[] =
-    form.country === 'GN' && selectedGuineaCommune
-      ? selectedGuineaCommune.districts
+  const availableDistricts: string[] =
+    form.country === 'GN' && selectedCommune
+      ? selectedCommune.districts
       : [];
 
   const handleChange =
@@ -351,6 +430,7 @@ const InscriptionOuvrier: React.FC = () => {
         email: form.email,
         phone: form.phone,
         country: form.country,
+        region: form.region || null,
         city: form.city,
         commune: form.commune,
         district: form.district,
@@ -375,6 +455,7 @@ const InscriptionOuvrier: React.FC = () => {
         password: '',
         phone: '',
         country: 'GN',
+        region: '',
         city: '',
         commune: '',
         district: '',
@@ -581,7 +662,11 @@ const InscriptionOuvrier: React.FC = () => {
                       setForm((prev) => ({
                         ...prev,
                         country: e.target.value,
-                        // si on quitte la Guinée, on garde les valeurs texte
+                        // reset localisation si on change de pays
+                        region: '',
+                        city: '',
+                        commune: '',
+                        district: '',
                       }))
                     }
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
@@ -594,9 +679,41 @@ const InscriptionOuvrier: React.FC = () => {
                   </select>
                 </div>
 
-                {/* Ville / Code postal */}
+                {/* Localisation – Mode Guinée avec Région -> Ville -> Commune -> Quartier */}
                 {form.country === 'GN' ? (
                   <>
+                    {/* Région */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {language === 'fr' ? 'Région' : 'Region'}
+                      </label>
+                      <select
+                        value={form.region}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            region: e.target.value,
+                            city: '',
+                            commune: '',
+                            district: '',
+                          }))
+                        }
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
+                      >
+                        <option value="">
+                          {language === 'fr'
+                            ? 'Choisissez une région'
+                            : 'Select a region'}
+                        </option>
+                        {GUINEA_REGIONS.map((r) => (
+                          <option key={r.name} value={r.name}>
+                            {r.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Ville & Code postal */}
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -612,14 +729,15 @@ const InscriptionOuvrier: React.FC = () => {
                               district: '',
                             }))
                           }
-                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
+                          disabled={!form.region}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
                         >
                           <option value="">
                             {language === 'fr'
                               ? 'Choisissez une ville'
                               : 'Select a city'}
                           </option>
-                          {GUINEA_CITIES.map((city) => (
+                          {availableCities.map((city) => (
                             <option key={city.name} value={city.name}>
                               {city.name}
                             </option>
@@ -661,7 +779,7 @@ const InscriptionOuvrier: React.FC = () => {
                               ? 'Choisissez une commune'
                               : 'Select a commune'}
                           </option>
-                          {availableGuineaCommunes.map((commune) => (
+                          {availableCommunes.map((commune) => (
                             <option key={commune.name} value={commune.name}>
                               {commune.name}
                             </option>
@@ -688,7 +806,7 @@ const InscriptionOuvrier: React.FC = () => {
                               ? 'Choisissez un quartier'
                               : 'Select a neighborhood'}
                           </option>
-                          {availableGuineaDistricts.map((q) => (
+                          {availableDistricts.map((q) => (
                             <option key={q} value={q}>
                               {q}
                             </option>
@@ -730,8 +848,8 @@ const InscriptionOuvrier: React.FC = () => {
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           {language === 'fr'
-                            ? 'Commune'
-                            : 'District / Borough'}
+                            ? 'Commune / Région'
+                            : 'District / Region'}
                         </label>
                         <Input
                           value={form.commune}
