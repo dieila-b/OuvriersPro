@@ -8,11 +8,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useNavigate } from 'react-router-dom';
 
 const Header = () => {
   const { language, setLanguage, t } = useLanguage();
-  const navigate = useNavigate();
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -56,28 +54,39 @@ const Header = () => {
 
           {/* Actions */}
           <div className="flex items-center space-x-3">
-            {/* CTA Devenir Ouvrier Pro (desktop) */}
-            <Button
-              size="sm"
-              className="hidden md:inline-flex bg-pro-blue text-white hover:bg-pro-blue/90"
-              onClick={() => navigate('/inscription-ouvrier')}
-            >
-              Devenir Ouvrier Pro
-            </Button>
+            {/* 👉 CTA Devenir Ouvrier Pro (desktop) */}
+            <a href="/inscription-ouvrier">
+              <Button
+                size="sm"
+                className="hidden md:inline-flex bg-pro-blue text-white hover:bg-pro-blue/90"
+              >
+                Devenir Ouvrier Pro
+              </Button>
+            </a>
 
             {/* Language Switcher */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="flex items-center space-x-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center space-x-1"
+                >
                   <Languages className="w-4 h-4" />
                   <span className="uppercase">{language}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white">
-                <DropdownMenuItem onClick={() => setLanguage('fr')} className="cursor-pointer">
+                <DropdownMenuItem
+                  onClick={() => setLanguage('fr')}
+                  className="cursor-pointer"
+                >
                   🇫🇷 Français
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setLanguage('en')} className="cursor-pointer">
+                <DropdownMenuItem
+                  onClick={() => setLanguage('en')}
+                  className="cursor-pointer"
+                >
                   🇬🇧 English
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -91,17 +100,17 @@ const Header = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white">
-                <DropdownMenuItem onClick={() => navigate('#search')}>
+                <DropdownMenuItem>
                   <Search className="w-4 h-4 mr-2" />
                   {t('nav.search')}
                 </DropdownMenuItem>
-                {/* CTA Devenir Ouvrier Pro (mobile) */}
-                <DropdownMenuItem
-                  onClick={() => navigate('/inscription-ouvrier')}
-                  className="cursor-pointer"
-                >
-                  <User className="w-4 h-4 mr-2" />
-                  Devenir Ouvrier Pro
+
+                {/* 👉 CTA Devenir Ouvrier Pro (mobile) */}
+                <DropdownMenuItem asChild className="cursor-pointer">
+                  <a href="/inscription-ouvrier" className="flex items-center">
+                    <User className="w-4 h-4 mr-2" />
+                    Devenir Ouvrier Pro
+                  </a>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
