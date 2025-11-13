@@ -1,20 +1,21 @@
-import React from 'react';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { Button } from '@/components/ui/button';
-import { Languages, Search, User, Menu } from 'lucide-react';
+import React from "react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { Button } from "@/components/ui/button";
+import { Languages, Search, User, Menu } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from "@/components/ui/dropdown-menu";
 
 const Header = () => {
   const { language, setLanguage, t } = useLanguage();
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-      <div className="container mx-auto px-4 py-4">
+      {/* ⬇️ plus de `container`, mais un wrapper full-width + max-w */}
+      <div className="w-full max-w-6xl mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center space-x-2">
@@ -30,25 +31,25 @@ const Header = () => {
               href="#search"
               className="text-pro-gray hover:text-pro-blue transition-colors"
             >
-              {t('nav.search')}
+              {t("nav.search")}
             </a>
             <a
               href="#faq"
               className="text-pro-gray hover:text-pro-blue transition-colors"
             >
-              {t('nav.faq')}
+              {t("nav.faq")}
             </a>
             <a
               href="#contact"
               className="text-pro-gray hover:text-pro-blue transition-colors"
             >
-              {t('nav.contact')}
+              {t("nav.contact")}
             </a>
           </nav>
 
           {/* Actions */}
           <div className="flex items-center space-x-3">
-            {/* 👉 CTA Devenir Ouvrier Pro (desktop) */}
+            {/* CTA Devenir Ouvrier Pro (desktop) */}
             <a href="#subscription">
               <Button
                 size="sm"
@@ -72,13 +73,13 @@ const Header = () => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white">
                 <DropdownMenuItem
-                  onClick={() => setLanguage('fr')}
+                  onClick={() => setLanguage("fr")}
                   className="cursor-pointer"
                 >
                   🇫🇷 Français
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => setLanguage('en')}
+                  onClick={() => setLanguage("en")}
                   className="cursor-pointer"
                 >
                   🇬🇧 English
@@ -97,11 +98,11 @@ const Header = () => {
                 <DropdownMenuItem asChild>
                   <a href="#search" className="flex items-center">
                     <Search className="w-4 h-4 mr-2" />
-                    {t('nav.search')}
+                    {t("nav.search")}
                   </a>
                 </DropdownMenuItem>
 
-                {/* 👉 CTA Devenir Ouvrier Pro (mobile) */}
+                {/* CTA Devenir Ouvrier Pro (mobile) */}
                 <DropdownMenuItem asChild className="cursor-pointer">
                   <a href="#subscription" className="flex items-center">
                     <User className="w-4 h-4 mr-2" />
