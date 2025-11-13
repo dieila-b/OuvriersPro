@@ -1,84 +1,247 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { supabase } from "@/lib/supabase";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Star, MapPin, Search } from "lucide-react";
 
+type DbWorker = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  profession: string | null;
+  country: string | null;
+  region: string | null;
+  city: string | null;
+  commune: string | null;
+  district: string | null;
+  hourly_rate: number | null;
+  currency: string | null;
+  years_experience: number | null;
+  average_rating: number | null;
+  rating_count: number | null;
+  status: string | null;
+};
+
 interface WorkerCard {
-  id: number;
+  id: string;
   name: string;
   job: string;
+  country: string;
+  region: string;
   city: string;
+  commune: string;
+  district: string;
   experienceYears: number;
   hourlyRate: number;
   currency: string;
   rating: number;
   ratingCount: number;
-  tag: string;
 }
-
-const MOCK_WORKERS: WorkerCard[] = [
-  {
-    id: 1,
-    name: "Pierre Martin",
-    job: "Plombier",
-    city: "Conakry - Ratoma",
-    experienceYears: 8,
-    hourlyRate: 150000,
-    currency: "GNF",
-    rating: 4.8,
-    ratingCount: 156,
-    tag: "Plomberie",
-  },
-  {
-    id: 2,
-    name: "Sophie Dubois",
-    job: "Électricienne",
-    city: "Conakry - Matoto",
-    experienceYears: 12,
-    hourlyRate: 180000,
-    currency: "GNF",
-    rating: 4.9,
-    ratingCount: 203,
-    tag: "Electricité",
-  },
-  {
-    id: 3,
-    name: "Ibrahima Bah",
-    job: "Maçon",
-    city: "Kindia",
-    experienceYears: 6,
-    hourlyRate: 130000,
-    currency: "GNF",
-    rating: 4.6,
-    ratingCount: 97,
-    tag: "Bâtiment",
-  },
-];
 
 const SearchSection: React.FC = () => {
   const { language } = useLanguage();
 
+  // Données depuis Supabase
+  const [workers, setWorkers] = useState<WorkerCard[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Filtres
   const [keyword, setKeyword] = useState("");
   const [selectedJob, setSelectedJob] = useState<string>("all");
   const [maxPrice, setMaxPrice] = useState<number>(250000);
   const [minRating, setMinRating] = useState<number>(0);
 
-  const jobs = ["Plombier", "Électricien", "Maçon", "Menuisier", "Peintre"];
+  const [selectedRegion, setSelectedRegion] = useState<string>("");
+  const [selectedCity, setSelectedCity] = useState<string>("");
+  const [selectedCommune, setSelectedCommune] = useState<string>("");
+  const [selectedDistrict, setSelectedDistrict] = useState<string>("");
 
-  const filteredWorkers = MOCK_WORKERS.filter((w) => {
-    const matchKeyword =
-      !keyword ||
-      w.name.toLowerCase().includes(keyword.toLowerCase()) ||
-      w.job.toLowerCase().includes(keyword.toLowerCase());
+  // 🔹 Chargement des ouvriers depuis Supabase
+  useEffect(() => {
+    const fetchWorkers = async () => {
+      setLoading(true);
+      setError(null);
 
-    const matchJob = selectedJob === "all" || w.job === selectedJob;
-    const matchPrice = w.hourlyRate <= maxPrice;
-    const matchRating = w.rating >= minRating;
+      const { data, error } = await supabase
+        .from<DbWorker>("op_ouvriers")
+        .select(
+          `
+          id,
+          first_name,
+          last_name,
+          profession,
+          country,
+          region,
+          city,
+          commune,
+          district,
+          hourly_rate,
+          currency,
+          years_experience,
+          average_rating,
+          rating_count,
+          status
+        `
+        )
+        .eq("status", "approved");
 
-    return matchKeyword && matchJob && matchPrice && matchRating;
-  });
+      if (error) {
+        console.error(error);
+        setError(
+          language === "fr"
+            ? "Impossible de charger les professionnels pour le moment."
+            : "Unable to load professionals at the moment."
+        );
+        setLoading(false);
+        return;
+      }
+
+      const mapped: WorkerCard[] =
+        (data ?? []).map((w) => ({
+          id: w.id,
+          name:
+            (w.first_name || "") +
+            (w.last_name ? ` ${w.last_name}` : "") ||
+            "Ouvrier",
+          job: w.profession ?? "",
+          country: w.country ?? "",
+          region: w.region ?? "",
+          city: w.city ?? "",
+          commune: w.commune ?? "",
+          district: w.district ?? "",
+          experienceYears: w.years_experience ?? 0,
+          hourlyRate: w.hourly_rate ?? 0,
+          currency: w.currency ?? "GNF",
+          rating: w.average_rating ?? 0,
+          ratingCount: w.rating_count ?? 0,
+        })) ?? [];
+
+      setWorkers(mapped);
+      setLoading(false);
+    };
+
+    fetchWorkers();
+  }, [language]);
+
+  // 🔹 Listes pour les filtres (dynamiques à partir des données)
+  const jobs = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          workers
+            .map((w) => w.job)
+            .filter((j) => j && j.trim().length > 0)
+        )
+      ),
+    [workers]
+  );
+
+  const regions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          workers
+            .map((w) => w.region)
+            .filter((r) => r && r.trim().length > 0)
+        )
+      ),
+    [workers]
+  );
+
+  const cities = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          workers
+            .filter((w) => !selectedRegion || w.region === selectedRegion)
+            .map((w) => w.city)
+            .filter((c) => c && c.trim().length > 0)
+        )
+      ),
+    [workers, selectedRegion]
+  );
+
+  const communes = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          workers
+            .filter(
+              (w) =>
+                (!selectedRegion || w.region === selectedRegion) &&
+                (!selectedCity || w.city === selectedCity)
+            )
+            .map((w) => w.commune)
+            .filter((c) => c && c.trim().length > 0)
+        )
+      ),
+    [workers, selectedRegion, selectedCity]
+  );
+
+  const districts = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          workers
+            .filter(
+              (w) =>
+                (!selectedRegion || w.region === selectedRegion) &&
+                (!selectedCity || w.city === selectedCity) &&
+                (!selectedCommune || w.commune === selectedCommune)
+            )
+            .map((w) => w.district)
+            .filter((d) => d && d.trim().length > 0)
+        )
+      ),
+    [workers, selectedRegion, selectedCity, selectedCommune]
+  );
+
+  // 🔹 Application des filtres
+  const filteredWorkers = useMemo(
+    () =>
+      workers.filter((w) => {
+        const matchKeyword =
+          !keyword ||
+          w.name.toLowerCase().includes(keyword.toLowerCase()) ||
+          w.job.toLowerCase().includes(keyword.toLowerCase());
+
+        const matchJob = selectedJob === "all" || w.job === selectedJob;
+        const matchPrice = w.hourlyRate <= maxPrice;
+        const matchRating = w.rating >= minRating;
+
+        const matchRegion = !selectedRegion || w.region === selectedRegion;
+        const matchCity = !selectedCity || w.city === selectedCity;
+        const matchCommune =
+          !selectedCommune || w.commune === selectedCommune;
+        const matchDistrict =
+          !selectedDistrict || w.district === selectedDistrict;
+
+        return (
+          matchKeyword &&
+          matchJob &&
+          matchPrice &&
+          matchRating &&
+          matchRegion &&
+          matchCity &&
+          matchCommune &&
+          matchDistrict
+        );
+      }),
+    [
+      workers,
+      keyword,
+      selectedJob,
+      maxPrice,
+      minRating,
+      selectedRegion,
+      selectedCity,
+      selectedCommune,
+      selectedDistrict,
+    ]
+  );
 
   const formatCurrency = (value: number, currency: string) => {
     if (currency === "GNF") {
@@ -92,22 +255,16 @@ const SearchSection: React.FC = () => {
       language === "fr"
         ? "Trouvez votre professionnel"
         : "Find your professional",
-    filters:
-      language === "fr"
-        ? "Filtres"
-        : "Filters",
-    job:
-      language === "fr"
-        ? "Métier"
-        : "Job",
+    filters: language === "fr" ? "Filtres" : "Filters",
+    keywordLabel:
+      language === "fr" ? "Rechercher" : "Search",
+    job: language === "fr" ? "Métier" : "Job",
     searchPlaceholder:
       language === "fr"
         ? "Rechercher un métier, un service ou un nom…"
         : "Search a trade, service or name…",
     allJobs:
-      language === "fr"
-        ? "Tous les métiers"
-        : "All trades",
+      language === "fr" ? "Tous les métiers" : "All trades",
     priceLabel:
       language === "fr"
         ? "Prix max par heure"
@@ -116,22 +273,26 @@ const SearchSection: React.FC = () => {
       language === "fr"
         ? "Note minimum"
         : "Minimum rating",
+    region: language === "fr" ? "Région" : "Region",
+    city: language === "fr" ? "Ville" : "City",
+    commune: language === "fr" ? "Commune" : "Commune",
+    district: language === "fr" ? "Quartier" : "District",
+    allRegions:
+      language === "fr" ? "Toutes les régions" : "All regions",
+    allCities:
+      language === "fr" ? "Toutes les villes" : "All cities",
+    allCommunes:
+      language === "fr" ? "Toutes les communes" : "All communes",
+    allDistricts:
+      language === "fr" ? "Tous les quartiers" : "All districts",
     btnFilter:
-      language === "fr"
-        ? "Appliquer les filtres"
-        : "Apply filters",
+      language === "fr" ? "Appliquer les filtres" : "Apply filters",
     noResults:
       language === "fr"
         ? "Aucun professionnel ne correspond à ces critères pour le moment."
         : "No professional matches your criteria yet.",
-    contact:
-      language === "fr"
-        ? "Contacter"
-        : "Contact",
-    perHour:
-      language === "fr"
-        ? "/heure"
-        : "/hour",
+    contact: language === "fr" ? "Contacter" : "Contact",
+    perHour: language === "fr" ? "/heure" : "/hour",
     years:
       language === "fr"
         ? "ans d'expérience"
@@ -153,13 +314,21 @@ const SearchSection: React.FC = () => {
             </h2>
             <p className="text-gray-600 mt-2 text-sm md:text-base">
               {language === "fr"
-                ? "Affinez votre recherche par métier, prix, note et trouvez l’ouvrier le plus proche de chez vous."
-                : "Filter by trade, price and rating to find the closest professional."}
+                ? "Affinez votre recherche par métier, localisation, prix et note pour trouver l’ouvrier le plus proche."
+                : "Filter by trade, location, price and rating to find the closest professional."}
             </p>
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-500">
             <Search className="w-4 h-4" />
-            <span>{text.resultCount(filteredWorkers.length)}</span>
+            {loading ? (
+              <span>
+                {language === "fr"
+                  ? "Chargement des résultats..."
+                  : "Loading results..."}
+              </span>
+            ) : (
+              <span>{text.resultCount(filteredWorkers.length)}</span>
+            )}
           </div>
         </div>
 
@@ -174,10 +343,10 @@ const SearchSection: React.FC = () => {
               </h3>
             </div>
 
-            {/* Recherche par mot clé */}
+            {/* Mot clé */}
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">
-                {text.job}
+                {text.keywordLabel}
               </label>
               <Input
                 value={keyword}
@@ -187,7 +356,7 @@ const SearchSection: React.FC = () => {
               />
             </div>
 
-            {/* Select métier */}
+            {/* Métier */}
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.job}
@@ -201,6 +370,94 @@ const SearchSection: React.FC = () => {
                 {jobs.map((job) => (
                   <option key={job} value={job}>
                     {job}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Région */}
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {text.region}
+              </label>
+              <select
+                value={selectedRegion}
+                onChange={(e) => {
+                  setSelectedRegion(e.target.value);
+                  setSelectedCity("");
+                  setSelectedCommune("");
+                  setSelectedDistrict("");
+                }}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+              >
+                <option value="">{text.allRegions}</option>
+                {regions.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Ville */}
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {text.city}
+              </label>
+              <select
+                value={selectedCity}
+                onChange={(e) => {
+                  setSelectedCity(e.target.value);
+                  setSelectedCommune("");
+                  setSelectedDistrict("");
+                }}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+              >
+                <option value="">{text.allCities}</option>
+                {cities.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Commune */}
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {text.commune}
+              </label>
+              <select
+                value={selectedCommune}
+                onChange={(e) => {
+                  setSelectedCommune(e.target.value);
+                  setSelectedDistrict("");
+                }}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+              >
+                <option value="">{text.allCommunes}</option>
+                {communes.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Quartier */}
+            <div className="mb-6">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {text.district}
+              </label>
+              <select
+                value={selectedDistrict}
+                onChange={(e) => setSelectedDistrict(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+              >
+                <option value="">{text.allDistricts}</option>
+                {districts.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
                   </option>
                 ))}
               </select>
@@ -227,7 +484,7 @@ const SearchSection: React.FC = () => {
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.ratingLabel} ({minRating.toFixed(1)})
               </label>
-              <div className="flex items-center gap-2 pt-2">
+              <div className="pt-2">
                 <Slider
                   defaultValue={[minRating]}
                   min={0}
@@ -245,9 +502,23 @@ const SearchSection: React.FC = () => {
 
           {/* Résultats */}
           <div className="md:col-span-2 space-y-4">
-            {filteredWorkers.length === 0 && (
+            {error && (
+              <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm">
+                {error}
+              </div>
+            )}
+
+            {!error && !loading && filteredWorkers.length === 0 && (
               <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
                 {text.noResults}
+              </div>
+            )}
+
+            {loading && filteredWorkers.length === 0 && (
+              <div className="border border-gray-100 rounded-xl p-6 text-sm text-gray-500">
+                {language === "fr"
+                  ? "Chargement des professionnels..."
+                  : "Loading professionals..."}
               </div>
             )}
 
@@ -256,7 +527,6 @@ const SearchSection: React.FC = () => {
                 key={w.id}
                 className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center gap-4"
               >
-                {/* Avatar simple (initiales) */}
                 <div className="flex-shrink-0">
                   <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">
                     {w.name
@@ -266,22 +536,29 @@ const SearchSection: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Infos principales */}
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-semibold text-pro-gray text-base md:text-lg truncate">
                       {w.name}
                     </h3>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-pro-blue border border-blue-100">
-                      {w.tag}
-                    </span>
+                    {w.job && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-pro-blue border border-blue-100">
+                        {w.job}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 mt-1 text-xs md:text-sm text-gray-600">
-                    <span>{w.job}</span>
                     <span className="flex items-center gap-1">
                       <MapPin className="w-3 h-3" />
-                      {w.city}
+                      {[
+                        w.region,
+                        w.city,
+                        w.commune,
+                        w.district,
+                      ]
+                        .filter(Boolean)
+                        .join(" • ")}
                     </span>
                     <span className="flex items-center gap-1">
                       <Star className="w-3 h-3 text-yellow-400" />
@@ -293,7 +570,6 @@ const SearchSection: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Prix + bouton */}
                 <div className="flex flex-col items-end gap-2 text-right">
                   <div className="text-pro-blue font-bold text-base md:text-lg">
                     {formatCurrency(w.hourlyRate, w.currency)}
