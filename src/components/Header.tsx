@@ -33,12 +33,6 @@ const Header = () => {
               {t('nav.search')}
             </a>
             <a
-              href="#subscription"
-              className="text-pro-gray hover:text-pro-blue transition-colors"
-            >
-              {t('nav.subscribe')}
-            </a>
-            <a
               href="#faq"
               className="text-pro-gray hover:text-pro-blue transition-colors"
             >
@@ -55,7 +49,7 @@ const Header = () => {
           {/* Actions */}
           <div className="flex items-center space-x-3">
             {/* 👉 CTA Devenir Ouvrier Pro (desktop) */}
-            <a href="/inscription-ouvrier">
+            <a href="#subscription">
               <Button
                 size="sm"
                 className="hidden md:inline-flex bg-pro-blue text-white hover:bg-pro-blue/90"
@@ -100,14 +94,16 @@ const Header = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white">
-                <DropdownMenuItem>
-                  <Search className="w-4 h-4 mr-2" />
-                  {t('nav.search')}
+                <DropdownMenuItem asChild>
+                  <a href="#search" className="flex items-center">
+                    <Search className="w-4 h-4 mr-2" />
+                    {t('nav.search')}
+                  </a>
                 </DropdownMenuItem>
 
                 {/* 👉 CTA Devenir Ouvrier Pro (mobile) */}
                 <DropdownMenuItem asChild className="cursor-pointer">
-                  <a href="/inscription-ouvrier" className="flex items-center">
+                  <a href="#subscription" className="flex items-center">
                     <User className="w-4 h-4 mr-2" />
                     Devenir Ouvrier Pro
                   </a>
