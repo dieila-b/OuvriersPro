@@ -8,7 +8,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import InscriptionOuvrier from "./pages/InscriptionOuvrier";
-import WorkerDetail from "./pages/WorkerDetail"; // 👈 nouvelle page fiche ouvrier
+import WorkerDetail from "./pages/WorkerDetail";
 
 const queryClient = new QueryClient();
 
@@ -26,11 +26,10 @@ const App = () => (
             {/* Page d'inscription des ouvriers */}
             <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
 
-            {/* Fiche détaillée ouvrier */}
-            <Route path="/ouvrier/:id" element={<WorkerDetail />} />
+            {/* Fiche détaillée ouvrier avec slug lisible */}
+            <Route path="/ouvrier/:slug" element={<WorkerDetail />} />
 
-            {/* Route de secours */}
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            {/* Catch-all */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
