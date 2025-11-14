@@ -43,12 +43,10 @@ interface WorkerCard {
 const SearchSection: React.FC = () => {
   const { language } = useLanguage();
 
-  // Données depuis Supabase
   const [workers, setWorkers] = useState<WorkerCard[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Filtres
   const [keyword, setKeyword] = useState("");
   const [selectedJob, setSelectedJob] = useState<string>("all");
   const [maxPrice, setMaxPrice] = useState<number>(300000);
@@ -59,10 +57,10 @@ const SearchSection: React.FC = () => {
   const [selectedCommune, setSelectedCommune] = useState<string>("");
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
 
-  // Vue : liste / mosaïque
+  // 🔵 état de la vue : "list" ou "grid"
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
-  // Chargement des ouvriers depuis Supabase
+  // Chargement Supabase
   useEffect(() => {
     const fetchWorkers = async () => {
       setLoading(true);
@@ -128,7 +126,7 @@ const SearchSection: React.FC = () => {
     fetchWorkers();
   }, [language]);
 
-  // Listes pour les filtres
+  // Listes de filtres dynamiques
   const jobs = useMemo(
     () =>
       Array.from(
@@ -330,43 +328,11 @@ const SearchSection: React.FC = () => {
 
         {/* Grille filtres + résultats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
-          {/* Filtres + boutons d'affichage */}
+          {/* Filtres */}
           <aside className="md:col-span-1 bg-gray-50 rounded-xl p-5 border border-gray-200">
-            {/* En-tête filtres + switch Liste/Mosaïque */}
-            <div className="flex items-center justify-between gap-2 mb-4">
-              <h3 className="text-base font-semibold text-pro-gray">
-                {text.filters}
-              </h3>
-              <div className="flex items-center gap-2 text-[11px] text-gray-500">
-                <span>{text.viewMode}</span>
-                <div className="flex border border-gray-300 rounded-lg bg-white p-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("list")}
-                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-md ${
-                      viewMode === "list"
-                        ? "bg-pro-blue text-white"
-                        : "text-gray-600 hover:bg-gray-100"
-                    }`}
-                  >
-                    <LayoutList className="w-3 h-3" />
-                    {text.viewList}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("grid")}
-                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-md ${
-                      viewMode === "grid"
-                        ? "bg-pro-blue text-white"
-                        : "text-gray-600 hover:bg-gray-100"
-                    }`}
-                  >
-                    <LayoutGrid className="w-3 h-3" />
-                    {text.viewGrid}
-                  </button>
-                </div>
-              </div>
-            </div>
+            <h3 className="text-base font-semibold text-pro-gray mb-4">
+              {text.filters}
+            </h3>
 
             {/* Mot clé */}
             <div className="mb-4">
@@ -536,19 +502,56 @@ const SearchSection: React.FC = () => {
             </Button>
           </aside>
 
-          {/* Résultats */}
+          {/* Résultats + boutons Liste/Mosaïque */}
           <div className="md:col-span-2">
-            <div className="flex items-center gap-2 mb-4 text-xs text-gray-500">
-              <Search className="w-4 h-4" />
-              {loading ? (
-                <span>
-                  {language === "fr"
-                    ? "Chargement des résultats..."
-                    : "Loading results..."}
-                </span>
-              ) : (
-                <span>{text.resultCount(filteredWorkers.length)}</span>
-              )}
+            {/* ✅ EN-TÊTE : texte + switch vue LISTE / MOSAÏQUE */}
+            <div className="flex flex-col gap-3 mb-4 border-b border-gray-200 pb-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <Search className="w-4 h-4" />
+                  {loading ? (
+                    <span>
+                      {language === "fr"
+                        ? "Chargement des résultats..."
+                        : "Loading results..."}
+                    </span>
+                  ) : (
+                    <span>{text.resultCount(filteredWorkers.length)}</span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-gray-500 uppercase tracking-wide">
+                    {text.viewMode}
+                  </span>
+                  <div className="flex border border-gray-300 rounded-lg bg-white overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("list")}
+                      className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs ${
+                        viewMode === "list"
+                          ? "bg-pro-blue text-white"
+                          : "text-gray-600 hover:bg-gray-100"
+                      }`}
+                    >
+                      <LayoutList className="w-3 h-3" />
+                      {text.viewList}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("grid")}
+                      className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs ${
+                        viewMode === "grid"
+                          ? "bg-pro-blue text-white"
+                          : "text-gray-600 hover:bg-gray-100"
+                      }`}
+                    >
+                      <LayoutGrid className="w-3 h-3" />
+                      {text.viewGrid}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {error && (
@@ -571,7 +574,7 @@ const SearchSection: React.FC = () => {
               </div>
             )}
 
-            {/* LISTE */}
+            {/* VUE LISTE */}
             {viewMode === "list" && (
               <div className="space-y-4">
                 {filteredWorkers.map((w) => (
@@ -636,7 +639,7 @@ const SearchSection: React.FC = () => {
               </div>
             )}
 
-            {/* MOSAÏQUE */}
+            {/* VUE MOSAÏQUE */}
             {viewMode === "grid" && (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {filteredWorkers.map((w) => (
