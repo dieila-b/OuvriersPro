@@ -4,6 +4,8 @@ import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
+import { useAuthProfile } from "@/hooks/useAuthProfile";
 
 type DbContact = {
   id: string;
@@ -23,6 +25,8 @@ type ContactStatus = (typeof statusOptions)[number];
 
 const AdminOuvrierContacts: React.FC = () => {
   const { language } = useLanguage();
+  const navigate = useNavigate();
+  const { isAdmin, loading: authLoading } = useAuthProfile();
 
   const [contacts, setContacts] = useState<DbContact[]>([]);
   const [loading, setLoading] = useState(false);
@@ -32,7 +36,17 @@ const AdminOuvrierContacts: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<"" | ContactStatus>("");
   const [search, setSearch] = useState("");
 
+  // 🔐 Protection de la page : si pas admin => redirection
   useEffect(() => {
+    if (!authLoading && !isAdmin) {
+      navigate("/");
+    }
+  }, [authLoading, isAdmin, navigate]);
+
+  // 🔹 Chargement des demandes (uniquement si admin connecté)
+  useEffect(() => {
+    if (authLoading || !isAdmin) return;
+
     const fetchContacts = async () => {
       setLoading(true);
       setError(null);
@@ -71,7 +85,7 @@ const AdminOuvrierContacts: React.FC = () => {
     };
 
     fetchContacts();
-  }, [language]);
+  }, [language, authLoading, isAdmin]);
 
   const filtered = useMemo(() => {
     return contacts.filter((c) => {
@@ -99,16 +113,13 @@ const AdminOuvrierContacts: React.FC = () => {
 
   const formatDate = (value: string) => {
     const d = new Date(value);
-    return d.toLocaleString(
-      language === "fr" ? "fr-FR" : "en-GB",
-      {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      }
-    );
+    return d.toLocaleString(language === "fr" ? "fr-FR" : "en-GB", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
   const statusLabel = (s: string | null | undefined) => {
@@ -147,9 +158,7 @@ const AdminOuvrierContacts: React.FC = () => {
       );
     } else {
       setContacts((prev) =>
-        prev.map((c) =>
-          c.id === id ? { ...c, status: newStatus } : c
-        )
+        prev.map((c) => (c.id === id ? { ...c, status: newStatus } : c))
       );
     }
 
@@ -165,8 +174,7 @@ const AdminOuvrierContacts: React.FC = () => {
       language === "fr"
         ? "Vue d’ensemble des demandes envoyées par les particuliers."
         : "Overview of all contact requests sent by clients.",
-    statusFilter:
-      language === "fr" ? "Statut" : "Status",
+    statusFilter: language === "fr" ? "Statut" : "Status",
     searchPlaceholder:
       language === "fr"
         ? "Rechercher (ouvrier, client, email, téléphone, message...)"
@@ -189,6 +197,8 @@ const AdminOuvrierContacts: React.FC = () => {
   };
 
   const refresh = async () => {
+    if (authLoading || !isAdmin) return;
+
     setLoading(true);
     setError(null);
 
@@ -223,6 +233,24 @@ const AdminOuvrierContacts: React.FC = () => {
 
     setLoading(false);
   };
+
+  // Pendant qu'on ne sait pas encore si l'utilisateur est admin ou non
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-sm text-slate-500">
+          {language === "fr"
+            ? "Vérification de vos droits..."
+            : "Checking your permissions..."}
+        </div>
+      </div>
+    );
+  }
+
+  // Si pas admin, on ne rend rien (la redirection a déjà eu lieu)
+  if (!isAdmin) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 py-10">
