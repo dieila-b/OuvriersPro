@@ -1,16 +1,17 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
 import {
   ArrowLeft,
   MapPin,
   Star,
-  Clock,
   Phone,
-  Mail,
   MessageCircle,
 } from "lucide-react";
 
@@ -18,9 +19,9 @@ type DbWorker = {
   id: string;
   first_name: string | null;
   last_name: string | null;
-  email: string | null;
-  phone: string | null;
   profession: string | null;
+  phone: string | null;
+  email: string | null;
   country: string | null;
   region: string | null;
   city: string | null;
@@ -32,55 +33,51 @@ type DbWorker = {
   years_experience: number | null;
   average_rating: number | null;
   rating_count: number | null;
-  status: string | null;
 };
 
-type DbReview = {
-  id: string;
-  worker_id: string;
-  author_name: string | null;
-  rating: number | null;
-  comment: string | null;
-  created_at: string;
+interface ContactFormState {
+  fullName: string;
+  email: string;
+  phone: string;
+  message: string;
+}
+
+const normalizePhoneForWhatsApp = (phone: string) =>
+  phone.replace(/[^\d]/g, "");
+
+const formatCurrency = (value: number | null, currency: string | null) => {
+  if (!value) return "";
+  const cur = currency || "GNF";
+  if (cur === "GNF") {
+    return `${value.toLocaleString("fr-FR")} GNF`;
+  }
+  return `${value} ${cur}`;
 };
 
 const WorkerDetail: React.FC = () => {
-  const { slug } = useParams<{ slug: string }>();
-  const navigate = useNavigate();
-  const { language } = useLanguage();
+  const { t, language } = useLanguage();
+  const { id } = useParams<{ id: string }>();
 
   const [worker, setWorker] = useState<DbWorker | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [reviews, setReviews] = useState<DbReview[]>([]);
+  const [contactForm, setContactForm] = useState<ContactFormState>({
+    fullName: "",
+    email: "",
+    phone: "",
+    message: "",
+  });
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
 
-  // 🔹 Extraire l'ID depuis le slug : nom-prenom--UUID
-  const workerId = useMemo(() => {
-    if (!slug) return null;
-    const parts = slug.split("--");
-    if (parts.length < 2) {
-      return slug; // fallback : au cas où on aurait juste l'id
-    }
-    return parts[parts.length - 1];
-  }, [slug]);
-
+  // 🔹 Charger l’ouvrier depuis Supabase
   useEffect(() => {
-    const fetchData = async () => {
-      if (!workerId) {
-        setError(
-          language === "fr"
-            ? "Identifiant ouvrier manquant."
-            : "Missing worker id."
-        );
-        setLoading(false);
-        return;
-      }
-
+    const fetchWorker = async () => {
+      if (!id) return;
       setLoading(true);
       setError(null);
 
-      // 1) Charger la fiche ouvrier
       const { data, error } = await supabase
         .from<DbWorker>("op_ouvriers")
         .select(
@@ -88,9 +85,9 @@ const WorkerDetail: React.FC = () => {
           id,
           first_name,
           last_name,
-          email,
-          phone,
           profession,
+          phone,
+          email,
           country,
           region,
           city,
@@ -101,89 +98,74 @@ const WorkerDetail: React.FC = () => {
           currency,
           years_experience,
           average_rating,
-          rating_count,
-          status
+          rating_count
         `
         )
-        .eq("id", workerId)
+        .eq("id", id)
         .eq("status", "approved")
         .single();
 
-      if (error) {
+      if (error || !data) {
         console.error(error);
         setError(
           language === "fr"
-            ? "Impossible de charger la fiche de cet ouvrier."
-            : "Unable to load this worker profile."
+            ? "Impossible de charger ce professionnel."
+            : "Unable to load this professional."
         );
-        setLoading(false);
-        return;
-      }
-
-      setWorker(data);
-
-      // 2) Charger les avis clients
-      const { data: reviewsData, error: reviewsError } = await supabase
-        .from<DbReview>("op_ouvrier_reviews")
-        .select(
-          `
-          id,
-          worker_id,
-          author_name,
-          rating,
-          comment,
-          created_at
-        `
-        )
-        .eq("worker_id", workerId)
-        .order("created_at", { ascending: false });
-
-      if (reviewsError) {
-        console.error(reviewsError);
-        // On n'affiche pas d'erreur bloquante, juste pas d'avis
-        setReviews([]);
       } else {
-        setReviews(reviewsData ?? []);
+        setWorker(data);
       }
 
       setLoading(false);
     };
 
-    fetchData();
-  }, [workerId, language]);
+    fetchWorker();
+  }, [id, language]);
 
-  const fullName =
-    (worker?.first_name || "") +
-    (worker?.last_name ? ` ${worker.last_name}` : "");
+  const handleChangeContact =
+    (field: keyof ContactFormState) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      setContactForm((prev) => ({ ...prev, [field]: e.target.value }));
+    };
 
-  const formatLocation = () => {
-    if (!worker) return "";
-    return [worker.region, worker.city, worker.commune, worker.district]
-      .filter(Boolean)
-      .join(" • ");
-  };
+  // 🔹 Envoi d’une demande de contact
+  const handleSubmitContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!worker || !id) return;
 
-  const formatPrice = () => {
-    if (!worker || worker.hourly_rate == null) return "";
-    if (worker.currency === "GNF") {
-      return `${worker.hourly_rate.toLocaleString("fr-FR")} GNF / ${
-        language === "fr" ? "heure" : "hour"
-      }`;
-    }
-    return `${worker.hourly_rate} ${worker.currency} / ${
-      language === "fr" ? "heure" : "hour"
-    }`;
-  };
+    setSending(true);
+    setError(null);
+    setSent(false);
 
-  const formatDate = (iso: string) => {
     try {
-      const d = new Date(iso);
-      return d.toLocaleDateString(
-        language === "fr" ? "fr-FR" : "en-GB",
-        { year: "numeric", month: "short", day: "numeric" }
+      const { error } = await supabase.from("op_ouvrier_contacts").insert({
+        worker_id: id,
+        full_name: contactForm.fullName,
+        email: contactForm.email || null,
+        phone: contactForm.phone || null,
+        message: contactForm.message,
+      });
+
+      if (error) {
+        console.error(error);
+        throw error;
+      }
+
+      setSent(true);
+      setContactForm({
+        fullName: "",
+        email: "",
+        phone: "",
+        message: "",
+      });
+    } catch (err: any) {
+      setError(
+        language === "fr"
+          ? "Impossible d’envoyer votre message pour le moment."
+          : "Unable to send your message at the moment."
       );
-    } catch {
-      return iso;
+    } finally {
+      setSending(false);
     }
   };
 
@@ -192,79 +174,40 @@ const WorkerDetail: React.FC = () => {
       language === "fr"
         ? "Retour aux résultats"
         : "Back to results",
-    title:
-      language === "fr"
-        ? "Fiche détaillée"
-        : "Detailed profile",
-    experience:
+    years:
       language === "fr"
         ? "ans d'expérience"
         : "years of experience",
-    descriptionTitle:
-      language === "fr"
-        ? "Description des services"
-        : "Services description",
-    zoneTitle:
-      language === "fr"
-        ? "Zone d’intervention"
-        : "Service area",
     contactTitle:
       language === "fr"
-        ? "Prise de contact"
-        : "Contact",
-    phoneLabel:
+        ? "Contacter ce professionnel"
+        : "Contact this professional",
+    fullName:
+      language === "fr" ? "Votre nom complet" : "Your full name",
+    email: "Email",
+    phone: language === "fr" ? "Téléphone" : "Phone",
+    messageLabel:
       language === "fr"
-        ? "Téléphone"
-        : "Phone",
-    emailLabel:
+        ? "Votre besoin / message"
+        : "Your request / message",
+    send:
+      language === "fr" ? "Envoyer le message" : "Send message",
+    sent:
       language === "fr"
-        ? "E-mail"
-        : "Email",
-    whatsappLabel:
-      language === "fr"
-        ? "WhatsApp"
-        : "WhatsApp",
-    noPhone:
-      language === "fr"
-        ? "Numéro non renseigné"
-        : "Phone number not provided",
-    noEmail:
-      language === "fr"
-        ? "E-mail non renseigné"
-        : "Email not provided",
-    loading:
-      language === "fr"
-        ? "Chargement de la fiche..."
-        : "Loading profile...",
-    notFound:
-      language === "fr"
-        ? "Ouvrier introuvable."
-        : "Worker not found.",
-    reviewsTitle:
-      language === "fr"
-        ? "Avis clients"
-        : "Customer reviews",
-    noReviews:
-      language === "fr"
-        ? "Aucun avis client pour le moment."
-        : "No customer reviews yet.",
-    ratingOutOf5:
-      language === "fr"
-        ? "sur 5"
-        : "out of 5",
-  };
-
-  const buildWhatsappLink = () => {
-    if (!worker?.phone) return "#";
-    const phoneClean = worker.phone.replace(/\s+/g, "");
-    return `https://wa.me/${phoneClean}`;
+        ? "Votre message a bien été envoyé. Nous vous répondrons au plus vite."
+        : "Your message has been sent. The worker will get back to you soon.",
+    call:
+      language === "fr" ? "Appeler" : "Call",
+    whatsapp:
+      language === "fr" ? "WhatsApp" : "WhatsApp",
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 py-10">
-        <div className="max-w-3xl mx-auto px-4">
-          <p className="text-gray-600 text-sm">{text.loading}</p>
+        <div className="max-w-5xl mx-auto px-4">
+          <div className="h-6 w-40 bg-gray-200 rounded mb-4" />
+          <div className="h-40 w-full bg-gray-200 rounded mb-4" />
         </div>
       </div>
     );
@@ -273,21 +216,20 @@ const WorkerDetail: React.FC = () => {
   if (error || !worker) {
     return (
       <div className="min-h-screen bg-gray-50 py-10">
-        <div className="max-w-3xl mx-auto px-4 space-y-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate(-1)}
-            className="inline-flex items-center gap-2"
+        <div className="max-w-3xl mx-auto px-4">
+          <Link
+            to="/#search"
+            className="inline-flex items-center text-sm text-pro-blue mb-4"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4 mr-1" />
             {text.back}
-          </Button>
+          </Link>
           <Card>
-            <CardContent className="p-6">
-              <p className="text-red-600 text-sm">
-                {error || text.notFound}
-              </p>
+            <CardContent className="py-6 text-red-600">
+              {error ||
+                (language === "fr"
+                  ? "Ce professionnel n’est pas disponible."
+                  : "This professional is not available.")}
             </CardContent>
           </Card>
         </div>
@@ -295,212 +237,230 @@ const WorkerDetail: React.FC = () => {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50 py-8 md:py-12">
-      <div className="max-w-4xl mx-auto px-4 space-y-6">
-        {/* Bouton retour */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-2"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          {text.back}
-        </Button>
+  const fullName =
+    (worker.first_name || "") +
+    (worker.last_name ? ` ${worker.last_name}` : "");
 
-        {/* Fiche ouvrier */}
-        <Card className="shadow-md">
-          <CardHeader className="border-b border-gray-100 pb-4">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-full bg-pro-blue/10 flex items-center justify-center text-pro-blue font-semibold text-xl">
-                  {fullName
-                    .split(" ")
-                    .filter(Boolean)
-                    .map((n) => n[0])
-                    .join("") || "OP"}
-                </div>
-                <div>
-                  <CardTitle className="text-xl md:text-2xl text-pro-gray">
-                    {fullName || "Ouvrier"}
-                  </CardTitle>
-                  {worker.profession && (
-                    <p className="text-sm text-pro-blue font-medium">
-                      {worker.profession}
-                    </p>
-                  )}
-                  {formatLocation() && (
-                    <p className="text-xs md:text-sm text-gray-500 flex items-center gap-1 mt-1">
+  const locationParts = [
+    worker.region,
+    worker.city,
+    worker.commune,
+    worker.district,
+  ].filter(Boolean);
+
+  const telHref = worker.phone ? `tel:${worker.phone}` : undefined;
+  const waHref = worker.phone
+    ? `https://wa.me/${normalizePhoneForWhatsApp(worker.phone)}`
+    : undefined;
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-10">
+      <div className="max-w-5xl mx-auto px-4 space-y-6">
+        {/* Lien retour */}
+        <div className="flex items-center justify-between">
+          <Link
+            to="/#search"
+            className="inline-flex items-center text-sm text-pro-blue hover:underline"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1" />
+            {text.back}
+          </Link>
+        </div>
+
+        {/* Bloc profil */}
+        <Card className="shadow-sm">
+          <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">
+                {fullName
+                  .split(" ")
+                  .filter(Boolean)
+                  .map((n) => n[0])
+                  .join("")}
+              </div>
+              <div>
+                <CardTitle className="text-xl font-bold text-pro-gray">
+                  {fullName}
+                </CardTitle>
+                {worker.profession && (
+                  <div className="text-pro-blue font-medium text-sm">
+                    {worker.profession}
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-3 mt-2 text-xs md:text-sm text-gray-600">
+                  {locationParts.length > 0 && (
+                    <span className="inline-flex items-center gap-1">
                       <MapPin className="w-3 h-3" />
-                      {formatLocation()}
-                    </p>
+                      {locationParts.join(" • ")}
+                    </span>
+                  )}
+                  {worker.average_rating !== null && (
+                    <span className="inline-flex items-center gap-1">
+                      <Star className="w-3 h-3 text-yellow-400" />
+                      {worker.average_rating.toFixed(1)} (
+                      {worker.rating_count ?? 0})
+                    </span>
+                  )}
+                  {worker.years_experience !== null && (
+                    <span>
+                      {worker.years_experience} {text.years}
+                    </span>
                   )}
                 </div>
               </div>
+            </div>
 
-              <div className="text-right space-y-1">
-                {worker.average_rating != null && (
-                  <p className="text-sm flex items-center gap-1 justify-end text-yellow-500">
-                    <Star className="w-4 h-4" />
-                    <span className="font-semibold">
-                      {worker.average_rating.toFixed(1)}
+            {/* Tarif + actions rapides */}
+            <div className="flex flex-col items-end gap-2">
+              {worker.hourly_rate && (
+                <div className="text-right">
+                  <div className="text-sm text-gray-500">
+                    {language === "fr"
+                      ? "Tarif indicatif"
+                      : "Indicative rate"}
+                  </div>
+                  <div className="text-lg font-bold text-pro-blue">
+                    {formatCurrency(worker.hourly_rate, worker.currency)}
+                    <span className="text-xs text-gray-600 ml-1">
+                      {language === "fr" ? "/heure" : "/hour"}
                     </span>
-                    <span className="text-gray-500 text-xs">
-                      ({worker.rating_count || 0}) {text.ratingOutOf5}
-                    </span>
-                  </p>
-                )}
+                  </div>
+                </div>
+              )}
 
-                {worker.years_experience != null && (
-                  <p className="text-xs text-gray-600 flex items-center gap-1 justify-end">
-                    <Clock className="w-3 h-3" />
-                    {worker.years_experience} {text.experience}
-                  </p>
+              <div className="flex gap-2">
+                {telHref && (
+                  <a href={telHref}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-1"
+                    >
+                      <Phone className="w-4 h-4" />
+                      {text.call}
+                    </Button>
+                  </a>
                 )}
-
-                {worker.hourly_rate != null && (
-                  <p className="text-sm font-semibold text-pro-blue">
-                    {formatPrice()}
-                  </p>
+                {waHref && (
+                  <a href={waHref} target="_blank" rel="noreferrer">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-1"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      {text.whatsapp}
+                    </Button>
+                  </a>
                 )}
               </div>
             </div>
           </CardHeader>
 
-          <CardContent className="p-6 space-y-6">
-            {/* Description */}
-            <section>
-              <h3 className="text-base font-semibold text-pro-gray mb-2">
-                {text.descriptionTitle}
-              </h3>
-              <p className="text-sm text-gray-700 leading-relaxed">
-                {worker.description ||
-                  (language === "fr"
-                    ? "Aucune description détaillée fournie pour le moment."
-                    : "No detailed description provided yet.")}
-              </p>
-            </section>
-
-            {/* Zone d’intervention */}
-            <section>
-              <h3 className="text-base font-semibold text-pro-gray mb-2">
-                {text.zoneTitle}
-              </h3>
-              <p className="text-sm text-gray-700">
-                {formatLocation() ||
-                  (language === "fr"
-                    ? "Zone d’intervention non précisée."
-                    : "Service area not specified.")}
-              </p>
-            </section>
-
-            {/* Contact */}
-            <section>
-              <h3 className="text-base font-semibold text-pro-gray mb-3">
-                {text.contactTitle}
-              </h3>
-              <div className="grid gap-3 md:grid-cols-2">
-                {/* Téléphone */}
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-pro-blue/10 flex items-center justify-center">
-                    <Phone className="w-4 h-4 text-pro-blue" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">{text.phoneLabel}</p>
-                    <p className="text-sm text-gray-800">
-                      {worker.phone || text.noPhone}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Email */}
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-pro-blue/10 flex items-center justify-center">
-                    <Mail className="w-4 h-4 text-pro-blue" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">{text.emailLabel}</p>
-                    <p className="text-sm text-gray-800">
-                      {worker.email || text.noEmail}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Boutons d'action */}
-              <div className="mt-4 flex flex-wrap gap-3">
-                {worker.phone && (
-                  <Button
-                    asChild
-                    className="bg-pro-blue hover:bg-blue-700 text-sm"
-                  >
-                    <a href={`tel:${worker.phone}`}>
-                      <Phone className="w-4 h-4 mr-2" />
-                      {language === "fr" ? "Appeler" : "Call"}
-                    </a>
-                  </Button>
-                )}
-
-                {worker.phone && (
-                  <Button variant="outline" asChild className="text-sm">
-                    <a href={buildWhatsappLink()} target="_blank" rel="noreferrer">
-                      <MessageCircle className="w-4 h-4 mr-2" />
-                      {text.whatsappLabel}
-                    </a>
-                  </Button>
-                )}
-
-                {worker.email && (
-                  <Button variant="outline" asChild className="text-sm">
-                    <a href={`mailto:${worker.email}`}>
-                      <Mail className="w-4 h-4 mr-2" />
-                      {language === "fr" ? "Envoyer un e-mail" : "Send email"}
-                    </a>
-                  </Button>
-                )}
-              </div>
-            </section>
-
-            {/* Avis clients */}
-            <section className="pt-4 border-t border-gray-100">
-              <h3 className="text-base font-semibold text-pro-gray mb-3">
-                {text.reviewsTitle}
-              </h3>
-
-              {reviews.length === 0 && (
-                <p className="text-sm text-gray-500">
-                  {text.noReviews}
+          <CardContent className="space-y-4">
+            {worker.description && (
+              <div>
+                <h3 className="text-sm font-semibold text-pro-gray mb-1">
+                  {language === "fr"
+                    ? "Présentation"
+                    : "About"}
+                </h3>
+                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                  {worker.description}
                 </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Formulaire de contact */}
+        <Card className="shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <MessageCircle className="w-4 h-4 text-pro-blue" />
+              {text.contactTitle}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmitContact} className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    {text.fullName}
+                  </label>
+                  <Input
+                    required
+                    value={contactForm.fullName}
+                    onChange={handleChangeContact("fullName")}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    {text.email}
+                  </label>
+                  <Input
+                    type="email"
+                    value={contactForm.email}
+                    onChange={handleChangeContact("email")}
+                    placeholder="vous@exemple.com"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  {text.phone}
+                </label>
+                <Input
+                  value={contactForm.phone}
+                  onChange={handleChangeContact("phone")}
+                  placeholder="+224 6X XX XX XX"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  {text.messageLabel}
+                </label>
+                <textarea
+                  required
+                  value={contactForm.message}
+                  onChange={handleChangeContact("message")}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue min-h-[120px]"
+                  placeholder={
+                    language === "fr"
+                      ? "Décrivez votre besoin, vos disponibilités, le lieu d’intervention…"
+                      : "Describe your request, availability and location…"
+                  }
+                />
+              </div>
+
+              {error && (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+                  {error}
+                </div>
               )}
 
-              <div className="space-y-3">
-                {reviews.map((rev) => (
-                  <div
-                    key={rev.id}
-                    className="border border-gray-100 rounded-lg p-3 bg-gray-50"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="text-sm font-semibold text-pro-gray">
-                        {rev.author_name || (language === "fr" ? "Client" : "Client")}
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-yellow-500">
-                        <Star className="w-3 h-3" />
-                        <span>{(rev.rating ?? 0).toFixed(1)}/5</span>
-                      </div>
-                    </div>
-                    {rev.comment && (
-                      <p className="text-xs text-gray-700 leading-relaxed mb-1">
-                        {rev.comment}
-                      </p>
-                    )}
-                    <div className="text-[11px] text-gray-400">
-                      {formatDate(rev.created_at)}
-                    </div>
-                  </div>
-                ))}
+              {sent && (
+                <div className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-md px-3 py-2">
+                  {text.sent}
+                </div>
+              )}
+
+              <div className="pt-2">
+                <Button
+                  type="submit"
+                  disabled={sending}
+                  className="bg-pro-blue hover:bg-blue-700"
+                >
+                  {sending
+                    ? language === "fr"
+                      ? "Envoi en cours..."
+                      : "Sending..."
+                    : text.send}
+                </Button>
               </div>
-            </section>
+            </form>
           </CardContent>
         </Card>
       </div>
