@@ -1,16 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Card, CardContent } from "@/components/ui/card";
+import { supabase } from "@/lib/supabase";
+import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { MapPin, Star, Phone } from "lucide-react";
+import { Star, MapPin, Search, LayoutList, LayoutGrid } from "lucide-react";
 
-type Worker = {
+type DbWorker = {
   id: string;
   first_name: string | null;
   last_name: string | null;
   profession: string | null;
+  country: string | null;
   region: string | null;
   city: string | null;
   commune: string | null;
@@ -20,529 +21,683 @@ type Worker = {
   years_experience: number | null;
   average_rating: number | null;
   rating_count: number | null;
+  status: string | null;
 };
 
-// ⚙️ Données de localisation simplifiées pour la Guinée
-// (tu pourras compléter / étendre tranquillement par la suite)
-const GUINEA_LOCATIONS = {
-  Conakry: {
-    cities: {
-      Conakry: {
-        communes: {
-          Ratoma: ["Kipé", "Taouyah", "Lambanyi", "Nongo"],
-          Matoto: ["Gbessia", "Yimbaya", "Sangoyah"],
-          Dixinn: ["Bellevue", "Coleah", "Camayenne"],
-          Kaloum: ["Sandervalia", "Boulbinet"],
-        },
-      },
-    },
-  },
-  Kindia: {
-    cities: {
-      Kindia: {
-        communes: {
-          "Commune urbaine": ["Kolenté", "Damakania"],
-        },
-      },
-    },
-  },
-  Boké: {
-    cities: {
-      Boké: {
-        communes: {
-          "Commune urbaine": ["Koumbia", "Tanènè"],
-        },
-      },
-    },
-  },
-};
-
-const DEFAULT_COUNTRY = "Guinée";
+interface WorkerCard {
+  id: string;
+  name: string;
+  job: string;
+  country: string;
+  region: string;
+  city: string;
+  commune: string;
+  district: string;
+  experienceYears: number;
+  hourlyRate: number;
+  currency: string;
+  rating: number;
+  ratingCount: number;
+}
 
 const WorkerSearchSection: React.FC = () => {
   const { language } = useLanguage();
 
-  const [workers, setWorkers] = useState<Worker[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Données
+  const [workers, setWorkers] = useState<WorkerCard[]>([]);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 🧠 Filtres
-  const [searchText, setSearchText] = useState("");
-  const [country] = useState<string>(DEFAULT_COUNTRY);
-  const [region, setRegion] = useState<string>("");
-  const [city, setCity] = useState<string>("");
-  const [commune, setCommune] = useState<string>("");
-  const [district, setDistrict] = useState<string>("");
-  const [maxHourlyRate, setMaxHourlyRate] = useState<number>(0); // 0 = pas de limite
-  const [minRating, setMinRating] = useState<number>(0); // 0 = toutes les notes
+  // Filtres
+  const [keyword, setKeyword] = useState("");
+  const [selectedJob, setSelectedJob] = useState<string>("all");
+  const [maxPrice, setMaxPrice] = useState<number>(300000);
+  const [minRating, setMinRating] = useState<number>(0);
 
-  // 🔁 Lorsque région change → reset ville/commune/quartier
-  useEffect(() => {
-    setCity("");
-    setCommune("");
-    setDistrict("");
-  }, [region]);
+  const [selectedRegion, setSelectedRegion] = useState<string>("");
+  const [selectedCity, setSelectedCity] = useState<string>("");
+  const [selectedCommune, setSelectedCommune] = useState<string>("");
+  const [selectedDistrict, setSelectedDistrict] = useState<string>("");
 
-  useEffect(() => {
-    setCommune("");
-    setDistrict("");
-  }, [city]);
+  // Vue liste / mosaïque
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
-  useEffect(() => {
-    setDistrict("");
-  }, [commune]);
-
-  // 📥 Chargement initial des ouvriers
+  // Chargement Supabase
   useEffect(() => {
     const fetchWorkers = async () => {
       setLoading(true);
       setError(null);
 
-      try {
-        const { data, error: supaError } = await supabase
-          .from("op_ouvriers")
-          .select(
-            `
-            id,
-            first_name,
-            last_name,
-            profession,
-            region,
-            city,
-            commune,
-            district,
-            hourly_rate,
-            currency,
-            years_experience,
-            average_rating,
-            rating_count,
-            status
+      const { data, error } = await supabase
+        .from<DbWorker>("op_ouvriers")
+        .select(
           `
-          )
-          .eq("status", "approved")
-          .order("created_at", { ascending: false })
-          .limit(100);
+          id,
+          first_name,
+          last_name,
+          profession,
+          country,
+          region,
+          city,
+          commune,
+          district,
+          hourly_rate,
+          currency,
+          years_experience,
+          average_rating,
+          rating_count,
+          status
+        `
+        )
+        .eq("status", "approved");
 
-        if (supaError) {
-          throw supaError;
-        }
-
-        setWorkers((data as Worker[]) || []);
-      } catch (err: any) {
-        console.error(err);
+      if (error) {
+        console.error(error);
         setError(
           language === "fr"
             ? "Impossible de charger les professionnels pour le moment."
-            : "Unable to load workers at the moment."
+            : "Unable to load professionals at the moment."
         );
-      } finally {
         setLoading(false);
+        return;
       }
+
+      const mapped: WorkerCard[] =
+        (data ?? []).map((w) => ({
+          id: w.id,
+          name:
+            ((w.first_name || "") +
+              (w.last_name ? ` ${w.last_name}` : "")) || "Ouvrier",
+          job: w.profession ?? "",
+          country: w.country ?? "",
+          region: w.region ?? "",
+          city: w.city ?? "",
+          commune: w.commune ?? "",
+          district: w.district ?? "",
+          experienceYears: w.years_experience ?? 0,
+          hourlyRate: w.hourly_rate ?? 0,
+          currency: w.currency ?? "GNF",
+          rating: w.average_rating ?? 0,
+          ratingCount: w.rating_count ?? 0,
+        })) ?? [];
+
+      setWorkers(mapped);
+      setLoading(false);
     };
 
     fetchWorkers();
   }, [language]);
 
-  // 📊 Options calculées à partir des données de localisation
-  const regionOptions = useMemo(
-    () => Object.keys(GUINEA_LOCATIONS),
-    []
+  // Listes de filtres dynamiques
+  const jobs = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          workers
+            .map((w) => w.job)
+            .filter((j) => j && j.trim().length > 0)
+        )
+      ),
+    [workers]
   );
 
-  const cityOptions = useMemo(() => {
-    if (!region || !GUINEA_LOCATIONS[region as keyof typeof GUINEA_LOCATIONS]) {
-      return [];
-    }
-    return Object.keys(
-      GUINEA_LOCATIONS[region as keyof typeof GUINEA_LOCATIONS].cities
-    );
-  }, [region]);
+  const regions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          workers
+            .map((w) => w.region)
+            .filter((r) => r && r.trim().length > 0)
+        )
+      ),
+    [workers]
+  );
 
-  const communeOptions = useMemo(() => {
-    if (!region || !city) return [];
-    const regionData = GUINEA_LOCATIONS[region as keyof typeof GUINEA_LOCATIONS];
-    if (!regionData) return [];
-    const cityData = regionData.cities[city as keyof typeof regionData.cities];
-    if (!cityData) return [];
-    return Object.keys(cityData.communes);
-  }, [region, city]);
+  const cities = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          workers
+            .filter((w) => !selectedRegion || w.region === selectedRegion)
+            .map((w) => w.city)
+            .filter((c) => c && c.trim().length > 0)
+        )
+      ),
+    [workers, selectedRegion]
+  );
 
-  const districtOptions = useMemo(() => {
-    if (!region || !city || !commune) return [];
-    const regionData = GUINEA_LOCATIONS[region as keyof typeof GUINEA_LOCATIONS];
-    if (!regionData) return [];
-    const cityData = regionData.cities[city as keyof typeof regionData.cities];
-    if (!cityData) return [];
-    const districts =
-      cityData.communes[commune as keyof typeof cityData.communes];
-    return districts || [];
-  }, [region, city, commune]);
+  const communes = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          workers
+            .filter(
+              (w) =>
+                (!selectedRegion || w.region === selectedRegion) &&
+                (!selectedCity || w.city === selectedCity)
+            )
+            .map((w) => w.commune)
+            .filter((c) => c && c.trim().length > 0)
+        )
+      ),
+    [workers, selectedRegion, selectedCity]
+  );
 
-  // 🧮 Application des filtres côté front
-  const filteredWorkers = useMemo(() => {
-    return workers.filter((w) => {
-      // Texte : métier + nom/prénom
-      if (searchText.trim()) {
-        const txt = searchText.toLowerCase();
-        const fullName = `${w.first_name || ""} ${w.last_name || ""}`.toLowerCase();
-        const job = (w.profession || "").toLowerCase();
-        if (!fullName.includes(txt) && !job.includes(txt)) {
-          return false;
-        }
-      }
+  const districts = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          workers
+            .filter(
+              (w) =>
+                (!selectedRegion || w.region === selectedRegion) &&
+                (!selectedCity || w.city === selectedCity) &&
+                (!selectedCommune || w.commune === selectedCommune)
+            )
+            .map((w) => w.district)
+            .filter((d) => d && d.trim().length > 0)
+        )
+      ),
+    [workers, selectedRegion, selectedCity, selectedCommune]
+  );
 
-      // Pays (pour l'instant on ne filtre pas sur la colonne country)
-      if (country === DEFAULT_COUNTRY) {
-        // rien de spécial, mais plus tard on pourra vérifier w.country
-      }
+  // Application des filtres
+  const filteredWorkers = useMemo(
+    () =>
+      workers.filter((w) => {
+        const matchKeyword =
+          !keyword ||
+          w.name.toLowerCase().includes(keyword.toLowerCase()) ||
+          w.job.toLowerCase().includes(keyword.toLowerCase());
 
-      if (region && (w.region || "") !== region) return false;
-      if (city && (w.city || "") !== city) return false;
-      if (commune && (w.commune || "") !== commune) return false;
-      if (district && (w.district || "") !== district) return false;
+        const matchJob = selectedJob === "all" || w.job === selectedJob;
+        const matchPrice = w.hourlyRate <= maxPrice;
+        const matchRating = w.rating >= minRating;
 
-      if (maxHourlyRate > 0 && w.hourly_rate != null) {
-        if (w.hourly_rate > maxHourlyRate) return false;
-      }
+        const matchRegion = !selectedRegion || w.region === selectedRegion;
+        const matchCity = !selectedCity || w.city === selectedCity;
+        const matchCommune =
+          !selectedCommune || w.commune === selectedCommune;
+        const matchDistrict =
+          !selectedDistrict || w.district === selectedDistrict;
 
-      if (minRating > 0 && w.average_rating != null) {
-        if (w.average_rating < minRating) return false;
-      }
+        return (
+          matchKeyword &&
+          matchJob &&
+          matchPrice &&
+          matchRating &&
+          matchRegion &&
+          matchCity &&
+          matchCommune &&
+          matchDistrict
+        );
+      }),
+    [
+      workers,
+      keyword,
+      selectedJob,
+      maxPrice,
+      minRating,
+      selectedRegion,
+      selectedCity,
+      selectedCommune,
+      selectedDistrict,
+    ]
+  );
 
-      return true;
-    });
-  }, [
-    workers,
-    searchText,
-    country,
-    region,
-    city,
-    commune,
-    district,
-    maxHourlyRate,
-    minRating,
-  ]);
-
-  const formatPrice = (worker: Worker) => {
-    if (!worker.hourly_rate) return language === "fr" ? "Tarif non renseigné" : "Rate not set";
-
-    // Pour la Guinée : GNF, sinon on affiche brut
-    if (worker.currency === "GNF") {
-      // On affiche en milliers pour que ça reste lisible
-      const value = Math.round(worker.hourly_rate / 1000) * 1000;
-      return `${value.toLocaleString("fr-FR")} GNF / h`;
-    }
-
-    return `${worker.hourly_rate} ${worker.currency || ""} / h`;
+  const resetFilters = () => {
+    setKeyword("");
+    setSelectedJob("all");
+    setMaxPrice(300000);
+    setMinRating(0);
+    setSelectedRegion("");
+    setSelectedCity("");
+    setSelectedCommune("");
+    setSelectedDistrict("");
   };
 
-  const formatLocation = (worker: Worker) => {
-    const parts = [
-      worker.district,
-      worker.commune,
-      worker.city,
-      worker.region,
-    ].filter(Boolean);
-    return parts.join(" • ");
+  const formatCurrency = (value: number, currency: string) => {
+    if (currency === "GNF") {
+      return `${value.toLocaleString("fr-FR")} GNF`;
+    }
+    return `${value} ${currency}`;
+  };
+
+  const text = {
+    title:
+      language === "fr"
+        ? "Trouvez votre professionnel"
+        : "Find your professional",
+    subtitle:
+      language === "fr"
+        ? "Filtrez par métier, zone géographique et tarif pour trouver l’ouvrier le plus proche."
+        : "Filter by trade, location and rate to find the closest professional.",
+    filters: language === "fr" ? "Filtres" : "Filters",
+    keywordLabel: language === "fr" ? "Métier ou nom" : "Trade or name",
+    searchPlaceholder:
+      language === "fr"
+        ? "Plombier, électricien, Mamadou..."
+        : "Plumber, electrician, John...",
+    job: language === "fr" ? "Métier" : "Job",
+    allJobs: language === "fr" ? "Tous les métiers" : "All trades",
+    priceLabel:
+      language === "fr" ? "Tarif horaire max" : "Max hourly rate",
+    ratingLabel:
+      language === "fr" ? "Note minimum" : "Minimum rating",
+    region: language === "fr" ? "Région" : "Region",
+    city: language === "fr" ? "Ville" : "City",
+    commune: language === "fr" ? "Commune" : "Commune",
+    district: language === "fr" ? "Quartier" : "District",
+    allRegions: language === "fr" ? "Toutes les régions" : "All regions",
+    allCities: language === "fr" ? "Toutes les villes" : "All cities",
+    allCommunes:
+      language === "fr" ? "Toutes les communes" : "All communes",
+    allDistricts:
+      language === "fr" ? "Tous les quartiers" : "All districts",
+    reset:
+      language === "fr" ? "Réinitialiser les filtres" : "Reset filters",
+    noResults:
+      language === "fr"
+        ? "Aucun professionnel ne correspond à ces critères pour le moment."
+        : "No professional matches your criteria yet.",
+    contact: language === "fr" ? "Contacter" : "Contact",
+    perHour: language === "fr" ? "/h" : "/h",
+    years:
+      language === "fr"
+        ? "ans d'expérience"
+        : "years of experience",
+    viewMode: language === "fr" ? "Affichage" : "View",
+    viewList: language === "fr" ? "Liste" : "List",
+    viewGrid: language === "fr" ? "Mosaïque" : "Grid",
+    resultCount: (count: number) =>
+      language === "fr"
+        ? `${count} résultat${count > 1 ? "s" : ""} trouvé${count > 1 ? "s" : ""}`
+        : `${count} result${count > 1 ? "s" : ""} found`,
   };
 
   return (
-    <section className="py-16 bg-white border-t border-gray-100">
-      <div className="container mx-auto px-4">
-        {/* Titre */}
-        <div className="mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-pro-gray mb-2">
-            {language === "fr"
-              ? "Trouvez votre professionnel"
-              : "Find your professional"}
-          </h2>
-          <p className="text-gray-600">
-            {language === "fr"
-              ? "Filtrez par métier, zone géographique et tarif pour trouver l’ouvrier le plus proche."
-              : "Filter by trade, area and rate to find the best nearby worker."}
-          </p>
+    <section className="w-full py-20 bg-white">
+      <div className="w-full max-w-6xl mx-auto px-4 md:px-8">
+        {/* EN-TÊTE GLOBAL : titre + boutons LISTE / MOSAÏQUE */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-8 border-b border-gray-200 pb-4">
+          <div>
+            <h2 className="text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
+              {text.title}
+            </h2>
+            <p className="text-gray-600 mt-2 text-sm md:text-base">
+              {text.subtitle}
+            </p>
+            <div className="mt-2 flex items-center gap-1 text-xs text-gray-500">
+              <Search className="w-3 h-3" />
+              {loading ? (
+                <span>
+                  {language === "fr"
+                    ? "Chargement des résultats..."
+                    : "Loading results..."}
+                </span>
+              ) : (
+                <span>{text.resultCount(filteredWorkers.length)}</span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-gray-500 uppercase tracking-wide">
+              {text.viewMode}
+            </span>
+            <div className="flex border border-gray-300 rounded-lg bg-white overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs ${
+                  viewMode === "list"
+                    ? "bg-pro-blue text-white"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                <LayoutList className="w-3 h-3" />
+                {text.viewList}
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs ${
+                  viewMode === "grid"
+                    ? "bg-pro-blue text-white"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                <LayoutGrid className="w-3 h-3" />
+                {text.viewGrid}
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="grid md:grid-cols-[320px,1fr] gap-8 items-start">
-          {/* 🧰 Filtres */}
-          <Card className="shadow-sm border-gray-200">
-            <CardContent className="p-4 space-y-6">
-              <div>
-                <h3 className="text-sm font-semibold text-pro-gray mb-3 flex items-center gap-2">
-                  {language === "fr" ? "Filtres" : "Filters"}
-                </h3>
+        {/* Grille filtres + résultats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+          {/* Filtres */}
+          <aside className="md:col-span-1 bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <h3 className="text-base font-semibold text-pro-gray mb-4">
+              {text.filters}
+            </h3>
 
-                {/* Recherche métier / nom */}
-                <div className="space-y-1 mb-4">
-                  <label className="text-xs font-medium text-gray-600">
-                    {language === "fr"
-                      ? "Métier ou nom"
-                      : "Trade or name"}
-                  </label>
-                  <Input
-                    placeholder={
-                      language === "fr"
-                        ? "Plombier, électricien, Mamadou..."
-                        : "Plumber, electrician, Mamadou..."
-                    }
-                    value={searchText}
-                    onChange={(e) => setSearchText(e.target.value)}
-                  />
-                </div>
+            {/* Mot clé */}
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {text.keywordLabel}
+              </label>
+              <Input
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder={text.searchPlaceholder}
+                className="text-sm"
+              />
+            </div>
 
-                {/* Région */}
-                <div className="space-y-1 mb-3">
-                  <label className="text-xs font-medium text-gray-600">
-                    {language === "fr" ? "Région" : "Region"}
-                  </label>
-                  <select
-                    className="w-full border rounded-md px-2 py-2 text-sm"
-                    value={region}
-                    onChange={(e) => setRegion(e.target.value)}
-                  >
-                    <option value="">
-                      {language === "fr"
-                        ? "Toutes les régions"
-                        : "All regions"}
-                    </option>
-                    {regionOptions.map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            {/* Métier */}
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {text.job}
+              </label>
+              <select
+                value={selectedJob}
+                onChange={(e) => setSelectedJob(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+              >
+                <option value="all">{text.allJobs}</option>
+                {jobs.map((job) => (
+                  <option key={job} value={job}>
+                    {job}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                {/* Ville */}
-                <div className="space-y-1 mb-3">
-                  <label className="text-xs font-medium text-gray-600">
-                    {language === "fr" ? "Ville" : "City"}
-                  </label>
-                  <select
-                    className="w-full border rounded-md px-2 py-2 text-sm"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    disabled={!region}
-                  >
-                    <option value="">
-                      {language === "fr"
-                        ? "Toutes les villes"
-                        : "All cities"}
-                    </option>
-                    {cityOptions.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            {/* Région */}
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {text.region}
+              </label>
+              <select
+                value={selectedRegion}
+                onChange={(e) => {
+                  setSelectedRegion(e.target.value);
+                  setSelectedCity("");
+                  setSelectedCommune("");
+                  setSelectedDistrict("");
+                }}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+              >
+                <option value="">{text.allRegions}</option>
+                {regions.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                {/* Commune */}
-                <div className="space-y-1 mb-3">
-                  <label className="text-xs font-medium text-gray-600">
-                    {language === "fr" ? "Commune" : "Commune"}
-                  </label>
-                  <select
-                    className="w-full border rounded-md px-2 py-2 text-sm"
-                    value={commune}
-                    onChange={(e) => setCommune(e.target.value)}
-                    disabled={!city}
-                  >
-                    <option value="">
-                      {language === "fr"
-                        ? "Toutes les communes"
-                        : "All communes"}
-                    </option>
-                    {communeOptions.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            {/* Ville */}
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {text.city}
+              </label>
+              <select
+                value={selectedCity}
+                onChange={(e) => {
+                  setSelectedCity(e.target.value);
+                  setSelectedCommune("");
+                  setSelectedDistrict("");
+                }}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+              >
+                <option value="">{text.allCities}</option>
+                {cities.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                {/* Quartier */}
-                <div className="space-y-1 mb-3">
-                  <label className="text-xs font-medium text-gray-600">
-                    {language === "fr" ? "Quartier" : "District"}
-                  </label>
-                  <select
-                    className="w-full border rounded-md px-2 py-2 text-sm"
-                    value={district}
-                    onChange={(e) => setDistrict(e.target.value)}
-                    disabled={!commune}
-                  >
-                    <option value="">
-                      {language === "fr"
-                        ? "Tous les quartiers"
-                        : "All districts"}
-                    </option>
-                    {districtOptions.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            {/* Commune */}
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {text.commune}
+              </label>
+              <select
+                value={selectedCommune}
+                onChange={(e) => {
+                  setSelectedCommune(e.target.value);
+                  setSelectedDistrict("");
+                }}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+              >
+                <option value="">{text.allCommunes}</option>
+                {communes.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                {/* Prix max */}
-                <div className="space-y-1 mb-3">
-                  <label className="text-xs font-medium text-gray-600 flex justify-between">
-                    <span>
-                      {language === "fr"
-                        ? "Tarif horaire max"
-                        : "Max hourly rate"}
-                    </span>
-                    <span className="text-[11px] text-gray-500">
-                      {maxHourlyRate === 0
-                        ? language === "fr"
-                          ? "Aucune limite"
-                          : "No limit"
-                        : `${maxHourlyRate.toLocaleString("fr-FR")} GNF`}
-                    </span>
-                  </label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={500000}
-                    step={25000}
-                    value={maxHourlyRate}
-                    onChange={(e) => setMaxHourlyRate(Number(e.target.value))}
-                    className="w-full"
-                  />
-                </div>
+            {/* Quartier */}
+            <div className="mb-6">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {text.district}
+              </label>
+              <select
+                value={selectedDistrict}
+                onChange={(e) => setSelectedDistrict(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+              >
+                <option value="">{text.allDistricts}</option>
+                {districts.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                {/* Note minimum */}
-                <div className="space-y-1 mb-3">
-                  <label className="text-xs font-medium text-gray-600 flex justify-between">
-                    <span>
-                      {language === "fr"
-                        ? "Note minimum"
-                        : "Minimum rating"}
-                    </span>
-                    <span className="text-[11px] text-gray-500">
-                      {minRating === 0
-                        ? language === "fr"
-                          ? "Toutes"
-                          : "Any"
-                        : `${minRating}+ ★`}
-                    </span>
-                  </label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={5}
-                    step={0.5}
-                    value={minRating}
-                    onChange={(e) => setMinRating(Number(e.target.value))}
-                    className="w-full"
-                  />
-                </div>
-
-                {/* Bouton reset */}
-                <Button
-                  variant="outline"
-                  className="w-full mt-4"
-                  onClick={() => {
-                    setSearchText("");
-                    setRegion("");
-                    setCity("");
-                    setCommune("");
-                    setDistrict("");
-                    setMaxHourlyRate(0);
-                    setMinRating(0);
-                  }}
-                >
-                  {language === "fr" ? "Réinitialiser les filtres" : "Reset filters"}
-                </Button>
+            {/* Prix max */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
+                <span>{text.priceLabel}</span>
+                <span className="text-[11px] text-gray-500">
+                  {maxPrice >= 300000
+                    ? language === "fr"
+                      ? "Aucune limite"
+                      : "No limit"
+                    : formatCurrency(maxPrice, "GNF")}
+                </span>
               </div>
-            </CardContent>
-          </Card>
+              <Slider
+                defaultValue={[maxPrice]}
+                min={50000}
+                max={300000}
+                step={10000}
+                onValueChange={(v) => setMaxPrice(v[0])}
+              />
+            </div>
 
-          {/* 👷‍♂️ Liste des ouvriers */}
-          <div className="space-y-4">
-            {loading && (
-              <div className="text-gray-500 text-sm">
-                {language === "fr"
-                  ? "Chargement des professionnels..."
-                  : "Loading workers..."}
+            {/* Note minimum */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
+                <span>{text.ratingLabel}</span>
+                <span className="text-[11px] text-gray-500">
+                  {minRating === 0 ? "Toutes" : minRating.toFixed(1)}
+                </span>
               </div>
-            )}
+              <Slider
+                defaultValue={[minRating]}
+                min={0}
+                max={5}
+                step={0.5}
+                onValueChange={(v) => setMinRating(v[0])}
+              />
+            </div>
 
+            <Button
+              className="w-full border-gray-300 text-sm"
+              variant="outline"
+              type="button"
+              onClick={resetFilters}
+            >
+              {text.reset}
+            </Button>
+          </aside>
+
+          {/* Résultats */}
+          <div className="md:col-span-2">
             {error && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-md">
+              <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">
                 {error}
               </div>
             )}
 
-            {!loading && !error && filteredWorkers.length === 0 && (
-              <div className="text-gray-500 text-sm">
-                {language === "fr"
-                  ? "Aucun professionnel trouvé avec ces critères. Essayez d’élargir votre recherche."
-                  : "No worker found with these filters. Try broadening your search."}
+            {!error && !loading && filteredWorkers.length === 0 && (
+              <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
+                {text.noResults}
               </div>
             )}
 
-            {!loading &&
-              !error &&
-              filteredWorkers.map((w) => (
-                <Card
-                  key={w.id}
-                  className="shadow-sm border-gray-200 hover:shadow-md transition-shadow"
-                >
-                  <CardContent className="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-1">
-                        <div className="w-10 h-10 rounded-full bg-pro-blue/10 flex items-center justify-center font-semibold text-pro-blue">
-                          {((w.first_name || "?")[0] ?? "").toUpperCase()}
-                        </div>
-                        <div>
-                          <div className="font-semibold text-pro-gray">
-                            {w.first_name} {w.last_name}
-                          </div>
-                          <div className="text-sm text-blue-600 font-medium">
-                            {w.profession}
-                          </div>
-                        </div>
-                      </div>
+            {loading && filteredWorkers.length === 0 && (
+              <div className="border border-gray-100 rounded-xl p-6 text-sm text-gray-500">
+                {language === "fr"
+                  ? "Chargement des professionnels..."
+                  : "Loading professionals..."}
+              </div>
+            )}
 
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
-                        <span className="inline-flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
-                          {formatLocation(w) || (language === "fr" ? "Localisation non précisée" : "Location not set")}
-                        </span>
-
-                        {w.years_experience != null && (
-                          <span>
-                            {w.years_experience}{" "}
-                            {language === "fr" ? "ans d'expérience" : "years experience"}
-                          </span>
-                        )}
-
-                        {w.average_rating != null && (
-                          <span className="inline-flex items-center gap-1">
-                            <Star className="w-3 h-3 text-yellow-400" />
-                            {w.average_rating.toFixed(1)}{" "}
-                            <span className="text-gray-400">
-                              ({w.rating_count || 0})
-                            </span>
-                          </span>
-                        )}
+            {/* VUE LISTE */}
+            {viewMode === "list" && (
+              <div className="space-y-4">
+                {filteredWorkers.map((w) => (
+                  <div
+                    key={w.id}
+                    className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center gap-4"
+                  >
+                    <div className="flex-shrink-0">
+                      <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">
+                        {w.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")}
                       </div>
                     </div>
 
-                    <div className="flex flex-col items-end gap-2">
-                      <div className="text-sm font-semibold text-pro-blue">
-                        {formatPrice(w)}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold text-pro-gray text-base md:text-lg truncate">
+                          {w.name}
+                        </h3>
+                        {w.job && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-pro-blue border border-blue-100">
+                            {w.job}
+                          </span>
+                        )}
                       </div>
-                      <Button className="flex items-center gap-2">
-                        <Phone className="w-4 h-4" />
-                        {language === "fr" ? "Contacter" : "Contact"}
+
+                      <div className="flex flex-wrap items-center gap-3 mt-1 text-xs md:text-sm text-gray-600">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          {[w.region, w.city, w.commune, w.district]
+                            .filter(Boolean)
+                            .join(" • ")}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Star className="w-3 h-3 text-yellow-400" />
+                          {w.rating.toFixed(1)} ({w.ratingCount})
+                        </span>
+                        <span>
+                          {w.experienceYears} {text.years}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-2 text-right">
+                      <div className="text-pro-blue font-bold text-base md:text-lg">
+                        {formatCurrency(w.hourlyRate, w.currency)}
+                        <span className="text-xs md:text-sm text-gray-600 ml-1">
+                          {text.perHour}
+                        </span>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="bg-pro-blue hover:bg-blue-700 text-xs md:text-sm"
+                      >
+                        {text.contact}
                       </Button>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* VUE MOSAÏQUE */}
+            {viewMode === "grid" && (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {filteredWorkers.map((w) => (
+                  <div
+                    key={w.id}
+                    className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-pro-blue text-white flex items-center justify-center text-sm font-semibold">
+                        {w.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")}
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-sm text-pro-gray truncate">
+                          {w.name}
+                        </h3>
+                        {w.job && (
+                          <div className="text-xs text-pro-blue mt-0.5">
+                            {w.job}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-gray-600 space-y-1">
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {[w.region, w.city, w.commune, w.district]
+                          .filter(Boolean)
+                          .join(" • ")}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Star className="w-3 h-3 text-yellow-400" />
+                        {w.rating.toFixed(1)} ({w.ratingCount})
+                      </span>
+                      <span>
+                        {w.experienceYears} {text.years}
+                      </span>
+                    </div>
+
+                    <div className="mt-2 flex items-center justify-between">
+                      <div className="text-sm font-bold text-pro-blue">
+                        {formatCurrency(w.hourlyRate, w.currency)}
+                        <span className="ml-1 text-[11px] text-gray-600">
+                          {text.perHour}
+                        </span>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="bg-pro-blue hover:bg-blue-700 text-[11px]"
+                      >
+                        {text.contact}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
