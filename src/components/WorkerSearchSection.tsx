@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Slider } from "@/components/ui/slider";
@@ -625,12 +626,14 @@ const WorkerSearchSection: React.FC = () => {
                           {text.perHour}
                         </span>
                       </div>
-                      <Button
-                        size="sm"
-                        className="bg-pro-blue hover:bg-blue-700 text-xs md:text-sm"
-                      >
-                        {text.contact}
-                      </Button>
+                      <Link to={`/ouvrier/${w.id}`}>
+                        <Button
+                          size="sm"
+                          className="bg-pro-blue hover:bg-blue-700 text-xs md:text-sm"
+                        >
+                          {text.contact}
+                        </Button>
+                      </Link>
                     </div>
                   </div>
                 ))}
@@ -687,12 +690,14 @@ const WorkerSearchSection: React.FC = () => {
                           {text.perHour}
                         </span>
                       </div>
-                      <Button
-                        size="sm"
-                        className="bg-pro-blue hover:bg-blue-700 text-[11px]"
-                      >
-                        {text.contact}
-                      </Button>
+                      <Link to={`/ouvrier/${w.id}`}>
+                        <Button
+                          size="sm"
+                          className="bg-pro-blue hover:bg-blue-700 text-[11px]"
+                        >
+                          {text.contact}
+                        </Button>
+                      </Link>
                     </div>
                   </div>
                 ))}
