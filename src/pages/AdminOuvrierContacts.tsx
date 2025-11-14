@@ -5,7 +5,6 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { useAuthProfile } from "@/hooks/useAuthProfile";
 
 type DbContact = {
   id: string;
@@ -26,7 +25,10 @@ type ContactStatus = (typeof statusOptions)[number];
 const AdminOuvrierContacts: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
-  const { isAdmin, loading: authLoading } = useAuthProfile();
+
+  // 🔐 État local pour l'authentification admin
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [contacts, setContacts] = useState<DbContact[]>([]);
   const [loading, setLoading] = useState(false);
@@ -36,14 +38,55 @@ const AdminOuvrierContacts: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<"" | ContactStatus>("");
   const [search, setSearch] = useState("");
 
-  // 🔐 Protection de la page : si pas admin => redirection
+  // 🔐 Vérification des droits : user connecté + rôle admin dans op_users
   useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      navigate("/");
-    }
-  }, [authLoading, isAdmin, navigate]);
+    let isMounted = true;
 
-  // 🔹 Chargement des demandes (uniquement si admin connecté)
+    const checkAuth = async () => {
+      setAuthLoading(true);
+
+      // 1) Récupérer l'utilisateur connecté
+      const { data, error } = await supabase.auth.getUser();
+      const user = data?.user;
+
+      if (!isMounted) return;
+
+      if (error || !user) {
+        // Pas connecté → login
+        setAuthLoading(false);
+        navigate("/login", { replace: true });
+        return;
+      }
+
+      // 2) Vérifier le rôle dans op_users
+      const { data: profile, error: profileError } = await supabase
+        .from("op_users")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (!isMounted) return;
+
+      if (profileError || !profile || profile.role !== "admin") {
+        // Connecté mais pas admin → retour à l'accueil
+        setAuthLoading(false);
+        navigate("/", { replace: true });
+        return;
+      }
+
+      // 3) OK, c'est un admin
+      setIsAdmin(true);
+      setAuthLoading(false);
+    };
+
+    checkAuth();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [navigate]);
+
+  // 🔹 Chargement des demandes (uniquement si admin validé)
   useEffect(() => {
     if (authLoading || !isAdmin) return;
 
@@ -175,6 +218,7 @@ const AdminOuvrierContacts: React.FC = () => {
         ? "Vue d’ensemble des demandes envoyées par les particuliers."
         : "Overview of all contact requests sent by clients.",
     statusFilter: language === "fr" ? "Statut" : "Status",
+    searchLabel: language === "fr" ? "Recherche" : "Search",
     searchPlaceholder:
       language === "fr"
         ? "Rechercher (ouvrier, client, email, téléphone, message...)"
@@ -300,7 +344,7 @@ const AdminOuvrierContacts: React.FC = () => {
 
           <div className="flex-1">
             <label className="block text-xs font-medium text-slate-600 mb-1">
-              Recherche
+              {text.searchLabel}
             </label>
             <Input
               value={search}
@@ -355,9 +399,7 @@ const AdminOuvrierContacts: React.FC = () => {
                       colSpan={6}
                       className="px-4 py-6 text-center text-slate-500 text-sm"
                     >
-                      {language === "fr"
-                        ? "Chargement..."
-                        : "Loading..."}
+                      {language === "fr" ? "Chargement..." : "Loading..."}
                     </td>
                   </tr>
                 )}
