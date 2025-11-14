@@ -11,6 +11,7 @@ import NotFound from "./pages/NotFound";
 import InscriptionOuvrier from "./pages/InscriptionOuvrier";
 import WorkerDetail from "./pages/WorkerDetail";
 import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
+import Login from "./pages/Login";
 
 const queryClient = new QueryClient();
 
@@ -22,7 +23,11 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
+            {/* Page d'accueil */}
             <Route path="/" element={<Index />} />
+
+            {/* Connexion Admin */}
+            <Route path="/login" element={<Login />} />
 
             {/* Page d'inscription des ouvriers */}
             <Route
@@ -39,7 +44,7 @@ const App = () => (
               element={<AdminOuvrierContacts />}
             />
 
-            {/* Catch-all */}
+            {/* Catch-all 404 */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
