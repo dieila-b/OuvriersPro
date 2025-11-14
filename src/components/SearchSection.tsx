@@ -49,7 +49,7 @@ interface WorkerCard {
 const SearchSection: React.FC = () => {
   const { language } = useLanguage();
 
-  // Données depuis Supabase
+  // Données
   const [workers, setWorkers] = useState<WorkerCard[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +68,7 @@ const SearchSection: React.FC = () => {
   // Vue : liste ou mosaïque
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
-  // 🔹 Chargement des ouvriers depuis Supabase
+  // Chargement Supabase
   useEffect(() => {
     const fetchWorkers = async () => {
       setLoading(true);
@@ -134,7 +134,7 @@ const SearchSection: React.FC = () => {
     fetchWorkers();
   }, [language]);
 
-  // 🔹 Listes pour les filtres (dynamiques à partir des données)
+  // Listes pour les filtres
   const jobs = useMemo(
     () =>
       Array.from(
@@ -207,7 +207,7 @@ const SearchSection: React.FC = () => {
     [workers, selectedRegion, selectedCity, selectedCommune]
   );
 
-  // 🔹 Application des filtres
+  // Application des filtres
   const filteredWorkers = useMemo(
     () =>
       workers.filter((w) => {
@@ -333,8 +333,8 @@ const SearchSection: React.FC = () => {
 
   return (
     <section id="search" className="w-full bg-white py-20">
-      <div className="w-full mx-auto max-w-6xl px-4 md:px-8">
-        {/* Titre + stats + switch de vue */}
+      <div className="mx-auto w-full max-w-6xl px-4 md:px-8">
+        {/* Titre + compteur + switch vue */}
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-3xl font-bold text-pro-gray md:text-4xl">
@@ -410,6 +410,25 @@ const SearchSection: React.FC = () => {
                 placeholder={text.searchPlaceholder}
                 className="text-sm"
               />
+            </div>
+
+            {/* Métier */}
+            <div className="mb-4">
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                {text.job}
+              </label>
+              <select
+                value={selectedJob}
+                onChange={(e) => setSelectedJob(e.target.value)}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pro-blue"
+              >
+                <option value="all">{text.allJobs}</option>
+                {jobs.map((job) => (
+                  <option key={job} value={job}>
+                    {job}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Région */}
@@ -570,7 +589,7 @@ const SearchSection: React.FC = () => {
               </div>
             )}
 
-            {/* Vue LISTE */}
+            {/* Vue liste */}
             {viewMode === "list" && (
               <div className="space-y-4">
                 {filteredWorkers.map((w) => (
@@ -635,7 +654,7 @@ const SearchSection: React.FC = () => {
               </div>
             )}
 
-            {/* Vue MOSAÏQUE */}
+            {/* Vue mosaïque */}
             {viewMode === "grid" && (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {filteredWorkers.map((w) => (
