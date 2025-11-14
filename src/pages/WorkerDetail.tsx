@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -35,8 +35,17 @@ type DbWorker = {
   status: string | null;
 };
 
+type DbReview = {
+  id: string;
+  worker_id: string;
+  author_name: string | null;
+  rating: number | null;
+  comment: string | null;
+  created_at: string;
+};
+
 const WorkerDetail: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { language } = useLanguage();
 
@@ -44,9 +53,21 @@ const WorkerDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [reviews, setReviews] = useState<DbReview[]>([]);
+
+  // 🔹 Extraire l'ID depuis le slug : nom-prenom--UUID
+  const workerId = useMemo(() => {
+    if (!slug) return null;
+    const parts = slug.split("--");
+    if (parts.length < 2) {
+      return slug; // fallback : au cas où on aurait juste l'id
+    }
+    return parts[parts.length - 1];
+  }, [slug]);
+
   useEffect(() => {
-    const fetchWorker = async () => {
-      if (!id) {
+    const fetchData = async () => {
+      if (!workerId) {
         setError(
           language === "fr"
             ? "Identifiant ouvrier manquant."
@@ -59,6 +80,7 @@ const WorkerDetail: React.FC = () => {
       setLoading(true);
       setError(null);
 
+      // 1) Charger la fiche ouvrier
       const { data, error } = await supabase
         .from<DbWorker>("op_ouvriers")
         .select(
@@ -83,7 +105,7 @@ const WorkerDetail: React.FC = () => {
           status
         `
         )
-        .eq("id", id)
+        .eq("id", workerId)
         .eq("status", "approved")
         .single();
 
@@ -99,11 +121,36 @@ const WorkerDetail: React.FC = () => {
       }
 
       setWorker(data);
+
+      // 2) Charger les avis clients
+      const { data: reviewsData, error: reviewsError } = await supabase
+        .from<DbReview>("op_ouvrier_reviews")
+        .select(
+          `
+          id,
+          worker_id,
+          author_name,
+          rating,
+          comment,
+          created_at
+        `
+        )
+        .eq("worker_id", workerId)
+        .order("created_at", { ascending: false });
+
+      if (reviewsError) {
+        console.error(reviewsError);
+        // On n'affiche pas d'erreur bloquante, juste pas d'avis
+        setReviews([]);
+      } else {
+        setReviews(reviewsData ?? []);
+      }
+
       setLoading(false);
     };
 
-    fetchWorker();
-  }, [id, language]);
+    fetchData();
+  }, [workerId, language]);
 
   const fullName =
     (worker?.first_name || "") +
@@ -126,6 +173,18 @@ const WorkerDetail: React.FC = () => {
     return `${worker.hourly_rate} ${worker.currency} / ${
       language === "fr" ? "heure" : "hour"
     }`;
+  };
+
+  const formatDate = (iso: string) => {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString(
+        language === "fr" ? "fr-FR" : "en-GB",
+        { year: "numeric", month: "short", day: "numeric" }
+      );
+    } catch {
+      return iso;
+    }
   };
 
   const text = {
@@ -181,11 +240,22 @@ const WorkerDetail: React.FC = () => {
       language === "fr"
         ? "Ouvrier introuvable."
         : "Worker not found.",
+    reviewsTitle:
+      language === "fr"
+        ? "Avis clients"
+        : "Customer reviews",
+    noReviews:
+      language === "fr"
+        ? "Aucun avis client pour le moment."
+        : "No customer reviews yet.",
+    ratingOutOf5:
+      language === "fr"
+        ? "sur 5"
+        : "out of 5",
   };
 
   const buildWhatsappLink = () => {
     if (!worker?.phone) return "#";
-    // Très simple : supprimer les espaces
     const phoneClean = worker.phone.replace(/\s+/g, "");
     return `https://wa.me/${phoneClean}`;
   };
@@ -277,7 +347,7 @@ const WorkerDetail: React.FC = () => {
                       {worker.average_rating.toFixed(1)}
                     </span>
                     <span className="text-gray-500 text-xs">
-                      ({worker.rating_count || 0})
+                      ({worker.rating_count || 0}) {text.ratingOutOf5}
                     </span>
                   </p>
                 )}
@@ -373,11 +443,7 @@ const WorkerDetail: React.FC = () => {
                 )}
 
                 {worker.phone && (
-                  <Button
-                    variant="outline"
-                    asChild
-                    className="text-sm"
-                  >
+                  <Button variant="outline" asChild className="text-sm">
                     <a href={buildWhatsappLink()} target="_blank" rel="noreferrer">
                       <MessageCircle className="w-4 h-4 mr-2" />
                       {text.whatsappLabel}
@@ -386,17 +452,53 @@ const WorkerDetail: React.FC = () => {
                 )}
 
                 {worker.email && (
-                  <Button
-                    variant="outline"
-                    asChild
-                    className="text-sm"
-                  >
+                  <Button variant="outline" asChild className="text-sm">
                     <a href={`mailto:${worker.email}`}>
                       <Mail className="w-4 h-4 mr-2" />
                       {language === "fr" ? "Envoyer un e-mail" : "Send email"}
                     </a>
                   </Button>
                 )}
+              </div>
+            </section>
+
+            {/* Avis clients */}
+            <section className="pt-4 border-t border-gray-100">
+              <h3 className="text-base font-semibold text-pro-gray mb-3">
+                {text.reviewsTitle}
+              </h3>
+
+              {reviews.length === 0 && (
+                <p className="text-sm text-gray-500">
+                  {text.noReviews}
+                </p>
+              )}
+
+              <div className="space-y-3">
+                {reviews.map((rev) => (
+                  <div
+                    key={rev.id}
+                    className="border border-gray-100 rounded-lg p-3 bg-gray-50"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-sm font-semibold text-pro-gray">
+                        {rev.author_name || (language === "fr" ? "Client" : "Client")}
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-yellow-500">
+                        <Star className="w-3 h-3" />
+                        <span>{(rev.rating ?? 0).toFixed(1)}/5</span>
+                      </div>
+                    </div>
+                    {rev.comment && (
+                      <p className="text-xs text-gray-700 leading-relaxed mb-1">
+                        {rev.comment}
+                      </p>
+                    )}
+                    <div className="text-[11px] text-gray-400">
+                      {formatDate(rev.created_at)}
+                    </div>
+                  </div>
+                ))}
               </div>
             </section>
           </CardContent>
