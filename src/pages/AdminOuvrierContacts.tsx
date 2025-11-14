@@ -17,6 +17,7 @@ type DbContact = {
   message: string | null;
   status: string | null;
   created_at: string;
+  // s'il y a d'autres colonnes, ce n'est pas bloquant
 };
 
 const statusOptions = ["new", "in_progress", "done"] as const;
@@ -34,6 +35,7 @@ const AdminOuvrierContacts: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorDebug, setErrorDebug] = useState<string | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<"" | ContactStatus>("");
   const [search, setSearch] = useState("");
@@ -93,32 +95,21 @@ const AdminOuvrierContacts: React.FC = () => {
     const fetchContacts = async () => {
       setLoading(true);
       setError(null);
+      setErrorDebug(null);
 
       const { data, error } = await supabase
         .from<DbContact>("op_ouvrier_contacts")
-        .select(
-          `
-          id,
-          worker_id,
-          worker_name,
-          worker_profession,
-          client_name,
-          client_email,
-          client_phone,
-          message,
-          status,
-          created_at
-        `
-        )
+        .select("*") // ✅ on récupère toutes les colonnes
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error(error);
+        console.error("Supabase error (select op_ouvrier_contacts):", error);
         setError(
           language === "fr"
             ? "Impossible de charger les demandes."
             : "Unable to load contact requests."
         );
+        setErrorDebug(error.message ?? null);
         setLoading(false);
         return;
       }
@@ -186,6 +177,7 @@ const AdminOuvrierContacts: React.FC = () => {
   const handleStatusChange = async (id: string, newStatus: ContactStatus) => {
     setSavingId(id);
     setError(null);
+    setErrorDebug(null);
 
     const { error } = await supabase
       .from("op_ouvrier_contacts")
@@ -193,12 +185,13 @@ const AdminOuvrierContacts: React.FC = () => {
       .eq("id", id);
 
     if (error) {
-      console.error(error);
+      console.error("Supabase error (update op_ouvrier_contacts):", error);
       setError(
         language === "fr"
           ? "Erreur lors de la mise à jour du statut."
           : "Error while updating status."
       );
+      setErrorDebug(error.message ?? null);
     } else {
       setContacts((prev) =>
         prev.map((c) => (c.id === id ? { ...c, status: newStatus } : c))
@@ -245,32 +238,21 @@ const AdminOuvrierContacts: React.FC = () => {
 
     setLoading(true);
     setError(null);
+    setErrorDebug(null);
 
     const { data, error } = await supabase
       .from<DbContact>("op_ouvrier_contacts")
-      .select(
-        `
-        id,
-        worker_id,
-        worker_name,
-        worker_profession,
-        client_name,
-        client_email,
-        client_phone,
-        message,
-        status,
-        created_at
-      `
-      )
+      .select("*")
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error(error);
+      console.error("Supabase error (refresh op_ouvrier_contacts):", error);
       setError(
         language === "fr"
           ? "Impossible de rafraîchir les données."
           : "Unable to refresh data."
       );
+      setErrorDebug(error.message ?? null);
     } else {
       setContacts(data ?? []);
     }
@@ -475,6 +457,11 @@ const AdminOuvrierContacts: React.FC = () => {
         {error && (
           <div className="mt-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
             {error}
+            {errorDebug && (
+              <div className="mt-1 text-xs text-red-500 opacity-80">
+                Détail technique : {errorDebug}
+              </div>
+            )}
           </div>
         )}
       </div>
