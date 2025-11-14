@@ -9,12 +9,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Link } from "react-router-dom";
+import { useAuthProfile } from "@/hooks/useAuthProfile";
 
 const Header = () => {
   const { language, setLanguage, t } = useLanguage();
-
-  // Bouton Admin visible uniquement en environnement de développement
-  const isDev = import.meta.env.DEV;
+  const { isAdmin } = useAuthProfile();
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -53,8 +52,8 @@ const Header = () => {
 
           {/* Actions */}
           <div className="flex items-center space-x-3">
-            {/* Petit bouton Admin (desktop) – DEV uniquement */}
-            {isDev && (
+            {/* Bouton Admin : visible uniquement si role = admin (desktop) */}
+            {isAdmin && (
               <Link
                 to="/admin/ouvrier-contacts"
                 className="hidden md:inline-flex items-center rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
@@ -116,8 +115,8 @@ const Header = () => {
                   </a>
                 </DropdownMenuItem>
 
-                {/* Lien Admin dans le menu mobile – DEV uniquement */}
-                {isDev && (
+                {/* Lien Admin dans le menu mobile – visible seulement si admin */}
+                {isAdmin && (
                   <DropdownMenuItem asChild>
                     <Link to="/admin/ouvrier-contacts" className="flex items-center">
                       <User className="w-4 h-4 mr-2" />
