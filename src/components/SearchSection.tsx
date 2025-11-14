@@ -4,8 +4,13 @@ import { supabase } from "@/lib/supabase";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Star, MapPin, Search } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import {
+  Star,
+  MapPin,
+  Search,
+  LayoutList,
+  LayoutGrid,
+} from "lucide-react";
 
 type DbWorker = {
   id: string;
@@ -43,7 +48,6 @@ interface WorkerCard {
 
 const SearchSection: React.FC = () => {
   const { language } = useLanguage();
-  const navigate = useNavigate();
 
   // Données depuis Supabase
   const [workers, setWorkers] = useState<WorkerCard[]>([]);
@@ -60,6 +64,9 @@ const SearchSection: React.FC = () => {
   const [selectedCity, setSelectedCity] = useState<string>("");
   const [selectedCommune, setSelectedCommune] = useState<string>("");
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
+
+  // Vue : liste ou mosaïque
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
   // 🔹 Chargement des ouvriers depuis Supabase
   useEffect(() => {
@@ -105,8 +112,8 @@ const SearchSection: React.FC = () => {
         (data ?? []).map((w) => ({
           id: w.id,
           name:
-            (w.first_name || "") +
-              (w.last_name ? ` ${w.last_name}` : "") || "Ouvrier",
+            ((w.first_name || "") +
+              (w.last_name ? ` ${w.last_name}` : "")) || "Ouvrier",
           job: w.profession ?? "",
           country: w.country ?? "",
           region: w.region ?? "",
@@ -200,20 +207,6 @@ const SearchSection: React.FC = () => {
     [workers, selectedRegion, selectedCity, selectedCommune]
   );
 
-  // 🔹 Slug lisible : nom-prenom-metier--UUID
-  const buildWorkerSlug = (w: WorkerCard) => {
-    const base = `${w.name || "ouvrier"} ${w.job || ""}`.trim();
-
-    const slugName = base
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "") // enlever accents
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-") // remplacer tout par des tirets
-      .replace(/^-+|-+$/g, ""); // trim -
-
-    return `${slugName || "ouvrier"}--${w.id}`;
-  };
-
   // 🔹 Application des filtres
   const filteredWorkers = useMemo(
     () =>
@@ -277,11 +270,16 @@ const SearchSection: React.FC = () => {
       language === "fr"
         ? "Rechercher un métier, un service ou un nom…"
         : "Search a trade, service or name…",
-    allJobs: language === "fr" ? "Tous les métiers" : "All trades",
+    allJobs:
+      language === "fr" ? "Tous les métiers" : "All trades",
     priceLabel:
-      language === "fr" ? "Prix max par heure" : "Max hourly rate",
+      language === "fr"
+        ? "Prix max par heure"
+        : "Max hourly rate",
     ratingLabel:
-      language === "fr" ? "Note minimum" : "Minimum rating",
+      language === "fr"
+        ? "Note minimum"
+        : "Minimum rating",
     region: language === "fr" ? "Région" : "Region",
     city: language === "fr" ? "Ville" : "City",
     commune: language === "fr" ? "Commune" : "Commune",
@@ -306,6 +304,9 @@ const SearchSection: React.FC = () => {
       language === "fr"
         ? "ans d'expérience"
         : "years of experience",
+    viewMode: language === "fr" ? "Affichage" : "View",
+    viewList: language === "fr" ? "Liste" : "List",
+    viewGrid: language === "fr" ? "Mosaïque" : "Grid",
     resultCount: (count: number) =>
       language === "fr"
         ? `${count} résultat${count > 1 ? "s" : ""} trouvé${count > 1 ? "s" : ""}`
@@ -315,37 +316,70 @@ const SearchSection: React.FC = () => {
   return (
     <section id="search" className="w-full py-20 bg-white">
       <div className="w-full max-w-6xl mx-auto px-4 md:px-8">
-        {/* Titre */}
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-10">
+        {/* Titre + stats + switch de vue */}
+        <div className="flex flex-col gap-4 mb-10 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
               {text.title}
             </h2>
-            <p className="text-gray-600 mt-2 text-sm md:text-base">
+            <p className="mt-2 text-sm text-gray-600 md:text-base">
               {language === "fr"
                 ? "Affinez votre recherche par métier, localisation, prix et note pour trouver l’ouvrier le plus proche."
                 : "Filter by trade, location, price and rating to find the closest professional."}
             </p>
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Search className="w-4 h-4" />
-            {loading ? (
-              <span>
-                {language === "fr"
-                  ? "Chargement des résultats..."
-                  : "Loading results..."}
-              </span>
-            ) : (
-              <span>{text.resultCount(filteredWorkers.length)}</span>
-            )}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 md:flex-col md:items-end">
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <Search className="w-4 h-4" />
+              {loading ? (
+                <span>
+                  {language === "fr"
+                    ? "Chargement des résultats..."
+                    : "Loading results..."}
+                </span>
+              ) : (
+                <span>{text.resultCount(filteredWorkers.length)}</span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 text-xs md:text-sm">
+              <span className="text-gray-500">{text.viewMode}</span>
+              <div className="flex rounded-lg border border-gray-200 bg-white p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("list")}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs md:text-sm ${
+                    viewMode === "list"
+                      ? "bg-pro-blue text-white"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  <LayoutList className="w-3 h-3" />
+                  <span className="hidden sm:inline">{text.viewList}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("grid")}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs md:text-sm ${
+                    viewMode === "grid"
+                      ? "bg-pro-blue text-white"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  <LayoutGrid className="w-3 h-3" />
+                  <span className="hidden sm:inline">{text.viewGrid}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Grille filtres + résultats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+        <div className="grid items-start grid-cols-1 gap-8 md:grid-cols-3">
           {/* Filtres */}
-          <aside className="md:col-span-1 bg-gray-50 rounded-xl p-5 border border-gray-100 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
+          <aside className="md:col-span-1 rounded-xl border border-gray-100 bg-gray-50 p-5 shadow-sm">
+            <div className="mb-4 flex items-center gap-2">
               <Search className="w-4 h-4 text-pro-blue" />
               <h3 className="text-base font-semibold text-pro-gray">
                 {text.filters}
@@ -354,7 +388,7 @@ const SearchSection: React.FC = () => {
 
             {/* Mot clé */}
             <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
+              <label className="mb-1 block text-xs font-medium text-gray-600">
                 {text.keywordLabel}
               </label>
               <Input
@@ -367,13 +401,13 @@ const SearchSection: React.FC = () => {
 
             {/* Métier */}
             <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
+              <label className="mb-1 block text-xs font-medium text-gray-600">
                 {text.job}
               </label>
               <select
                 value={selectedJob}
                 onChange={(e) => setSelectedJob(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="all">{text.allJobs}</option>
                 {jobs.map((job) => (
@@ -386,7 +420,7 @@ const SearchSection: React.FC = () => {
 
             {/* Région */}
             <div className="mb-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
+              <label className="mb-1 block text-xs font-medium text-gray-600">
                 {text.region}
               </label>
               <select
@@ -397,7 +431,7 @@ const SearchSection: React.FC = () => {
                   setSelectedCommune("");
                   setSelectedDistrict("");
                 }}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                className="w-full rounded-md border border-gray-300 bg:white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="">{text.allRegions}</option>
                 {regions.map((r) => (
@@ -410,7 +444,7 @@ const SearchSection: React.FC = () => {
 
             {/* Ville */}
             <div className="mb-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
+              <label className="mb-1 block text-xs font-medium text-gray-600">
                 {text.city}
               </label>
               <select
@@ -420,7 +454,7 @@ const SearchSection: React.FC = () => {
                   setSelectedCommune("");
                   setSelectedDistrict("");
                 }}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="">{text.allCities}</option>
                 {cities.map((c) => (
@@ -433,7 +467,7 @@ const SearchSection: React.FC = () => {
 
             {/* Commune */}
             <div className="mb-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
+              <label className="mb-1 block text-xs font-medium text-gray-600">
                 {text.commune}
               </label>
               <select
@@ -442,7 +476,7 @@ const SearchSection: React.FC = () => {
                   setSelectedCommune(e.target.value);
                   setSelectedDistrict("");
                 }}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="">{text.allCommunes}</option>
                 {communes.map((c) => (
@@ -455,13 +489,13 @@ const SearchSection: React.FC = () => {
 
             {/* Quartier */}
             <div className="mb-6">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
+              <label className="mb-1 block text-xs font-medium text-gray-600">
                 {text.district}
               </label>
               <select
                 value={selectedDistrict}
                 onChange={(e) => setSelectedDistrict(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="">{text.allDistricts}</option>
                 {districts.map((d) => (
@@ -474,7 +508,7 @@ const SearchSection: React.FC = () => {
 
             {/* Prix max */}
             <div className="mb-6">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
+              <label className="mb-1 block text-xs font-medium text-gray-600">
                 {text.priceLabel} ({formatCurrency(maxPrice, "GNF")})
               </label>
               <div className="pt-2">
@@ -490,7 +524,7 @@ const SearchSection: React.FC = () => {
 
             {/* Note minimum */}
             <div className="mb-6">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
+              <label className="mb-1 block text-xs font-medium text-gray-600">
                 {text.ratingLabel} ({minRating.toFixed(1)})
               </label>
               <div className="pt-2">
@@ -504,93 +538,159 @@ const SearchSection: React.FC = () => {
               </div>
             </div>
 
-            <Button className="w-full bg-pro-blue hover:bg-blue-700 text-sm mt-2">
+            <Button className="mt-2 w-full bg-pro-blue text-sm hover:bg-blue-700">
               {text.btnFilter}
             </Button>
           </aside>
 
           {/* Résultats */}
-          <div className="md:col-span-2 space-y-4">
+          <div className="md:col-span-2">
             {error && (
-              <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm">
+              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                 {error}
               </div>
             )}
 
             {!error && !loading && filteredWorkers.length === 0 && (
-              <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
+              <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
                 {text.noResults}
               </div>
             )}
 
             {loading && filteredWorkers.length === 0 && (
-              <div className="border border-gray-100 rounded-xl p-6 text-sm text-gray-500">
+              <div className="rounded-xl border border-gray-100 p-6 text-sm text-gray-500">
                 {language === "fr"
                   ? "Chargement des professionnels..."
                   : "Loading professionals..."}
               </div>
             )}
 
-            {filteredWorkers.map((w) => (
-              <div
-                key={w.id}
-                className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center gap-4"
-              >
-                <div className="flex-shrink-0">
-                  <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">
-                    {w.name
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")}
-                  </div>
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-semibold text-pro-gray text-base md:text-lg truncate">
-                      {w.name}
-                    </h3>
-                    {w.job && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-pro-blue border border-blue-100">
-                        {w.job}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 mt-1 text-xs md:text-sm text-gray-600">
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3" />
-                      {[w.region, w.city, w.commune, w.district]
-                        .filter(Boolean)
-                        .join(" • ")}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Star className="w-3 h-3 text-yellow-400" />
-                      {w.rating.toFixed(1)} ({w.ratingCount})
-                    </span>
-                    <span>
-                      {w.experienceYears} {text.years}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex flex-col items-end gap-2 text-right">
-                  <div className="text-pro-blue font-bold text-base md:text-lg">
-                    {formatCurrency(w.hourlyRate, w.currency)}
-                    <span className="text-xs md:text-sm text-gray-600 ml-1">
-                      {text.perHour}
-                    </span>
-                  </div>
-                  <Button
-                    size="sm"
-                    className="bg-pro-blue hover:bg-blue-700 text-xs md:text-sm"
-                    onClick={() => navigate(`/ouvrier/${buildWorkerSlug(w)}`)}
+            {/* Vue LISTE */}
+            {viewMode === "list" && (
+              <div className="space-y-4">
+                {filteredWorkers.map((w) => (
+                  <div
+                    key={w.id}
+                    className="flex flex-col items-start gap-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-shadow hover:shadow-md md:flex-row md:items-center md:p-5"
                   >
-                    {text.contact}
-                  </Button>
-                </div>
+                    <div className="flex-shrink-0">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-pro-blue text-lg font-semibold text-white">
+                        {w.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")}
+                      </div>
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="truncate text-base font-semibold text-pro-gray md:text-lg">
+                          {w.name}
+                        </h3>
+                        {w.job && (
+                          <span className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-xs text-pro-blue">
+                            {w.job}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-gray-600 md:text-sm">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3" />
+                          {[w.region, w.city, w.commune, w.district]
+                            .filter(Boolean)
+                            .join(" • ")}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Star className="h-3 w-3 text-yellow-400" />
+                          {w.rating.toFixed(1)} ({w.ratingCount})
+                        </span>
+                        <span>
+                          {w.experienceYears} {text.years}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-2 text-right">
+                      <div className="text-base font-bold text-pro-blue md:text-lg">
+                        {formatCurrency(w.hourlyRate, w.currency)}
+                        <span className="ml-1 text-xs text-gray-600 md:text-sm">
+                          {text.perHour}
+                        </span>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="bg-pro-blue text-xs hover:bg-blue-700 md:text-sm"
+                      >
+                        {text.contact}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+
+            {/* Vue MOSAÏQUE */}
+            {viewMode === "grid" && (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {filteredWorkers.map((w) => (
+                  <div
+                    key={w.id}
+                    className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-pro-blue text-base font-semibold text-white">
+                        {w.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")}
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="truncate text-sm font-semibold text-pro-gray">
+                          {w.name}
+                        </h3>
+                        {w.job && (
+                          <div className="mt-0.5 text-xs text-pro-blue">
+                            {w.job}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1 text-xs text-gray-600">
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {[w.region, w.city, w.commune, w.district]
+                          .filter(Boolean)
+                          .join(" • ")}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Star className="h-3 w-3 text-yellow-400" />
+                        {w.rating.toFixed(1)} ({w.ratingCount})
+                      </span>
+                      <span>
+                        {w.experienceYears} {text.years}
+                      </span>
+                    </div>
+
+                    <div className="mt-2 flex items-center justify-between">
+                      <div className="text-sm font-bold text-pro-blue">
+                        {formatCurrency(w.hourlyRate, w.currency)}
+                        <span className="ml-1 text-[11px] text-gray-600">
+                          {text.perHour}
+                        </span>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="bg-pro-blue text-[11px] hover:bg-blue-700"
+                      >
+                        {text.contact}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
