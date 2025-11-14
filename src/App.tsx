@@ -20,16 +20,18 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            {/* Page d'accueil */}
             <Route path="/" element={<Index />} />
 
             {/* Page d'inscription des ouvriers */}
-            <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
+            <Route
+              path="/inscription-ouvrier"
+              element={<InscriptionOuvrier />}
+            />
 
-            {/* Fiche détaillée ouvrier avec slug lisible */}
-            <Route path="/ouvrier/:slug" element={<WorkerDetail />} />
+            {/* Fiche détaillée ouvrier */}
+            <Route path="/ouvrier/:id" element={<WorkerDetail />} />
 
-            {/* Catch-all */}
+            {/* CATCH-ALL */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
