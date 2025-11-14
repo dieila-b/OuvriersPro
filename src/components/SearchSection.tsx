@@ -200,6 +200,20 @@ const SearchSection: React.FC = () => {
     [workers, selectedRegion, selectedCity, selectedCommune]
   );
 
+  // 🔹 Slug lisible : nom-prenom-metier--UUID
+  const buildWorkerSlug = (w: WorkerCard) => {
+    const base = `${w.name || "ouvrier"} ${w.job || ""}`.trim();
+
+    const slugName = base
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // enlever accents
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-") // remplacer tout par des tirets
+      .replace(/^-+|-+$/g, ""); // trim -
+
+    return `${slugName || "ouvrier"}--${w.id}`;
+  };
+
   // 🔹 Application des filtres
   const filteredWorkers = useMemo(
     () =>
@@ -570,7 +584,7 @@ const SearchSection: React.FC = () => {
                   <Button
                     size="sm"
                     className="bg-pro-blue hover:bg-blue-700 text-xs md:text-sm"
-                    onClick={() => navigate(`/ouvrier/${w.id}`)}
+                    onClick={() => navigate(`/ouvrier/${buildWorkerSlug(w)}`)}
                   >
                     {text.contact}
                   </Button>
