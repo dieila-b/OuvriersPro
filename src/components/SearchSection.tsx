@@ -43,10 +43,12 @@ interface WorkerCard {
 const SearchSection: React.FC = () => {
   const { language } = useLanguage();
 
+  // Données
   const [workers, setWorkers] = useState<WorkerCard[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Filtres
   const [keyword, setKeyword] = useState("");
   const [selectedJob, setSelectedJob] = useState<string>("all");
   const [maxPrice, setMaxPrice] = useState<number>(300000);
@@ -57,7 +59,7 @@ const SearchSection: React.FC = () => {
   const [selectedCommune, setSelectedCommune] = useState<string>("");
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
 
-  // 🔵 état de la vue : "list" ou "grid"
+  // Vue liste / mosaïque
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
   // Chargement Supabase
@@ -316,14 +318,60 @@ const SearchSection: React.FC = () => {
   return (
     <section id="search" className="w-full py-20 bg-white">
       <div className="w-full max-w-6xl mx-auto px-4 md:px-8">
-        {/* Titre + sous-titre */}
-        <div className="mb-6">
-          <h2 className="text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
-            {text.title}
-          </h2>
-          <p className="text-gray-600 mt-2 text-sm md:text-base">
-            {text.subtitle}
-          </p>
+        {/* 🔵 EN-TÊTE GLOBAL : titre + boutons LISTE / MOSAÏQUE */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-8 border-b border-gray-200 pb-4">
+          <div>
+            <h2 className="text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
+              {text.title}
+            </h2>
+            <p className="text-gray-600 mt-2 text-sm md:text-base">
+              {text.subtitle}
+            </p>
+            <div className="mt-2 flex items-center gap-1 text-xs text-gray-500">
+              <Search className="w-3 h-3" />
+              {loading ? (
+                <span>
+                  {language === "fr"
+                    ? "Chargement des résultats..."
+                    : "Loading results..."}
+                </span>
+              ) : (
+                <span>{text.resultCount(filteredWorkers.length)}</span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-gray-500 uppercase tracking-wide">
+              {text.viewMode}
+            </span>
+            <div className="flex border border-gray-300 rounded-lg bg-white overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs ${
+                  viewMode === "list"
+                    ? "bg-pro-blue text-white"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                <LayoutList className="w-3 h-3" />
+                {text.viewList}
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs ${
+                  viewMode === "grid"
+                    ? "bg-pro-blue text-white"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                <LayoutGrid className="w-3 h-3" />
+                {text.viewGrid}
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Grille filtres + résultats */}
@@ -502,58 +550,8 @@ const SearchSection: React.FC = () => {
             </Button>
           </aside>
 
-          {/* Résultats + boutons Liste/Mosaïque */}
+          {/* Résultats */}
           <div className="md:col-span-2">
-            {/* ✅ EN-TÊTE : texte + switch vue LISTE / MOSAÏQUE */}
-            <div className="flex flex-col gap-3 mb-4 border-b border-gray-200 pb-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <Search className="w-4 h-4" />
-                  {loading ? (
-                    <span>
-                      {language === "fr"
-                        ? "Chargement des résultats..."
-                        : "Loading results..."}
-                    </span>
-                  ) : (
-                    <span>{text.resultCount(filteredWorkers.length)}</span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-gray-500 uppercase tracking-wide">
-                    {text.viewMode}
-                  </span>
-                  <div className="flex border border-gray-300 rounded-lg bg-white overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("list")}
-                      className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs ${
-                        viewMode === "list"
-                          ? "bg-pro-blue text-white"
-                          : "text-gray-600 hover:bg-gray-100"
-                      }`}
-                    >
-                      <LayoutList className="w-3 h-3" />
-                      {text.viewList}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("grid")}
-                      className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs ${
-                        viewMode === "grid"
-                          ? "bg-pro-blue text-white"
-                          : "text-gray-600 hover:bg-gray-100"
-                      }`}
-                    >
-                      <LayoutGrid className="w-3 h-3" />
-                      {text.viewGrid}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             {error && (
               <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">
                 {error}
