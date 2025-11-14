@@ -57,7 +57,7 @@ const SearchSection: React.FC = () => {
   // Filtres
   const [keyword, setKeyword] = useState("");
   const [selectedJob, setSelectedJob] = useState<string>("all");
-  const [maxPrice, setMaxPrice] = useState<number>(250000);
+  const [maxPrice, setMaxPrice] = useState<number>(300000);
   const [minRating, setMinRating] = useState<number>(0);
 
   const [selectedRegion, setSelectedRegion] = useState<string>("");
@@ -251,6 +251,17 @@ const SearchSection: React.FC = () => {
     ]
   );
 
+  const resetFilters = () => {
+    setKeyword("");
+    setSelectedJob("all");
+    setMaxPrice(300000);
+    setMinRating(0);
+    setSelectedRegion("");
+    setSelectedCity("");
+    setSelectedCommune("");
+    setSelectedDistrict("");
+  };
+
   const formatCurrency = (value: number, currency: string) => {
     if (currency === "GNF") {
       return `${value.toLocaleString("fr-FR")} GNF`;
@@ -263,18 +274,23 @@ const SearchSection: React.FC = () => {
       language === "fr"
         ? "Trouvez votre professionnel"
         : "Find your professional",
+    subtitle:
+      language === "fr"
+        ? "Filtrez par métier, zone géographique et tarif pour trouver l’ouvrier le plus proche."
+        : "Filter by trade, area and rate to find the closest professional.",
     filters: language === "fr" ? "Filtres" : "Filters",
-    keywordLabel: language === "fr" ? "Rechercher" : "Search",
-    job: language === "fr" ? "Métier" : "Job",
+    keywordLabel:
+      language === "fr" ? "Métier ou nom" : "Trade or name",
     searchPlaceholder:
       language === "fr"
-        ? "Rechercher un métier, un service ou un nom…"
-        : "Search a trade, service or name…",
+        ? "Plombier, électricien, Mamadou..."
+        : "Plumber, electrician, John...",
+    job: language === "fr" ? "Métier" : "Job",
     allJobs:
       language === "fr" ? "Tous les métiers" : "All trades",
     priceLabel:
       language === "fr"
-        ? "Prix max par heure"
+        ? "Tarif horaire max"
         : "Max hourly rate",
     ratingLabel:
       language === "fr"
@@ -292,14 +308,16 @@ const SearchSection: React.FC = () => {
       language === "fr" ? "Toutes les communes" : "All communes",
     allDistricts:
       language === "fr" ? "Tous les quartiers" : "All districts",
-    btnFilter:
-      language === "fr" ? "Appliquer les filtres" : "Apply filters",
+    reset:
+      language === "fr"
+        ? "Réinitialiser les filtres"
+        : "Reset filters",
     noResults:
       language === "fr"
         ? "Aucun professionnel ne correspond à ces critères pour le moment."
         : "No professional matches your criteria yet.",
     contact: language === "fr" ? "Contacter" : "Contact",
-    perHour: language === "fr" ? "/heure" : "/hour",
+    perHour: language === "fr" ? "/h" : "/h",
     years:
       language === "fr"
         ? "ans d'expérience"
@@ -314,24 +332,22 @@ const SearchSection: React.FC = () => {
   };
 
   return (
-    <section id="search" className="w-full py-20 bg-white">
-      <div className="w-full max-w-6xl mx-auto px-4 md:px-8">
+    <section id="search" className="w-full bg-white py-20">
+      <div className="w-full mx-auto max-w-6xl px-4 md:px-8">
         {/* Titre + stats + switch de vue */}
-        <div className="flex flex-col gap-4 mb-10 md:flex-row md:items-end md:justify-between">
+        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
+            <h2 className="text-3xl font-bold text-pro-gray md:text-4xl">
               {text.title}
             </h2>
             <p className="mt-2 text-sm text-gray-600 md:text-base">
-              {language === "fr"
-                ? "Affinez votre recherche par métier, localisation, prix et note pour trouver l’ouvrier le plus proche."
-                : "Filter by trade, location, price and rating to find the closest professional."}
+              {text.subtitle}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 md:flex-col md:items-end">
             <div className="flex items-center gap-2 text-sm text-gray-500">
-              <Search className="w-4 h-4" />
+              <Search className="h-4 w-4" />
               {loading ? (
                 <span>
                   {language === "fr"
@@ -349,25 +365,25 @@ const SearchSection: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setViewMode("list")}
-                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs md:text-sm ${
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs md:text-sm ${
                     viewMode === "list"
                       ? "bg-pro-blue text-white"
                       : "text-gray-600 hover:bg-gray-100"
                   }`}
                 >
-                  <LayoutList className="w-3 h-3" />
+                  <LayoutList className="h-3 w-3" />
                   <span className="hidden sm:inline">{text.viewList}</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setViewMode("grid")}
-                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs md:text-sm ${
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs md:text-sm ${
                     viewMode === "grid"
                       ? "bg-pro-blue text-white"
                       : "text-gray-600 hover:bg-gray-100"
                   }`}
                 >
-                  <LayoutGrid className="w-3 h-3" />
+                  <LayoutGrid className="h-3 w-3" />
                   <span className="hidden sm:inline">{text.viewGrid}</span>
                 </button>
               </div>
@@ -376,15 +392,12 @@ const SearchSection: React.FC = () => {
         </div>
 
         {/* Grille filtres + résultats */}
-        <div className="grid items-start grid-cols-1 gap-8 md:grid-cols-3">
+        <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-3">
           {/* Filtres */}
-          <aside className="md:col-span-1 rounded-xl border border-gray-100 bg-gray-50 p-5 shadow-sm">
-            <div className="mb-4 flex items-center gap-2">
-              <Search className="w-4 h-4 text-pro-blue" />
-              <h3 className="text-base font-semibold text-pro-gray">
-                {text.filters}
-              </h3>
-            </div>
+          <aside className="rounded-xl border border-gray-200 bg-gray-50 p-5 md:col-span-1">
+            <h3 className="mb-4 text-base font-semibold text-pro-gray">
+              {text.filters}
+            </h3>
 
             {/* Mot clé */}
             <div className="mb-4">
@@ -397,25 +410,6 @@ const SearchSection: React.FC = () => {
                 placeholder={text.searchPlaceholder}
                 className="text-sm"
               />
-            </div>
-
-            {/* Métier */}
-            <div className="mb-4">
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                {text.job}
-              </label>
-              <select
-                value={selectedJob}
-                onChange={(e) => setSelectedJob(e.target.value)}
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pro-blue"
-              >
-                <option value="all">{text.allJobs}</option>
-                {jobs.map((job) => (
-                  <option key={job} value={job}>
-                    {job}
-                  </option>
-                ))}
-              </select>
             </div>
 
             {/* Région */}
@@ -431,7 +425,7 @@ const SearchSection: React.FC = () => {
                   setSelectedCommune("");
                   setSelectedDistrict("");
                 }}
-                className="w-full rounded-md border border-gray-300 bg:white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="">{text.allRegions}</option>
                 {regions.map((r) => (
@@ -508,38 +502,49 @@ const SearchSection: React.FC = () => {
 
             {/* Prix max */}
             <div className="mb-6">
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                {text.priceLabel} ({formatCurrency(maxPrice, "GNF")})
-              </label>
-              <div className="pt-2">
-                <Slider
-                  defaultValue={[maxPrice]}
-                  min={50000}
-                  max={300000}
-                  step={10000}
-                  onValueChange={(v) => setMaxPrice(v[0])}
-                />
+              <div className="mb-1 flex items-center justify-between text-xs font-medium text-gray-600">
+                <span>{text.priceLabel}</span>
+                <span className="text-[11px] text-gray-500">
+                  {maxPrice >= 300000
+                    ? language === "fr"
+                      ? "Aucune limite"
+                      : "No limit"
+                    : formatCurrency(maxPrice, "GNF")}
+                </span>
               </div>
+              <Slider
+                defaultValue={[maxPrice]}
+                min={50000}
+                max={300000}
+                step={10000}
+                onValueChange={(v) => setMaxPrice(v[0])}
+              />
             </div>
 
             {/* Note minimum */}
             <div className="mb-6">
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                {text.ratingLabel} ({minRating.toFixed(1)})
-              </label>
-              <div className="pt-2">
-                <Slider
-                  defaultValue={[minRating]}
-                  min={0}
-                  max={5}
-                  step={0.5}
-                  onValueChange={(v) => setMinRating(v[0])}
-                />
+              <div className="mb-1 flex items-center justify-between text-xs font-medium text-gray-600">
+                <span>{text.ratingLabel}</span>
+                <span className="text-[11px] text-gray-500">
+                  {minRating === 0 ? "Toutes" : minRating.toFixed(1)}
+                </span>
               </div>
+              <Slider
+                defaultValue={[minRating]}
+                min={0}
+                max={5}
+                step={0.5}
+                onValueChange={(v) => setMinRating(v[0])}
+              />
             </div>
 
-            <Button className="mt-2 w-full bg-pro-blue text-sm hover:bg-blue-700">
-              {text.btnFilter}
+            <Button
+              type="button"
+              onClick={resetFilters}
+              variant="outline"
+              className="mt-2 w-full border-gray-300 text-sm"
+            >
+              {text.reset}
             </Button>
           </aside>
 
@@ -574,7 +579,7 @@ const SearchSection: React.FC = () => {
                     className="flex flex-col items-start gap-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-shadow hover:shadow-md md:flex-row md:items-center md:p-5"
                   >
                     <div className="flex-shrink-0">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-pro-blue text-lg font-semibold text-white">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-pro-blue text-sm font-semibold text-white md:h-14 md:w-14 md:text-lg">
                         {w.name
                           .split(" ")
                           .map((n) => n[0])
@@ -639,7 +644,7 @@ const SearchSection: React.FC = () => {
                     className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-pro-blue text-base font-semibold text-white">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-pro-blue text-sm font-semibold text-white">
                         {w.name
                           .split(" ")
                           .map((n) => n[0])
