@@ -334,8 +334,8 @@ const SearchSection: React.FC = () => {
   return (
     <section id="search" className="w-full bg-white py-20">
       <div className="mx-auto w-full max-w-6xl px-4 md:px-8">
-        {/* Titre + compteur + switch vue */}
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        {/* Titre + barre de contrôle (toujours sur toute la largeur) */}
+        <div className="mb-8 space-y-4">
           <div>
             <h2 className="text-3xl font-bold text-pro-gray md:text-4xl">
               {text.title}
@@ -345,8 +345,9 @@ const SearchSection: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 md:flex-col md:items-end">
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 md:px-4">
+            {/* Compteur résultats */}
+            <div className="flex items-center gap-2 text-xs text-gray-600 md:text-sm">
               <Search className="h-4 w-4" />
               {loading ? (
                 <span>
@@ -359,32 +360,33 @@ const SearchSection: React.FC = () => {
               )}
             </div>
 
+            {/* Switch vue liste / mosaïque */}
             <div className="flex items-center gap-2 text-xs md:text-sm">
               <span className="text-gray-500">{text.viewMode}</span>
               <div className="flex rounded-lg border border-gray-200 bg-white p-0.5">
                 <button
                   type="button"
                   onClick={() => setViewMode("list")}
-                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs md:text-sm ${
+                  className={`inline-flex items-center gap-1 rounded-md px-3 py-1 ${
                     viewMode === "list"
                       ? "bg-pro-blue text-white"
                       : "text-gray-600 hover:bg-gray-100"
                   }`}
                 >
                   <LayoutList className="h-3 w-3" />
-                  <span className="hidden sm:inline">{text.viewList}</span>
+                  <span>{text.viewList}</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setViewMode("grid")}
-                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs md:text-sm ${
+                  className={`inline-flex items-center gap-1 rounded-md px-3 py-1 ${
                     viewMode === "grid"
                       ? "bg-pro-blue text-white"
                       : "text-gray-600 hover:bg-gray-100"
                   }`}
                 >
                   <LayoutGrid className="h-3 w-3" />
-                  <span className="hidden sm:inline">{text.viewGrid}</span>
+                  <span>{text.viewGrid}</span>
                 </button>
               </div>
             </div>
