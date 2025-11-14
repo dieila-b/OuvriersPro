@@ -68,7 +68,7 @@ const SearchSection: React.FC = () => {
   // Vue liste / mosaïque
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
-  // 🔹 Chargement des ouvriers depuis Supabase
+  // Chargement des ouvriers
   useEffect(() => {
     const fetchWorkers = async () => {
       setLoading(true);
@@ -134,7 +134,7 @@ const SearchSection: React.FC = () => {
     fetchWorkers();
   }, [language]);
 
-  // 🔹 Listes pour les filtres (dynamiques à partir des données)
+  // Listes pour les filtres
   const jobs = useMemo(
     () =>
       Array.from(
@@ -207,7 +207,7 @@ const SearchSection: React.FC = () => {
     [workers, selectedRegion, selectedCity, selectedCommune]
   );
 
-  // 🔹 Application des filtres
+  // Application des filtres
   const filteredWorkers = useMemo(
     () =>
       workers.filter((w) => {
@@ -333,7 +333,7 @@ const SearchSection: React.FC = () => {
   return (
     <section id="search" className="w-full py-20 bg-white">
       <div className="w-full max-w-6xl mx-auto px-4 md:px-8">
-        {/* Titre */}
+        {/* Titre + sous-titre */}
         <div className="mb-4">
           <h2 className="text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
             {text.title}
@@ -343,8 +343,11 @@ const SearchSection: React.FC = () => {
           </p>
         </div>
 
-        {/* 🔵 BARRE LISTE / MOSAÏQUE + COMPTEUR (nouvelle) */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-8 border border-gray-100 bg-gray-50 rounded-xl px-3 py-2 md:px-4">
+        {/* Barre résultat + boutons Liste / Mosaïque */}
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 mb-8 border border-gray-100 bg-gray-50 rounded-xl px-3 py-2 md:px-4"
+          data-testid="op-view-toggle-bar"
+        >
           <div className="flex items-center gap-2 text-xs md:text-sm text-gray-600">
             <Search className="w-4 h-4" />
             {loading ? (
