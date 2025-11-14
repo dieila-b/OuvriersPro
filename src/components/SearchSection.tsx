@@ -4,13 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Star,
-  MapPin,
-  Search,
-  LayoutList,
-  LayoutGrid,
-} from "lucide-react";
+import { Star, MapPin, Search, LayoutList, LayoutGrid } from "lucide-react";
 
 type DbWorker = {
   id: string;
@@ -65,10 +59,10 @@ const SearchSection: React.FC = () => {
   const [selectedCommune, setSelectedCommune] = useState<string>("");
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
 
-  // Vue liste / mosaïque
+  // Vue : liste / mosaïque
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
-  // Chargement des ouvriers
+  // Chargement des ouvriers depuis Supabase
   useEffect(() => {
     const fetchWorkers = async () => {
       setLoading(true);
@@ -285,32 +279,23 @@ const SearchSection: React.FC = () => {
         ? "Plombier, électricien, Mamadou..."
         : "Plumber, electrician, John...",
     job: language === "fr" ? "Métier" : "Job",
-    allJobs:
-      language === "fr" ? "Tous les métiers" : "All trades",
+    allJobs: language === "fr" ? "Tous les métiers" : "All trades",
     priceLabel:
-      language === "fr"
-        ? "Tarif horaire max"
-        : "Max hourly rate",
+      language === "fr" ? "Tarif horaire max" : "Max hourly rate",
     ratingLabel:
-      language === "fr"
-        ? "Note minimum"
-        : "Minimum rating",
+      language === "fr" ? "Note minimum" : "Minimum rating",
     region: language === "fr" ? "Région" : "Region",
     city: language === "fr" ? "Ville" : "City",
     commune: language === "fr" ? "Commune" : "Commune",
     district: language === "fr" ? "Quartier" : "District",
-    allRegions:
-      language === "fr" ? "Toutes les régions" : "All regions",
-    allCities:
-      language === "fr" ? "Toutes les villes" : "All cities",
+    allRegions: language === "fr" ? "Toutes les régions" : "All regions",
+    allCities: language === "fr" ? "Toutes les villes" : "All cities",
     allCommunes:
       language === "fr" ? "Toutes les communes" : "All communes",
     allDistricts:
       language === "fr" ? "Tous les quartiers" : "All districts",
     reset:
-      language === "fr"
-        ? "Réinitialiser les filtres"
-        : "Reset filters",
+      language === "fr" ? "Réinitialiser les filtres" : "Reset filters",
     noResults:
       language === "fr"
         ? "Aucun professionnel ne correspond à ces critères pour le moment."
@@ -334,7 +319,7 @@ const SearchSection: React.FC = () => {
     <section id="search" className="w-full py-20 bg-white">
       <div className="w-full max-w-6xl mx-auto px-4 md:px-8">
         {/* Titre + sous-titre */}
-        <div className="mb-4">
+        <div className="mb-6">
           <h2 className="text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
             {text.title}
           </h2>
@@ -343,62 +328,45 @@ const SearchSection: React.FC = () => {
           </p>
         </div>
 
-        {/* Barre résultat + boutons Liste / Mosaïque */}
-        <div
-          className="flex flex-wrap items-center justify-between gap-3 mb-8 border border-gray-100 bg-gray-50 rounded-xl px-3 py-2 md:px-4"
-          data-testid="op-view-toggle-bar"
-        >
-          <div className="flex items-center gap-2 text-xs md:text-sm text-gray-600">
-            <Search className="w-4 h-4" />
-            {loading ? (
-              <span>
-                {language === "fr"
-                  ? "Chargement des résultats..."
-                  : "Loading results..."}
-              </span>
-            ) : (
-              <span>{text.resultCount(filteredWorkers.length)}</span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 text-xs md:text-sm">
-            <span className="text-gray-500">{text.viewMode}</span>
-            <div className="flex border border-gray-200 rounded-lg bg-white p-0.5">
-              <button
-                type="button"
-                onClick={() => setViewMode("list")}
-                className={`inline-flex items-center gap-1 px-3 py-1 rounded-md ${
-                  viewMode === "list"
-                    ? "bg-pro-blue text-white"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                <LayoutList className="w-3 h-3" />
-                {text.viewList}
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("grid")}
-                className={`inline-flex items-center gap-1 px-3 py-1 rounded-md ${
-                  viewMode === "grid"
-                    ? "bg-pro-blue text-white"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                <LayoutGrid className="w-3 h-3" />
-                {text.viewGrid}
-              </button>
-            </div>
-          </div>
-        </div>
-
         {/* Grille filtres + résultats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
-          {/* Filtres */}
+          {/* Filtres + boutons d'affichage */}
           <aside className="md:col-span-1 bg-gray-50 rounded-xl p-5 border border-gray-200">
-            <h3 className="text-base font-semibold text-pro-gray mb-4">
-              {text.filters}
-            </h3>
+            {/* En-tête filtres + switch Liste/Mosaïque */}
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <h3 className="text-base font-semibold text-pro-gray">
+                {text.filters}
+              </h3>
+              <div className="flex items-center gap-2 text-[11px] text-gray-500">
+                <span>{text.viewMode}</span>
+                <div className="flex border border-gray-300 rounded-lg bg-white p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("list")}
+                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-md ${
+                      viewMode === "list"
+                        ? "bg-pro-blue text-white"
+                        : "text-gray-600 hover:bg-gray-100"
+                    }`}
+                  >
+                    <LayoutList className="w-3 h-3" />
+                    {text.viewList}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("grid")}
+                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-md ${
+                      viewMode === "grid"
+                        ? "bg-pro-blue text-white"
+                        : "text-gray-600 hover:bg-gray-100"
+                    }`}
+                  >
+                    <LayoutGrid className="w-3 h-3" />
+                    {text.viewGrid}
+                  </button>
+                </div>
+              </div>
+            </div>
 
             {/* Mot clé */}
             <div className="mb-4">
@@ -570,6 +538,19 @@ const SearchSection: React.FC = () => {
 
           {/* Résultats */}
           <div className="md:col-span-2">
+            <div className="flex items-center gap-2 mb-4 text-xs text-gray-500">
+              <Search className="w-4 h-4" />
+              {loading ? (
+                <span>
+                  {language === "fr"
+                    ? "Chargement des résultats..."
+                    : "Loading results..."}
+                </span>
+              ) : (
+                <span>{text.resultCount(filteredWorkers.length)}</span>
+              )}
+            </div>
+
             {error && (
               <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">
                 {error}
