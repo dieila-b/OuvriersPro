@@ -4,7 +4,8 @@ import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import AdminNavTabs from "@/components/AdminNavTabs";
 
 type DbWorker = {
   id: string;
@@ -446,10 +447,6 @@ const AdminOuvrierInscriptions: React.FC = () => {
       language === "fr"
         ? "Validez ou refusez les demandes d'adhésion des professionnels."
         : "Approve or reject worker registration requests.",
-    tabContacts:
-      language === "fr" ? "Demandes de contact" : "Contact requests",
-    tabWorkers:
-      language === "fr" ? "Inscriptions ouvriers" : "Worker registrations",
     statusFilter: language === "fr" ? "Statut" : "Status",
     searchLabel: language === "fr" ? "Recherche" : "Search",
     dateFrom:
@@ -487,21 +484,8 @@ const AdminOuvrierInscriptions: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 py-10">
       <div className="max-w-6xl mx-auto px-4 md:px-8">
-        {/* Onglets haut : contacts / inscriptions */}
-        <div className="flex items-center gap-3 mb-6">
-          <Link
-            to="/admin/ouvrier-contacts"
-            className="px-4 py-2 rounded-full text-sm border border-slate-200 text-slate-600 bg-white hover:bg-slate-50"
-          >
-            {text.tabContacts}
-          </Link>
-          <button
-            type="button"
-            className="px-4 py-2 rounded-full text-sm font-medium bg-pro-blue text-white shadow-sm"
-          >
-            {text.tabWorkers}
-          </button>
-        </div>
+        {/* Menu admin (contacts / inscriptions) */}
+        <AdminNavTabs />
 
         {/* Header + actions globales */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
@@ -578,7 +562,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
             />
           </div>
 
-          <div className="md>w-1/4">
+          <div className="md:w-1/4">
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.dateTo}
             </label>
@@ -690,7 +674,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
                           </div>
                         </td>
 
-                        {/* 🟡 Statut + infos de validation / refus */}
+                        {/* Statut + infos de validation / refus */}
                         <td className="px-4 py-3 align-top">
                           <span
                             className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusBadgeClass(
