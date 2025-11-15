@@ -42,7 +42,7 @@ const AdminOuvrierContacts: React.FC = () => {
 
   // 🔹 filtres de date
   const [dateFrom, setDateFrom] = useState<string>("");
-  const [dateTo, setDateTo] = useState<string>("");
+  the const [dateTo, setDateTo] = useState<string>("");
 
   // 🔐 Vérification des droits admin
   useEffect(() => {
@@ -386,7 +386,7 @@ const AdminOuvrierContacts: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 py-10">
       <div className="max-w-6xl mx-auto px-4 md:px-8">
-        {/* Menu admin (contacts / inscriptions) */}
+        {/* Menu admin (contacts / inscriptions / retour site) */}
         <AdminNavTabs />
 
         {/* Header */}
