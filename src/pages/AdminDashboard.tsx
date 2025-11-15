@@ -39,7 +39,7 @@ const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Optionnel : filtre rapide par date sur le dashboard global
+  // Filtres globaux de dates
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
 
@@ -154,7 +154,7 @@ const AdminDashboard: React.FC = () => {
     fetchDashboardData();
   }, [language, authLoading, isAdmin]);
 
-  // 🔎 Filtrage par dates global (appliqué aux stats et listes récentes)
+  // 🔎 Filtrage par dates global
   const filteredWorkers = useMemo(() => {
     return workers.filter((w) => {
       const created = new Date(w.created_at);
@@ -193,7 +193,7 @@ const AdminDashboard: React.FC = () => {
     });
   }, [contacts, dateFrom, dateTo]);
 
-  // 🔢 Stats calculées
+  // 🔢 Stats globales
   const stats = useMemo(() => {
     // Ouvriers
     const totalWorkers = filteredWorkers.length;
@@ -234,6 +234,36 @@ const AdminDashboard: React.FC = () => {
       contactsLast7,
     };
   }, [filteredWorkers, filteredContacts]);
+
+  // 📈 Données pour le petit graphique (7 derniers jours de demandes de contact)
+  const contactChartData = useMemo(() => {
+    // On construit les 7 derniers jours (du plus ancien au plus récent)
+    const days: { label: string; iso: string; count: number }[] = [];
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(
+        Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() - i)
+      );
+      const iso = d.toISOString().slice(0, 10); // yyyy-mm-dd
+      const label =
+        language === "fr"
+          ? d.toLocaleDateString("fr-FR", { weekday: "short" })
+          : d.toLocaleDateString("en-GB", { weekday: "short" });
+      days.push({ label, iso, count: 0 });
+    }
+
+    filteredContacts.forEach((c) => {
+      const dateStr = c.created_at.slice(0, 10);
+      const day = days.find((d) => d.iso === dateStr);
+      if (day) {
+        day.count += 1;
+      }
+    });
+
+    const maxCount = days.reduce((max, d) => (d.count > max ? d.count : max), 0) || 1;
+
+    return { days, maxCount };
+  }, [filteredContacts, language]);
 
   const formatDateTime = (value: string) => {
     const d = new Date(value);
@@ -341,6 +371,22 @@ const AdminDashboard: React.FC = () => {
       language === "fr"
         ? "Voir toutes les demandes"
         : "View all requests",
+    chartTitle:
+      language === "fr"
+        ? "Évolution des demandes (7 derniers jours)"
+        : "Requests trend (last 7 days)",
+    chartSubtitle:
+      language === "fr"
+        ? "Nombre de demandes de contact reçues par jour."
+        : "Number of contact requests received per day.",
+    mobileWidgetTitle:
+      language === "fr"
+        ? "Prochains développements mobile"
+        : "Upcoming mobile features",
+    mobileWidgetSubtitle:
+      language === "fr"
+        ? "Roadmap indicative pour l’app mobile OuvriersPro."
+        : "Indicative roadmap for the OuvriersPro mobile app.",
   };
 
   if (authLoading) {
@@ -365,7 +411,7 @@ const AdminDashboard: React.FC = () => {
         {/* Menu admin (tabs + bouton retour au site) */}
         <AdminNavTabs />
 
-        {/* Header */}
+        {/* Header + filtres globaux */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6 mt-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
@@ -375,7 +421,6 @@ const AdminDashboard: React.FC = () => {
               {text.subtitle}
             </p>
           </div>
-          {/* Filtres dates globaux */}
           <div className="flex flex-col sm:flex-row gap-2">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -497,13 +542,130 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Listes récentes */}
+        {/* Ligne : graphique + widget mobile */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          {/* Graphique d’évolution simple (bar chart CSS) */}
+          <div className="bg-white border border-slate-200 rounded-xl p-4">
+            <h2 className="text-sm font-semibold text-slate-800 mb-1">
+              {text.chartTitle}
+            </h2>
+            <p className="text-xs text-slate-500 mb-3">
+              {text.chartSubtitle}
+            </p>
+            <div className="h-40 flex items-end gap-2 border-b border-slate-100 pb-2">
+              {contactChartData.days.map((d) => {
+                const height = (d.count / contactChartData.maxCount) * 120; // px
+                return (
+                  <div
+                    key={d.iso}
+                    className="flex-1 flex flex-col items-center justify-end"
+                  >
+                    <div
+                      className="w-6 rounded-t-md bg-blue-100 border border-blue-200 flex items-end justify-center"
+                      style={{ height: `${height || 4}px` }}
+                    >
+                      {d.count > 0 && (
+                        <span className="text-[10px] text-blue-700 font-semibold mb-1">
+                          {d.count}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 text-[10px] text-slate-500">
+                      {d.label}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Widget roadmap mobile */}
+          <div className="bg-white border border-slate-200 rounded-xl p-4">
+            <h2 className="text-sm font-semibold text-slate-800 mb-1">
+              {text.mobileWidgetTitle}
+            </h2>
+            <p className="text-xs text-slate-500 mb-3">
+              {text.mobileWidgetSubtitle}
+            </p>
+            <ul className="space-y-2 text-xs text-slate-700">
+              <li className="flex items-start gap-2">
+                <span className="mt-[3px] h-2 w-2 rounded-full bg-emerald-500" />
+                <div>
+                  <span className="font-semibold">
+                    {language === "fr"
+                      ? "Phase 1 – API / Back-end prêt pour mobile"
+                      : "Phase 1 – API / backend ready for mobile"}
+                  </span>
+                  <div className="text-slate-500">
+                    {language === "fr"
+                      ? "Réutiliser Supabase + endpoints existants pour consommer les ouvriers, contacts et inscriptions depuis une future app React Native / Expo."
+                      : "Reuse Supabase + existing endpoints to consume workers, contacts and registrations from a future React Native / Expo app."}
+                  </div>
+                </div>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-[3px] h-2 w-2 rounded-full bg-amber-500" />
+                <div>
+                  <span className="font-semibold">
+                    {language === "fr"
+                      ? "Phase 2 – App mobile ouvriers"
+                      : "Phase 2 – Workers mobile app"}
+                  </span>
+                  <div className="text-slate-500">
+                    {language === "fr"
+                      ? "Permettre aux ouvriers de gérer leur profil, leur abonnement, leurs zones d’intervention et de répondre aux demandes directement depuis le téléphone."
+                      : "Let workers manage their profile, subscription, service areas and answer requests directly from their phone."}
+                  </div>
+                </div>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-[3px] h-2 w-2 rounded-full bg-slate-400" />
+                <div>
+                  <span className="font-semibold">
+                    {language === "fr"
+                      ? "Phase 3 – App mobile clients"
+                      : "Phase 3 – Clients mobile app"}
+                  </span>
+                  <div className="text-slate-500">
+                    {language === "fr"
+                      ? "Recherche d’ouvriers par distance, notes, prix, notification des réponses et suivi des interventions."
+                      : "Search workers by distance, rating, price, get notifications for replies and track interventions."}
+                  </div>
+                </div>
+              </li>
+              <li className="flex items-start gap-2 mt-1">
+                <span className="mt-[3px] h-2 w-2 rounded-full bg-blue-500" />
+                <div>
+                  <span className="font-semibold">
+                    {language === "fr"
+                      ? "Phase 4 – Stats & reporting mobile"
+                      : "Phase 4 – Mobile analytics & reporting"}
+                  </span>
+                  <div className="text-slate-500">
+                    {language === "fr"
+                      ? "Tableaux de bord synthétiques sur mobile pour suivre les inscriptions, les demandes et le chiffre d’affaires des abonnements."
+                      : "Mobile dashboards to track registrations, requests and subscription revenue."}
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Listes récentes + liens rapides */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Dernières inscriptions ouvriers */}
           <div className="bg-white border border-slate-200 rounded-xl p-4">
-            <h2 className="text-sm font-semibold text-slate-800 mb-3">
-              {text.recentWorkers}
-            </h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-slate-800">
+                {text.recentWorkers}
+              </h2>
+              <Link to="/admin/ouvriers">
+                <span className="text-[11px] text-pro-blue hover:underline cursor-pointer">
+                  {language === "fr" ? "Tout voir" : "View all"}
+                </span>
+              </Link>
+            </div>
             {recentWorkers.length === 0 && !loading && (
               <div className="text-sm text-slate-500">
                 {language === "fr"
@@ -523,7 +685,10 @@ const AdminDashboard: React.FC = () => {
                     (w.first_name || "") +
                     (w.last_name ? ` ${w.last_name}` : "");
                   return (
-                    <li key={w.id} className="py-2 flex items-start justify-between gap-3">
+                    <li
+                      key={w.id}
+                      className="py-2 flex items-start justify-between gap-3"
+                    >
                       <div>
                         <div className="font-semibold text-slate-800 text-sm">
                           {fullName || "—"}
@@ -533,6 +698,17 @@ const AdminDashboard: React.FC = () => {
                         </div>
                         <div className="text-xs text-slate-400">
                           {formatDateTime(w.created_at)}
+                        </div>
+                        {/* 🔗 Lien rapide vers la fiche publique ouvrier */}
+                        <div className="mt-1">
+                          <Link
+                            to={`/ouvrier/${w.id}`}
+                            className="text-[11px] text-pro-blue hover:underline"
+                          >
+                            {language === "fr"
+                              ? "Voir la fiche ouvrier"
+                              : "Open worker profile"}
+                          </Link>
                         </div>
                       </div>
                       <span
@@ -551,9 +727,16 @@ const AdminDashboard: React.FC = () => {
 
           {/* Dernières demandes de contact */}
           <div className="bg-white border border-slate-200 rounded-xl p-4">
-            <h2 className="text-sm font-semibold text-slate-800 mb-3">
-              {text.recentContacts}
-            </h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-slate-800">
+                {text.recentContacts}
+              </h2>
+              <Link to="/admin/ouvrier-contacts">
+                <span className="text-[11px] text-pro-blue hover:underline cursor-pointer">
+                  {language === "fr" ? "Tout voir" : "View all"}
+                </span>
+              </Link>
+            </div>
             {recentContacts.length === 0 && !loading && (
               <div className="text-sm text-slate-500">
                 {language === "fr"
@@ -569,7 +752,10 @@ const AdminDashboard: React.FC = () => {
             {!loading && recentContacts.length > 0 && (
               <ul className="divide-y divide-slate-100">
                 {recentContacts.map((c) => (
-                  <li key={c.id} className="py-2 flex items-start justify-between gap-3">
+                  <li
+                    key={c.id}
+                    className="py-2 flex items-start justify-between gap-3"
+                  >
                     <div>
                       <div className="font-semibold text-slate-800 text-sm">
                         {c.worker_name || "—"}
@@ -579,6 +765,17 @@ const AdminDashboard: React.FC = () => {
                       </div>
                       <div className="text-xs text-slate-400">
                         {formatDateTime(c.created_at)} • {originLabel(c.origin)}
+                      </div>
+                      {/* 🔗 Lien rapide vers le back-office contacts */}
+                      <div className="mt-1">
+                        <Link
+                          to="/admin/ouvrier-contacts"
+                          className="text-[11px] text-pro-blue hover:underline"
+                        >
+                          {language === "fr"
+                            ? "Ouvrir dans le back-office"
+                            : "Open in back-office"}
+                        </Link>
                       </div>
                     </div>
                     <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-50 text-slate-700 border-slate-200">
