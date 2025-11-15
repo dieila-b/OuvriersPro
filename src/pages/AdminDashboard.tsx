@@ -25,6 +25,8 @@ type DbContactSummary = {
   created_at: string;
 };
 
+type ChartMode = "daily" | "weekly";
+
 const AdminDashboard: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
@@ -42,6 +44,9 @@ const AdminDashboard: React.FC = () => {
   // Filtres globaux de dates
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
+
+  // 📊 Mode du graphique : par jour / par semaine
+  const [chartMode, setChartMode] = useState<ChartMode>("daily");
 
   // 🔐 Vérification des droits admin
   useEffect(() => {
@@ -235,35 +240,86 @@ const AdminDashboard: React.FC = () => {
     };
   }, [filteredWorkers, filteredContacts]);
 
-  // 📈 Données pour le petit graphique (7 derniers jours de demandes de contact)
+  // 🧮 fonction pour obtenir un "numéro de semaine" approximatif
+  const getWeekKey = (d: Date) => {
+    const year = d.getFullYear();
+    const start = new Date(year, 0, 1);
+    const diff = d.getTime() - start.getTime();
+    const diffDays = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const week = Math.floor((diffDays + d.getDay() + 1) / 7); // approx
+    const weekStr = week.toString().padStart(2, "0");
+    return { key: `${year}-W${weekStr}`, week };
+  };
+
+  // 📈 Données pour le graphique (mode jour / semaine)
   const contactChartData = useMemo(() => {
-    // On construit les 7 derniers jours (du plus ancien au plus récent)
-    const days: { label: string; iso: string; count: number }[] = [];
-    const today = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(
-        Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() - i)
-      );
-      const iso = d.toISOString().slice(0, 10); // yyyy-mm-dd
-      const label =
-        language === "fr"
-          ? d.toLocaleDateString("fr-FR", { weekday: "short" })
-          : d.toLocaleDateString("en-GB", { weekday: "short" });
-      days.push({ label, iso, count: 0 });
-    }
-
-    filteredContacts.forEach((c) => {
-      const dateStr = c.created_at.slice(0, 10);
-      const day = days.find((d) => d.iso === dateStr);
-      if (day) {
-        day.count += 1;
+    if (chartMode === "daily") {
+      // 7 derniers jours
+      const days: { label: string; key: string; count: number }[] = [];
+      const today = new Date();
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(
+          Date.UTC(
+            today.getFullYear(),
+            today.getMonth(),
+            today.getDate() - i
+          )
+        );
+        const key = d.toISOString().slice(0, 10); // yyyy-mm-dd
+        const label =
+          language === "fr"
+            ? d.toLocaleDateString("fr-FR", { weekday: "short" })
+            : d.toLocaleDateString("en-GB", { weekday: "short" });
+        days.push({ label, key, count: 0 });
       }
-    });
 
-    const maxCount = days.reduce((max, d) => (d.count > max ? d.count : max), 0) || 1;
+      filteredContacts.forEach((c) => {
+        const dateStr = c.created_at.slice(0, 10);
+        const day = days.find((d) => d.key === dateStr);
+        if (day) {
+          day.count += 1;
+        }
+      });
 
-    return { days, maxCount };
-  }, [filteredContacts, language]);
+      const maxCount =
+        days.reduce((max, d) => (d.count > max ? d.count : max), 0) || 1;
+
+      return { points: days, maxCount };
+    } else {
+      // mode "weekly" : 8 dernières semaines
+      const weeksMap: Record<
+        string,
+        { label: string; key: string; count: number; orderKey: string }
+      > = {};
+
+      filteredContacts.forEach((c) => {
+        const d = new Date(c.created_at);
+        const { key, week } = getWeekKey(d);
+        if (!weeksMap[key]) {
+          const label =
+            language === "fr" ? `S${week}` : `W${week}`;
+          const orderKey = key; // yyyy-Www
+          weeksMap[key] = { label, key, count: 0, orderKey };
+        }
+        weeksMap[key].count += 1;
+      });
+
+      let allWeeks = Object.values(weeksMap).sort((a, b) =>
+        a.orderKey.localeCompare(b.orderKey)
+      );
+
+      // Garder seulement les 8 dernières semaines
+      if (allWeeks.length > 8) {
+        allWeeks = allWeeks.slice(allWeeks.length - 8);
+      }
+
+      const maxCount =
+        allWeeks.reduce((max, d) => (d.count > max ? d.count : max), 0) ||
+        1;
+
+      return { points: allWeeks, maxCount };
+    }
+  }, [filteredContacts, chartMode, language]);
 
   const formatDateTime = (value: string) => {
     const d = new Date(value);
@@ -373,12 +429,16 @@ const AdminDashboard: React.FC = () => {
         : "View all requests",
     chartTitle:
       language === "fr"
-        ? "Évolution des demandes (7 derniers jours)"
-        : "Requests trend (last 7 days)",
-    chartSubtitle:
+        ? "Évolution des demandes"
+        : "Requests trend",
+    chartSubtitleDaily:
       language === "fr"
-        ? "Nombre de demandes de contact reçues par jour."
-        : "Number of contact requests received per day.",
+        ? "Nombre de demandes de contact reçues par jour (7 derniers jours)."
+        : "Number of contact requests per day (last 7 days).",
+    chartSubtitleWeekly:
+      language === "fr"
+        ? "Nombre de demandes de contact reçues par semaine (8 dernières semaines)."
+        : "Number of contact requests per week (last 8 weeks).",
     mobileWidgetTitle:
       language === "fr"
         ? "Prochains développements mobile"
@@ -387,6 +447,10 @@ const AdminDashboard: React.FC = () => {
       language === "fr"
         ? "Roadmap indicative pour l’app mobile OuvriersPro."
         : "Indicative roadmap for the OuvriersPro mobile app.",
+    chartModeDaily:
+      language === "fr" ? "Jour" : "Daily",
+    chartModeWeekly:
+      language === "fr" ? "Semaine" : "Weekly",
   };
 
   if (authLoading) {
@@ -544,38 +608,76 @@ const AdminDashboard: React.FC = () => {
 
         {/* Ligne : graphique + widget mobile */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          {/* Graphique d’évolution simple (bar chart CSS) */}
+          {/* Graphique d’évolution (toggle Jour / Semaine) */}
           <div className="bg-white border border-slate-200 rounded-xl p-4">
-            <h2 className="text-sm font-semibold text-slate-800 mb-1">
-              {text.chartTitle}
-            </h2>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-sm font-semibold text-slate-800">
+                {text.chartTitle}
+              </h2>
+              {/* Toggle daily / weekly */}
+              <div className="inline-flex items-center rounded-full bg-slate-100 p-0.5 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setChartMode("daily")}
+                  className={`px-2 py-1 rounded-full ${
+                    chartMode === "daily"
+                      ? "bg-white shadow text-slate-900"
+                      : "text-slate-500"
+                  }`}
+                >
+                  {text.chartModeDaily}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartMode("weekly")}
+                  className={`px-2 py-1 rounded-full ${
+                    chartMode === "weekly"
+                      ? "bg-white shadow text-slate-900"
+                      : "text-slate-500"
+                  }`}
+                >
+                  {text.chartModeWeekly}
+                </button>
+              </div>
+            </div>
             <p className="text-xs text-slate-500 mb-3">
-              {text.chartSubtitle}
+              {chartMode === "daily"
+                ? text.chartSubtitleDaily
+                : text.chartSubtitleWeekly}
             </p>
             <div className="h-40 flex items-end gap-2 border-b border-slate-100 pb-2">
-              {contactChartData.days.map((d) => {
-                const height = (d.count / contactChartData.maxCount) * 120; // px
-                return (
-                  <div
-                    key={d.iso}
-                    className="flex-1 flex flex-col items-center justify-end"
-                  >
+              {contactChartData.points.length === 0 ? (
+                <div className="text-xs text-slate-400">
+                  {language === "fr"
+                    ? "Aucune donnée dans la période sélectionnée."
+                    : "No data in the selected period."}
+                </div>
+              ) : (
+                contactChartData.points.map((p) => {
+                  const height =
+                    (p.count / contactChartData.maxCount) * 120; // px
+                  return (
                     <div
-                      className="w-6 rounded-t-md bg-blue-100 border border-blue-200 flex items-end justify-center"
-                      style={{ height: `${height || 4}px` }}
+                      key={p.key}
+                      className="flex-1 flex flex-col items-center justify-end"
                     >
-                      {d.count > 0 && (
-                        <span className="text-[10px] text-blue-700 font-semibold mb-1">
-                          {d.count}
-                        </span>
-                      )}
+                      <div
+                        className="w-6 rounded-t-md bg-blue-100 border border-blue-200 flex items-end justify-center"
+                        style={{ height: `${height || 4}px` }}
+                      >
+                        {p.count > 0 && (
+                          <span className="text-[10px] text-blue-700 font-semibold mb-1">
+                            {p.count}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-1 text-[10px] text-slate-500">
+                        {p.label}
+                      </div>
                     </div>
-                    <div className="mt-1 text-[10px] text-slate-500">
-                      {d.label}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
 
@@ -731,11 +833,6 @@ const AdminDashboard: React.FC = () => {
               <h2 className="text-sm font-semibold text-slate-800">
                 {text.recentContacts}
               </h2>
-              <Link to="/admin/ouvrier-contacts">
-                <span className="text-[11px] text-pro-blue hover:underline cursor-pointer">
-                  {language === "fr" ? "Tout voir" : "View all"}
-                </span>
-              </Link>
             </div>
             {recentContacts.length === 0 && !loading && (
               <div className="text-sm text-slate-500">
