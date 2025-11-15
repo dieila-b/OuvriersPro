@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabase"; // 🔁 même import que les autres fichiers
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -398,7 +398,10 @@ const InscriptionOuvrier: React.FC = () => {
         .maybeSingle();
 
       if (existingWorkerError) {
-        console.warn("Erreur lors de la vérification des ouvriers existants:", existingWorkerError);
+        console.warn(
+          "Erreur lors de la vérification des ouvriers existants:",
+          existingWorkerError
+        );
       }
 
       if (existingWorker) {
@@ -481,6 +484,7 @@ const InscriptionOuvrier: React.FC = () => {
         hourlyRateNumber = Number.isFinite(parsed) ? parsed : null;
       }
 
+      // ⚠️ On NE met PAS "id" ici -> Postgres génère tout seul (DEFAULT gen_random_uuid())
       const { error: insertError } = await supabase.from("op_ouvriers").insert({
         user_id: user.id,
         first_name: form.firstName,
