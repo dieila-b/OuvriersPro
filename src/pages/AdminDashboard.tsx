@@ -14,6 +14,7 @@ type DbWorkerSummary = {
   profession: string | null;
   status: string | null;
   created_at: string;
+  plan_code: string | null; // 🔹 plan (Gratuit / Mensuel / Annuel)
 };
 
 type DbContactSummary = {
@@ -37,6 +38,67 @@ type ChartPoint = {
 type ChartData = {
   points: ChartPoint[];
   maxValue: number;
+};
+
+type PlanKey = "free" | "monthly" | "yearly" | "other";
+
+// 🔧 normalisation du plan (free / monthly / yearly / other)
+const normalizePlan = (code: string | null | undefined): PlanKey => {
+  const c = (code || "").toLowerCase().trim();
+
+  if (!c) return "free"; // par défaut on considère Gratuit
+
+  if (
+    c.includes("free") ||
+    c.includes("gratuit") ||
+    c === "plan_free" ||
+    c === "basic"
+  ) {
+    return "free";
+  }
+
+  if (
+    c.includes("month") ||
+    c.includes("mensuel") ||
+    c === "monthly" ||
+    c === "pro_monthly"
+  ) {
+    return "monthly";
+  }
+
+  if (
+    c.includes("year") ||
+    c.includes("annuel") ||
+    c === "yearly" ||
+    c === "pro_yearly" ||
+    c === "annual"
+  ) {
+    return "yearly";
+  }
+
+  return "other";
+};
+
+const planLabel = (
+  code: string | null | undefined,
+  language: "fr" | "en"
+): string => {
+  const plan = normalizePlan(code);
+  if (plan === "free") return language === "fr" ? "Gratuit" : "Free";
+  if (plan === "monthly") return language === "fr" ? "Mensuel" : "Monthly";
+  if (plan === "yearly") return language === "fr" ? "Annuel" : "Yearly";
+  return language === "fr" ? "Autre" : "Other";
+};
+
+const planBadgeClass = (code: string | null | undefined): string => {
+  const plan = normalizePlan(code);
+  if (plan === "free")
+    return "bg-slate-50 text-slate-700 border-slate-200";
+  if (plan === "monthly")
+    return "bg-blue-50 text-blue-700 border-blue-200";
+  if (plan === "yearly")
+    return "bg-indigo-50 text-indigo-700 border-indigo-200";
+  return "bg-slate-50 text-slate-400 border-slate-200";
 };
 
 const AdminDashboard: React.FC = () => {
@@ -122,7 +184,8 @@ const AdminDashboard: React.FC = () => {
           last_name,
           profession,
           status,
-          created_at
+          created_at,
+          plan_code
         `
         )
         .order("created_at", { ascending: false });
@@ -211,7 +274,7 @@ const AdminDashboard: React.FC = () => {
     });
   }, [contacts, dateFrom, dateTo]);
 
-  // 🔢 Stats globales
+  // 🔢 Stats globales (dont plans)
   const stats = useMemo(() => {
     // Ouvriers
     const totalWorkers = filteredWorkers.length;
@@ -219,10 +282,21 @@ const AdminDashboard: React.FC = () => {
     let approvedWorkers = 0;
     let rejectedWorkers = 0;
 
+    let planFree = 0;
+    let planMonthly = 0;
+    let planYearly = 0;
+    let planOther = 0;
+
     filteredWorkers.forEach((w) => {
       if (w.status === "pending") pendingWorkers += 1;
       if (w.status === "approved") approvedWorkers += 1;
       if (w.status === "rejected") rejectedWorkers += 1;
+
+      const p = normalizePlan(w.plan_code);
+      if (p === "free") planFree += 1;
+      else if (p === "monthly") planMonthly += 1;
+      else if (p === "yearly") planYearly += 1;
+      else planOther += 1;
     });
 
     // Contacts
@@ -250,6 +324,10 @@ const AdminDashboard: React.FC = () => {
       totalContacts,
       contactsToday,
       contactsLast7,
+      planFree,
+      planMonthly,
+      planYearly,
+      planOther,
     };
   }, [filteredWorkers, filteredContacts]);
 
@@ -694,6 +772,41 @@ const AdminDashboard: React.FC = () => {
                 {stats.rejectedWorkers}
               </div>
             </div>
+
+            {/* 🔹 Répartition par plan (Gratuit / Mensuel / Annuel) */}
+            <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass(
+                  "free"
+                )}`}
+              >
+                <span>{language === "fr" ? "Gratuit" : "Free"}</span>
+                <span className="font-semibold">
+                  {stats.planFree}
+                </span>
+              </span>
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass(
+                  "monthly"
+                )}`}
+              >
+                <span>{language === "fr" ? "Mensuel" : "Monthly"}</span>
+                <span className="font-semibold">
+                  {stats.planMonthly}
+                </span>
+              </span>
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass(
+                  "yearly"
+                )}`}
+              >
+                <span>{language === "fr" ? "Annuel" : "Yearly"}</span>
+                <span className="font-semibold">
+                  {stats.planYearly}
+                </span>
+              </span>
+            </div>
+
             <div className="mt-4">
               <Link to="/admin/ouvriers">
                 <Button size="sm" variant="outline">
@@ -987,13 +1100,24 @@ const AdminDashboard: React.FC = () => {
                           </Link>
                         </div>
                       </div>
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${workerStatusClass(
-                          w.status
-                        )}`}
-                      >
-                        {workerStatusLabel(w.status)}
-                      </span>
+                      <div className="flex flex-col items-end gap-1">
+                        {/* Statut */}
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${workerStatusClass(
+                            w.status
+                          )}`}
+                        >
+                          {workerStatusLabel(w.status)}
+                        </span>
+                        {/* 🔹 Pastille plan (Gratuit / Mensuel / Annuel) */}
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full border ${planBadgeClass(
+                            w.plan_code
+                          )}`}
+                        >
+                          {planLabel(w.plan_code, language)}
+                        </span>
+                      </div>
                     </li>
                   );
                 })}
