@@ -284,7 +284,6 @@ const InscriptionOuvrier: React.FC = () => {
   });
 
   const [profileFile, setProfileFile] = useState<File | null>(null);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -368,10 +367,54 @@ const InscriptionOuvrier: React.FC = () => {
     setLoading(true);
 
     try {
+      const email = form.email.trim().toLowerCase();
+      const password = form.password;
+
+      // 🔎 Validation minimale côté client
+      if (!email || !password) {
+        setError(
+          language === "fr"
+            ? "Email et mot de passe sont obligatoires."
+            : "Email and password are required."
+        );
+        setLoading(false);
+        return;
+      }
+      if (password.length < 6) {
+        setError(
+          language === "fr"
+            ? "Le mot de passe doit contenir au moins 6 caractères."
+            : "Password must be at least 6 characters long."
+        );
+        setLoading(false);
+        return;
+      }
+
+      // 0) Vérifier s'il existe déjà un profil ouvrier avec cet email
+      const { data: existingWorker, error: existingWorkerError } = await supabase
+        .from("op_ouvriers")
+        .select("id,status")
+        .eq("email", email)
+        .maybeSingle();
+
+      if (existingWorkerError) {
+        console.warn("Erreur lors de la vérification des ouvriers existants:", existingWorkerError);
+      }
+
+      if (existingWorker) {
+        setError(
+          language === "fr"
+            ? "Un profil ouvrier existe déjà avec cet email. Connectez-vous ou utilisez une autre adresse."
+            : "A worker profile already exists with this email. Please log in or use another address."
+        );
+        setLoading(false);
+        return;
+      }
+
       // 1) Auth Supabase
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.password,
+        email,
+        password,
         options: {
           data: {
             first_name: form.firstName,
@@ -381,7 +424,25 @@ const InscriptionOuvrier: React.FC = () => {
         },
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        const message = authError.message?.toLowerCase() ?? "";
+
+        // Cas spécifique : utilisateur déjà enregistré dans Supabase Auth
+        if (
+          message.includes("user already registered") ||
+          (authError as any).code === "user_already_exists"
+        ) {
+          setError(
+            language === "fr"
+              ? "Cet email est déjà enregistré. Connectez-vous avec ce compte ou utilisez une autre adresse."
+              : "This email is already registered. Please log in with this account or use another email."
+          );
+          setLoading(false);
+          return;
+        }
+
+        throw authError;
+      }
 
       const user = authData.user;
       if (!user) {
@@ -412,14 +473,19 @@ const InscriptionOuvrier: React.FC = () => {
       }
 
       // 3) Insert profil ouvrier
-      const hourlyRateNumber =
-        form.hourlyRate.trim() === "" ? null : Number(form.hourlyRate);
+      const hourlyRateTrim = form.hourlyRate.trim();
+      let hourlyRateNumber: number | null = null;
+
+      if (hourlyRateTrim !== "") {
+        const parsed = Number(hourlyRateTrim);
+        hourlyRateNumber = Number.isFinite(parsed) ? parsed : null;
+      }
 
       const { error: insertError } = await supabase.from("op_ouvriers").insert({
         user_id: user.id,
         first_name: form.firstName,
         last_name: form.lastName,
-        email: form.email,
+        email,
         phone: form.phone,
         country: form.country,
         region: form.region || null,
@@ -459,7 +525,12 @@ const InscriptionOuvrier: React.FC = () => {
       setProfileFile(null);
     } catch (err: any) {
       console.error(err);
-      setError(err.message ?? "Unknown error");
+      setError(
+        err?.message ??
+          (language === "fr"
+            ? "Une erreur inattendue s'est produite. Merci de réessayer."
+            : "An unexpected error occurred. Please try again.")
+      );
     } finally {
       setLoading(false);
     }
@@ -521,9 +592,7 @@ const InscriptionOuvrier: React.FC = () => {
                         : "1 listed trade, limited contacts"}
                     </li>
                     <li>
-                      {language === "fr"
-                        ? "Profil simplifié"
-                        : "Simplified profile"}
+                      {language === "fr" ? "Profil simplifié" : "Simplified profile"}
                     </li>
                   </>
                 )}
