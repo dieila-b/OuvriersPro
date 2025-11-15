@@ -96,7 +96,7 @@ const AdminOuvrierContacts: React.FC = () => {
 
       const { data, error } = await supabase
         .from<DbContact>("op_ouvrier_contacts")
-        .select("*") // ✅ plus robuste : toutes les colonnes, origin incluse si elle existe
+        .select("*") // ✅ toutes les colonnes, y compris origin si elle existe
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -220,6 +220,32 @@ const AdminOuvrierContacts: React.FC = () => {
     setSavingId(null);
   };
 
+  // 🔢 Mini dashboard basé sur les lignes filtrées
+  const stats = useMemo(() => {
+    const total = filtered.length;
+
+    const todayISO = new Date().toISOString().slice(0, 10); // yyyy-mm-dd
+    let today = 0;
+    let last7 = 0;
+
+    const originCounts: Record<string, number> = {};
+
+    filtered.forEach((c) => {
+      const dateStr = c.created_at.slice(0, 10);
+      const created = new Date(c.created_at);
+      const diffMs = Date.now() - created.getTime();
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+      if (dateStr === todayISO) today += 1;
+      if (diffDays <= 7) last7 += 1;
+
+      const originKey = originLabel(c.origin);
+      originCounts[originKey] = (originCounts[originKey] || 0) + 1;
+    });
+
+    return { total, today, last7, originCounts };
+  }, [filtered]);
+
   const text = {
     title:
       language === "fr"
@@ -254,6 +280,12 @@ const AdminOuvrierContacts: React.FC = () => {
         : "No requests yet.",
     refresh: language === "fr" ? "Rafraîchir" : "Refresh",
     exportCsv: language === "fr" ? "Exporter CSV" : "Export CSV",
+    statTotal: language === "fr" ? "Total (période filtrée)" : "Total (filtered)",
+    statToday: language === "fr" ? "Aujourd’hui" : "Today",
+    statLast7:
+      language === "fr" ? "7 derniers jours" : "Last 7 days",
+    statByOrigin:
+      language === "fr" ? "Par origine" : "By origin",
   };
 
   const refresh = async () => {
@@ -354,12 +386,14 @@ const AdminOuvrierContacts: React.FC = () => {
     <div className="min-h-screen bg-slate-50 py-10">
       <div className="max-w-6xl mx-auto px-4 md:px-8">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
               {text.title}
             </h1>
-            <p className="text-sm text-slate-600 mt-1">{text.subtitle}</p>
+            <p className="text-sm text-slate-600 mt-1">
+              {text.subtitle}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-500">
@@ -381,6 +415,54 @@ const AdminOuvrierContacts: React.FC = () => {
             >
               {text.exportCsv}
             </Button>
+          </div>
+        </div>
+
+        {/* Mini dashboard */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
+          <div className="bg-white border border-slate-200 rounded-lg p-3">
+            <div className="text-xs text-slate-500 uppercase">
+              {text.statTotal}
+            </div>
+            <div className="text-2xl font-bold text-slate-900">
+              {stats.total}
+            </div>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-lg p-3">
+            <div className="text-xs text-slate-500 uppercase">
+              {text.statToday}
+            </div>
+            <div className="text-2xl font-bold text-slate-900">
+              {stats.today}
+            </div>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-lg p-3">
+            <div className="text-xs text-slate-500 uppercase">
+              {text.statLast7}
+            </div>
+            <div className="text-2xl font-bold text-slate-900">
+              {stats.last7}
+            </div>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-lg p-3">
+            <div className="text-xs text-slate-500 uppercase mb-1">
+              {text.statByOrigin}
+            </div>
+            {Object.keys(stats.originCounts).length === 0 ? (
+              <div className="text-sm text-slate-500">—</div>
+            ) : (
+              <div className="flex flex-wrap gap-1 text-xs">
+                {Object.entries(stats.originCounts).map(([key, value]) => (
+                  <span
+                    key={key}
+                    className="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200"
+                  >
+                    {key}:{" "}
+                    <span className="font-semibold ml-1">{value}</span>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
