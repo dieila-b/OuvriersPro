@@ -11,6 +11,7 @@ import NotFound from "./pages/NotFound";
 import InscriptionOuvrier from "./pages/InscriptionOuvrier";
 import WorkerDetail from "./pages/WorkerDetail";
 import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
+import AdminOuvrierInscriptions from "./pages/AdminOuvrierInscriptions";
 import Login from "./pages/Login";
 
 const queryClient = new QueryClient();
@@ -38,10 +39,16 @@ const App = () => (
             {/* Fiche détaillée ouvrier */}
             <Route path="/ouvrier/:id" element={<WorkerDetail />} />
 
-            {/* Back-office demandes de contact */}
+            {/* Back-office : demandes de contact */}
             <Route
               path="/admin/ouvrier-contacts"
               element={<AdminOuvrierContacts />}
+            />
+
+            {/* Back-office : inscriptions ouvriers */}
+            <Route
+              path="/admin/ouvriers"
+              element={<AdminOuvrierInscriptions />}
             />
 
             {/* Catch-all 404 */}
