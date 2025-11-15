@@ -475,26 +475,6 @@ const InscriptionOuvrier: React.FC = () => {
         }
       }
 
-      // 2.5) S'assurer qu'il y a une ligne dans op_users pour ce user (FK user_id)
-      const fullName =
-        `${form.firstName} ${form.lastName}`.trim() || email || "Ouvrier";
-
-      const { error: upsertUserError } = await supabase
-        .from("op_users")
-        .upsert(
-          {
-            id: user.id,
-            role: "worker",
-            full_name: fullName,
-          },
-          { onConflict: "id" }
-        );
-
-      if (upsertUserError) {
-        console.error("Erreur upsert op_users:", upsertUserError);
-        throw upsertUserError;
-      }
-
       // 3) Insert profil ouvrier
       const hourlyRateTrim = form.hourlyRate.trim();
       let hourlyRateNumber: number | null = null;
@@ -598,7 +578,9 @@ const InscriptionOuvrier: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="mb-3">
-                <div className="text-xl font-bold text-pro-blue">{planMeta.label}</div>
+                <div className="text-xl font-bold text-pro-blue">
+                  {planMeta.label}
+                </div>
                 <div className="text-gray-700">{planMeta.price}</div>
                 <div className="inline-block mt-2 px-3 py-1 text-xs rounded-full bg-green-100 text-green-700">
                   {planMeta.badge}
@@ -642,422 +624,442 @@ const InscriptionOuvrier: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Colonne Formulaire */}
+          {/* Colonne Formulaire / Succès */}
           <Card className="md:col-span-2 shadow-lg">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-pro-gray">
-                {language === "fr"
+                {success
+                  ? language === "fr"
+                    ? "Inscription réussie"
+                    : "Registration successful"
+                  : language === "fr"
                   ? "Informations professionnelles"
                   : "Professional information"}
               </CardTitle>
             </CardHeader>
+
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Nom & Prénom */}
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === "fr" ? "Prénom" : "First name"}
-                    </label>
-                    <Input
-                      required
-                      value={form.firstName}
-                      onChange={handleChange("firstName")}
-                      placeholder={language === "fr" ? "Votre prénom" : "First name"}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === "fr" ? "Nom" : "Last name"}
-                    </label>
-                    <Input
-                      required
-                      value={form.lastName}
-                      onChange={handleChange("lastName")}
-                      placeholder={language === "fr" ? "Votre nom" : "Last name"}
-                    />
-                  </div>
-                </div>
-
-                {/* Email & Mot de passe */}
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email
-                    </label>
-                    <Input
-                      type="email"
-                      required
-                      value={form.email}
-                      onChange={handleChange("email")}
-                      placeholder="vous@exemple.com"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === "fr" ? "Mot de passe" : "Password"}
-                    </label>
-                    <Input
-                      type="password"
-                      required
-                      minLength={6}
-                      value={form.password}
-                      onChange={handleChange("password")}
-                      placeholder={
-                        language === "fr"
-                          ? "Au moins 6 caractères"
-                          : "At least 6 characters"
-                      }
-                    />
-                  </div>
-                </div>
-
-                {/* Téléphone */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {language === "fr" ? "Téléphone" : "Phone"}
-                  </label>
-                  <Input
-                    required
-                    value={form.phone}
-                    onChange={handleChange("phone")}
-                    placeholder="+224 6X XX XX XX"
-                  />
-                </div>
-
-                {/* Pays */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {language === "fr" ? "Pays" : "Country"}
-                  </label>
-                  <select
-                    value={form.country}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        country: e.target.value,
-                        // reset localisation si on change de pays
-                        region: "",
-                        city: "",
-                        commune: "",
-                        district: "",
-                      }))
-                    }
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
-                  >
-                    {countryOptions.map((c) => (
-                      <option key={c.code} value={c.code}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Localisation – Mode Guinée */}
-                {form.country === "GN" ? (
-                  <>
-                    {/* Région */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {language === "fr" ? "Région" : "Region"}
-                      </label>
-                      <select
-                        value={form.region}
-                        onChange={(e) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            region: e.target.value,
-                            city: "",
-                            commune: "",
-                            district: "",
-                          }))
-                        }
-                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
-                      >
-                        <option value="">
-                          {language === "fr"
-                            ? "Choisissez une région"
-                            : "Select a region"}
-                        </option>
-                        {GUINEA_REGIONS.map((r) => (
-                          <option key={r.name} value={r.name}>
-                            {r.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Ville & Code postal */}
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === "fr" ? "Ville" : "City"}
-                        </label>
-                        <select
-                          value={form.city}
-                          onChange={(e) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              city: e.target.value,
-                              commune: "",
-                              district: "",
-                            }))
-                          }
-                          disabled={!form.region}
-                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
-                        >
-                          <option value="">
-                            {language === "fr"
-                              ? "Choisissez une ville"
-                              : "Select a city"}
-                          </option>
-                          {availableCities.map((city) => (
-                            <option key={city.name} value={city.name}>
-                              {city.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === "fr" ? "Code postal" : "Postal code"}
-                        </label>
-                        <Input
-                          value={form.postalCode}
-                          onChange={handleChange("postalCode")}
-                          placeholder="1000"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Commune / Quartier */}
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === "fr" ? "Commune" : "Commune"}
-                        </label>
-                        <select
-                          value={form.commune}
-                          onChange={(e) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              commune: e.target.value,
-                              district: "",
-                            }))
-                          }
-                          disabled={!form.city}
-                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
-                        >
-                          <option value="">
-                            {language === "fr"
-                              ? "Choisissez une commune"
-                              : "Select a commune"}
-                          </option>
-                          {availableCommunes.map((commune) => (
-                            <option key={commune.name} value={commune.name}>
-                              {commune.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === "fr" ? "Quartier" : "Neighborhood"}
-                        </label>
-                        <select
-                          value={form.district}
-                          onChange={(e) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              district: e.target.value,
-                            }))
-                          }
-                          disabled={!form.commune}
-                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
-                        >
-                          <option value="">
-                            {language === "fr"
-                              ? "Choisissez un quartier"
-                              : "Select a neighborhood"}
-                          </option>
-                          {availableDistricts.map((q) => (
-                            <option key={q} value={q}>
-                              {q}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {/* Fallback pour les autres pays : champs texte */}
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === "fr" ? "Ville" : "City"}
-                        </label>
-                        <Input
-                          required
-                          value={form.city}
-                          onChange={handleChange("city")}
-                          placeholder={
-                            language === "fr" ? "Votre ville" : "Your city"
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === "fr" ? "Code postal" : "Postal code"}
-                        </label>
-                        <Input
-                          value={form.postalCode}
-                          onChange={handleChange("postalCode")}
-                          placeholder="75001"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === "fr"
-                            ? "Commune / Région"
-                            : "District / Region"}
-                        </label>
-                        <Input
-                          value={form.commune}
-                          onChange={handleChange("commune")}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === "fr" ? "Quartier" : "Neighborhood"}
-                        </label>
-                        <Input
-                          value={form.district}
-                          onChange={handleChange("district")}
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* Métier principal */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {language === "fr" ? "Métier principal" : "Main trade"}
-                  </label>
-                  <Input
-                    required
-                    value={form.profession}
-                    onChange={handleChange("profession")}
-                    placeholder={
-                      language === "fr"
-                        ? "Plombier, électricien, maçon..."
-                        : "Plumber, electrician, builder..."
-                    }
-                  />
-                  {plan === "FREE" && (
-                    <p className="mt-1 text-xs text-gray-500">
-                      {language === "fr"
-                        ? "Avec le plan Gratuit, un seul métier peut être affiché."
-                        : "With the Free plan, only one trade can be listed."}
-                    </p>
-                  )}
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {language === "fr"
-                      ? "Description de vos services"
-                      : "Description of your services"}
-                  </label>
-                  <textarea
-                    required
-                    value={form.description}
-                    onChange={handleChange("description")}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue min-h-[100px]"
-                    placeholder={
-                      language === "fr"
-                        ? "Décrivez votre expérience, vos services, vos zones d’intervention..."
-                        : "Describe your experience, services and working area..."
-                    }
-                  />
-                </div>
-
-                {/* Tarif horaire (optionnel) */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {language === "fr"
-                      ? `Tarif horaire (${currency.symbol} / h) (optionnel)`
-                      : `Hourly rate (${currency.symbol} / h) (optional)`}
-                  </label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.hourlyRate}
-                    onChange={handleChange("hourlyRate")}
-                    placeholder={
-                      language === "fr"
-                        ? `Ex : 250000 ${currency.symbol}`
-                        : `e.g. 20 ${currency.symbol}`
-                    }
-                  />
-                </div>
-
-                {/* Photo de profil (optionnelle) */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {language === "fr"
-                      ? "Photo de profil (optionnel)"
-                      : "Profile picture (optional)"}
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="block w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-pro-blue file:text-white hover:file:bg-blue-700"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    {language === "fr"
-                      ? "Format JPG ou PNG recommandé, taille max ~2 Mo."
-                      : "JPG or PNG recommended, max size ~2MB."}
-                  </p>
-                </div>
-
-                {/* Messages */}
-                {error && (
-                  <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
-                    {error}
-                  </div>
-                )}
-                {success && (
-                  <div className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-md px-3 py-2">
+              {/* 🎉 Si succès : on masque le formulaire et on montre seulement le message + bouton retour */}
+              {success ? (
+                <div className="space-y-6 text-center py-10">
+                  <div className="text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-4 text-base md:text-lg">
                     {language === "fr"
                       ? "Votre inscription a bien été enregistrée. Un email de confirmation vous a été envoyé et votre profil sera validé par un administrateur."
                       : "Your registration has been saved. A confirmation email has been sent and your profile will be reviewed by an administrator."}
                   </div>
-                )}
 
-                {/* Bouton */}
-                <div className="pt-2">
                   <Button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-pro-blue hover:bg-blue-700"
+                    type="button"
+                    onClick={() => (window.location.href = "/")}
+                    className="bg-pro-blue hover:bg-blue-700 px-6 py-3 text-base md:text-lg"
                   >
-                    {loading
-                      ? language === "fr"
-                        ? "Enregistrement..."
-                        : "Saving..."
-                      : language === "fr"
-                      ? "Valider mon inscription"
-                      : "Submit my registration"}
+                    {language === "fr"
+                      ? "Retour à l'accueil"
+                      : "Return to home"}
                   </Button>
                 </div>
-              </form>
+              ) : (
+                /* 📝 Formulaire normal tant que success = false */
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  {/* Nom & Prénom */}
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {language === "fr" ? "Prénom" : "First name"}
+                      </label>
+                      <Input
+                        required
+                        value={form.firstName}
+                        onChange={handleChange("firstName")}
+                        placeholder={language === "fr" ? "Votre prénom" : "First name"}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {language === "fr" ? "Nom" : "Last name"}
+                      </label>
+                      <Input
+                        required
+                        value={form.lastName}
+                        onChange={handleChange("lastName")}
+                        placeholder={language === "fr" ? "Votre nom" : "Last name"}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Email & Mot de passe */}
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Email
+                      </label>
+                      <Input
+                        type="email"
+                        required
+                        value={form.email}
+                        onChange={handleChange("email")}
+                        placeholder="vous@exemple.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {language === "fr" ? "Mot de passe" : "Password"}
+                      </label>
+                      <Input
+                        type="password"
+                        required
+                        minLength={6}
+                        value={form.password}
+                        onChange={handleChange("password")}
+                        placeholder={
+                          language === "fr"
+                            ? "Au moins 6 caractères"
+                            : "At least 6 characters"
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  {/* Téléphone */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {language === "fr" ? "Téléphone" : "Phone"}
+                    </label>
+                    <Input
+                      required
+                      value={form.phone}
+                      onChange={handleChange("phone")}
+                      placeholder="+224 6X XX XX XX"
+                    />
+                  </div>
+
+                  {/* Pays */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {language === "fr" ? "Pays" : "Country"}
+                    </label>
+                    <select
+                      value={form.country}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          country: e.target.value,
+                          // reset localisation si on change de pays
+                          region: "",
+                          city: "",
+                          commune: "",
+                          district: "",
+                        }))
+                      }
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
+                    >
+                      {countryOptions.map((c) => (
+                        <option key={c.code} value={c.code}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Localisation – Mode Guinée */}
+                  {form.country === "GN" ? (
+                    <>
+                      {/* Région */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          {language === "fr" ? "Région" : "Region"}
+                        </label>
+                        <select
+                          value={form.region}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              region: e.target.value,
+                              city: "",
+                              commune: "",
+                              district: "",
+                            }))
+                          }
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
+                        >
+                          <option value="">
+                            {language === "fr"
+                              ? "Choisissez une région"
+                              : "Select a region"}
+                          </option>
+                          {GUINEA_REGIONS.map((r) => (
+                            <option key={r.name} value={r.name}>
+                              {r.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Ville & Code postal */}
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {language === "fr" ? "Ville" : "City"}
+                          </label>
+                          <select
+                            value={form.city}
+                            onChange={(e) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                city: e.target.value,
+                                commune: "",
+                                district: "",
+                              }))
+                            }
+                            disabled={!form.region}
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
+                          >
+                            <option value="">
+                              {language === "fr"
+                                ? "Choisissez une ville"
+                                : "Select a city"}
+                            </option>
+                            {availableCities.map((city) => (
+                              <option key={city.name} value={city.name}>
+                                {city.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {language === "fr" ? "Code postal" : "Postal code"}
+                          </label>
+                          <Input
+                            value={form.postalCode}
+                            onChange={handleChange("postalCode")}
+                            placeholder="1000"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Commune / Quartier */}
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {language === "fr" ? "Commune" : "Commune"}
+                          </label>
+                          <select
+                            value={form.commune}
+                            onChange={(e) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                commune: e.target.value,
+                                district: "",
+                              }))
+                            }
+                            disabled={!form.city}
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
+                          >
+                            <option value="">
+                              {language === "fr"
+                                ? "Choisissez une commune"
+                                : "Select a commune"}
+                            </option>
+                            {availableCommunes.map((commune) => (
+                              <option key={commune.name} value={commune.name}>
+                                {commune.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {language === "fr" ? "Quartier" : "Neighborhood"}
+                          </label>
+                          <select
+                            value={form.district}
+                            onChange={(e) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                district: e.target.value,
+                              }))
+                            }
+                            disabled={!form.commune}
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
+                          >
+                            <option value="">
+                              {language === "fr"
+                                ? "Choisissez un quartier"
+                                : "Select a neighborhood"}
+                            </option>
+                            {availableDistricts.map((q) => (
+                              <option key={q} value={q}>
+                                {q}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Fallback pour les autres pays : champs texte */}
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {language === "fr" ? "Ville" : "City"}
+                          </label>
+                          <Input
+                            required
+                            value={form.city}
+                            onChange={handleChange("city")}
+                            placeholder={
+                              language === "fr" ? "Votre ville" : "Your city"
+                            }
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {language === "fr" ? "Code postal" : "Postal code"}
+                          </label>
+                          <Input
+                            value={form.postalCode}
+                            onChange={handleChange("postalCode")}
+                            placeholder="75001"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {language === "fr"
+                              ? "Commune / Région"
+                              : "District / Region"}
+                          </label>
+                          <Input
+                            value={form.commune}
+                            onChange={handleChange("commune")}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {language === "fr" ? "Quartier" : "Neighborhood"}
+                          </label>
+                          <Input
+                            value={form.district}
+                            onChange={handleChange("district")}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Métier principal */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {language === "fr" ? "Métier principal" : "Main trade"}
+                    </label>
+                    <Input
+                      required
+                      value={form.profession}
+                      onChange={handleChange("profession")}
+                      placeholder={
+                        language === "fr"
+                          ? "Plombier, électricien, maçon..."
+                          : "Plumber, electrician, builder..."
+                      }
+                    />
+                    {plan === "FREE" && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        {language === "fr"
+                          ? "Avec le plan Gratuit, un seul métier peut être affiché."
+                          : "With the Free plan, only one trade can be listed."}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {language === "fr"
+                        ? "Description de vos services"
+                        : "Description of your services"}
+                    </label>
+                    <textarea
+                      required
+                      value={form.description}
+                      onChange={handleChange("description")}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue min-h-[100px]"
+                      placeholder={
+                        language === "fr"
+                          ? "Décrivez votre expérience, vos services, vos zones d’intervention..."
+                          : "Describe your experience, services and working area..."
+                      }
+                    />
+                  </div>
+
+                  {/* Tarif horaire (optionnel) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {language === "fr"
+                        ? `Tarif horaire (${currency.symbol} / h) (optionnel)`
+                        : `Hourly rate (${currency.symbol} / h) (optional)`}
+                    </label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={form.hourlyRate}
+                      onChange={handleChange("hourlyRate")}
+                      placeholder={
+                        language === "fr"
+                          ? `Ex : 250000 ${currency.symbol}`
+                          : `e.g. 20 ${currency.symbol}`
+                      }
+                    />
+                  </div>
+
+                  {/* Photo de profil (optionnelle) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {language === "fr"
+                        ? "Photo de profil (optionnel)"
+                        : "Profile picture (optional)"}
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="block w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-pro-blue file:text-white hover:file:bg-blue-700"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      {language === "fr"
+                        ? "Format JPG ou PNG recommandé, taille max ~2 Mo."
+                        : "JPG or PNG recommended, max size ~2MB."}
+                    </p>
+                  </div>
+
+                  {/* Messages d’erreur (uniquement quand le formulaire est visible) */}
+                  {error && (
+                    <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+                      {error}
+                    </div>
+                  )}
+
+                  {/* Bouton */}
+                  <div className="pt-2">
+                    <Button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-pro-blue hover:bg-blue-700"
+                    >
+                      {loading
+                        ? language === "fr"
+                          ? "Enregistrement..."
+                          : "Saving..."
+                        : language === "fr"
+                        ? "Valider mon inscription"
+                        : "Submit my registration"}
+                    </Button>
+                  </div>
+                </form>
+              )}
             </CardContent>
           </Card>
         </div>
