@@ -9,17 +9,20 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 // Pages publiques
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
-import WorkerDetail from "./pages/WorkerDetail";
 import InscriptionOuvrier from "./pages/InscriptionOuvrier";
+import WorkerDetail from "./pages/WorkerDetail";
 import Login from "./pages/Login";
 
 // Back-office Admin
-import AdminDashboard from "./pages/AdminDashboard";
 import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
 import AdminOuvrierInscriptions from "./pages/AdminOuvrierInscriptions";
+import AdminDashboard from "./pages/AdminDashboard";
 
 // Espace ouvrier connecté
 import WorkerDashboard from "./pages/WorkerDashboard";
+
+// Protection routes
+import PrivateRoute from "./components/PrivateRoute";
 
 const queryClient = new QueryClient();
 
@@ -29,13 +32,12 @@ const App = () => (
       <LanguageProvider>
         <Toaster />
         <Sonner />
-
         <BrowserRouter>
           <Routes>
             {/* 🏠 Page d'accueil */}
             <Route path="/" element={<Index />} />
 
-            {/* 🔐 Connexion */}
+            {/* 🔐 Connexion (admin + ouvriers) */}
             <Route path="/login" element={<Login />} />
 
             {/* 📝 Inscription ouvrier */}
@@ -44,28 +46,50 @@ const App = () => (
               element={<InscriptionOuvrier />}
             />
 
-            {/* 👤 Fiche détaillée ouvrier */}
+            {/* 👤 Fiche publique ouvrier */}
             <Route path="/ouvrier/:id" element={<WorkerDetail />} />
 
-            {/* 👷‍♂️ Espace Worker connecté */}
-            <Route path="/espace-ouvrier" element={<WorkerDashboard />} />
+            {/* 👷‍♂️ Espace ouvrier (protégé, rôle worker) */}
+            <Route
+              path="/espace-ouvrier"
+              element={
+                <PrivateRoute allowedRoles={["worker"]}>
+                  <WorkerDashboard />
+                </PrivateRoute>
+              }
+            />
 
-            {/* 🛠️ Admin : Dashboard */}
-            <Route path="/admin/dashboard" element={<AdminDashboard />} />
+            {/* 🛠️ Admin : Dashboard (protégé) */}
+            <Route
+              path="/admin/dashboard"
+              element={
+                <PrivateRoute allowedRoles={["admin"]}>
+                  <AdminDashboard />
+                </PrivateRoute>
+              }
+            />
 
-            {/* 🛠️ Admin : demandes de contact */}
+            {/* 🛠️ Admin : demandes de contact (protégé) */}
             <Route
               path="/admin/ouvrier-contacts"
-              element={<AdminOuvrierContacts />}
+              element={
+                <PrivateRoute allowedRoles={["admin"]}>
+                  <AdminOuvrierContacts />
+                </PrivateRoute>
+              }
             />
 
-            {/* 🛠️ Admin : inscriptions ouvriers */}
+            {/* 🛠️ Admin : inscriptions ouvriers (protégé) */}
             <Route
               path="/admin/ouvriers"
-              element={<AdminOuvrierInscriptions />}
+              element={
+                <PrivateRoute allowedRoles={["admin"]}>
+                  <AdminOuvrierInscriptions />
+                </PrivateRoute>
+              }
             />
 
-            {/* ❌ Page 404 */}
+            {/* ❌ 404 */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
