@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { supabase } from "@/lib/supabase"; // 🔁 même import que les autres fichiers
+import { supabase } from "@/lib/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -475,6 +475,28 @@ const InscriptionOuvrier: React.FC = () => {
         }
       }
 
+      // 2.5) S'assurer qu'il y a une ligne dans op_users pour ce user (FK user_id)
+      const fullName =
+        `${form.firstName} ${form.lastName}`.trim() || email || "Ouvrier";
+
+      const { error: upsertUserError } = await supabase
+        .from("op_users")
+        .upsert(
+          {
+            id: user.id,
+            role: "worker",
+            full_name: fullName,
+            avatar_url: avatarUrl,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" }
+        );
+
+      if (upsertUserError) {
+        console.error("Erreur upsert op_users:", upsertUserError);
+        throw upsertUserError;
+      }
+
       // 3) Insert profil ouvrier
       const hourlyRateTrim = form.hourlyRate.trim();
       let hourlyRateNumber: number | null = null;
@@ -484,7 +506,6 @@ const InscriptionOuvrier: React.FC = () => {
         hourlyRateNumber = Number.isFinite(parsed) ? parsed : null;
       }
 
-      // ⚠️ On NE met PAS "id" ici -> Postgres génère tout seul (DEFAULT gen_random_uuid())
       const { error: insertError } = await supabase.from("op_ouvriers").insert({
         user_id: user.id,
         first_name: form.firstName,
@@ -734,7 +755,7 @@ const InscriptionOuvrier: React.FC = () => {
                   </select>
                 </div>
 
-                {/* Localisation – Mode Guinée avec Région -> Ville -> Commune -> Quartier */}
+                {/* Localisation – Mode Guinée */}
                 {form.country === "GN" ? (
                   <>
                     {/* Région */}
