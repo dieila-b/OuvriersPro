@@ -96,7 +96,7 @@ const AdminOuvrierContacts: React.FC = () => {
 
       const { data, error } = await supabase
         .from<DbContact>("op_ouvrier_contacts")
-        .select("*") // ✅ toutes les colonnes, y compris origin si elle existe
+        .select("*") // ✅ toutes les colonnes, y compris origin
         .order("created_at", { ascending: false });
 
       if (error) {
