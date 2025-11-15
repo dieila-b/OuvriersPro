@@ -106,7 +106,10 @@ const WorkerDetail: React.FC = () => {
     fetchWorker();
   }, [id]);
 
-  const formatCurrency = (value: number | null | undefined, currency?: string | null) => {
+  const formatCurrency = (
+    value: number | null | undefined,
+    currency?: string | null
+  ) => {
     if (!value) return "—";
     const cur = currency || "GNF";
     if (cur === "GNF") {
@@ -116,16 +119,13 @@ const WorkerDetail: React.FC = () => {
   };
 
   const text = {
-    back:
-      language === "fr" ? "Retour aux résultats" : "Back to results",
+    back: language === "fr" ? "Retour aux résultats" : "Back to results",
     notFound:
       language === "fr"
         ? "Impossible de charger ce professionnel."
         : "Unable to load this professional.",
     contactTitle:
-      language === "fr"
-        ? "Contacter cet ouvrier"
-        : "Contact this worker",
+      language === "fr" ? "Contacter cet ouvrier" : "Contact this worker",
     contactSubtitle:
       language === "fr"
         ? "Expliquez brièvement votre besoin, il vous répondra directement."
@@ -134,10 +134,8 @@ const WorkerDetail: React.FC = () => {
     yourEmail: language === "fr" ? "Votre email" : "Your email",
     yourPhone: language === "fr" ? "Votre téléphone" : "Your phone",
     yourMessage: language === "fr" ? "Votre message" : "Your message",
-    send:
-      language === "fr" ? "Envoyer la demande" : "Send request",
-    sending:
-      language === "fr" ? "Envoi en cours..." : "Sending...",
+    send: language === "fr" ? "Envoyer la demande" : "Send request",
+    sending: language === "fr" ? "Envoi en cours..." : "Sending...",
     success:
       language === "fr"
         ? "Votre demande a bien été envoyée. L’ouvrier vous contactera directement."
@@ -161,7 +159,7 @@ const WorkerDetail: React.FC = () => {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  // 🔹 Envoi du formulaire : origin = 'web'
+  // 🔹 Envoi du formulaire avec origin = 'web'
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!worker) return;
@@ -170,9 +168,9 @@ const WorkerDetail: React.FC = () => {
     setSuccessMsg(null);
     setErrorMsg(null);
 
-    const fullWorkerName =
-      (worker.first_name || "") +
-      (worker.last_name ? ` ${worker.last_name}` : "");
+    const fullWorkerName = `${worker.first_name ?? ""} ${
+      worker.last_name ?? ""
+    }`.trim();
 
     const { error } = await supabase.from("op_ouvrier_contacts").insert({
       worker_id: worker.id,
@@ -183,7 +181,7 @@ const WorkerDetail: React.FC = () => {
       client_phone: form.phone,
       message: form.message,
       status: "new",
-      origin: "web", // ✅ ORIGINE WEB
+      origin: "web", // ✅ toutes les demandes venant du site seront marquées "web"
     });
 
     if (error) {
@@ -232,9 +230,9 @@ const WorkerDetail: React.FC = () => {
     );
   }
 
-  const fullName =
-    (worker.first_name || "") +
-    (worker.last_name ? ` ${worker.last_name}` : "");
+  const fullName = `${worker.first_name ?? ""} ${
+    worker.last_name ?? ""
+  }`.trim();
 
   const locationParts = [
     worker.region,
@@ -261,8 +259,9 @@ const WorkerDetail: React.FC = () => {
           <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
             <div className="flex items-start gap-4 mb-4">
               <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">
-                {fullName
+                {(fullName || "O")
                   .split(" ")
+                  .filter(Boolean)
                   .map((n) => n[0])
                   .join("")}
               </div>
@@ -286,9 +285,7 @@ const WorkerDetail: React.FC = () => {
 
             <div className="flex flex-wrap gap-4 text-sm text-slate-700 mb-4">
               <div>
-                <div className="text-xs text-slate-500">
-                  {text.rating}
-                </div>
+                <div className="text-xs text-slate-500">{text.rating}</div>
                 <div className="flex items-center gap-1">
                   <Star className="w-4 h-4 text-yellow-400" />
                   <span className="font-semibold">
