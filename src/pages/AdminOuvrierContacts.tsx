@@ -23,6 +23,12 @@ type DbContact = {
 const statusOptions = ["new", "in_progress", "done"] as const;
 type ContactStatus = (typeof statusOptions)[number];
 
+type DayStat = {
+  date: string; // YYYY-MM-DD
+  total: number;
+  byOrigin: Record<string, number>;
+};
+
 const AdminOuvrierContacts: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
@@ -39,7 +45,6 @@ const AdminOuvrierContacts: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<"" | ContactStatus>("");
   const [search, setSearch] = useState("");
 
-  // 🔹 filtres de date
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
 
@@ -86,7 +91,7 @@ const AdminOuvrierContacts: React.FC = () => {
     };
   }, [navigate]);
 
-  // 🔹 Chargement des demandes (uniquement admin)
+  // 🔹 Chargement des demandes
   useEffect(() => {
     if (authLoading || !isAdmin) return;
 
@@ -203,7 +208,7 @@ const AdminOuvrierContacts: React.FC = () => {
   };
 
   const originLabel = (o: string | null | undefined) => {
-    if (!o) return "web";
+    if (!o || o === "web") return "web";
     if (o === "mobile") return "mobile";
     if (o === "other") return language === "fr" ? "autre" : "other";
     return o;
@@ -268,6 +273,14 @@ const AdminOuvrierContacts: React.FC = () => {
         : "No requests yet.",
     refresh: language === "fr" ? "Rafraîchir" : "Refresh",
     exportCsv: language === "fr" ? "Exporter CSV" : "Export CSV",
+    statsTitle:
+      language === "fr"
+        ? "Statistiques récentes"
+        : "Recent statistics",
+    statsHint:
+      language === "fr"
+        ? "Nombre de demandes par jour, réparties par origine (7 derniers jours avec activité)."
+        : "Requests per day by origin (last 7 active days).",
   };
 
   const refresh = async () => {
@@ -309,6 +322,44 @@ const AdminOuvrierContacts: React.FC = () => {
     setLoading(false);
   };
 
+  // 📊 Stats par jour / origine (sur TOUTES les demandes, pas seulement filtrées)
+  const dayStats = useMemo<DayStat[]>(() => {
+    if (!contacts.length) return [];
+
+    const map = new Map<string, DayStat>();
+
+    contacts.forEach((c) => {
+      const d = new Date(c.created_at);
+      const key = d.toISOString().slice(0, 10); // YYYY-MM-DD
+      const origin = c.origin || "web";
+
+      if (!map.has(key)) {
+        map.set(key, {
+          date: key,
+          total: 0,
+          byOrigin: {},
+        });
+      }
+
+      const stat = map.get(key)!;
+      stat.total += 1;
+      stat.byOrigin[origin] = (stat.byOrigin[origin] || 0) + 1;
+    });
+
+    const all = Array.from(map.values()).sort((a, b) =>
+      a.date.localeCompare(b.date)
+    );
+
+    // on garde les 7 derniers jours où il y a eu des demandes
+    const last7 = all.slice(-7);
+
+    return last7;
+  }, [contacts]);
+
+  const maxTotal = useMemo(() => {
+    return dayStats.reduce((max, d) => (d.total > max ? d.total : max), 0);
+  }, [dayStats]);
+
   // 🔄 Export CSV (avec les résultats filtrés)
   const exportCsv = () => {
     if (!filtered.length) return;
@@ -349,7 +400,9 @@ const AdminOuvrierContacts: React.FC = () => {
       "\n" +
       rows.map((r) => r.join(";")).join("\n");
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement("a");
@@ -361,7 +414,7 @@ const AdminOuvrierContacts: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  // Écrans d’attente / blocage
+  // Loading / pas admin
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -387,7 +440,9 @@ const AdminOuvrierContacts: React.FC = () => {
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
               {text.title}
             </h1>
-            <p className="text-sm text-slate-600 mt-1">{text.subtitle}</p>
+            <p className="text-sm text-slate-600 mt-1">
+              {text.subtitle}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-500">
@@ -411,6 +466,90 @@ const AdminOuvrierContacts: React.FC = () => {
             </Button>
           </div>
         </div>
+
+        {/* 📊 Stats rapides */}
+        {dayStats.length > 0 && (
+          <section className="mb-6 bg-white border border-slate-200 rounded-xl p-4">
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">
+              {text.statsTitle}
+            </h2>
+            <p className="text-[11px] text-slate-500 mb-3">
+              {text.statsHint}
+            </p>
+
+            <div className="flex items-end gap-3 h-32">
+              {dayStats.map((d) => {
+                const dateObj = new Date(d.date + "T00:00:00");
+                const label =
+                  language === "fr"
+                    ? dateObj.toLocaleDateString("fr-FR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                      })
+                    : dateObj.toLocaleDateString("en-GB", {
+                        day: "2-digit",
+                        month: "2-digit",
+                      });
+
+                const origins = ["web", "mobile", "other"];
+                const total = d.total || 1;
+
+                return (
+                  <div
+                    key={d.date}
+                    className="flex-1 flex flex-col items-center gap-1"
+                  >
+                    <div className="w-full h-24 bg-slate-50 rounded-md flex flex-col justify-end overflow-hidden">
+                      {origins.map((o) => {
+                        const value = d.byOrigin[o] || 0;
+                        if (!value) return null;
+                        const heightPct = maxTotal
+                          ? (value / maxTotal) * 100
+                          : 0;
+                        const colorClass =
+                          o === "web"
+                            ? "bg-pro-blue"
+                            : o === "mobile"
+                            ? "bg-emerald-400"
+                            : "bg-amber-400";
+
+                        return (
+                          <div
+                            key={o}
+                            className={colorClass + " w-full"}
+                            style={{ height: `${heightPct}%` }}
+                            title={`${label} - ${originLabel(o)}: ${value}`}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div className="text-[11px] text-slate-700">
+                      {label}
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      {d.total} req.
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-4 text-[11px] text-slate-600">
+              <div className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-sm bg-pro-blue" />
+                <span>web</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-sm bg-emerald-400" />
+                <span>mobile</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-sm bg-amber-400" />
+                <span>{language === "fr" ? "autre" : "other"}</span>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Filtres */}
         <div className="flex flex-col md:flex-row gap-3 mb-6">
