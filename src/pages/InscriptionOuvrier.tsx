@@ -486,8 +486,6 @@ const InscriptionOuvrier: React.FC = () => {
             id: user.id,
             role: "worker",
             full_name: fullName,
-            avatar_url: avatarUrl,
-            updated_at: new Date().toISOString(),
           },
           { onConflict: "id" }
         );
