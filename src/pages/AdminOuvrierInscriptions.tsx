@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/components/ui/use-toast";
+import AdminNavTabs from "@/components/AdminNavTabs";
 
 type DbWorker = {
   id: string;
@@ -570,6 +571,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 py-10">
       <div className="max-w-6xl mx-auto px-4 md:px-8">
+        {/* Menu admin (contacts / inscriptions / retour site) */}
+        <AdminNavTabs />
+
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           <div>
