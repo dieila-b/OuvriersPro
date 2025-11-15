@@ -2,6 +2,7 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { Home } from "lucide-react";
 
 const AdminNavTabs: React.FC = () => {
   const { language } = useLanguage();
@@ -10,50 +11,57 @@ const AdminNavTabs: React.FC = () => {
 
   const isContacts = path.startsWith("/admin/ouvrier-contacts");
   const isInscriptions = path.startsWith("/admin/ouvriers");
+  const isDashboard = path.startsWith("/admin/dashboard");
 
-  const text = {
-    contacts:
-      language === "fr"
-        ? "Demandes de contact"
-        : "Contact requests",
-    inscriptions:
-      language === "fr"
-        ? "Inscriptions ouvriers"
-        : "Worker registrations",
+  const t = {
+    contacts: language === "fr" ? "Demandes de contact" : "Contact requests",
+    inscriptions: language === "fr" ? "Inscriptions ouvriers" : "Worker registrations",
+    dashboard: language === "fr" ? "Tableau de bord" : "Dashboard",
+    back: language === "fr" ? "Retour au site" : "Back to site",
+    admin: language === "fr" ? "Espace admin" : "Admin area",
   };
 
-  const baseTabClass =
+  const baseTab =
     "px-4 py-2 text-sm font-medium rounded-full transition-colors";
-  const activeClass =
+  const active =
     "bg-white text-slate-900 shadow-sm border border-slate-200";
-  const inactiveClass =
+  const inactive =
     "text-slate-600 hover:text-slate-900 hover:bg-slate-100";
 
   return (
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      {/* Onglets */}
       <div className="inline-flex items-center gap-1 rounded-full bg-slate-100 p-1">
         <Link
-          to="/admin/ouvrier-contacts"
-          className={`${baseTabClass} ${
-            isContacts ? activeClass : inactiveClass
-          }`}
+          to="/admin/dashboard"
+          className={`${baseTab} ${isDashboard ? active : inactive}`}
         >
-          {text.contacts}
+          {t.dashboard}
         </Link>
+
+        <Link
+          to="/admin/ouvrier-contacts"
+          className={`${baseTab} ${isContacts ? active : inactive}`}
+        >
+          {t.contacts}
+        </Link>
+
         <Link
           to="/admin/ouvriers"
-          className={`${baseTabClass} ${
-            isInscriptions ? activeClass : inactiveClass
-          }`}
+          className={`${baseTab} ${isInscriptions ? active : inactive}`}
         >
-          {text.inscriptions}
+          {t.inscriptions}
         </Link>
       </div>
 
-      {/* Petit rappel discret de l'espace admin */}
-      <div className="text-[11px] text-slate-500 uppercase tracking-wide">
-        {language === "fr" ? "Espace admin" : "Admin area"}
-      </div>
+      {/* Bouton retour au site */}
+      <Link
+        to="/"
+        className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+      >
+        <Home className="w-4 h-4" />
+        {t.back}
+      </Link>
     </div>
   );
 };
