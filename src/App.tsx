@@ -14,6 +14,9 @@ import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
 import AdminOuvrierInscriptions from "./pages/AdminOuvrierInscriptions";
 import Login from "./pages/Login";
 
+// ⭐ Nouveau : import du Dashboard Admin
+import AdminDashboard from "./pages/AdminDashboard";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -38,6 +41,9 @@ const App = () => (
 
             {/* Fiche détaillée ouvrier */}
             <Route path="/ouvrier/:id" element={<WorkerDetail />} />
+
+            {/* Back-office : Dashboard admin */}
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
 
             {/* Back-office : demandes de contact */}
             <Route
