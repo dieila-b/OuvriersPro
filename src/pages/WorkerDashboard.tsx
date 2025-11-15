@@ -25,6 +25,18 @@ type WorkerProfile = {
   created_at: string;
 };
 
+type WorkerContact = {
+  id: string;
+  worker_id: string | null;
+  client_name: string | null;
+  client_email: string | null;
+  client_phone: string | null;
+  message: string | null;
+  status: string | null;
+  origin: string | null;
+  created_at: string;
+};
+
 type TabKey = "profile" | "subscription" | "stats" | "messages";
 
 const WorkerDashboard: React.FC = () => {
@@ -32,14 +44,22 @@ const WorkerDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<WorkerProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
+
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
+
+  // 🔔 Messages / demandes de contact de cet ouvrier
+  const [contacts, setContacts] = useState<WorkerContact[]>([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [contactsError, setContactsError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
 
-    const fetchProfile = async () => {
+    const fetchData = async () => {
       setLoading(true);
       setError(null);
+      setContacts([]);
+      setContactsError(null);
 
       // 1) Qui est connecté ?
       const { data, error: userError } = await supabase.auth.getUser();
@@ -94,20 +114,62 @@ const WorkerDashboard: React.FC = () => {
             ? `Erreur lors du chargement de votre profil : ${workerError.message}`
             : `Error while loading your profile: ${workerError.message}`
         );
-      } else if (!worker) {
+        setLoading(false);
+        return;
+      }
+
+      if (!worker) {
         setError(
           language === "fr"
             ? "Aucun profil ouvrier associé à ce compte. Merci de compléter votre inscription."
             : "No worker profile associated with this account. Please complete your registration."
         );
-      } else {
-        setProfile(worker);
+        setLoading(false);
+        return;
       }
 
+      setProfile(worker);
       setLoading(false);
+
+      // 3) Récupérer les demandes de contact liées à cet ouvrier
+      setContactsLoading(true);
+      setContactsError(null);
+
+      const { data: contactsData, error: contactsErr } = await supabase
+        .from<WorkerContact>("op_ouvrier_contacts")
+        .select(
+          `
+          id,
+          worker_id,
+          client_name,
+          client_email,
+          client_phone,
+          message,
+          status,
+          origin,
+          created_at
+        `
+        )
+        .eq("worker_id", worker.id)
+        .order("created_at", { ascending: false });
+
+      if (!isMounted) return;
+
+      if (contactsErr) {
+        console.error(contactsErr);
+        setContactsError(
+          language === "fr"
+            ? `Erreur lors du chargement de vos demandes : ${contactsErr.message}`
+            : `Error while loading your requests: ${contactsErr.message}`
+        );
+      } else {
+        setContacts(contactsData ?? []);
+      }
+
+      setContactsLoading(false);
     };
 
-    fetchProfile();
+    fetchData();
 
     return () => {
       isMounted = false;
@@ -140,6 +202,25 @@ const WorkerDashboard: React.FC = () => {
     if (s === "rejected")
       return "bg-red-50 text-red-700 border-red-200";
     return "bg-amber-50 text-amber-700 border-amber-200";
+  };
+
+  const contactStatusLabel = (s: string | null | undefined) => {
+    if (language === "fr") {
+      if (s === "in_progress") return "En cours";
+      if (s === "done") return "Traité";
+      return "Nouveau";
+    } else {
+      if (s === "in_progress") return "In progress";
+      if (s === "done") return "Done";
+      return "New";
+    }
+  };
+
+  const originLabel = (o: string | null | undefined) => {
+    if (!o || o === "web") return "web";
+    if (o === "mobile") return "mobile";
+    if (o === "other") return language === "fr" ? "autre" : "other";
+    return o;
   };
 
   const formatDate = (value: string) => {
@@ -256,6 +337,7 @@ const WorkerDashboard: React.FC = () => {
 
         {/* Contenu selon l’onglet */}
         <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+          {/* PROFIL */}
           {activeTab === "profile" && (
             <div className="space-y-4">
               <h2 className="text-sm font-semibold text-slate-800 mb-2">
@@ -339,8 +421,6 @@ const WorkerDashboard: React.FC = () => {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="text-xs"
-                  // TODO: à connecter plus tard à un écran d'édition
                   onClick={() =>
                     alert(
                       language === "fr"
@@ -357,6 +437,7 @@ const WorkerDashboard: React.FC = () => {
             </div>
           )}
 
+          {/* ABONNEMENT */}
           {activeTab === "subscription" && (
             <div className="space-y-4">
               <h2 className="text-sm font-semibold text-slate-800 mb-2">
@@ -429,6 +510,7 @@ const WorkerDashboard: React.FC = () => {
             </div>
           )}
 
+          {/* STATS */}
           {activeTab === "stats" && (
             <div className="space-y-4">
               <h2 className="text-sm font-semibold text-slate-800 mb-2">
@@ -475,20 +557,75 @@ const WorkerDashboard: React.FC = () => {
             </div>
           )}
 
+          {/* MESSAGES */}
           {activeTab === "messages" && (
             <div className="space-y-4">
               <h2 className="text-sm font-semibold text-slate-800 mb-2">
-                {language === "fr" ? "Messages" : "Messages"}
+                {language === "fr" ? "Messages reçus" : "Received messages"}
               </h2>
-              <p className="text-xs text-slate-500">
+
+              {/* Etat chargement / erreur */}
+              {contactsLoading && (
+                <div className="text-sm text-slate-500">
+                  {language === "fr"
+                    ? "Chargement de vos demandes..."
+                    : "Loading your requests..."}
+                </div>
+              )}
+
+              {contactsError && (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+                  {contactsError}
+                </div>
+              )}
+
+              {!contactsLoading && !contactsError && contacts.length === 0 && (
+                <div className="text-sm text-slate-500">
+                  {language === "fr"
+                    ? "Vous n’avez pas encore reçu de demandes de contact."
+                    : "You haven't received any contact requests yet."}
+                </div>
+              )}
+
+              {!contactsLoading && !contactsError && contacts.length > 0 && (
+                <ul className="divide-y divide-slate-100">
+                  {contacts.map((c) => (
+                    <li
+                      key={c.id}
+                      className="py-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2"
+                    >
+                      <div>
+                        <div className="text-sm font-semibold text-slate-800">
+                          {c.client_name || "—"}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {c.client_email || ""}{" "}
+                          {c.client_phone ? `• ${c.client_phone}` : ""}
+                        </div>
+                        <div className="text-xs text-slate-400 mt-0.5">
+                          {formatDate(c.created_at)} • {originLabel(c.origin)}
+                        </div>
+                        {c.message && (
+                          <div className="mt-2 text-sm text-slate-700 whitespace-pre-line">
+                            {c.message}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-start justify-end gap-2">
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-50 text-slate-700 border-slate-200">
+                          {contactStatusLabel(c.status)}
+                        </span>
+                        {/* futur bouton pour marquer comme traité, répondre, etc. */}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <div className="text-xs text-slate-500">
                 {language === "fr"
-                  ? "Ici, vous pourrez retrouver les demandes reçues, échanger avec les clients, marquer les demandes comme traitées, etc."
-                  : "Here you’ll be able to view incoming requests, chat with clients and mark them as handled, etc."}
-              </p>
-              <div className="border border-dashed border-slate-200 rounded-lg p-4 text-xs text-slate-400">
-                {language === "fr"
-                  ? "La messagerie interne sera ajoutée dans une prochaine étape (lié aux demandes dans op_ouvrier_contacts)."
-                  : "Internal messaging will be added in a next step (linked to requests in op_ouvrier_contacts)."}
+                  ? "Ces demandes sont directement liées à votre profil ouvrier (table op_ouvrier_contacts filtrée sur worker_id)."
+                  : "These requests are directly linked to your worker profile (table op_ouvrier_contacts filtered by worker_id)."}
               </div>
             </div>
           )}
