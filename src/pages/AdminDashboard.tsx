@@ -26,6 +26,18 @@ type DbContactSummary = {
 };
 
 type ChartMode = "daily" | "weekly";
+type MetricMode = "volume" | "conversion";
+
+type ChartPoint = {
+  key: string;
+  label: string;
+  value: number;
+};
+
+type ChartData = {
+  points: ChartPoint[];
+  maxValue: number;
+};
 
 const AdminDashboard: React.FC = () => {
   const { language } = useLanguage();
@@ -41,12 +53,13 @@ const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Filtres globaux de dates
+  // Filtres globaux
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
 
-  // 📊 Mode du graphique : par jour / par semaine
+  // 📊 Graphique : mode jour / semaine + volume / conversion
   const [chartMode, setChartMode] = useState<ChartMode>("daily");
+  const [metricMode, setMetricMode] = useState<MetricMode>("volume");
 
   // 🔐 Vérification des droits admin
   useEffect(() => {
@@ -91,7 +104,7 @@ const AdminDashboard: React.FC = () => {
     };
   }, [navigate]);
 
-  // 🔹 Chargement des données globales (ouvriers + contacts)
+  // 🔹 Chargement des données globales
   useEffect(() => {
     if (authLoading || !isAdmin) return;
 
@@ -159,7 +172,7 @@ const AdminDashboard: React.FC = () => {
     fetchDashboardData();
   }, [language, authLoading, isAdmin]);
 
-  // 🔎 Filtrage par dates global
+  // 🔎 Filtrage global par dates
   const filteredWorkers = useMemo(() => {
     return workers.filter((w) => {
       const created = new Date(w.created_at);
@@ -240,7 +253,7 @@ const AdminDashboard: React.FC = () => {
     };
   }, [filteredWorkers, filteredContacts]);
 
-  // 🧮 fonction pour obtenir un "numéro de semaine" approximatif
+  // 🧮 calcul week key
   const getWeekKey = (d: Date) => {
     const year = d.getFullYear();
     const start = new Date(year, 0, 1);
@@ -251,11 +264,11 @@ const AdminDashboard: React.FC = () => {
     return { key: `${year}-W${weekStr}`, week };
   };
 
-  // 📈 Données pour le graphique (mode jour / semaine)
-  const contactChartData = useMemo(() => {
+  // 📈 Graphique Volume = demandes de contact
+  const volumeChartData: ChartData = useMemo(() => {
     if (chartMode === "daily") {
       // 7 derniers jours
-      const days: { label: string; key: string; count: number }[] = [];
+      const days: ChartPoint[] = [];
       const today = new Date();
       for (let i = 6; i >= 0; i--) {
         const d = new Date(
@@ -270,26 +283,26 @@ const AdminDashboard: React.FC = () => {
           language === "fr"
             ? d.toLocaleDateString("fr-FR", { weekday: "short" })
             : d.toLocaleDateString("en-GB", { weekday: "short" });
-        days.push({ label, key, count: 0 });
+        days.push({ key, label, value: 0 });
       }
 
       filteredContacts.forEach((c) => {
         const dateStr = c.created_at.slice(0, 10);
         const day = days.find((d) => d.key === dateStr);
         if (day) {
-          day.count += 1;
+          day.value += 1;
         }
       });
 
-      const maxCount =
-        days.reduce((max, d) => (d.count > max ? d.count : max), 0) || 1;
+      const maxValue =
+        days.reduce((max, d) => (d.value > max ? d.value : max), 0) || 1;
 
-      return { points: days, maxCount };
+      return { points: days, maxValue };
     } else {
-      // mode "weekly" : 8 dernières semaines
+      // weekly : 8 dernières semaines
       const weeksMap: Record<
         string,
-        { label: string; key: string; count: number; orderKey: string }
+        { label: string; key: string; value: number; orderKey: string }
       > = {};
 
       filteredContacts.forEach((c) => {
@@ -298,28 +311,143 @@ const AdminDashboard: React.FC = () => {
         if (!weeksMap[key]) {
           const label =
             language === "fr" ? `S${week}` : `W${week}`;
-          const orderKey = key; // yyyy-Www
-          weeksMap[key] = { label, key, count: 0, orderKey };
+          weeksMap[key] = {
+            label,
+            key,
+            value: 0,
+            orderKey: key,
+          };
         }
-        weeksMap[key].count += 1;
+        weeksMap[key].value += 1;
       });
 
-      let allWeeks = Object.values(weeksMap).sort((a, b) =>
+      let weeks = Object.values(weeksMap).sort((a, b) =>
         a.orderKey.localeCompare(b.orderKey)
       );
 
-      // Garder seulement les 8 dernières semaines
-      if (allWeeks.length > 8) {
-        allWeeks = allWeeks.slice(allWeeks.length - 8);
+      if (weeks.length > 8) {
+        weeks = weeks.slice(weeks.length - 8);
       }
 
-      const maxCount =
-        allWeeks.reduce((max, d) => (d.count > max ? d.count : max), 0) ||
-        1;
+      const maxValue =
+        weeks.reduce((max, d) => (d.value > max ? d.value : max), 0) || 1;
 
-      return { points: allWeeks, maxCount };
+      return { points: weeks, maxValue };
     }
   }, [filteredContacts, chartMode, language]);
+
+  // 📈 Graphique Conversion = % ouvriers validés parmi les inscriptions
+  const conversionChartData: ChartData = useMemo(() => {
+    if (chartMode === "daily") {
+      // 7 derniers jours
+      const daysBase: { key: string; label: string }[] = [];
+      const today = new Date();
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(
+          Date.UTC(
+            today.getFullYear(),
+            today.getMonth(),
+            today.getDate() - i
+          )
+        );
+        const key = d.toISOString().slice(0, 10);
+        const label =
+          language === "fr"
+            ? d.toLocaleDateString("fr-FR", { weekday: "short" })
+            : d.toLocaleDateString("en-GB", { weekday: "short" });
+        daysBase.push({ key, label });
+      }
+
+      const meta: Record<
+        string,
+        { total: number; approved: number; label: string }
+      > = {};
+
+      daysBase.forEach((d) => {
+        meta[d.key] = { total: 0, approved: 0, label: d.label };
+      });
+
+      filteredWorkers.forEach((w) => {
+        const dateStr = w.created_at.slice(0, 10);
+        if (meta[dateStr]) {
+          meta[dateStr].total += 1;
+          if (w.status === "approved") {
+            meta[dateStr].approved += 1;
+          }
+        }
+      });
+
+      const points: ChartPoint[] = daysBase.map((d) => {
+        const m = meta[d.key];
+        const rate =
+          m.total > 0 ? (m.approved / m.total) * 100 : 0;
+        return {
+          key: d.key,
+          label: d.label,
+          value: rate,
+        };
+      });
+
+      const maxValue = 100; // taux max 100%
+
+      return { points, maxValue };
+    } else {
+      // weekly
+      const weeksMeta: Record<
+        string,
+        {
+          label: string;
+          orderKey: string;
+          total: number;
+          approved: number;
+        }
+      > = {};
+
+      filteredWorkers.forEach((w) => {
+        const d = new Date(w.created_at);
+        const { key, week } = getWeekKey(d);
+        if (!weeksMeta[key]) {
+          const label =
+            language === "fr" ? `S${week}` : `W${week}`;
+          weeksMeta[key] = {
+            label,
+            orderKey: key,
+            total: 0,
+            approved: 0,
+          };
+        }
+        weeksMeta[key].total += 1;
+        if (w.status === "approved") {
+          weeksMeta[key].approved += 1;
+        }
+      });
+
+      let weeksArr = Object.values(weeksMeta).sort((a, b) =>
+        a.orderKey.localeCompare(b.orderKey)
+      );
+
+      if (weeksArr.length > 8) {
+        weeksArr = weeksArr.slice(weeksArr.length - 8);
+      }
+
+      const points: ChartPoint[] = weeksArr.map((w) => {
+        const rate =
+          w.total > 0 ? (w.approved / w.total) * 100 : 0;
+        return {
+          key: w.orderKey,
+          label: w.label,
+          value: rate,
+        };
+      });
+
+      const maxValue = 100;
+
+      return { points, maxValue };
+    }
+  }, [filteredWorkers, chartMode, language]);
+
+  const activeChartData =
+    metricMode === "volume" ? volumeChartData : conversionChartData;
 
   const formatDateTime = (value: string) => {
     const d = new Date(value);
@@ -429,16 +557,24 @@ const AdminDashboard: React.FC = () => {
         : "View all requests",
     chartTitle:
       language === "fr"
-        ? "Évolution des demandes"
-        : "Requests trend",
-    chartSubtitleDaily:
+        ? "Évolution des demandes / conversions"
+        : "Requests / conversions trend",
+    chartSubtitleDailyVolume:
       language === "fr"
         ? "Nombre de demandes de contact reçues par jour (7 derniers jours)."
         : "Number of contact requests per day (last 7 days).",
-    chartSubtitleWeekly:
+    chartSubtitleWeeklyVolume:
       language === "fr"
         ? "Nombre de demandes de contact reçues par semaine (8 dernières semaines)."
         : "Number of contact requests per week (last 8 weeks).",
+    chartSubtitleDailyConversion:
+      language === "fr"
+        ? "Taux de conversion des inscriptions (validées / totales) par jour (7 derniers jours)."
+        : "Conversion rate of registrations (approved / total) per day (last 7 days).",
+    chartSubtitleWeeklyConversion:
+      language === "fr"
+        ? "Taux de conversion des inscriptions (validées / totales) par semaine (8 dernières semaines)."
+        : "Conversion rate of registrations (approved / total) per week (last 8 weeks).",
     mobileWidgetTitle:
       language === "fr"
         ? "Prochains développements mobile"
@@ -451,6 +587,10 @@ const AdminDashboard: React.FC = () => {
       language === "fr" ? "Jour" : "Daily",
     chartModeWeekly:
       language === "fr" ? "Semaine" : "Weekly",
+    metricModeVolume:
+      language === "fr" ? "Volume" : "Volume",
+    metricModeConversion:
+      language === "fr" ? "Conversion" : "Conversion",
   };
 
   if (authLoading) {
@@ -472,7 +612,7 @@ const AdminDashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 py-10">
       <div className="max-w-6xl mx-auto px-4 md:px-8">
-        {/* Menu admin (tabs + bouton retour au site) */}
+        {/* Menu admin (tabs + retour site) */}
         <AdminNavTabs />
 
         {/* Header + filtres globaux */}
@@ -608,54 +748,89 @@ const AdminDashboard: React.FC = () => {
 
         {/* Ligne : graphique + widget mobile */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          {/* Graphique d’évolution (toggle Jour / Semaine) */}
+          {/* Graphique d’évolution avec double toggle */}
           <div className="bg-white border border-slate-200 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex items-start justify-between mb-1">
               <h2 className="text-sm font-semibold text-slate-800">
                 {text.chartTitle}
               </h2>
-              {/* Toggle daily / weekly */}
-              <div className="inline-flex items-center rounded-full bg-slate-100 p-0.5 text-[11px]">
-                <button
-                  type="button"
-                  onClick={() => setChartMode("daily")}
-                  className={`px-2 py-1 rounded-full ${
-                    chartMode === "daily"
-                      ? "bg-white shadow text-slate-900"
-                      : "text-slate-500"
-                  }`}
-                >
-                  {text.chartModeDaily}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setChartMode("weekly")}
-                  className={`px-2 py-1 rounded-full ${
-                    chartMode === "weekly"
-                      ? "bg-white shadow text-slate-900"
-                      : "text-slate-500"
-                  }`}
-                >
-                  {text.chartModeWeekly}
-                </button>
+              <div className="flex flex-col items-end gap-1">
+                {/* Toggle Jour / Semaine */}
+                <div className="inline-flex items-center rounded-full bg-slate-100 p-0.5 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setChartMode("daily")}
+                    className={`px-2 py-1 rounded-full ${
+                      chartMode === "daily"
+                        ? "bg-white shadow text-slate-900"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    {text.chartModeDaily}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChartMode("weekly")}
+                    className={`px-2 py-1 rounded-full ${
+                      chartMode === "weekly"
+                        ? "bg-white shadow text-slate-900"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    {text.chartModeWeekly}
+                  </button>
+                </div>
+                {/* Toggle Volume / Conversion */}
+                <div className="inline-flex items-center rounded-full bg-slate-100 p-0.5 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setMetricMode("volume")}
+                    className={`px-2 py-1 rounded-full ${
+                      metricMode === "volume"
+                        ? "bg-white shadow text-slate-900"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    {text.metricModeVolume}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMetricMode("conversion")}
+                    className={`px-2 py-1 rounded-full ${
+                      metricMode === "conversion"
+                        ? "bg-white shadow text-slate-900"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    {text.metricModeConversion}
+                  </button>
+                </div>
               </div>
             </div>
             <p className="text-xs text-slate-500 mb-3">
               {chartMode === "daily"
-                ? text.chartSubtitleDaily
-                : text.chartSubtitleWeekly}
+                ? metricMode === "volume"
+                  ? text.chartSubtitleDailyVolume
+                  : text.chartSubtitleDailyConversion
+                : metricMode === "volume"
+                ? text.chartSubtitleWeeklyVolume
+                : text.chartSubtitleWeeklyConversion}
             </p>
             <div className="h-40 flex items-end gap-2 border-b border-slate-100 pb-2">
-              {contactChartData.points.length === 0 ? (
+              {activeChartData.points.length === 0 ? (
                 <div className="text-xs text-slate-400">
                   {language === "fr"
                     ? "Aucune donnée dans la période sélectionnée."
                     : "No data in the selected period."}
                 </div>
               ) : (
-                contactChartData.points.map((p) => {
+                activeChartData.points.map((p) => {
                   const height =
-                    (p.count / contactChartData.maxCount) * 120; // px
+                    (p.value / activeChartData.maxValue) * 120; // px
+                  const labelValue =
+                    metricMode === "volume"
+                      ? p.value
+                      : `${Math.round(p.value)}%`;
                   return (
                     <div
                       key={p.key}
@@ -665,9 +840,9 @@ const AdminDashboard: React.FC = () => {
                         className="w-6 rounded-t-md bg-blue-100 border border-blue-200 flex items-end justify-center"
                         style={{ height: `${height || 4}px` }}
                       >
-                        {p.count > 0 && (
+                        {p.value > 0 && (
                           <span className="text-[10px] text-blue-700 font-semibold mb-1">
-                            {p.count}
+                            {labelValue}
                           </span>
                         )}
                       </div>
@@ -801,7 +976,6 @@ const AdminDashboard: React.FC = () => {
                         <div className="text-xs text-slate-400">
                           {formatDateTime(w.created_at)}
                         </div>
-                        {/* 🔗 Lien rapide vers la fiche publique ouvrier */}
                         <div className="mt-1">
                           <Link
                             to={`/ouvrier/${w.id}`}
@@ -863,7 +1037,6 @@ const AdminDashboard: React.FC = () => {
                       <div className="text-xs text-slate-400">
                         {formatDateTime(c.created_at)} • {originLabel(c.origin)}
                       </div>
-                      {/* 🔗 Lien rapide vers le back-office contacts */}
                       <div className="mt-1">
                         <Link
                           to="/admin/ouvrier-contacts"
