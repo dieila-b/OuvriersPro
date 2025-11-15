@@ -11,19 +11,26 @@ type DbWorker = {
   first_name: string | null;
   last_name: string | null;
   profession: string | null;
+  email: string | null;
+  phone: string | null;
+  country: string | null;
   region: string | null;
   city: string | null;
   commune: string | null;
   district: string | null;
-  phone: string | null;
-  email: string | null;
   years_experience: number | null;
   status: string | null;
   created_at: string;
+
+  // colonnes d’audit de validation / refus
+  validated_at?: string | null;
+  validated_by?: string | null;
+  rejected_at?: string | null;
+  rejected_by?: string | null;
+  rejection_reason?: string | null;
 };
 
-const statusOptions = ["pending", "approved", "rejected"] as const;
-type WorkerStatus = (typeof statusOptions)[number];
+type WorkerStatus = "pending" | "approved" | "rejected";
 
 const AdminOuvrierInscriptions: React.FC = () => {
   const { language } = useLanguage();
@@ -32,20 +39,27 @@ const AdminOuvrierInscriptions: React.FC = () => {
   // 🔐 Auth admin
   const [authLoading, setAuthLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [currentAdminId, setCurrentAdminId] = useState<string | null>(null);
 
+  // données
   const [workers, setWorkers] = useState<DbWorker[]>([]);
   const [loading, setLoading] = useState(false);
-  const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [statusFilter, setStatusFilter] = useState<WorkerStatus | "">("pending");
+  // filtres
+  const [statusFilter, setStatusFilter] = useState<WorkerStatus | "all">(
+    "pending"
+  );
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
-  // 🔹 Filtres de dates
-  const [dateFrom, setDateFrom] = useState<string>("");
-  const [dateTo, setDateTo] = useState<string>("");
+  // bouton en cours (pour désactiver Validé / Refusé pendant l’update)
+  const [savingId, setSavingId] = useState<string | null>(null);
 
-  // 🔐 Vérification admin (op_users.role = 'admin')
+  // ─────────────────────────────
+  // 1) Vérification des droits admin
+  // ─────────────────────────────
   useEffect(() => {
     let isMounted = true;
 
@@ -78,6 +92,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
       }
 
       setIsAdmin(true);
+      setCurrentAdminId(user.id);
       setAuthLoading(false);
     };
 
@@ -88,54 +103,90 @@ const AdminOuvrierInscriptions: React.FC = () => {
     };
   }, [navigate]);
 
-  // 🔹 Chargement des inscriptions
-  useEffect(() => {
+  // ─────────────────────────────
+  // 2) Chargement des inscriptions
+  // ─────────────────────────────
+  const loadWorkers = async () => {
     if (authLoading || !isAdmin) return;
 
-    const fetchWorkers = async () => {
-      setLoading(true);
-      setError(null);
+    setLoading(true);
+    setError(null);
 
-      const { data, error } = await supabase
-        .from<DbWorker>("op_ouvriers")
-        .select(
-          `
-          id,
-          first_name,
-          last_name,
-          profession,
-          region,
-          city,
-          commune,
-          district,
-          phone,
-          email,
-          years_experience,
-          status,
-          created_at
+    const { data, error } = await supabase
+      .from<DbWorker>("op_ouvriers")
+      .select(
         `
-        )
-        .order("created_at", { ascending: false });
+        id,
+        first_name,
+        last_name,
+        profession,
+        email,
+        phone,
+        country,
+        region,
+        city,
+        commune,
+        district,
+        years_experience,
+        status,
+        created_at,
+        validated_at,
+        validated_by,
+        rejected_at,
+        rejected_by,
+        rejection_reason
+      `
+      )
+      .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error(error);
-        setError(
-          language === "fr"
-            ? "Impossible de charger les demandes d'inscription."
-            : "Unable to load worker registrations."
-        );
-        setLoading(false);
-        return;
-      }
-
+    if (error) {
+      console.error(error);
+      setError(
+        language === "fr"
+          ? `Impossible de charger les inscriptions. (${error.message})`
+          : `Unable to load registrations. (${error.message})`
+      );
+    } else {
       setWorkers(data ?? []);
-      setLoading(false);
-    };
+    }
 
-    fetchWorkers();
-  }, [language, authLoading, isAdmin]);
+    setLoading(false);
+  };
 
-  const formatDate = (value: string) => {
+  useEffect(() => {
+    if (!authLoading && isAdmin) {
+      loadWorkers();
+    }
+  }, [authLoading, isAdmin, language]);
+
+  // ─────────────────────────────
+  // 3) Helpers
+  // ─────────────────────────────
+  const statusLabel = (s: string | null | undefined) => {
+    if (language === "fr") {
+      if (s === "approved") return "Validé";
+      if (s === "rejected") return "Refusé";
+      return "En attente";
+    } else {
+      if (s === "approved") return "Approved";
+      if (s === "rejected") return "Rejected";
+      return "Pending";
+    }
+  };
+
+  const statusBadgeClass = (s: string | null | undefined) => {
+    if (s === "approved")
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (s === "rejected")
+      return "bg-red-50 text-red-700 border-red-200";
+    return "bg-amber-50 text-amber-700 border-amber-200";
+  };
+
+  const fullName = (w: DbWorker) =>
+    `${w.first_name ?? ""} ${w.last_name ?? ""}`.trim() || "—";
+
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return "";
     const d = new Date(value);
     return d.toLocaleString(language === "fr" ? "fr-FR" : "en-GB", {
       year: "numeric",
@@ -146,32 +197,17 @@ const AdminOuvrierInscriptions: React.FC = () => {
     });
   };
 
-  const statusLabel = (s: string | null | undefined) => {
-    if (language === "fr") {
-      if (s === "approved") return "Validé";
-      if (s === "rejected") return "Refusé";
-      return "En attente";
-    }
-    if (s === "approved") return "Approved";
-    if (s === "rejected") return "Rejected";
-    return "Pending";
-  };
-
-  const statusColor = (s: string | null | undefined) => {
-    if (s === "approved") {
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    }
-    if (s === "rejected") {
-      return "bg-red-50 text-red-700 border-red-200";
-    }
-    return "bg-amber-50 text-amber-700 border-amber-200";
-  };
-
-  // 🔹 Filtrage (statut + recherche + dates)
+  // ─────────────────────────────
+  // 4) Filtrage
+  // ─────────────────────────────
   const filtered = useMemo(() => {
     return workers.filter((w) => {
-      const matchStatus = !statusFilter || w.status === statusFilter;
+      // statut
+      if (statusFilter !== "all") {
+        if ((w.status as WorkerStatus | null) !== statusFilter) return false;
+      }
 
+      // recherche texte
       const haystack =
         [
           w.first_name,
@@ -188,202 +224,205 @@ const AdminOuvrierInscriptions: React.FC = () => {
           .join(" ")
           .toLowerCase() || "";
 
-      const matchSearch =
-        !search || haystack.includes(search.trim().toLowerCase());
+      if (search && !haystack.includes(search.trim().toLowerCase())) {
+        return false;
+      }
 
+      // dates (sur created_at)
       const created = new Date(w.created_at);
+      let okFrom = true;
+      let okTo = true;
 
-      // Date from
       if (dateFrom) {
         const from = new Date(dateFrom + "T00:00:00");
-        if (created < from) return false;
+        okFrom = created >= from;
       }
-
-      // Date to
       if (dateTo) {
-        const to = new Date(dateTo + "T23:59:59.999");
-        if (created > to) return false;
+        const to = new Date(dateTo + "T23:59:59");
+        okTo = created <= to;
       }
 
-      return matchStatus && matchSearch;
+      return okFrom && okTo;
     });
   }, [workers, statusFilter, search, dateFrom, dateTo]);
 
-  const handleStatusChange = async (id: string, newStatus: WorkerStatus) => {
-    setSavingId(id);
+  // ─────────────────────────────
+  // 5) Actions : valider / refuser
+  // ─────────────────────────────
+  const handleApprove = async (w: DbWorker) => {
+    if (!currentAdminId) return;
+
+    setSavingId(w.id);
     setError(null);
+
+    const nowIso = new Date().toISOString();
 
     const { error } = await supabase
       .from("op_ouvriers")
-      .update({ status: newStatus })
-      .eq("id", id);
+      .update({
+        status: "approved",
+        validated_at: nowIso,
+        validated_by: currentAdminId,
+        rejected_at: null,
+        rejected_by: null,
+        rejection_reason: null,
+      })
+      .eq("id", w.id);
 
     if (error) {
       console.error(error);
       setError(
         language === "fr"
-          ? "Erreur lors de la mise à jour du statut."
-          : "Error while updating status."
+          ? `Erreur lors de la validation. (${error.message})`
+          : `Error while approving. (${error.message})`
       );
     } else {
       setWorkers((prev) =>
-        prev.map((w) => (w.id === id ? { ...w, status: newStatus } : w))
+        prev.map((x) =>
+          x.id === w.id
+            ? {
+                ...x,
+                status: "approved",
+                validated_at: nowIso,
+                validated_by: currentAdminId,
+                rejected_at: null,
+                rejected_by: null,
+                rejection_reason: null,
+              }
+            : x
+        )
       );
     }
 
     setSavingId(null);
   };
 
-  const text = {
-    title:
-      language === "fr"
-        ? "Inscriptions ouvriers"
-        : "Worker registrations",
-    subtitle:
-      language === "fr"
-        ? "Validez ou refusez les demandes d'adhésion des professionnels."
-        : "Approve or reject worker registration requests.",
-    statusFilter: language === "fr" ? "Statut" : "Status",
-    searchLabel: language === "fr" ? "Recherche" : "Search",
-    searchPlaceholder:
-      language === "fr"
-        ? "Rechercher (nom, métier, email, téléphone, ville...)"
-        : "Search (name, trade, email, phone, city...)",
-    allStatuses: language === "fr" ? "Tous les statuts" : "All statuses",
-    pending: language === "fr" ? "En attente" : "Pending",
-    approved: language === "fr" ? "Validé" : "Approved",
-    rejected: language === "fr" ? "Refusé" : "Rejected",
-    colDate: language === "fr" ? "Date" : "Date",
-    colWorker: language === "fr" ? "Ouvrier" : "Worker",
-    colContact: language === "fr" ? "Contact" : "Contact",
-    colLocation: language === "fr" ? "Localisation" : "Location",
-    colStatus: language === "fr" ? "Statut" : "Status",
-    colActions: language === "fr" ? "Actions" : "Actions",
-    empty:
-      language === "fr"
-        ? "Aucune demande d'inscription pour le moment."
-        : "No registration requests yet.",
-    refresh: language === "fr" ? "Rafraîchir" : "Refresh",
-    adminContacts:
-      language === "fr"
-        ? "Demandes de contact"
-        : "Contact requests",
-    adminInscriptions:
-      language === "fr"
-        ? "Inscriptions ouvriers"
-        : "Worker registrations",
-    dateFrom:
-      language === "fr" ? "Du (date de création)" : "From (creation date)",
-    dateTo:
-      language === "fr" ? "Au (date de création)" : "To (creation date)",
-    exportCsv:
-      language === "fr" ? "Exporter en CSV" : "Export CSV",
-  };
+  const handleReject = async (w: DbWorker) => {
+    if (!currentAdminId) return;
 
-  const refresh = async () => {
-    if (authLoading || !isAdmin) return;
+    // petite boîte de dialogue pour la raison
+    const reason = window.prompt(
+      language === "fr"
+        ? "Motif du refus (optionnel) :"
+        : "Rejection reason (optional):",
+      w.rejection_reason ?? ""
+    );
 
-    setLoading(true);
+    setSavingId(w.id);
     setError(null);
 
-    const { data, error } = await supabase
-      .from<DbWorker>("op_ouvriers")
-      .select(
-        `
-        id,
-        first_name,
-        last_name,
-        profession,
-        region,
-        city,
-        commune,
-        district,
-        phone,
-        email,
-        years_experience,
-        status,
-        created_at
-      `
-      )
-      .order("created_at", { ascending: false });
+    const nowIso = new Date().toISOString();
+
+    const { error } = await supabase
+      .from("op_ouvriers")
+      .update({
+        status: "rejected",
+        rejected_at: nowIso,
+        rejected_by: currentAdminId,
+        rejection_reason: reason || null,
+        validated_at: null,
+        validated_by: null,
+      })
+      .eq("id", w.id);
 
     if (error) {
       console.error(error);
       setError(
         language === "fr"
-          ? "Impossible de rafraîchir les données."
-          : "Unable to refresh data."
+          ? `Erreur lors du refus. (${error.message})`
+          : `Error while rejecting. (${error.message})`
       );
     } else {
-      setWorkers(data ?? []);
+      setWorkers((prev) =>
+        prev.map((x) =>
+          x.id === w.id
+            ? {
+                ...x,
+                status: "rejected",
+                rejected_at: nowIso,
+                rejected_by: currentAdminId,
+                rejection_reason: reason || null,
+                validated_at: null,
+                validated_by: null,
+              }
+            : x
+        )
+      );
     }
 
-    setLoading(false);
+    setSavingId(null);
   };
 
-  // 🔹 Export CSV des lignes filtrées
+  // ─────────────────────────────
+  // 6) Export CSV (période filtrée)
+  // ─────────────────────────────
   const exportCsv = () => {
     if (!filtered.length) return;
 
-    const header = [
+    const escapeCsv = (v: string | null | undefined) =>
+      `"${(v ?? "").replace(/"/g, '""')}"`;
+
+    const headers = [
       "id",
       "created_at",
       "status",
       "first_name",
       "last_name",
       "profession",
+      "email",
+      "phone",
       "region",
       "city",
       "commune",
       "district",
-      "email",
-      "phone",
       "years_experience",
+      "validated_at",
+      "validated_by",
+      "rejected_at",
+      "rejected_by",
+      "rejection_reason",
     ];
 
-    const rows = filtered.map((w) => [
-      w.id,
-      w.created_at,
-      w.status ?? "",
-      w.first_name ?? "",
-      w.last_name ?? "",
-      w.profession ?? "",
-      w.region ?? "",
-      w.city ?? "",
-      w.commune ?? "",
-      w.district ?? "",
-      w.email ?? "",
-      w.phone ?? "",
-      w.years_experience?.toString() ?? "",
-    ]);
+    const rows = filtered.map((w) =>
+      [
+        w.id,
+        w.created_at,
+        w.status ?? "",
+        w.first_name ?? "",
+        w.last_name ?? "",
+        w.profession ?? "",
+        w.email ?? "",
+        w.phone ?? "",
+        w.region ?? "",
+        w.city ?? "",
+        w.commune ?? "",
+        w.district ?? "",
+        w.years_experience?.toString() ?? "",
+        w.validated_at ?? "",
+        w.validated_by ?? "",
+        w.rejected_at ?? "",
+        w.rejected_by ?? "",
+        w.rejection_reason ?? "",
+      ].map(escapeCsv)
+    );
 
-    const csvLines = [
-      header.join(";"),
-      ...rows.map((r) =>
-        r
-          .map((cell) => {
-            const safe = cell.replace(/"/g, '""');
-            return `"${safe}"`;
-          })
-          .join(";")
-      ),
-    ];
+    const csv =
+      headers.join(";") + "\n" + rows.map((r) => r.join(";")).join("\n");
 
-    const blob = new Blob([csvLines.join("\n")], {
-      type: "text/csv;charset=utf-8;",
-    });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    const filename =
-      language === "fr"
-        ? "inscriptions_ouvriers.csv"
-        : "worker_registrations.csv";
-    a.download = filename;
+    a.download = "ouvriers_inscriptions.csv";
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
+  // ─────────────────────────────
+  // 7) Rendu
+  // ─────────────────────────────
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -396,28 +435,76 @@ const AdminOuvrierInscriptions: React.FC = () => {
     );
   }
 
-  if (!isAdmin) {
-    return null;
-  }
+  if (!isAdmin) return null;
+
+  const text = {
+    title:
+      language === "fr"
+        ? "Inscriptions ouvriers"
+        : "Worker registrations",
+    subtitle:
+      language === "fr"
+        ? "Validez ou refusez les demandes d'adhésion des professionnels."
+        : "Approve or reject worker registration requests.",
+    tabContacts:
+      language === "fr" ? "Demandes de contact" : "Contact requests",
+    tabWorkers:
+      language === "fr" ? "Inscriptions ouvriers" : "Worker registrations",
+    statusFilter: language === "fr" ? "Statut" : "Status",
+    searchLabel: language === "fr" ? "Recherche" : "Search",
+    dateFrom:
+      language === "fr" ? "Du (date de création)" : "From (created at)",
+    dateTo:
+      language === "fr" ? "Au (date de création)" : "To (created at)",
+    colDate: language === "fr" ? "Date" : "Date",
+    colWorker: language === "fr" ? "Ouvrier" : "Worker",
+    colContact: language === "fr" ? "Contact" : "Contact",
+    colLocation: language === "fr" ? "Localisation" : "Location",
+    colStatus: language === "fr" ? "Statut" : "Status",
+    colActions: language === "fr" ? "Actions" : "Actions",
+    filterPending: language === "fr" ? "En attente" : "Pending",
+    filterApproved: language === "fr" ? "Validé" : "Approved",
+    filterRejected: language === "fr" ? "Refusé" : "Rejected",
+    filterAll: language === "fr" ? "Tous" : "All",
+    searchPlaceholder:
+      language === "fr"
+        ? "Rechercher (nom, métier, email, téléphone...)"
+        : "Search (name, job, email, phone...)",
+    refresh: language === "fr" ? "Rafraîchir" : "Refresh",
+    exportCsv: language === "fr" ? "Exporter en CSV" : "Export CSV",
+    validate: language === "fr" ? "Validé" : "Approve",
+    reject: language === "fr" ? "Refusé" : "Reject",
+    noData:
+      language === "fr"
+        ? "Aucune demande d'inscription pour le moment."
+        : "No registration request yet.",
+    experience:
+      language === "fr"
+        ? "ans d'expérience"
+        : "years of experience",
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 py-10">
       <div className="max-w-6xl mx-auto px-4 md:px-8">
-        {/* Mini navigation admin */}
-        <div className="flex items-center gap-2 mb-4">
+        {/* Onglets haut : contacts / inscriptions */}
+        <div className="flex items-center gap-3 mb-6">
           <Link
             to="/admin/ouvrier-contacts"
-            className="text-xs px-3 py-1.5 rounded-full border border-slate-300 text-slate-700 bg-white hover:bg-slate-50"
+            className="px-4 py-2 rounded-full text-sm border border-slate-200 text-slate-600 bg-white hover:bg-slate-50"
           >
-            {text.adminContacts}
+            {text.tabContacts}
           </Link>
-          <span className="text-xs px-3 py-1.5 rounded-full bg-pro-blue text-white">
-            {text.adminInscriptions}
-          </span>
+          <button
+            type="button"
+            className="px-4 py-2 rounded-full text-sm font-medium bg-pro-blue text-white shadow-sm"
+          >
+            {text.tabWorkers}
+          </button>
         </div>
 
-        {/* Header + actions */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+        {/* Header + actions globales */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
               {text.title}
@@ -426,14 +513,14 @@ const AdminOuvrierInscriptions: React.FC = () => {
               {text.subtitle}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span>
               {filtered.length} / {workers.length}
             </span>
             <Button
               variant="outline"
               size="sm"
-              onClick={refresh}
+              onClick={loadWorkers}
               disabled={loading}
             >
               {text.refresh}
@@ -442,7 +529,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={exportCsv}
-              disabled={loading || filtered.length === 0}
+              disabled={!filtered.length}
             >
               {text.exportCsv}
             </Button>
@@ -450,9 +537,8 @@ const AdminOuvrierInscriptions: React.FC = () => {
         </div>
 
         {/* Filtres */}
-        <div className="flex flex-col md:grid md:grid-cols-4 gap-3 mb-6">
-          {/* Statut */}
-          <div className="md:col-span-1">
+        <div className="flex flex-col md:flex-row gap-3 mb-6">
+          <div className="md:w-1/4">
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.statusFilter}
             </label>
@@ -461,15 +547,14 @@ const AdminOuvrierInscriptions: React.FC = () => {
               onChange={(e) => setStatusFilter(e.target.value as any)}
               className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pro-blue"
             >
-              <option value="">{text.allStatuses}</option>
-              <option value="pending">{text.pending}</option>
-              <option value="approved">{text.approved}</option>
-              <option value="rejected">{text.rejected}</option>
+              <option value="pending">{text.filterPending}</option>
+              <option value="approved">{text.filterApproved}</option>
+              <option value="rejected">{text.filterRejected}</option>
+              <option value="all">{text.filterAll}</option>
             </select>
           </div>
 
-          {/* Recherche texte */}
-          <div className="md:col-span-1">
+          <div className="flex-1">
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.searchLabel}
             </label>
@@ -481,8 +566,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
             />
           </div>
 
-          {/* Date du */}
-          <div className="md:col-span-1">
+          <div className="md:w-1/4">
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.dateFrom}
             </label>
@@ -494,8 +578,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
             />
           </div>
 
-          {/* Date au */}
-          <div className="md:col-span-1">
+          <div className="md>w-1/4">
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.dateTo}
             </label>
@@ -508,7 +591,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
           </div>
         </div>
 
-        {/* Table */}
+        {/* Tableau */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -541,7 +624,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
                       colSpan={6}
                       className="px-4 py-6 text-center text-slate-500 text-sm"
                     >
-                      {text.empty}
+                      {text.noData}
                     </td>
                   </tr>
                 )}
@@ -559,10 +642,8 @@ const AdminOuvrierInscriptions: React.FC = () => {
 
                 {!loading &&
                   filtered.map((w) => {
-                    const fullName = `${w.first_name ?? ""} ${
-                      w.last_name ?? ""
-                    }`.trim();
-                    const location = [
+                    const locationParts = [
+                      w.country,
                       w.region,
                       w.city,
                       w.commune,
@@ -577,24 +658,23 @@ const AdminOuvrierInscriptions: React.FC = () => {
                         className="border-t border-slate-100 hover:bg-slate-50/60"
                       >
                         <td className="px-4 py-3 align-top text-slate-700 whitespace-nowrap">
-                          {formatDate(w.created_at)}
+                          {formatDateTime(w.created_at)}
                         </td>
+
                         <td className="px-4 py-3 align-top text-slate-800">
                           <div className="font-semibold">
-                            {fullName || "—"}
+                            {fullName(w)}
                           </div>
                           <div className="text-xs text-slate-500">
                             {w.profession || ""}
                           </div>
                           {w.years_experience != null && (
                             <div className="text-xs text-slate-500">
-                              {w.years_experience}{" "}
-                              {language === "fr"
-                                ? "ans d'expérience"
-                                : "years of experience"}
+                              {w.years_experience} {text.experience}
                             </div>
                           )}
                         </td>
+
                         <td className="px-4 py-3 align-top text-slate-800">
                           <div className="text-xs text-slate-500">
                             {w.email || "—"}
@@ -603,41 +683,69 @@ const AdminOuvrierInscriptions: React.FC = () => {
                             {w.phone || ""}
                           </div>
                         </td>
+
                         <td className="px-4 py-3 align-top text-slate-700">
-                          <div className="text-xs">{location || "—"}</div>
+                          <div className="text-xs text-slate-500">
+                            {locationParts || "—"}
+                          </div>
                         </td>
+
+                        {/* 🟡 Statut + infos de validation / refus */}
                         <td className="px-4 py-3 align-top">
                           <span
-                            className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusColor(
+                            className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusBadgeClass(
                               w.status
                             )}`}
                           >
                             {statusLabel(w.status)}
                           </span>
+
+                          {w.validated_at && (
+                            <div className="mt-1 text-[11px] text-slate-500">
+                              {language === "fr"
+                                ? "Validé le "
+                                : "Approved on "}
+                              {formatDateTime(w.validated_at)}
+                            </div>
+                          )}
+
+                          {w.rejected_at && (
+                            <div className="mt-1 text-[11px] text-slate-500">
+                              {language === "fr"
+                                ? "Refusé le "
+                                : "Rejected on "}
+                              {formatDateTime(w.rejected_at)}
+                              {w.rejection_reason &&
+                                ` – ${w.rejection_reason}`}
+                            </div>
+                          )}
                         </td>
-                        <td className="px-4 py-3 align-top text-right space-x-1">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={savingId === w.id}
-                            onClick={() =>
-                              handleStatusChange(w.id, "approved")
-                            }
-                            className="text-xs"
-                          >
-                            {text.approved}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={savingId === w.id}
-                            onClick={() =>
-                              handleStatusChange(w.id, "rejected")
-                            }
-                            className="text-xs border-red-300 text-red-700 hover:bg-red-50"
-                          >
-                            {text.rejected}
-                          </Button>
+
+                        {/* Actions */}
+                        <td className="px-4 py-3 align-top text-right">
+                          <div className="inline-flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={
+                                savingId === w.id || w.status === "approved"
+                              }
+                              onClick={() => handleApprove(w)}
+                            >
+                              {text.validate}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-red-300 text-red-600 hover:bg-red-50"
+                              disabled={
+                                savingId === w.id || w.status === "rejected"
+                              }
+                              onClick={() => handleReject(w)}
+                            >
+                              {text.reject}
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );
