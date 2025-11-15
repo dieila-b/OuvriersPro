@@ -147,7 +147,6 @@ const WorkerDashboard: React.FC = () => {
         );
         setWorker(null);
       } else if (!workerRow) {
-        // Aucun profil ouvrier : on peut proposer de retourner vers l'inscription
         setError(
           language === "fr"
             ? "Aucun profil ouvrier trouvé. Merci de compléter votre inscription."
@@ -201,7 +200,7 @@ const WorkerDashboard: React.FC = () => {
 
     if (planCode === "MONTHLY") {
       return {
-        code: "MONTHLY",
+        code: "MONTHLY" as const,
         label: language === "fr" ? "Mensuel" : "Monthly",
         badge: language === "fr" ? "Sans engagement" : "No commitment",
         description:
@@ -212,7 +211,7 @@ const WorkerDashboard: React.FC = () => {
     }
     if (planCode === "YEARLY") {
       return {
-        code: "YEARLY",
+        code: "YEARLY" as const,
         label: language === "fr" ? "Annuel" : "Yearly",
         badge: language === "fr" ? "2 mois offerts" : "2 months free",
         description:
@@ -222,7 +221,7 @@ const WorkerDashboard: React.FC = () => {
       };
     }
     return {
-      code: "FREE",
+      code: "FREE" as const,
       label: language === "fr" ? "Gratuit" : "Free",
       badge:
         language === "fr"
@@ -267,7 +266,7 @@ const WorkerDashboard: React.FC = () => {
     setSaving(true);
     setError(null);
 
-    try:
+    try {
       const hourlyRateTrim = editForm.hourlyRate.trim();
       let hourlyRateNumber: number | null = null;
       if (hourlyRateTrim !== "") {
