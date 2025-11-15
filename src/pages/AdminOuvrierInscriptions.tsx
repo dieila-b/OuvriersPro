@@ -29,6 +29,7 @@ type DbWorker = {
   rejected_at: string | null;
   rejected_by: string | null;
   rejection_reason: string | null;
+  plan_code: string | null; // ✅ plan souscrit (free / monthly / yearly ...)
 };
 
 type WorkerStatus = "pending" | "approved" | "rejected";
@@ -130,7 +131,8 @@ const AdminOuvrierInscriptions: React.FC = () => {
           validated_by,
           rejected_at,
           rejected_by,
-          rejection_reason
+          rejection_reason,
+          plan_code
         `
         )
         .order("created_at", { ascending: false });
@@ -171,6 +173,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
           w.district,
           w.region,
           w.country,
+          w.plan_code,
         ]
           .filter(Boolean)
           .join(" ")
@@ -225,6 +228,35 @@ const AdminOuvrierInscriptions: React.FC = () => {
     if (s === "rejected")
       return "bg-red-50 text-red-700 border-red-200";
     return "bg-amber-50 text-amber-700 border-amber-200";
+  };
+
+  // ✅ label & style des plans (Gratuit / Mensuel / Annuel)
+  const planLabel = (code: string | null | undefined) => {
+    const c = code?.toLowerCase() || "";
+    if (["free", "gratuit"].includes(c)) {
+      return language === "fr" ? "Gratuit" : "Free";
+    }
+    if (["monthly", "mensuel", "month"].includes(c)) {
+      return language === "fr" ? "Mensuel" : "Monthly";
+    }
+    if (["yearly", "annuel", "annual"].includes(c)) {
+      return language === "fr" ? "Annuel" : "Yearly";
+    }
+    return language === "fr" ? "—" : "—";
+  };
+
+  const planBadgeClass = (code: string | null | undefined) => {
+    const c = code?.toLowerCase() || "";
+    if (["free", "gratuit"].includes(c)) {
+      return "bg-slate-50 text-slate-700 border-slate-200";
+    }
+    if (["monthly", "mensuel", "month"].includes(c)) {
+      return "bg-blue-50 text-blue-700 border-blue-200";
+    }
+    if (["yearly", "annuel", "annual"].includes(c)) {
+      return "bg-indigo-50 text-indigo-700 border-indigo-200";
+    }
+    return "bg-slate-50 text-slate-400 border-slate-200";
   };
 
   // ✅ Validation + toast
@@ -403,7 +435,8 @@ const AdminOuvrierInscriptions: React.FC = () => {
         validated_by,
         rejected_at,
         rejected_by,
-        rejection_reason
+        rejection_reason,
+        plan_code
       `
       )
       .order("created_at", { ascending: false });
@@ -445,6 +478,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
       "id",
       "created_at",
       "status",
+      "plan_code",
       "first_name",
       "last_name",
       "email",
@@ -468,6 +502,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
         w.id,
         w.created_at,
         w.status ?? "",
+        w.plan_code ?? "",
         w.first_name ?? "",
         w.last_name ?? "",
         w.email ?? "",
@@ -543,6 +578,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
     colContact: language === "fr" ? "Contact" : "Contact",
     colLocation: language === "fr" ? "Localisation" : "Location",
     colStatus: language === "fr" ? "Statut" : "Status",
+    colPlan: language === "fr" ? "Formule" : "Plan",
     colActions: language === "fr" ? "Actions" : "Actions",
     empty:
       language === "fr"
@@ -571,11 +607,11 @@ const AdminOuvrierInscriptions: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 py-10">
       <div className="max-w-6xl mx-auto px-4 md:px-8">
-        {/* Menu admin (contacts / inscriptions / retour site) */}
+        {/* Menu admin (tabs + retour site) */}
         <AdminNavTabs />
 
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4 mt-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
               {text.title}
@@ -609,7 +645,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
 
         {/* Filtres */}
         <div className="flex flex-col md:flex-row gap-3 mb-6">
-          <div className="md:w-1/4">
+          <div className="md:w-1/5">
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.statusFilter}
             </label>
@@ -635,7 +671,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
             </select>
           </div>
 
-          <div className="md:w-1/4">
+          <div className="md:w-1/5">
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.dateFrom}
             </label>
@@ -647,7 +683,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
             />
           </div>
 
-          <div className="md:w-1/4">
+          <div className="md:w-1/5">
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.dateTo}
             </label>
@@ -691,6 +727,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
                     {text.colLocation}
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">
+                    {text.colPlan}
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">
                     {text.colStatus}
                   </th>
                   <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">
@@ -702,7 +741,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
                 {filtered.length === 0 && !loading && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-4 py-6 text-center text-slate-500 text-sm"
                     >
                       {text.empty}
@@ -713,7 +752,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
                 {loading && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-4 py-6 text-center text-slate-500 text-sm"
                     >
                       {language === "fr" ? "Chargement..." : "Loading..."}
@@ -774,6 +813,17 @@ const AdminOuvrierInscriptions: React.FC = () => {
                             {locationParts || "—"}
                           </div>
                         </td>
+                        {/* Formule */}
+                        <td className="px-4 py-3 align-top">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${planBadgeClass(
+                              w.plan_code
+                            )}`}
+                          >
+                            {planLabel(w.plan_code)}
+                          </span>
+                        </td>
+                        {/* Statut */}
                         <td className="px-4 py-3 align-top">
                           <span
                             className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusBadgeClass(
@@ -783,7 +833,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
                             {statusLabel(w.status)}
                           </span>
 
-                          {/* ✅ Infos qui a validé / refusé */}
+                          {/* Infos qui a validé / refusé */}
                           {w.validated_at && (
                             <div className="mt-1 text-[11px] text-slate-500">
                               {language === "fr"
