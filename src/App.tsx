@@ -6,16 +6,20 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 
+// Pages publiques
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
-import InscriptionOuvrier from "./pages/InscriptionOuvrier";
 import WorkerDetail from "./pages/WorkerDetail";
-import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
-import AdminOuvrierInscriptions from "./pages/AdminOuvrierInscriptions";
+import InscriptionOuvrier from "./pages/InscriptionOuvrier";
 import Login from "./pages/Login";
 
-// ⭐ Nouveau : import du Dashboard Admin
+// Back-office Admin
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
+import AdminOuvrierInscriptions from "./pages/AdminOuvrierInscriptions";
+
+// Espace ouvrier connecté
+import WorkerDashboard from "./pages/WorkerDashboard";
 
 const queryClient = new QueryClient();
 
@@ -25,39 +29,43 @@ const App = () => (
       <LanguageProvider>
         <Toaster />
         <Sonner />
+
         <BrowserRouter>
           <Routes>
-            {/* Page d'accueil */}
+            {/* 🏠 Page d'accueil */}
             <Route path="/" element={<Index />} />
 
-            {/* Connexion Admin */}
+            {/* 🔐 Connexion */}
             <Route path="/login" element={<Login />} />
 
-            {/* Page d'inscription des ouvriers */}
+            {/* 📝 Inscription ouvrier */}
             <Route
               path="/inscription-ouvrier"
               element={<InscriptionOuvrier />}
             />
 
-            {/* Fiche détaillée ouvrier */}
+            {/* 👤 Fiche détaillée ouvrier */}
             <Route path="/ouvrier/:id" element={<WorkerDetail />} />
 
-            {/* Back-office : Dashboard admin */}
+            {/* 👷‍♂️ Espace Worker connecté */}
+            <Route path="/espace-ouvrier" element={<WorkerDashboard />} />
+
+            {/* 🛠️ Admin : Dashboard */}
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
 
-            {/* Back-office : demandes de contact */}
+            {/* 🛠️ Admin : demandes de contact */}
             <Route
               path="/admin/ouvrier-contacts"
               element={<AdminOuvrierContacts />}
             />
 
-            {/* Back-office : inscriptions ouvriers */}
+            {/* 🛠️ Admin : inscriptions ouvriers */}
             <Route
               path="/admin/ouvriers"
               element={<AdminOuvrierInscriptions />}
             />
 
-            {/* Catch-all 404 */}
+            {/* ❌ Page 404 */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
