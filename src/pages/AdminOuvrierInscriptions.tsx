@@ -41,6 +41,10 @@ const AdminOuvrierInscriptions: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<WorkerStatus | "">("pending");
   const [search, setSearch] = useState("");
 
+  // 🔹 Filtres de dates
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+
   // 🔐 Vérification admin (op_users.role = 'admin')
   useEffect(() => {
     let isMounted = true;
@@ -131,33 +135,6 @@ const AdminOuvrierInscriptions: React.FC = () => {
     fetchWorkers();
   }, [language, authLoading, isAdmin]);
 
-  const filtered = useMemo(() => {
-    return workers.filter((w) => {
-      const matchStatus = !statusFilter || w.status === statusFilter;
-
-      const haystack =
-        [
-          w.first_name,
-          w.last_name,
-          w.profession,
-          w.email,
-          w.phone,
-          w.region,
-          w.city,
-          w.commune,
-          w.district,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase() || "";
-
-      const matchSearch =
-        !search || haystack.includes(search.trim().toLowerCase());
-
-      return matchStatus && matchSearch;
-    });
-  }, [workers, statusFilter, search]);
-
   const formatDate = (value: string) => {
     const d = new Date(value);
     return d.toLocaleString(language === "fr" ? "fr-FR" : "en-GB", {
@@ -189,6 +166,48 @@ const AdminOuvrierInscriptions: React.FC = () => {
     }
     return "bg-amber-50 text-amber-700 border-amber-200";
   };
+
+  // 🔹 Filtrage (statut + recherche + dates)
+  const filtered = useMemo(() => {
+    return workers.filter((w) => {
+      const matchStatus = !statusFilter || w.status === statusFilter;
+
+      const haystack =
+        [
+          w.first_name,
+          w.last_name,
+          w.profession,
+          w.email,
+          w.phone,
+          w.region,
+          w.city,
+          w.commune,
+          w.district,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase() || "";
+
+      const matchSearch =
+        !search || haystack.includes(search.trim().toLowerCase());
+
+      const created = new Date(w.created_at);
+
+      // Date from
+      if (dateFrom) {
+        const from = new Date(dateFrom + "T00:00:00");
+        if (created < from) return false;
+      }
+
+      // Date to
+      if (dateTo) {
+        const to = new Date(dateTo + "T23:59:59.999");
+        if (created > to) return false;
+      }
+
+      return matchStatus && matchSearch;
+    });
+  }, [workers, statusFilter, search, dateFrom, dateTo]);
 
   const handleStatusChange = async (id: string, newStatus: WorkerStatus) => {
     setSavingId(id);
@@ -253,6 +272,12 @@ const AdminOuvrierInscriptions: React.FC = () => {
       language === "fr"
         ? "Inscriptions ouvriers"
         : "Worker registrations",
+    dateFrom:
+      language === "fr" ? "Du (date de création)" : "From (creation date)",
+    dateTo:
+      language === "fr" ? "Au (date de création)" : "To (creation date)",
+    exportCsv:
+      language === "fr" ? "Exporter en CSV" : "Export CSV",
   };
 
   const refresh = async () => {
@@ -296,6 +321,69 @@ const AdminOuvrierInscriptions: React.FC = () => {
     setLoading(false);
   };
 
+  // 🔹 Export CSV des lignes filtrées
+  const exportCsv = () => {
+    if (!filtered.length) return;
+
+    const header = [
+      "id",
+      "created_at",
+      "status",
+      "first_name",
+      "last_name",
+      "profession",
+      "region",
+      "city",
+      "commune",
+      "district",
+      "email",
+      "phone",
+      "years_experience",
+    ];
+
+    const rows = filtered.map((w) => [
+      w.id,
+      w.created_at,
+      w.status ?? "",
+      w.first_name ?? "",
+      w.last_name ?? "",
+      w.profession ?? "",
+      w.region ?? "",
+      w.city ?? "",
+      w.commune ?? "",
+      w.district ?? "",
+      w.email ?? "",
+      w.phone ?? "",
+      w.years_experience?.toString() ?? "",
+    ]);
+
+    const csvLines = [
+      header.join(";"),
+      ...rows.map((r) =>
+        r
+          .map((cell) => {
+            const safe = cell.replace(/"/g, '""');
+            return `"${safe}"`;
+          })
+          .join(";")
+      ),
+    ];
+
+    const blob = new Blob([csvLines.join("\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const filename =
+      language === "fr"
+        ? "inscriptions_ouvriers.csv"
+        : "worker_registrations.csv";
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -328,7 +416,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
           </span>
         </div>
 
-        {/* Header */}
+        {/* Header + actions */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
@@ -350,12 +438,21 @@ const AdminOuvrierInscriptions: React.FC = () => {
             >
               {text.refresh}
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportCsv}
+              disabled={loading || filtered.length === 0}
+            >
+              {text.exportCsv}
+            </Button>
           </div>
         </div>
 
         {/* Filtres */}
-        <div className="flex flex-col md:flex-row gap-3 mb-6">
-          <div className="md:w-1/3">
+        <div className="flex flex-col md:grid md:grid-cols-4 gap-3 mb-6">
+          {/* Statut */}
+          <div className="md:col-span-1">
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.statusFilter}
             </label>
@@ -371,7 +468,8 @@ const AdminOuvrierInscriptions: React.FC = () => {
             </select>
           </div>
 
-          <div className="flex-1">
+          {/* Recherche texte */}
+          <div className="md:col-span-1">
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.searchLabel}
             </label>
@@ -379,6 +477,32 @@ const AdminOuvrierInscriptions: React.FC = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={text.searchPlaceholder}
+              className="text-sm"
+            />
+          </div>
+
+          {/* Date du */}
+          <div className="md:col-span-1">
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              {text.dateFrom}
+            </label>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="text-sm"
+            />
+          </div>
+
+          {/* Date au */}
+          <div className="md:col-span-1">
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              {text.dateTo}
+            </label>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
               className="text-sm"
             />
           </div>
@@ -450,7 +574,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
                     return (
                       <tr
                         key={w.id}
-                        className="border-top border-slate-100 hover:bg-slate-50/60"
+                        className="border-t border-slate-100 hover:bg-slate-50/60"
                       >
                         <td className="px-4 py-3 align-top text-slate-700 whitespace-nowrap">
                           {formatDate(w.created_at)}
