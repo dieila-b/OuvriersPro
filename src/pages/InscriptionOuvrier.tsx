@@ -483,7 +483,7 @@ const InscriptionOuvrier: React.FC = () => {
         id: user.id,
         role: "worker",
         full_name: fullNameForUser,
-        avatar_url: avatarUrl,
+        // ⚠️ pas de avatar_url ici, la colonne n'existe pas dans op_users
       });
 
       if (opUserError) {
