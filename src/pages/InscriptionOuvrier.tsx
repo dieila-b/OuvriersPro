@@ -475,7 +475,23 @@ const InscriptionOuvrier: React.FC = () => {
         }
       }
 
-      // 3) Insert profil ouvrier
+      // 3) Synchroniser op_users (nécessaire pour la FK op_ouvriers.user_id → op_users.id)
+      const fullNameForUser =
+        `${form.firstName} ${form.lastName}`.trim() || email;
+
+      const { error: opUserError } = await supabase.from("op_users").upsert({
+        id: user.id,
+        role: "worker",
+        full_name: fullNameForUser,
+        avatar_url: avatarUrl,
+      });
+
+      if (opUserError) {
+        console.error("Erreur lors de la création dans op_users:", opUserError);
+        throw opUserError;
+      }
+
+      // 4) Insert profil ouvrier
       const hourlyRateTrim = form.hourlyRate.trim();
       let hourlyRateNumber: number | null = null;
 
@@ -507,8 +523,6 @@ const InscriptionOuvrier: React.FC = () => {
         currency: currency.code,
         avatar_url: avatarUrl,
         created_at: new Date().toISOString(),
-
-        // Nouveau : paiement
         payment_status: isFreePlan ? "paid" : "unpaid",
         payment_provider: isFreePlan ? "free_plan" : null,
         payment_reference: null,
@@ -671,14 +685,15 @@ const InscriptionOuvrier: React.FC = () => {
                       )
                     ) : plan === "FREE" ? (
                       <>
-                        Your registration to the <strong>Free</strong> plan has been saved.
+                        Your registration to the <strong>Free</strong> plan has been
+                        saved.
                         <br />
                         Your profile will be reviewed by an administrator.
                       </>
                     ) : (
                       <>
-                        Your registration to the <strong>{planMeta.label}</strong> plan has
-                        been saved.
+                        Your registration to the <strong>{planMeta.label}</strong> plan
+                        has been saved.
                         <br />
                         Please proceed to payment to finalize your registration. Your
                         profile will only be validated after payment confirmation.
