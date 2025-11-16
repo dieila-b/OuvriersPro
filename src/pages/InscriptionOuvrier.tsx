@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 type PlanCode = "FREE" | "MONTHLY" | "YEARLY";
+type PaymentMethod = "" | "card" | "paypal" | "mobile_money" | "google_pay";
 
 interface WorkerFormState {
   firstName: string;
@@ -288,6 +289,10 @@ const InscriptionOuvrier: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // 💳 Paiement pour les plans payants
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("");
+  const [paymentCompleted, setPaymentCompleted] = useState(false);
+
   const planMeta = useMemo(() => {
     if (plan === "MONTHLY") {
       return {
@@ -360,6 +365,24 @@ const InscriptionOuvrier: React.FC = () => {
     setProfileFile(file);
   };
 
+  const handleSimulatePayment = () => {
+    if (plan === "FREE") return;
+
+    if (!paymentMethod) {
+      setError(
+        language === "fr"
+          ? "Veuillez choisir un moyen de paiement."
+          : "Please select a payment method."
+      );
+      return;
+    }
+
+    // Ici on simule la réussite du paiement.
+    // Plus tard, tu pourras remplacer par l’appel réel vers Stripe / PayPal / Mobile Money.
+    setPaymentCompleted(true);
+    setError(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -388,6 +411,29 @@ const InscriptionOuvrier: React.FC = () => {
         );
         setLoading(false);
         return;
+      }
+
+      // 💳 Vérifications paiement pour les plans payants
+      const isPaidPlan = plan === "MONTHLY" || plan === "YEARLY";
+      if (isPaidPlan) {
+        if (!paymentMethod) {
+          setError(
+            language === "fr"
+              ? "Veuillez choisir un moyen de paiement."
+              : "Please select a payment method."
+          );
+          setLoading(false);
+          return;
+        }
+        if (!paymentCompleted) {
+          setError(
+            language === "fr"
+              ? "Merci de cliquer sur « Procéder au paiement » pour finaliser le règlement avant de valider votre inscription."
+              : "Please click on “Proceed to payment” to complete the payment before submitting your registration."
+          );
+          setLoading(false);
+          return;
+        }
       }
 
       // 0) Vérifier s'il existe déjà un profil ouvrier avec cet email
@@ -475,7 +521,7 @@ const InscriptionOuvrier: React.FC = () => {
         }
       }
 
-      // 3) Synchroniser op_users (nécessaire pour la FK op_ouvriers.user_id → op_users.id)
+      // 3) Synchroniser op_users (FK op_ouvriers.user_id → op_users.id)
       const fullNameForUser =
         `${form.firstName} ${form.lastName}`.trim() || email;
 
@@ -483,7 +529,6 @@ const InscriptionOuvrier: React.FC = () => {
         id: user.id,
         role: "worker",
         full_name: fullNameForUser,
-        // ⚠️ pas de avatar_url ici, la colonne n'existe pas dans op_users
       });
 
       if (opUserError) {
@@ -500,8 +545,8 @@ const InscriptionOuvrier: React.FC = () => {
         hourlyRateNumber = Number.isFinite(parsed) ? parsed : null;
       }
 
-      // 💳 Gestion paiement selon le plan : FREE = payé d’avance, autres = en attente
       const isFreePlan = plan === "FREE";
+      const isPaymentReallyPaid = isFreePlan || paymentCompleted;
 
       const { error: insertError } = await supabase.from("op_ouvriers").insert({
         user_id: user.id,
@@ -523,10 +568,10 @@ const InscriptionOuvrier: React.FC = () => {
         currency: currency.code,
         avatar_url: avatarUrl,
         created_at: new Date().toISOString(),
-        payment_status: isFreePlan ? "paid" : "unpaid",
-        payment_provider: isFreePlan ? "free_plan" : null,
+        payment_status: isPaymentReallyPaid ? "paid" : "unpaid",
+        payment_provider: isPaymentReallyPaid ? paymentMethod || "free_plan" : null,
         payment_reference: null,
-        payment_at: isFreePlan ? new Date().toISOString() : null,
+        payment_at: isPaymentReallyPaid ? new Date().toISOString() : null,
       });
 
       if (insertError) throw insertError;
@@ -549,6 +594,8 @@ const InscriptionOuvrier: React.FC = () => {
         hourlyRate: "",
       });
       setProfileFile(null);
+      setPaymentMethod("");
+      setPaymentCompleted(false);
     } catch (err: any) {
       console.error(err);
       setError(
@@ -575,6 +622,9 @@ const InscriptionOuvrier: React.FC = () => {
     { code: "GB", label: "Royaume-Uni" },
     { code: "US", label: "États-Unis" },
   ];
+
+  const canSubmit =
+    !loading && (plan === "FREE" || paymentCompleted || plan === "FREE");
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-12">
@@ -679,8 +729,8 @@ const InscriptionOuvrier: React.FC = () => {
                           Votre inscription au plan{" "}
                           <strong>{planMeta.label}</strong> a bien été enregistrée.
                           <br />
-                          Veuillez procéder au paiement pour finaliser votre inscription.
-                          Votre profil ne sera validé qu’après confirmation du règlement.
+                          Votre paiement a été pris en compte. Votre profil sera validé
+                          par un administrateur.
                         </>
                       )
                     ) : plan === "FREE" ? (
@@ -695,8 +745,8 @@ const InscriptionOuvrier: React.FC = () => {
                         Your registration to the <strong>{planMeta.label}</strong> plan
                         has been saved.
                         <br />
-                        Please proceed to payment to finalize your registration. Your
-                        profile will only be validated after payment confirmation.
+                        Your payment has been recorded. Your profile will be reviewed by
+                        an administrator.
                       </>
                     )}
                   </div>
@@ -714,6 +764,150 @@ const InscriptionOuvrier: React.FC = () => {
               ) : (
                 /* 📝 Formulaire normal tant que success = false */
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {/* 🧾 Résumé / panier + paiement pour les plans payants */}
+                  {plan !== "FREE" && (
+                    <div className="border border-amber-100 bg-amber-50 rounded-lg p-3 mb-2">
+                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                        <div>
+                          <div className="text-sm font-semibold text-amber-800">
+                            {language === "fr"
+                              ? "Résumé de votre abonnement"
+                              : "Subscription summary"}
+                          </div>
+                          <div className="text-xs text-amber-700">
+                            {language === "fr"
+                              ? "Le montant ci-dessous sera facturé selon le mode de paiement choisi."
+                              : "The amount below will be charged according to the selected payment method."}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-amber-700 uppercase">
+                            {language === "fr" ? "Total à payer" : "Total to pay"}
+                          </div>
+                          <div className="text-lg font-bold text-amber-900">
+                            {plan === "MONTHLY" ? "29€ / mois" : "290€ / an"}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid md:grid-cols-2 gap-3">
+                        <div>
+                          <div className="text-xs font-semibold text-amber-800 mb-1">
+                            {language === "fr"
+                              ? "Choisissez un moyen de paiement"
+                              : "Choose a payment method"}
+                          </div>
+                          <div className="space-y-1 text-xs text-amber-900">
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name="paymentMethod"
+                                value="card"
+                                checked={paymentMethod === "card"}
+                                onChange={(e) => {
+                                  setPaymentMethod(e.target.value as PaymentMethod);
+                                  setPaymentCompleted(false);
+                                }}
+                              />
+                              <span>
+                                {language === "fr"
+                                  ? "Carte bancaire (Visa, MasterCard...)"
+                                  : "Credit / debit card"}
+                              </span>
+                            </label>
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name="paymentMethod"
+                                value="paypal"
+                                checked={paymentMethod === "paypal"}
+                                onChange={(e) => {
+                                  setPaymentMethod(e.target.value as PaymentMethod);
+                                  setPaymentCompleted(false);
+                                }}
+                              />
+                              <span>PayPal</span>
+                            </label>
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name="paymentMethod"
+                                value="mobile_money"
+                                checked={paymentMethod === "mobile_money"}
+                                onChange={(e) => {
+                                  setPaymentMethod(e.target.value as PaymentMethod);
+                                  setPaymentCompleted(false);
+                                }}
+                              />
+                              <span>
+                                {language === "fr"
+                                  ? "Mobile Money (Orange Money, MTN, etc.)"
+                                  : "Mobile money"}
+                              </span>
+                            </label>
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name="paymentMethod"
+                                value="google_pay"
+                                checked={paymentMethod === "google_pay"}
+                                onChange={(e) => {
+                                  setPaymentMethod(e.target.value as PaymentMethod);
+                                  setPaymentCompleted(false);
+                                }}
+                              />
+                              <span>Google Pay</span>
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col justify-between">
+                          <div className="text-xs text-amber-800 mb-2">
+                            {language === "fr"
+                              ? "Étape 1 : choisissez votre moyen de paiement ci-contre."
+                              : "Step 1: choose your payment method."}
+                            <br />
+                            {language === "fr"
+                              ? "Étape 2 : cliquez sur « Procéder au paiement » pour simuler le règlement."
+                              : "Step 2: click “Proceed to payment” to simulate the payment."}
+                            <br />
+                            {language === "fr"
+                              ? "Étape 3 : remplissez le formulaire puis validez votre inscription."
+                              : "Step 3: fill in the form then submit your registration."}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={paymentCompleted ? "outline" : "default"}
+                              onClick={handleSimulatePayment}
+                              className={
+                                paymentCompleted
+                                  ? "border-emerald-400 text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
+                                  : "bg-amber-600 hover:bg-amber-700"
+                              }
+                            >
+                              {paymentCompleted
+                                ? language === "fr"
+                                  ? "Paiement simulé ✔"
+                                  : "Payment simulated ✔"
+                                : language === "fr"
+                                ? "Procéder au paiement"
+                                : "Proceed to payment"}
+                            </Button>
+                            {paymentCompleted && (
+                              <span className="text-[11px] text-emerald-700">
+                                {language === "fr"
+                                  ? "Paiement marqué comme effectué. Vous pouvez maintenant valider votre inscription."
+                                  : "Payment marked as complete. You can now submit your registration."}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Nom & Prénom */}
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
@@ -1099,17 +1293,28 @@ const InscriptionOuvrier: React.FC = () => {
                   <div className="pt-2">
                     <Button
                       type="submit"
-                      disabled={loading}
-                      className="w-full bg-pro-blue hover:bg-blue-700"
+                      disabled={!canSubmit}
+                      className="w-full bg-pro-blue hover:bg-blue-700 disabled:opacity-60"
                     >
                       {loading
                         ? language === "fr"
                           ? "Enregistrement..."
                           : "Saving..."
+                        : plan === "FREE"
+                        ? language === "fr"
+                          ? "Valider mon inscription"
+                          : "Submit my registration"
                         : language === "fr"
-                        ? "Valider mon inscription"
-                        : "Submit my registration"}
+                        ? "Valider mon inscription après paiement"
+                        : "Submit my registration after payment"}
                     </Button>
+                    {plan !== "FREE" && !paymentCompleted && (
+                      <p className="mt-1 text-[11px] text-amber-700">
+                        {language === "fr"
+                          ? "Vous devez d’abord simuler le paiement pour activer ce bouton."
+                          : "You must first simulate the payment to enable this button."}
+                      </p>
+                    )}
                   </div>
                 </form>
               )}
