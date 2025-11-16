@@ -264,9 +264,7 @@ const InscriptionOuvrier: React.FC = () => {
 
   const rawPlan = (searchParams.get("plan") || "").toUpperCase();
   const plan: PlanCode =
-    rawPlan === "MONTHLY" || rawPlan === "YEARLY"
-      ? (rawPlan as PlanCode)
-      : "FREE";
+    rawPlan === "MONTHLY" || rawPlan === "YEARLY" ? (rawPlan as PlanCode) : "FREE";
 
   const [form, setForm] = useState<WorkerFormState>({
     firstName: "",
@@ -324,10 +322,7 @@ const InscriptionOuvrier: React.FC = () => {
     };
   }, [plan, t, language]);
 
-  const currency = useMemo(
-    () => getCurrencyForCountry(form.country),
-    [form.country]
-  );
+  const currency = useMemo(() => getCurrencyForCountry(form.country), [form.country]);
 
   // Sélection actuelle pour la Guinée : région → ville → commune → quartier
   const selectedRegion = useMemo(
@@ -396,12 +391,11 @@ const InscriptionOuvrier: React.FC = () => {
       }
 
       // 0) Vérifier s'il existe déjà un profil ouvrier avec cet email
-      const { data: existingWorker, error: existingWorkerError } =
-        await supabase
-          .from("op_ouvriers")
-          .select("id,status")
-          .eq("email", email)
-          .maybeSingle();
+      const { data: existingWorker, error: existingWorkerError } = await supabase
+        .from("op_ouvriers")
+        .select("id,status")
+        .eq("email", email)
+        .maybeSingle();
 
       if (existingWorkerError) {
         console.warn(
@@ -462,31 +456,6 @@ const InscriptionOuvrier: React.FC = () => {
         );
       }
 
-      // 1bis) S'assurer qu'une entrée existe dans op_users (pour la FK op_ouvriers.user_id_fkey)
-      const fullName =
-        `${form.firstName || ""} ${form.lastName || ""}`.trim() || email;
-
-      const { error: opUsersError } = await supabase
-        .from("op_users")
-        .upsert(
-          {
-            id: user.id,
-            role: "worker", // doit exister dans l'ENUM user_role
-            full_name: fullName,
-          },
-          {
-            onConflict: "id",
-          }
-        );
-
-      if (opUsersError) {
-        console.error(
-          "Erreur lors de la création du profil op_users:",
-          opUsersError
-        );
-        throw opUsersError;
-      }
-
       // 2) Upload avatar (optionnel)
       let avatarUrl: string | null = null;
       if (profileFile) {
@@ -503,19 +472,6 @@ const InscriptionOuvrier: React.FC = () => {
             .from("op_avatars")
             .getPublicUrl(storageData.path);
           avatarUrl = publicUrlData.publicUrl;
-
-          // (optionnel) mettre aussi à jour op_users.avatar_url si la colonne existe
-          try {
-            await supabase
-              .from("op_users")
-              .update({ avatar_url: avatarUrl })
-              .eq("id", user.id);
-          } catch (e) {
-            console.warn(
-              "Impossible de mettre à jour op_users.avatar_url (optionnel)",
-              e
-            );
-          }
         }
       }
 
@@ -528,7 +484,7 @@ const InscriptionOuvrier: React.FC = () => {
         hourlyRateNumber = Number.isFinite(parsed) ? parsed : null;
       }
 
-      // paiement : gratuit = paid, payant = unpaid
+      // 💳 Gestion paiement selon le plan : FREE = payé d’avance, autres = en attente
       const isFreePlan = plan === "FREE";
 
       const { error: insertError } = await supabase.from("op_ouvriers").insert({
@@ -552,7 +508,7 @@ const InscriptionOuvrier: React.FC = () => {
         avatar_url: avatarUrl,
         created_at: new Date().toISOString(),
 
-        // 🧾 Infos paiement
+        // Nouveau : paiement
         payment_status: isFreePlan ? "paid" : "unpaid",
         payment_provider: isFreePlan ? "free_plan" : null,
         payment_reference: null,
@@ -692,15 +648,15 @@ const InscriptionOuvrier: React.FC = () => {
             </CardHeader>
 
             <CardContent>
-              {/* 🎉 Si succès : message + bouton retour */}
+              {/* 🎉 Si succès : on masque le formulaire */}
               {success ? (
                 <div className="space-y-6 text-center py-10">
                   <div className="text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-4 text-base md:text-lg">
                     {language === "fr" ? (
                       plan === "FREE" ? (
                         <>
-                          Votre inscription au plan <strong>Gratuit</strong> a bien
-                          été enregistrée.
+                          Votre inscription au plan <strong>Gratuit</strong> a bien été
+                          enregistrée.
                           <br />
                           Votre profil sera validé par un administrateur.
                         </>
@@ -709,22 +665,20 @@ const InscriptionOuvrier: React.FC = () => {
                           Votre inscription au plan{" "}
                           <strong>{planMeta.label}</strong> a bien été enregistrée.
                           <br />
-                          Veuillez procéder au paiement pour finaliser votre
-                          inscription. Votre profil ne sera validé qu’après
-                          confirmation du règlement.
+                          Veuillez procéder au paiement pour finaliser votre inscription.
+                          Votre profil ne sera validé qu’après confirmation du règlement.
                         </>
                       )
                     ) : plan === "FREE" ? (
                       <>
-                        Your registration to the <strong>Free</strong> plan has been
-                        saved.
+                        Your registration to the <strong>Free</strong> plan has been saved.
                         <br />
                         Your profile will be reviewed by an administrator.
                       </>
                     ) : (
                       <>
-                        Your registration to the <strong>{planMeta.label}</strong>{" "}
-                        plan has been saved.
+                        Your registration to the <strong>{planMeta.label}</strong> plan has
+                        been saved.
                         <br />
                         Please proceed to payment to finalize your registration. Your
                         profile will only be validated after payment confirmation.
@@ -755,9 +709,7 @@ const InscriptionOuvrier: React.FC = () => {
                         required
                         value={form.firstName}
                         onChange={handleChange("firstName")}
-                        placeholder={
-                          language === "fr" ? "Votre prénom" : "First name"
-                        }
+                        placeholder={language === "fr" ? "Votre prénom" : "First name"}
                       />
                     </div>
                     <div>
