@@ -528,6 +528,9 @@ const InscriptionOuvrier: React.FC = () => {
         hourlyRateNumber = Number.isFinite(parsed) ? parsed : null;
       }
 
+      // paiement : gratuit = paid, payant = unpaid
+      const isFreePlan = plan === "FREE";
+
       const { error: insertError } = await supabase.from("op_ouvriers").insert({
         user_id: user.id,
         first_name: form.firstName,
@@ -548,6 +551,12 @@ const InscriptionOuvrier: React.FC = () => {
         currency: currency.code,
         avatar_url: avatarUrl,
         created_at: new Date().toISOString(),
+
+        // 🧾 Infos paiement
+        payment_status: isFreePlan ? "paid" : "unpaid",
+        payment_provider: isFreePlan ? "free_plan" : null,
+        payment_reference: null,
+        payment_at: isFreePlan ? new Date().toISOString() : null,
       });
 
       if (insertError) throw insertError;
@@ -687,9 +696,40 @@ const InscriptionOuvrier: React.FC = () => {
               {success ? (
                 <div className="space-y-6 text-center py-10">
                   <div className="text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-4 text-base md:text-lg">
-                    {language === "fr"
-                      ? "Votre inscription a bien été enregistrée. Un email de confirmation vous a été envoyé et votre profil sera validé par un administrateur."
-                      : "Your registration has been saved. A confirmation email has been sent and your profile will be reviewed by an administrator."}
+                    {language === "fr" ? (
+                      plan === "FREE" ? (
+                        <>
+                          Votre inscription au plan <strong>Gratuit</strong> a bien
+                          été enregistrée.
+                          <br />
+                          Votre profil sera validé par un administrateur.
+                        </>
+                      ) : (
+                        <>
+                          Votre inscription au plan{" "}
+                          <strong>{planMeta.label}</strong> a bien été enregistrée.
+                          <br />
+                          Veuillez procéder au paiement pour finaliser votre
+                          inscription. Votre profil ne sera validé qu’après
+                          confirmation du règlement.
+                        </>
+                      )
+                    ) : plan === "FREE" ? (
+                      <>
+                        Your registration to the <strong>Free</strong> plan has been
+                        saved.
+                        <br />
+                        Your profile will be reviewed by an administrator.
+                      </>
+                    ) : (
+                      <>
+                        Your registration to the <strong>{planMeta.label}</strong>{" "}
+                        plan has been saved.
+                        <br />
+                        Please proceed to payment to finalize your registration. Your
+                        profile will only be validated after payment confirmation.
+                      </>
+                    )}
                   </div>
 
                   <Button
