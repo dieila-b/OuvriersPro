@@ -1,65 +1,74 @@
-import React from 'react';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Check, Star, BarChart3, Headphones, User } from 'lucide-react';
+import React from "react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Check, Star, BarChart3, Headphones, User } from "lucide-react";
 
 const SubscriptionSection = () => {
   const { t, language } = useLanguage();
 
+  // Petite fonction utilitaire pour formater les montants (5 000, 50 000…)
+  const formatPrice = (amount: number) => {
+    try {
+      return amount.toLocaleString(language === "fr" ? "fr-FR" : "en-US");
+    } catch {
+      return amount.toString();
+    }
+  };
+
   const plans = [
     {
-      code: 'FREE',
-      name: language === 'fr' ? 'Gratuit' : 'Free',
+      code: "FREE",
+      name: language === "fr" ? "Gratuit" : "Free",
       price: 0,
-      period: t('subscription.month'),
+      period: t("subscription.month"),
       popular: false,
       isFree: true,
       features:
-        language === 'fr'
+        language === "fr"
           ? [
-              '1 métier affiché',
-              'Profil simplifié',
-              'Nombre de contacts limité',
-              'Pas de mise en avant',
+              "1 métier affiché",
+              "Profil simplifié",
+              "Nombre de contacts limité",
+              "Pas de mise en avant",
             ]
           : [
-              '1 listed trade',
-              'Simplified profile',
-              'Limited number of contacts',
-              'No highlight in search results',
+              "1 listed trade",
+              "Simplified profile",
+              "Limited number of contacts",
+              "No highlight in search results",
             ],
     },
     {
-      code: 'MONTHLY',
-      name: t('subscription.monthly'),
-      price: 29,
-      period: t('subscription.month'),
+      code: "MONTHLY",
+      name: t("subscription.monthly"),
+      price: 5000, // 5 000 FG / mois
+      period: t("subscription.month"),
       popular: true,
       isFree: false,
       features: [
-        t('subscription.features.profile'),
-        t('subscription.features.unlimited'),
-        t('subscription.features.stats'),
-        t('subscription.features.support'),
+        t("subscription.features.profile"),
+        t("subscription.features.unlimited"),
+        t("subscription.features.stats"),
+        t("subscription.features.support"),
       ],
-      savings: language === 'fr' ? 'Sans engagement' : 'No commitment',
+      savings: language === "fr" ? "Sans engagement" : "No commitment",
     },
     {
-      code: 'YEARLY',
-      name: t('subscription.yearly'),
-      price: 290,
-      period: t('subscription.year'),
+      code: "YEARLY",
+      name: t("subscription.yearly"),
+      price: 50000, // 50 000 FG / an
+      period: t("subscription.year"),
       popular: false,
       isFree: false,
       features: [
-        t('subscription.features.profile'),
-        t('subscription.features.unlimited'),
-        t('subscription.features.stats'),
-        t('subscription.features.support'),
+        t("subscription.features.profile"),
+        t("subscription.features.unlimited"),
+        t("subscription.features.stats"),
+        t("subscription.features.support"),
       ],
-      savings: language === 'fr' ? '2 mois offerts' : '2 months free',
+      savings: language === "fr" ? "2 mois offerts" : "2 months free",
     },
   ];
 
@@ -71,10 +80,10 @@ const SubscriptionSection = () => {
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl font-bold text-pro-gray mb-4">
-            {t('subscription.title')}
+            {t("subscription.title")}
           </h2>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            {t('subscription.subtitle')}
+            {t("subscription.subtitle")}
           </p>
         </div>
 
@@ -83,7 +92,7 @@ const SubscriptionSection = () => {
             <Card
               key={index}
               className={`relative overflow-hidden transition-transform hover:scale-105 ${
-                plan.popular ? 'ring-2 ring-pro-blue shadow-xl' : 'shadow-lg'
+                plan.popular ? "ring-2 ring-pro-blue shadow-xl" : "shadow-lg"
               }`}
             >
               {plan.popular && (
@@ -96,17 +105,15 @@ const SubscriptionSection = () => {
               )}
 
               <CardHeader
-                className={`text-center ${
-                  plan.popular ? 'pt-12' : 'pt-6'
-                }`}
+                className={`text-center ${plan.popular ? "pt-12" : "pt-6"}`}
               >
                 <CardTitle className="text-2xl font-bold text-pro-gray">
                   {plan.name}
                 </CardTitle>
                 <div className="mt-4">
                   <span className="text-4xl font-bold text-pro-blue">
-                    {plan.price}
-                    {t('common.euro')}
+                    {formatPrice(plan.price)}{" "}
+                    <span className="text-2xl">FG</span>
                   </span>
                   <span className="text-gray-600">/{plan.period}</span>
                 </div>
@@ -133,39 +140,39 @@ const SubscriptionSection = () => {
                 <Button
                   className={`w-full py-3 ${
                     plan.popular
-                      ? 'bg-pro-blue hover:bg-blue-700'
+                      ? "bg-pro-blue hover:bg-blue-700"
                       : plan.isFree
-                      ? 'bg-gray-800 hover:bg-gray-900'
-                      : 'bg-gray-700 hover:bg-gray-800'
+                      ? "bg-gray-800 hover:bg-gray-900"
+                      : "bg-gray-700 hover:bg-gray-800"
                   }`}
                   onClick={() => {
                     window.location.href = `/inscription-ouvrier?plan=${plan.code}`;
                   }}
                 >
-                  {t('subscription.choose')}
+                  {t("subscription.choose")}
                 </Button>
               </CardContent>
             </Card>
           ))}
         </div>
 
-        {/* Additional Benefits */}
+        {/* Avantages additionnels */}
         <div className="grid md:grid-cols-3 gap-8 mt-16 max-w-4xl mx-auto">
           {[
             {
               icon: User,
-              title: 'Profil vérifié',
-              description: 'Badge de confiance sur votre profil',
+              title: "Profil vérifié",
+              description: "Badge de confiance sur votre profil",
             },
             {
               icon: BarChart3,
-              title: 'Analytics détaillés',
-              description: 'Suivez vos performances et optimisez',
+              title: "Analytics détaillés",
+              description: "Suivez vos performances et optimisez",
             },
             {
               icon: Headphones,
-              title: 'Support dédié',
-              description: 'Assistance prioritaire 7j/7',
+              title: "Support dédié",
+              description: "Assistance prioritaire 7j/7",
             },
           ].map((benefit, index) => (
             <div key={index} className="text-center">
@@ -175,9 +182,7 @@ const SubscriptionSection = () => {
               <h3 className="font-semibold text-pro-gray mb-2">
                 {benefit.title}
               </h3>
-              <p className="text-gray-600 text-sm">
-                {benefit.description}
-              </p>
+              <p className="text-gray-600 text-sm">{benefit.description}</p>
             </div>
           ))}
         </div>
