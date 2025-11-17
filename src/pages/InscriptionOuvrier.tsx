@@ -291,7 +291,12 @@ const InscriptionOuvrier: React.FC = () => {
 
   // 💳 Paiement pour les plans payants
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("");
-  const [paymentCompleted, setPaymentCompleted] = useState(false);
+  const [paymentCompleted, setPaymentCompleted] = useState(
+    searchParams.get("payment_status") === "success"
+  );
+  const [paymentReference, setPaymentReference] = useState<string | null>(
+    searchParams.get("payment_ref")
+  );
 
   const planMeta = useMemo(() => {
     if (plan === "MONTHLY") {
@@ -365,8 +370,17 @@ const InscriptionOuvrier: React.FC = () => {
     setProfileFile(file);
   };
 
-  const handleSimulatePayment = () => {
-    if (plan === "FREE") return;
+  /**
+   * Lance le paiement réel via un endpoint backend (Stripe / PayPal / Mobile Money).
+   * Ce backend doit :
+   *  - créer la session de paiement (Stripe Checkout, PayPal order, etc.)
+   *  - renvoyer { redirectUrl: "https://..." }
+   *  - rediriger l’utilisateur vers l’URL du fournisseur
+   *  - sur succès, renvoyer vers /inscription-ouvrier?plan=...&payment_status=success&payment_ref=XXX
+   */
+  const handleStartPayment = async () => {
+    const isPaidPlan = plan === "MONTHLY" || plan === "YEARLY";
+    if (!isPaidPlan) return;
 
     if (!paymentMethod) {
       setError(
@@ -377,10 +391,59 @@ const InscriptionOuvrier: React.FC = () => {
       return;
     }
 
-    // Ici on simule la réussite du paiement.
-    // Plus tard, tu pourras remplacer par l’appel réel vers Stripe / PayPal / Mobile Money.
-    setPaymentCompleted(true);
-    setError(null);
+    if (!form.email.trim()) {
+      setError(
+        language === "fr"
+          ? "Veuillez renseigner au minimum votre email avant de lancer le paiement."
+          : "Please fill at least your email before starting the payment."
+      );
+      return;
+    }
+
+    try {
+      setError(null);
+      setLoading(true);
+
+      const successUrl = `${window.location.origin}/inscription-ouvrier?plan=${plan}&payment_status=success&payment_ref={REF}`;
+      const cancelUrl = `${window.location.origin}/inscription-ouvrier?plan=${plan}&payment_status=cancel`;
+
+      const res = await fetch("/api/payments/start", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          plan,
+          paymentMethod,
+          email: form.email.trim().toLowerCase(),
+          language,
+          successUrl,
+          cancelUrl,
+        }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Payment API error");
+      }
+
+      const data = await res.json();
+      if (!data.redirectUrl) {
+        throw new Error("Missing redirectUrl from payment API.");
+      }
+
+      // redirection vers Stripe / PayPal / Mobile Money
+      window.location.href = data.redirectUrl as string;
+    } catch (err: any) {
+      console.error("Erreur démarrage paiement:", err);
+      setError(
+        language === "fr"
+          ? "Erreur lors du démarrage du paiement. Merci de réessayer."
+          : "Error while starting payment. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -416,20 +479,11 @@ const InscriptionOuvrier: React.FC = () => {
       // 💳 Vérifications paiement pour les plans payants
       const isPaidPlan = plan === "MONTHLY" || plan === "YEARLY";
       if (isPaidPlan) {
-        if (!paymentMethod) {
-          setError(
-            language === "fr"
-              ? "Veuillez choisir un moyen de paiement."
-              : "Please select a payment method."
-          );
-          setLoading(false);
-          return;
-        }
         if (!paymentCompleted) {
           setError(
             language === "fr"
-              ? "Merci de cliquer sur « Procéder au paiement » pour finaliser le règlement avant de valider votre inscription."
-              : "Please click on “Proceed to payment” to complete the payment before submitting your registration."
+              ? "Votre paiement n'a pas encore été confirmé. Veuillez effectuer le paiement puis revenir sur cette page (payment_status=success) avant de valider votre inscription."
+              : "Your payment is not confirmed yet. Please complete the payment and come back with payment_status=success before submitting your registration."
           );
           setLoading(false);
           return;
@@ -569,8 +623,8 @@ const InscriptionOuvrier: React.FC = () => {
         avatar_url: avatarUrl,
         created_at: new Date().toISOString(),
         payment_status: isPaymentReallyPaid ? "paid" : "unpaid",
-        payment_provider: isPaymentReallyPaid ? paymentMethod || "free_plan" : null,
-        payment_reference: null,
+        payment_provider: isFreePlan ? "free_plan" : paymentMethod || "unknown",
+        payment_reference: paymentReference,
         payment_at: isPaymentReallyPaid ? new Date().toISOString() : null,
       });
 
@@ -594,8 +648,6 @@ const InscriptionOuvrier: React.FC = () => {
         hourlyRate: "",
       });
       setProfileFile(null);
-      setPaymentMethod("");
-      setPaymentCompleted(false);
     } catch (err: any) {
       console.error(err);
       setError(
@@ -623,8 +675,7 @@ const InscriptionOuvrier: React.FC = () => {
     { code: "US", label: "États-Unis" },
   ];
 
-  const canSubmit =
-    !loading && (plan === "FREE" || paymentCompleted || plan === "FREE");
+  const canSubmit = !loading && (plan === "FREE" || paymentCompleted);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-12">
@@ -806,13 +857,12 @@ const InscriptionOuvrier: React.FC = () => {
                                 checked={paymentMethod === "card"}
                                 onChange={(e) => {
                                   setPaymentMethod(e.target.value as PaymentMethod);
-                                  setPaymentCompleted(false);
                                 }}
                               />
                               <span>
                                 {language === "fr"
                                   ? "Carte bancaire (Visa, MasterCard...)"
-                                  : "Credit / debit card"}
+                                  : "Credit / debit card (via Stripe)"}
                               </span>
                             </label>
                             <label className="flex items-center gap-2">
@@ -823,7 +873,6 @@ const InscriptionOuvrier: React.FC = () => {
                                 checked={paymentMethod === "paypal"}
                                 onChange={(e) => {
                                   setPaymentMethod(e.target.value as PaymentMethod);
-                                  setPaymentCompleted(false);
                                 }}
                               />
                               <span>PayPal</span>
@@ -836,7 +885,6 @@ const InscriptionOuvrier: React.FC = () => {
                                 checked={paymentMethod === "mobile_money"}
                                 onChange={(e) => {
                                   setPaymentMethod(e.target.value as PaymentMethod);
-                                  setPaymentCompleted(false);
                                 }}
                               />
                               <span>
@@ -853,7 +901,6 @@ const InscriptionOuvrier: React.FC = () => {
                                 checked={paymentMethod === "google_pay"}
                                 onChange={(e) => {
                                   setPaymentMethod(e.target.value as PaymentMethod);
-                                  setPaymentCompleted(false);
                                 }}
                               />
                               <span>Google Pay</span>
@@ -868,38 +915,30 @@ const InscriptionOuvrier: React.FC = () => {
                               : "Step 1: choose your payment method."}
                             <br />
                             {language === "fr"
-                              ? "Étape 2 : cliquez sur « Procéder au paiement » pour simuler le règlement."
-                              : "Step 2: click “Proceed to payment” to simulate the payment."}
+                              ? "Étape 2 : cliquez sur « Procéder au paiement » pour être redirigé vers la page sécurisée du fournisseur (Stripe, PayPal, etc.)."
+                              : "Step 2: click “Proceed to payment” to be redirected to the secure provider page (Stripe, PayPal, etc.)."}
                             <br />
                             {language === "fr"
-                              ? "Étape 3 : remplissez le formulaire puis validez votre inscription."
-                              : "Step 3: fill in the form then submit your registration."}
+                              ? "Étape 3 : à la fin du paiement, vous reviendrez sur cette page avec la confirmation (payment_status=success), puis vous pourrez valider votre inscription."
+                              : "Step 3: after payment you will come back here with payment_status=success, then you can submit your registration."}
                           </div>
                           <div className="flex items-center gap-2">
                             <Button
                               type="button"
                               size="sm"
-                              variant={paymentCompleted ? "outline" : "default"}
-                              onClick={handleSimulatePayment}
-                              className={
-                                paymentCompleted
-                                  ? "border-emerald-400 text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
-                                  : "bg-amber-600 hover:bg-amber-700"
-                              }
+                              onClick={handleStartPayment}
+                              className="bg-amber-600 hover:bg-amber-700"
+                              disabled={loading}
                             >
-                              {paymentCompleted
-                                ? language === "fr"
-                                  ? "Paiement simulé ✔"
-                                  : "Payment simulated ✔"
-                                : language === "fr"
+                              {language === "fr"
                                 ? "Procéder au paiement"
                                 : "Proceed to payment"}
                             </Button>
                             {paymentCompleted && (
                               <span className="text-[11px] text-emerald-700">
                                 {language === "fr"
-                                  ? "Paiement marqué comme effectué. Vous pouvez maintenant valider votre inscription."
-                                  : "Payment marked as complete. You can now submit your registration."}
+                                  ? "Paiement confirmé. Vous pouvez maintenant valider votre inscription."
+                                  : "Payment confirmed. You can now submit your registration."}
                               </span>
                             )}
                           </div>
@@ -1311,8 +1350,8 @@ const InscriptionOuvrier: React.FC = () => {
                     {plan !== "FREE" && !paymentCompleted && (
                       <p className="mt-1 text-[11px] text-amber-700">
                         {language === "fr"
-                          ? "Vous devez d’abord simuler le paiement pour activer ce bouton."
-                          : "You must first simulate the payment to enable this button."}
+                          ? "Vous devez d’abord effectuer le paiement (et revenir avec payment_status=success) pour activer ce bouton."
+                          : "You must complete the payment first (and come back with payment_status=success) to enable this button."}
                       </p>
                     )}
                   </div>
