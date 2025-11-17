@@ -2,14 +2,10 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  functions = "netlify/functions"
 
-[functions]
-  directory = "netlify/functions"
-  node_bundler = "esbuild"
-
-# ✅ Proxy propre /api/payments/start → Function Netlify "payments-start"
+# Proxy /api/payments/start → la Netlify Function "payments-start"
 [[redirects]]
   from = "/api/payments/start"
   to = "/.netlify/functions/payments-start"
   status = 200
-  force = true
