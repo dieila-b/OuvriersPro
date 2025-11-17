@@ -408,7 +408,8 @@ const InscriptionOuvrier: React.FC = () => {
       const successUrl = `${window.location.origin}/inscription-ouvrier?plan=${plan}&payment_status=success&payment_ref={REF}`;
       const cancelUrl = `${window.location.origin}/inscription-ouvrier?plan=${plan}&payment_status=cancel`;
 
-      const res = await fetch("/api/payments/start", {
+      // 🔥 Appel direct à la Netlify Function (et plus /api/payments/start)
+      const res = await fetch("/.netlify/functions/payments-start", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
