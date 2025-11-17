@@ -298,11 +298,12 @@ const InscriptionOuvrier: React.FC = () => {
     searchParams.get("payment_ref")
   );
 
+  // 🔁 Plans avec montants en GNF
   const planMeta = useMemo(() => {
     if (plan === "MONTHLY") {
       return {
         label: t("subscription.monthly"),
-        price: "29€ / mois",
+        price: "5 000 FG / mois",
         badge: language === "fr" ? "Sans engagement" : "No commitment",
         description:
           language === "fr"
@@ -313,7 +314,7 @@ const InscriptionOuvrier: React.FC = () => {
     if (plan === "YEARLY") {
       return {
         label: t("subscription.yearly"),
-        price: "290€ / an",
+        price: "50 000 FG / an",
         badge: language === "fr" ? "2 mois offerts" : "2 months free",
         description:
           language === "fr"
@@ -323,7 +324,7 @@ const InscriptionOuvrier: React.FC = () => {
     }
     return {
       label: language === "fr" ? "Gratuit" : "Free",
-      price: "0€ / mois",
+      price: "0 FG / mois",
       badge: language === "fr" ? "Fonctionnalités limitées" : "Limited features",
       description:
         language === "fr"
@@ -836,7 +837,9 @@ const InscriptionOuvrier: React.FC = () => {
                             {language === "fr" ? "Total à payer" : "Total to pay"}
                           </div>
                           <div className="text-lg font-bold text-amber-900">
-                            {plan === "MONTHLY" ? "29€ / mois" : "290€ / an"}
+                            {plan === "MONTHLY"
+                              ? "5 000 FG / mois"
+                              : "50 000 FG / an"}
                           </div>
                         </div>
                       </div>
