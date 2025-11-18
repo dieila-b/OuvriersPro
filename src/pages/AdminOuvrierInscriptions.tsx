@@ -30,6 +30,11 @@ type DbWorker = {
   rejected_by: string | null;
   rejection_reason: string | null;
   plan_code: string | null; // ✅ plan souscrit (free / monthly / yearly ...)
+  // 🔐 Paiement
+  payment_status: string | null;   // "unpaid" | "pending" | "paid"
+  payment_provider: string | null; // "free_plan" | "mobile_money" | ...
+  payment_reference: string | null;
+  payment_at: string | null;
 };
 
 type WorkerStatus = "pending" | "approved" | "rejected";
@@ -55,6 +60,14 @@ const AdminOuvrierInscriptions: React.FC = () => {
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
+
+  // Helpers plan / paiement
+  const isFreePlan = (code: string | null | undefined) => {
+    const c = code?.toLowerCase() || "";
+    return !c || ["free", "gratuit"].includes(c);
+  };
+
+  const requiresPayment = (code: string | null | undefined) => !isFreePlan(code);
 
   // 🔐 Vérification des droits admin
   useEffect(() => {
@@ -132,7 +145,11 @@ const AdminOuvrierInscriptions: React.FC = () => {
           rejected_at,
           rejected_by,
           rejection_reason,
-          plan_code
+          plan_code,
+          payment_status,
+          payment_provider,
+          payment_reference,
+          payment_at
         `
         )
         .order("created_at", { ascending: false });
@@ -174,6 +191,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
           w.region,
           w.country,
           w.plan_code,
+          w.payment_status,
+          w.payment_provider,
+          w.payment_reference,
         ]
           .filter(Boolean)
           .join(" ")
@@ -259,7 +279,49 @@ const AdminOuvrierInscriptions: React.FC = () => {
     return "bg-slate-50 text-slate-400 border-slate-200";
   };
 
-  // ✅ Validation + toast
+  // ✅ Paiement : label & style
+  const paymentStatusLabel = (s: string | null | undefined) => {
+    if (language === "fr") {
+      if (s === "paid") return "Payé";
+      if (s === "pending") return "En attente";
+      return "Non payé";
+    } else {
+      if (s === "paid") return "Paid";
+      if (s === "pending") return "Pending";
+      return "Unpaid";
+    }
+  };
+
+  const paymentStatusBadgeClass = (s: string | null | undefined) => {
+    if (s === "paid")
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (s === "pending")
+      return "bg-amber-50 text-amber-700 border-amber-200";
+    return "bg-red-50 text-red-700 border-red-200";
+  };
+
+  const paymentProviderLabel = (p: string | null | undefined) => {
+    const c = p?.toLowerCase() || "";
+    if (c === "free_plan") {
+      return language === "fr" ? "Plan gratuit" : "Free plan";
+    }
+    if (c === "mobile_money") {
+      return "Mobile Money";
+    }
+    if (c === "card") {
+      return language === "fr" ? "Carte bancaire" : "Card";
+    }
+    if (c === "paypal") {
+      return "PayPal";
+    }
+    if (c === "google_pay") {
+      return "Google Pay";
+    }
+    if (!c) return "—";
+    return c;
+  };
+
+  // ✅ Validation + toast (avec contrôle paiement)
   const handleValidate = async (w: DbWorker) => {
     if (!currentAdminId) return;
 
@@ -275,6 +337,26 @@ const AdminOuvrierInscriptions: React.FC = () => {
           language === "fr"
             ? "Email, téléphone et métier doivent être renseignés avant validation."
             : "Email, phone and profession must be filled before approval.",
+      });
+      return;
+    }
+
+    // 🔒 Si le plan nécessite un paiement, s'assurer que payment_status = paid
+    if (requiresPayment(w.plan_code) && w.payment_status !== "paid") {
+      toast({
+        variant: "destructive",
+        title:
+          language === "fr"
+            ? "Paiement non confirmé"
+            : "Payment not confirmed",
+        description:
+          language === "fr"
+            ? `Impossible de valider l'ouvrier tant que le paiement n'est pas marqué comme "Payé". Statut actuel : ${paymentStatusLabel(
+                w.payment_status
+              )}.`
+            : `You cannot approve this worker while the payment is not marked as "Paid". Current status: ${paymentStatusLabel(
+                w.payment_status
+              )}.`,
       });
       return;
     }
@@ -330,6 +412,71 @@ const AdminOuvrierInscriptions: React.FC = () => {
           language === "fr"
             ? `${w.first_name ?? ""} ${w.last_name ?? ""} est maintenant visible comme ouvrier validé.`
             : `${w.first_name ?? ""} ${w.last_name ?? ""} is now approved.`,
+      });
+    }
+
+    setActionLoadingId(null);
+  };
+
+  // ✅ Marquer paiement comme "Payé" (ex : Mobile Money)
+  const handleMarkPaymentPaid = async (w: DbWorker) => {
+    if (!currentAdminId) return;
+
+    const defaultRef = w.payment_reference || "";
+    const promptText =
+      language === "fr"
+        ? "Référence de paiement (Mobile Money, reçu...) :"
+        : "Payment reference (Mobile Money, receipt, ...):";
+
+    const ref = window.prompt(promptText, defaultRef);
+
+    setActionLoadingId(w.id);
+    setError(null);
+
+    const nowIso = new Date().toISOString();
+
+    const { error } = await supabase
+      .from("op_ouvriers")
+      .update({
+        payment_status: "paid",
+        payment_at: nowIso,
+        payment_reference: ref || defaultRef || null,
+      })
+      .eq("id", w.id);
+
+    if (error) {
+      console.error(error);
+      toast({
+        variant: "destructive",
+        title:
+          language === "fr"
+            ? "Erreur lors de la validation du paiement"
+            : "Error while confirming payment",
+        description: error.message,
+      });
+    } else {
+      setWorkers((prev) =>
+        prev.map((x) =>
+          x.id === w.id
+            ? {
+                ...x,
+                payment_status: "paid",
+                payment_at: nowIso,
+                payment_reference: ref || defaultRef || null,
+              }
+            : x
+        )
+      );
+
+      toast({
+        title:
+          language === "fr"
+            ? "Paiement confirmé"
+            : "Payment confirmed",
+        description:
+          language === "fr"
+            ? "Le paiement a été marqué comme payé. Vous pouvez maintenant valider l'ouvrier."
+            : "Payment has been marked as paid. You can now approve this worker.",
       });
     }
 
@@ -436,7 +583,11 @@ const AdminOuvrierInscriptions: React.FC = () => {
         rejected_at,
         rejected_by,
         rejection_reason,
-        plan_code
+        plan_code,
+        payment_status,
+        payment_provider,
+        payment_reference,
+        payment_at
       `
       )
       .order("created_at", { ascending: false });
@@ -479,6 +630,10 @@ const AdminOuvrierInscriptions: React.FC = () => {
       "created_at",
       "status",
       "plan_code",
+      "payment_status",
+      "payment_provider",
+      "payment_reference",
+      "payment_at",
       "first_name",
       "last_name",
       "email",
@@ -503,6 +658,10 @@ const AdminOuvrierInscriptions: React.FC = () => {
         w.created_at,
         w.status ?? "",
         w.plan_code ?? "",
+        w.payment_status ?? "",
+        w.payment_provider ?? "",
+        w.payment_reference ?? "",
+        w.payment_at ?? "",
         w.first_name ?? "",
         w.last_name ?? "",
         w.email ?? "",
@@ -577,8 +736,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
     colWorker: language === "fr" ? "Ouvrier" : "Worker",
     colContact: language === "fr" ? "Contact" : "Contact",
     colLocation: language === "fr" ? "Localisation" : "Location",
-    colStatus: language === "fr" ? "Statut" : "Status",
     colPlan: language === "fr" ? "Formule" : "Plan",
+    colPayment: language === "fr" ? "Paiement" : "Payment",
+    colStatus: language === "fr" ? "Statut" : "Status",
     colActions: language === "fr" ? "Actions" : "Actions",
     empty:
       language === "fr"
@@ -730,6 +890,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
                     {text.colPlan}
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">
+                    {text.colPayment}
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">
                     {text.colStatus}
                   </th>
                   <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">
@@ -741,7 +904,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
                 {filtered.length === 0 && !loading && (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="px-4 py-6 text-center text-slate-500 text-sm"
                     >
                       {text.empty}
@@ -752,7 +915,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
                 {loading && (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="px-4 py-6 text-center text-slate-500 text-sm"
                     >
                       {language === "fr" ? "Chargement..." : "Loading..."}
@@ -775,6 +938,8 @@ const AdminOuvrierInscriptions: React.FC = () => {
                     ]
                       .filter(Boolean)
                       .join(" • ");
+
+                    const needsPayment = requiresPayment(w.plan_code);
 
                     return (
                       <tr
@@ -823,7 +988,33 @@ const AdminOuvrierInscriptions: React.FC = () => {
                             {planLabel(w.plan_code)}
                           </span>
                         </td>
-                        {/* Statut */}
+                        {/* Paiement */}
+                        <td className="px-4 py-3 align-top">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${paymentStatusBadgeClass(
+                              w.payment_status
+                            )}`}
+                          >
+                            {paymentStatusLabel(w.payment_status)}
+                          </span>
+                          <div className="mt-1 text-[11px] text-slate-500">
+                            {language === "fr" ? "Mode : " : "Method: "}
+                            {paymentProviderLabel(w.payment_provider)}
+                          </div>
+                          {w.payment_at && (
+                            <div className="text-[11px] text-slate-500">
+                              {language === "fr" ? "Le " : "On "}{" "}
+                              {formatDateTime(w.payment_at)}
+                            </div>
+                          )}
+                          {w.payment_reference && (
+                            <div className="text-[11px] text-slate-500 truncate">
+                              {language === "fr" ? "Réf. " : "Ref. "}{" "}
+                              {w.payment_reference}
+                            </div>
+                          )}
+                        </td>
+                        {/* Statut inscription */}
                         <td className="px-4 py-3 align-top">
                           <span
                             className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusBadgeClass(
@@ -853,7 +1044,23 @@ const AdminOuvrierInscriptions: React.FC = () => {
                             </div>
                           )}
                         </td>
+                        {/* Actions */}
                         <td className="px-4 py-3 align-top text-right space-x-2 whitespace-nowrap">
+                          {/* Bouton "Valider paiement" pour les plans payants non encore payés */}
+                          {needsPayment && w.payment_status !== "paid" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 mr-2"
+                              disabled={actionLoadingId === w.id}
+                              onClick={() => handleMarkPaymentPaid(w)}
+                            >
+                              {language === "fr"
+                                ? "Valider paiement"
+                                : "Confirm payment"}
+                            </Button>
+                          )}
+
                           <Button
                             size="sm"
                             variant="outline"
