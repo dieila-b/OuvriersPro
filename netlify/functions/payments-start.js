@@ -1,6 +1,6 @@
 // netlify/functions/payments-start.js
 
-// Petit helper CORS
+// 🔁 Headers CORS de base
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 exports.handler = async (event) => {
-  // Préflight CORS
+  // ✅ Préflight CORS
   if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 204,
@@ -17,7 +17,7 @@ exports.handler = async (event) => {
     };
   }
 
-  // On n'accepte que POST
+  // ✅ On n'accepte que POST
   if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
@@ -29,6 +29,7 @@ exports.handler = async (event) => {
     };
   }
 
+  // ✅ Lecture du body JSON
   let body;
   try {
     body = JSON.parse(event.body || "{}");
@@ -46,7 +47,7 @@ exports.handler = async (event) => {
 
   const { plan, paymentMethod, email, successUrl, cancelUrl } = body;
 
-  // Vérification basique des champs attendus
+  // ✅ Vérification des champs obligatoires
   if (!plan || !paymentMethod || !email || !successUrl || !cancelUrl) {
     console.error("Missing required fields:", {
       plan,
@@ -68,7 +69,7 @@ exports.handler = async (event) => {
     };
   }
 
-  // Ici, plus tard : appel réel à Stripe / PayPal / Mobile Money.
+  // 🧪 Ici, plus tard : appel réel à Stripe / PayPal / Mobile Money.
   // Pour l’instant, on SIMULE un paiement réussi.
 
   const paymentRef = `MM-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
@@ -86,6 +87,7 @@ exports.handler = async (event) => {
     redirectUrl,
   });
 
+  // ✅ Réponse OK pour le front
   return {
     statusCode: 200,
     headers: {
