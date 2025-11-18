@@ -29,9 +29,8 @@ type DbWorker = {
   rejected_at: string | null;
   rejected_by: string | null;
   rejection_reason: string | null;
-  plan_code: string | null; // ✅ plan souscrit (free / monthly / yearly ...)
-  // 🔐 Paiement
-  payment_status: string | null;   // "unpaid" | "pending" | "paid"
+  plan_code: string | null;
+  payment_status: string | null; // "unpaid" | "pending" | "paid"
   payment_provider: string | null; // "free_plan" | "mobile_money" | ...
   payment_reference: string | null;
   payment_at: string | null;
@@ -325,7 +324,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
   const handleValidate = async (w: DbWorker) => {
     if (!currentAdminId) return;
 
-    // Vérification minimale avant validation
+    // Vérif minimale avant validation
     if (!w.email || !w.phone || !w.profession) {
       toast({
         variant: "destructive",
@@ -341,7 +340,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
       return;
     }
 
-    // 🔒 Si le plan nécessite un paiement, s'assurer que payment_status = paid
+    // 🔒 Si le plan nécessite un paiement, il doit être "paid"
     if (requiresPayment(w.plan_code) && w.payment_status !== "paid") {
       toast({
         variant: "destructive",
@@ -418,7 +417,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
     setActionLoadingId(null);
   };
 
-  // ✅ Marquer paiement comme "Payé" (ex : Mobile Money)
+  // ✅ Marquer paiement comme "Payé"
   const handleMarkPaymentPaid = async (w: DbWorker) => {
     if (!currentAdminId) return;
 
@@ -483,7 +482,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
     setActionLoadingId(null);
   };
 
-  // ❌ Refus + toast
+  // ❌ Refus
   const handleReject = async (w: DbWorker) => {
     if (!currentAdminId) return;
 
@@ -493,7 +492,10 @@ const AdminOuvrierInscriptions: React.FC = () => {
             "Motif du refus (optionnel) :",
             w.rejection_reason || ""
           )
-        : window.prompt("Rejection reason (optional):", w.rejection_reason || "");
+        : window.prompt(
+            "Rejection reason (optional):",
+            w.rejection_reason || ""
+          );
 
     setActionLoadingId(w.id);
     setError(null);
@@ -602,7 +604,10 @@ const AdminOuvrierInscriptions: React.FC = () => {
     } else {
       setWorkers(data ?? []);
       toast({
-        title: language === "fr" ? "Données actualisées" : "Data refreshed",
+        title:
+          language === "fr"
+            ? "Données actualisées"
+            : "Data refreshed",
       });
     }
 
@@ -686,7 +691,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
       "\n" +
       rows.map((r) => r.join(";")).join("\n");
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement("a");
@@ -804,8 +811,8 @@ const AdminOuvrierInscriptions: React.FC = () => {
         </div>
 
         {/* Filtres */}
-        <div className="flex flex-col md:flex-row gap-3 mb-6">
-          <div className="md:w-1/5">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
+          <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.statusFilter}
             </label>
@@ -831,7 +838,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
             </select>
           </div>
 
-          <div className="md:w-1/5">
+          <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.dateFrom}
             </label>
@@ -843,7 +850,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
             />
           </div>
 
-          <div className="md:w-1/5">
+          <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.dateTo}
             </label>
@@ -855,7 +862,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
             />
           </div>
 
-          <div className="flex-1">
+          <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.searchLabel}
             </label>
@@ -918,7 +925,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
                       colSpan={8}
                       className="px-4 py-6 text-center text-slate-500 text-sm"
                     >
-                      {language === "fr" ? "Chargement..." : "Loading..."}
+                      {language === "fr"
+                        ? "Chargement..."
+                        : "Loading..."}
                     </td>
                   </tr>
                 )}
