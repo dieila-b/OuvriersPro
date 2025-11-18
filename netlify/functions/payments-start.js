@@ -1,82 +1,100 @@
 // netlify/functions/payments-start.js
-import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const appBaseUrl =
-  process.env.APP_BASE_URL || "https://ouvrierspro.netlify.app";
+// Petit helper CORS
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
 
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-  auth: { persistSession: false },
-});
+exports.handler = async (event) => {
+  // Préflight CORS
+  if (event.httpMethod === "OPTIONS") {
+    return {
+      statusCode: 204,
+      headers: corsHeaders,
+      body: "",
+    };
+  }
 
-function getAmountForPlan(planCode) {
-  if (planCode === "MONTHLY") return 5000;
-  if (planCode === "YEARLY") return 50000;
-  return 0;
-}
-
-export const handler = async (event) => {
+  // On n'accepte que POST
   if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({ error: "Method not allowed" }),
     };
   }
 
+  let body;
   try {
-    const body = JSON.parse(event.body || "{}");
-    const { planCode, paymentMethod, workerEmail } = body;
-
-    if (!planCode || !paymentMethod || !workerEmail) {
-      return {
-        statusCode: 400,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          error:
-            "Missing required fields: planCode, paymentMethod, workerEmail",
-        }),
-      };
-    }
-
-    const amount = getAmountForPlan(planCode);
-
-    const { data, error } = await supabaseAdmin
-      .from("op_payments")
-      .insert({
-        worker_email: workerEmail,
-        plan_code: planCode,
-        amount,
-        currency: "GNF",
-        method: paymentMethod, // "mobile_money" / "manual"
-        status: "pending",
-      })
-      .select("id")
-      .single();
-
-    if (error) throw error;
-
-    const paymentRef = data.id;
-
-    const redirectUrl = `${appBaseUrl}/inscription-ouvrier?plan=${encodeURIComponent(
-      planCode
-    )}&payment_status=success&payment_ref=${encodeURIComponent(paymentRef)}`;
-
+    body = JSON.parse(event.body || "{}");
+  } catch (e) {
+    console.error("Invalid JSON body:", e);
     return {
-      statusCode: 200,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ redirectUrl, paymentRef }),
+      statusCode: 400,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ error: "Invalid JSON body" }),
     };
-  } catch (err) {
-    console.error("payments-start error:", err);
+  }
+
+  const { plan, paymentMethod, email, successUrl, cancelUrl } = body;
+
+  // Vérification basique des champs attendus
+  if (!plan || !paymentMethod || !email || !successUrl || !cancelUrl) {
+    console.error("Missing required fields:", {
+      plan,
+      paymentMethod,
+      email,
+      successUrl,
+      cancelUrl,
+    });
     return {
-      statusCode: 500,
-      headers: { "Content-Type": "application/json" },
+      statusCode: 400,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
-        error: "Payment initialization failed",
-        details: err.message || String(err),
+        error:
+          "Missing required fields (plan, paymentMethod, email, successUrl, cancelUrl)",
       }),
     };
   }
+
+  // Ici, plus tard : appel réel à Stripe / PayPal / Mobile Money.
+  // Pour l’instant, on SIMULE un paiement réussi.
+
+  const paymentRef = `MM-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+
+  // successUrl vient du front sous la forme :
+  //   /inscription-ouvrier?plan=...&payment_status=success&payment_ref={REF}
+  // On remplace {REF} par la vraie référence.
+  const redirectUrl = successUrl.replace("{REF}", encodeURIComponent(paymentRef));
+
+  console.log("Payment simulation ok:", {
+    plan,
+    paymentMethod,
+    email,
+    paymentRef,
+    redirectUrl,
+  });
+
+  return {
+    statusCode: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      redirectUrl,
+      paymentRef,
+    }),
+  };
 };
