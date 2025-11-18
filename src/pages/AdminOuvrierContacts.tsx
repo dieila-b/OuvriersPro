@@ -16,9 +16,9 @@ type DbContact = {
   client_email: string | null;
   client_phone: string | null;
   message: string | null;
-  status: string | null;
+  status: string | null; // "new" | "in_progress" | "done"
   created_at: string;
-  origin?: string | null; // peut ne pas exister si la colonne n'est pas encore créée
+  origin?: string | null;
 };
 
 const statusOptions = ["new", "in_progress", "done"] as const;
@@ -40,7 +40,6 @@ const AdminOuvrierContacts: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<"" | ContactStatus>("");
   const [search, setSearch] = useState("");
 
-  // 🔹 filtres de date
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
 
@@ -87,7 +86,7 @@ const AdminOuvrierContacts: React.FC = () => {
     };
   }, [navigate]);
 
-  // 🔹 Chargement des demandes (uniquement admin)
+  // 🔹 Chargement des demandes
   useEffect(() => {
     if (authLoading || !isAdmin) return;
 
@@ -97,7 +96,7 @@ const AdminOuvrierContacts: React.FC = () => {
 
       const { data, error } = await supabase
         .from<DbContact>("op_ouvrier_contacts")
-        .select("*") // ✅ toutes les colonnes, y compris origin
+        .select("*")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -118,7 +117,7 @@ const AdminOuvrierContacts: React.FC = () => {
     fetchContacts();
   }, [language, authLoading, isAdmin]);
 
-  // 🔎 Filtrage (statut, texte, dates)
+  // 🔎 Filtrage (statut, recherche, dates)
   const filtered = useMemo(() => {
     return contacts.filter((c) => {
       const matchStatus = !statusFilter || c.status === statusFilter;
@@ -140,7 +139,6 @@ const AdminOuvrierContacts: React.FC = () => {
         !search || haystack.includes(search.trim().toLowerCase());
 
       const created = new Date(c.created_at);
-
       let matchDateFrom = true;
       let matchDateTo = true;
 
@@ -225,7 +223,7 @@ const AdminOuvrierContacts: React.FC = () => {
   const stats = useMemo(() => {
     const total = filtered.length;
 
-    const todayISO = new Date().toISOString().slice(0, 10); // yyyy-mm-dd
+    const todayISO = new Date().toISOString().slice(0, 10);
     let today = 0;
     let last7 = 0;
 
@@ -281,7 +279,8 @@ const AdminOuvrierContacts: React.FC = () => {
         : "No requests yet.",
     refresh: language === "fr" ? "Rafraîchir" : "Refresh",
     exportCsv: language === "fr" ? "Exporter CSV" : "Export CSV",
-    statTotal: language === "fr" ? "Total (période filtrée)" : "Total (filtered)",
+    statTotal:
+      language === "fr" ? "Total (période filtrée)" : "Total (filtered)",
     statToday: language === "fr" ? "Aujourd’hui" : "Today",
     statLast7:
       language === "fr" ? "7 derniers jours" : "Last 7 days",
@@ -314,7 +313,7 @@ const AdminOuvrierContacts: React.FC = () => {
     setLoading(false);
   };
 
-  // 🔄 Export CSV (avec les résultats filtrés)
+  // 🔄 Export CSV (résultats filtrés)
   const exportCsv = () => {
     if (!filtered.length) return;
 
@@ -354,7 +353,9 @@ const AdminOuvrierContacts: React.FC = () => {
       "\n" +
       rows.map((r) => r.join(";")).join("\n");
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement("a");
@@ -386,11 +387,11 @@ const AdminOuvrierContacts: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 py-10">
       <div className="max-w-6xl mx-auto px-4 md:px-8">
-        {/* Menu admin (contacts / inscriptions / retour site) */}
+        {/* Tabs admin */}
         <AdminNavTabs />
 
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4 mt-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
               {text.title}
@@ -471,8 +472,8 @@ const AdminOuvrierContacts: React.FC = () => {
         </div>
 
         {/* Filtres */}
-        <div className="flex flex-col md:flex-row gap-3 mb-6">
-          <div className="md:w-1/4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
+          <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.statusFilter}
             </label>
@@ -488,7 +489,7 @@ const AdminOuvrierContacts: React.FC = () => {
             </select>
           </div>
 
-          <div className="md:w-1/4">
+          <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.dateFrom}
             </label>
@@ -500,7 +501,7 @@ const AdminOuvrierContacts: React.FC = () => {
             />
           </div>
 
-          <div className="md:w-1/4">
+          <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.dateTo}
             </label>
@@ -512,7 +513,7 @@ const AdminOuvrierContacts: React.FC = () => {
             />
           </div>
 
-          <div className="flex-1">
+          <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.searchLabel}
             </label>
@@ -572,7 +573,9 @@ const AdminOuvrierContacts: React.FC = () => {
                       colSpan={7}
                       className="px-4 py-6 text-center text-slate-500 text-sm"
                     >
-                      {language === "fr" ? "Chargement..." : "Loading..."}
+                      {language === "fr"
+                        ? "Chargement..."
+                        : "Loading..."}
                     </td>
                   </tr>
                 )}
