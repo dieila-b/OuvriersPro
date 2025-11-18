@@ -833,140 +833,6 @@ const InscriptionOuvrier: React.FC = () => {
               ) : (
                 /* 📝 Formulaire normal tant que success = false */
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  {/* 🧾 Résumé / panier + paiement pour les plans payants */}
-                  {plan !== "FREE" && (
-                    <div className="border border-amber-100 bg-amber-50 rounded-lg p-3 mb-2">
-                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                        <div>
-                          <div className="text-sm font-semibold text-amber-800">
-                            {language === "fr"
-                              ? "Résumé de votre abonnement"
-                              : "Subscription summary"}
-                          </div>
-                          <div className="text-xs text-amber-700">
-                            {language === "fr"
-                              ? "Le montant ci-dessous sera facturé selon le mode de paiement choisi."
-                              : "The amount below will be charged according to the selected payment method."}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xs text-amber-700 uppercase">
-                            {language === "fr" ? "Total à payer" : "Total to pay"}
-                          </div>
-                          <div className="text-lg font-bold text-amber-900">
-                            {plan === "MONTHLY"
-                              ? "5 000 FG / mois"
-                              : "50 000 FG / an"}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 grid md:grid-cols-2 gap-3">
-                        <div>
-                          <div className="text-xs font-semibold text-amber-800 mb-1">
-                            {language === "fr"
-                              ? "Choisissez un moyen de paiement"
-                              : "Choose a payment method"}
-                          </div>
-                          <div className="space-y-1 text-xs text-amber-900">
-                            <label className="flex items-center gap-2">
-                              <input
-                                type="radio"
-                                name="paymentMethod"
-                                value="card"
-                                checked={paymentMethod === "card"}
-                                onChange={(e) => {
-                                  setPaymentMethod(e.target.value as PaymentMethod);
-                                }}
-                              />
-                              <span>
-                                {language === "fr"
-                                  ? "Carte bancaire (Visa, MasterCard...)"
-                                  : "Credit / debit card (via Stripe)"}
-                              </span>
-                            </label>
-                            <label className="flex items-center gap-2">
-                              <input
-                                type="radio"
-                                name="paymentMethod"
-                                value="paypal"
-                                checked={paymentMethod === "paypal"}
-                                onChange={(e) => {
-                                  setPaymentMethod(e.target.value as PaymentMethod);
-                                }}
-                              />
-                              <span>PayPal</span>
-                            </label>
-                            <label className="flex items-center gap-2">
-                              <input
-                                type="radio"
-                                name="paymentMethod"
-                                value="mobile_money"
-                                checked={paymentMethod === "mobile_money"}
-                                onChange={(e) => {
-                                  setPaymentMethod(e.target.value as PaymentMethod);
-                                }}
-                              />
-                              <span>
-                                {language === "fr"
-                                  ? "Mobile Money (Orange Money, MTN, etc.)"
-                                  : "Mobile money"}
-                              </span>
-                            </label>
-                            <label className="flex items-center gap-2">
-                              <input
-                                type="radio"
-                                name="paymentMethod"
-                                value="google_pay"
-                                checked={paymentMethod === "google_pay"}
-                                onChange={(e) => {
-                                  setPaymentMethod(e.target.value as PaymentMethod);
-                                }}
-                              />
-                              <span>Google Pay</span>
-                            </label>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col justify-between">
-                          <div className="text-xs text-amber-800 mb-2">
-                            {language === "fr"
-                              ? "Étape 1 : choisissez votre moyen de paiement ci-contre."
-                              : "Step 1: choose your payment method."}
-                            <br />
-                            {language === "fr"
-                              ? "Étape 2 : cliquez sur « Procéder au paiement » pour être redirigé vers la page sécurisée du fournisseur (Stripe, PayPal, etc.)."
-                              : "Step 2: click “Proceed to payment” to be redirected to the secure provider page (Stripe, PayPal, etc.)."}
-                            <br />
-                            {language === "fr"
-                              ? "Étape 3 : à la fin du paiement, vous reviendrez sur cette page avec la confirmation (payment_status=success), puis vous pourrez valider votre inscription."
-                              : "Step 3: after payment you will come back here with payment_status=success, then you can submit your registration."}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={handleStartPayment}
-                              className="bg-amber-600 hover:bg-amber-700"
-                              disabled={loading}
-                            >
-                              {language === "fr"
-                                ? "Procéder au paiement"
-                                : "Proceed to payment"}
-                            </Button>
-                            {paymentCompleted && (
-                              <span className="text-[11px] text-emerald-700">
-                                {language === "fr"
-                                  ? "Paiement confirmé. Vous pouvez maintenant valider votre inscription."
-                                  : "Payment confirmed. You can now submit your registration."}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
                   {/* Nom & Prénom */}
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
@@ -1345,6 +1211,140 @@ const InscriptionOuvrier: React.FC = () => {
                   {error && (
                     <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
                       {error}
+                    </div>
+                  )}
+
+                  {/* 🧾 Résumé / panier + paiement pour les plans payants – juste au-dessus du bouton */}
+                  {plan !== "FREE" && (
+                    <div className="border border-amber-100 bg-amber-50 rounded-lg p-4 mb-3">
+                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                        <div>
+                          <div className="text-sm font-semibold text-amber-800">
+                            {language === "fr"
+                              ? "Résumé de votre abonnement"
+                              : "Subscription summary"}
+                          </div>
+                          <div className="text-xs text-amber-700">
+                            {language === "fr"
+                              ? "Le montant ci-dessous sera facturé selon le mode de paiement choisi."
+                              : "The amount below will be charged according to the selected payment method."}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-amber-700 uppercase">
+                            {language === "fr" ? "Total à payer" : "Total to pay"}
+                          </div>
+                          <div className="text-lg font-bold text-amber-900">
+                            {plan === "MONTHLY"
+                              ? "5 000 FG / mois"
+                              : "50 000 FG / an"}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid md:grid-cols-2 gap-3">
+                        <div>
+                          <div className="text-xs font-semibold text-amber-800 mb-1">
+                            {language === "fr"
+                              ? "Choisissez un moyen de paiement"
+                              : "Choose a payment method"}
+                          </div>
+                          <div className="space-y-1 text-xs text-amber-900">
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name="paymentMethod"
+                                value="card"
+                                checked={paymentMethod === "card"}
+                                onChange={(e) =>
+                                  setPaymentMethod(e.target.value as PaymentMethod)
+                                }
+                              />
+                              <span>
+                                {language === "fr"
+                                  ? "Carte bancaire (Visa, MasterCard...)"
+                                  : "Credit / debit card (via Stripe)"}
+                              </span>
+                            </label>
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name="paymentMethod"
+                                value="paypal"
+                                checked={paymentMethod === "paypal"}
+                                onChange={(e) =>
+                                  setPaymentMethod(e.target.value as PaymentMethod)
+                                }
+                              />
+                              <span>PayPal</span>
+                            </label>
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name="paymentMethod"
+                                value="mobile_money"
+                                checked={paymentMethod === "mobile_money"}
+                                onChange={(e) =>
+                                  setPaymentMethod(e.target.value as PaymentMethod)
+                                }
+                              />
+                              <span>
+                                {language === "fr"
+                                  ? "Mobile Money (Orange Money, MTN, etc.)"
+                                  : "Mobile money"}
+                              </span>
+                            </label>
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name="paymentMethod"
+                                value="google_pay"
+                                checked={paymentMethod === "google_pay"}
+                                onChange={(e) =>
+                                  setPaymentMethod(e.target.value as PaymentMethod)
+                                }
+                              />
+                              <span>Google Pay</span>
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col justify-between">
+                          <div className="text-xs text-amber-800 mb-2 leading-relaxed">
+                            {language === "fr"
+                              ? "Étape 1 : choisissez votre moyen de paiement."
+                              : "Step 1: choose your payment method."}
+                            <br />
+                            {language === "fr"
+                              ? "Étape 2 : cliquez sur « Procéder au paiement »."
+                              : "Step 2: click “Proceed to payment”."}
+                            <br />
+                            {language === "fr"
+                              ? "Étape 3 : à la fin du paiement, vous reviendrez sur cette page avec payment_status=success, puis vous pourrez valider votre inscription."
+                              : "Step 3: after payment you will return here with payment_status=success, then you can submit your registration."}
+                          </div>
+                          <div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={handleStartPayment}
+                              className="bg-amber-600 hover:bg-amber-700"
+                              disabled={loading}
+                            >
+                              {language === "fr"
+                                ? "Procéder au paiement"
+                                : "Proceed to payment"}
+                            </Button>
+                            {paymentCompleted && (
+                              <p className="text-[11px] text-emerald-700 mt-1">
+                                {language === "fr"
+                                  ? "Paiement confirmé. Vous pouvez maintenant valider votre inscription."
+                                  : "Payment confirmed. You can now submit your registration."}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
 
