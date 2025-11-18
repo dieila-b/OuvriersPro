@@ -601,8 +601,24 @@ const InscriptionOuvrier: React.FC = () => {
         hourlyRateNumber = Number.isFinite(parsed) ? parsed : null;
       }
 
+      // ✅ Nouvelle logique paiement (gratuit / mobile money / autres)
       const isFreePlan = plan === "FREE";
-      const isPaymentReallyPaid = isFreePlan || paymentCompleted;
+      const isManualMobileMoney = !isFreePlan && paymentMethod === "mobile_money";
+
+      // Pour l’instant, on considère "payé" uniquement :
+      // - le plan gratuit
+      // - ou les paiements non-mobiles avec payment_status=success
+      const isPaymentReallyPaid =
+        isFreePlan || (paymentCompleted && !isManualMobileMoney);
+
+      // Statut initial de paiement enregistré en base
+      const initialPaymentStatus: "unpaid" | "pending" | "paid" = isFreePlan
+        ? "paid"
+        : isManualMobileMoney
+        ? "pending" // Mobile Money = à vérifier manuellement par l'admin
+        : isPaymentReallyPaid
+        ? "paid"
+        : "unpaid";
 
       const { error: insertError } = await supabase.from("op_ouvriers").insert({
         user_id: user.id,
@@ -624,7 +640,7 @@ const InscriptionOuvrier: React.FC = () => {
         currency: currency.code,
         avatar_url: avatarUrl,
         created_at: new Date().toISOString(),
-        payment_status: isPaymentReallyPaid ? "paid" : "unpaid",
+        payment_status: initialPaymentStatus,
         payment_provider: isFreePlan ? "free_plan" : paymentMethod || "unknown",
         payment_reference: paymentReference,
         payment_at: isPaymentReallyPaid ? new Date().toISOString() : null,
