@@ -385,8 +385,9 @@ const AdminOuvrierContacts: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 py-10">
-      <div className="max-w-6xl mx-auto px-4 md:px-8">
+    <div className="min-h-screen bg-slate-50 py-4 md:py-8">
+      {/* conteneur pleine largeur, avec padding responsive */}
+      <div className="w-full px-2 sm:px-4 lg:px-8">
         {/* Tabs admin */}
         <AdminNavTabs />
 
@@ -526,8 +527,101 @@ const AdminOuvrierContacts: React.FC = () => {
           </div>
         </div>
 
-        {/* Table */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* ✅ Vue mobile (cartes) */}
+        <div className="md:hidden space-y-3 mb-6">
+          {filtered.length === 0 && !loading && (
+            <div className="bg-white border border-slate-200 rounded-xl px-4 py-6 text-center text-slate-500 text-sm">
+              {text.empty}
+            </div>
+          )}
+
+          {loading && (
+            <div className="bg-white border border-slate-200 rounded-xl px-4 py-6 text-center text-slate-500 text-sm">
+              {language === "fr" ? "Chargement..." : "Loading..."}
+            </div>
+          )}
+
+          {!loading &&
+            filtered.map((c) => (
+              <div
+                key={c.id}
+                className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="text-xs text-slate-500">
+                    {formatDate(c.created_at)}
+                  </div>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusColor(
+                      c.status
+                    )}`}
+                  >
+                    {statusLabel(c.status)}
+                  </span>
+                </div>
+
+                <div className="mb-2">
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase">
+                    {text.colWorker}
+                  </div>
+                  <div className="font-semibold text-slate-900">
+                    {c.worker_name || "—"}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {c.worker_profession || ""}
+                  </div>
+                </div>
+
+                <div className="mb-2">
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase">
+                    {text.colClient}
+                  </div>
+                  <div className="font-medium text-slate-900">
+                    {c.client_name || "—"}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {c.client_email || ""}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {c.client_phone || ""}
+                  </div>
+                </div>
+
+                <div className="mb-2">
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase">
+                    {text.colMessage}
+                  </div>
+                  <div className="text-xs text-slate-700 whitespace-pre-line line-clamp-4">
+                    {c.message || "—"}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between mt-3">
+                  <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-slate-50 text-slate-700 border border-slate-200">
+                    {originLabel(c.origin)}
+                  </span>
+                  <select
+                    disabled={savingId === c.id}
+                    value={(c.status as ContactStatus) || "new"}
+                    onChange={(e) =>
+                      handleStatusChange(
+                        c.id,
+                        e.target.value as ContactStatus
+                      )
+                    }
+                    className="text-xs border border-slate-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                  >
+                    <option value="new">{text.new}</option>
+                    <option value="in_progress">{text.inProgress}</option>
+                    <option value="done">{text.done}</option>
+                  </select>
+                </div>
+              </div>
+            ))}
+        </div>
+
+        {/* ✅ Vue desktop (tableau) */}
+        <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
