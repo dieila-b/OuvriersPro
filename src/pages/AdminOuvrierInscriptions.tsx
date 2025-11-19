@@ -36,7 +36,7 @@ type DbWorker = {
   payment_at: string | null;
 };
 
-type WorkerStatus = "pending" | "approved" | "rejected";
+type WorkerStatus = "pending" | "approved" | "rejected" | "suspended";
 
 const AdminOuvrierInscriptions: React.FC = () => {
   const { language } = useLanguage();
@@ -53,9 +53,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [statusFilter, setStatusFilter] = useState<WorkerStatus | "all">(
-    "pending"
-  );
+  const [statusFilter, setStatusFilter] = useState<WorkerStatus | "all">("pending");
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
@@ -233,10 +231,12 @@ const AdminOuvrierInscriptions: React.FC = () => {
     if (language === "fr") {
       if (s === "approved") return "Validé";
       if (s === "rejected") return "Refusé";
+      if (s === "suspended") return "Suspendu";
       return "En attente";
     } else {
       if (s === "approved") return "Approved";
       if (s === "rejected") return "Rejected";
+      if (s === "suspended") return "Suspended";
       return "Pending";
     }
   };
@@ -246,10 +246,12 @@ const AdminOuvrierInscriptions: React.FC = () => {
       return "bg-emerald-50 text-emerald-700 border-emerald-200";
     if (s === "rejected")
       return "bg-red-50 text-red-700 border-red-200";
+    if (s === "suspended")
+      return "bg-slate-100 text-slate-700 border-slate-300";
     return "bg-amber-50 text-amber-700 border-amber-200";
   };
 
-  // ✅ Plans (Gratuit / Mensuel / Annuel)
+  // ✅ label & style des plans (Gratuit / Mensuel / Annuel)
   const planLabel = (code: string | null | undefined) => {
     const c = code?.toLowerCase() || "";
     if (["free", "gratuit"].includes(c)) {
@@ -278,7 +280,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
     return "bg-slate-50 text-slate-400 border-slate-200";
   };
 
-  // ✅ Paiement
+  // ✅ Paiement : label & style
   const paymentStatusLabel = (s: string | null | undefined) => {
     if (language === "fr") {
       if (s === "paid") return "Payé";
@@ -324,13 +326,12 @@ const AdminOuvrierInscriptions: React.FC = () => {
   const handleValidate = async (w: DbWorker) => {
     if (!currentAdminId) return;
 
+    // Vérif minimale avant validation
     if (!w.email || !w.phone || !w.profession) {
       toast({
         variant: "destructive",
         title:
-          language === "fr"
-            ? "Validation impossible"
-            : "Cannot approve",
+          language === "fr" ? "Validation impossible" : "Cannot approve",
         description:
           language === "fr"
             ? "Email, téléphone et métier doivent être renseignés avant validation."
@@ -339,13 +340,12 @@ const AdminOuvrierInscriptions: React.FC = () => {
       return;
     }
 
+    // 🔒 Si le plan nécessite un paiement, il doit être "paid"
     if (requiresPayment(w.plan_code) && w.payment_status !== "paid") {
       toast({
         variant: "destructive",
         title:
-          language === "fr"
-            ? "Paiement non confirmé"
-            : "Payment not confirmed",
+          language === "fr" ? "Paiement non confirmé" : "Payment not confirmed",
         description:
           language === "fr"
             ? `Impossible de valider l'ouvrier tant que le paiement n'est pas marqué comme "Payé". Statut actuel : ${paymentStatusLabel(
@@ -552,6 +552,71 @@ const AdminOuvrierInscriptions: React.FC = () => {
     setActionLoadingId(null);
   };
 
+  // 🛑 Suspension
+  const handleSuspend = async (w: DbWorker) => {
+    if (!currentAdminId) return;
+
+    const reason =
+      language === "fr"
+        ? window.prompt(
+            "Motif de la suspension (optionnel) :",
+            w.rejection_reason || ""
+          )
+        : window.prompt(
+            "Suspension reason (optional):",
+            w.rejection_reason || ""
+          );
+
+    setActionLoadingId(w.id);
+    setError(null);
+
+    const { error } = await supabase
+      .from("op_ouvriers")
+      .update({
+        status: "suspended",
+        // on réutilise éventuellement rejection_reason pour garder une trace
+        rejection_reason: reason || w.rejection_reason || null,
+      })
+      .eq("id", w.id);
+
+    if (error) {
+      console.error(error);
+      toast({
+        variant: "destructive",
+        title:
+          language === "fr"
+            ? "Erreur lors de la suspension"
+            : "Error while suspending",
+        description: error.message,
+      });
+    } else {
+      setWorkers((prev) =>
+        prev.map((x) =>
+          x.id === w.id
+            ? {
+                ...x,
+                status: "suspended",
+                rejection_reason: reason || x.rejection_reason || null,
+              }
+            : x
+        )
+      );
+
+      toast({
+        title:
+          language === "fr"
+            ? "Ouvrier suspendu"
+            : "Worker suspended",
+        description:
+          language === "fr"
+            ? "Cet ouvrier ne sera plus visible dans la recherche publique."
+            : "This worker will no longer appear in public search.",
+      });
+    }
+
+    setActionLoadingId(null);
+  };
+
   // 🔄 Rafraîchir
   const refresh = async () => {
     if (authLoading || !isAdmin) return;
@@ -592,7 +657,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
       )
       .order("created_at", { ascending: false });
 
-    if (error) {
+  if (error) {
       console.error(error);
       setError(
         language === "fr"
@@ -603,9 +668,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
       setWorkers(data ?? []);
       toast({
         title:
-          language === "fr"
-            ? "Données actualisées"
-            : "Data refreshed",
+          language === "fr" ? "Données actualisées" : "Data refreshed",
       });
     }
 
@@ -685,9 +748,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
     );
 
     const csvContent =
-      headers.join(";") +
-      "\n" +
-      rows.map((r) => r.join(";")).join("\n");
+      headers.join(";") + "\n" + rows.map((r) => r.join(";")).join("\n");
 
     const blob = new Blob([csvContent], {
       type: "text/csv;charset=utf-8;",
@@ -704,9 +765,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
 
     toast({
       title:
-        language === "fr"
-          ? "Export CSV créé"
-          : "CSV export created",
+        language === "fr" ? "Export CSV créé" : "CSV export created",
       description:
         language === "fr"
           ? "Le fichier a été téléchargé."
@@ -730,13 +789,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
         ? "Rechercher (nom, métier, email, téléphone...)"
         : "Search (name, job, email, phone...)",
     dateFrom:
-      language === "fr"
-        ? "Du (date de création)"
-        : "From (created at)",
+      language === "fr" ? "Du (date de création)" : "From (created at)",
     dateTo:
-      language === "fr"
-        ? "Au (date de création)"
-        : "To (created at)",
+      language === "fr" ? "Au (date de création)" : "To (created at)",
     colDate: language === "fr" ? "Date" : "Date",
     colWorker: language === "fr" ? "Ouvrier" : "Worker",
     colContact: language === "fr" ? "Contact" : "Contact",
@@ -770,10 +825,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 py-4 md:py-8">
-      {/* pleine largeur avec padding responsive */}
-      <div className="w-full px-2 sm:px-4 lg:px-8">
-        {/* Menu admin */}
+    <div className="min-h-screen bg-slate-50 py-10">
+      <div className="max-w-6xl mx-auto px-4 md:px-8">
+        {/* Menu admin (tabs + retour site) */}
         <AdminNavTabs />
 
         {/* Header */}
@@ -831,6 +885,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
               <option value="rejected">
                 {language === "fr" ? "Refusé" : "Rejected"}
               </option>
+              <option value="suspended">
+                {language === "fr" ? "Suspendu" : "Suspended"}
+              </option>
               <option value="all">
                 {language === "fr" ? "Tous" : "All"}
               </option>
@@ -874,182 +931,8 @@ const AdminOuvrierInscriptions: React.FC = () => {
           </div>
         </div>
 
-        {/* ✅ Vue mobile (cartes) */}
-        <div className="md:hidden space-y-3 mb-6">
-          {filtered.length === 0 && !loading && (
-            <div className="bg-white border border-slate-200 rounded-xl px-4 py-6 text-center text-slate-500 text-sm">
-              {text.empty}
-            </div>
-          )}
-
-          {loading && (
-            <div className="bg-white border border-slate-200 rounded-xl px-4 py-6 text-center text-slate-500 text-sm">
-              {language === "fr" ? "Chargement..." : "Loading..."}
-            </div>
-          )}
-
-          {!loading &&
-            filtered.map((w) => {
-              const fullName =
-                (w.first_name || "") +
-                (w.last_name ? ` ${w.last_name}` : "");
-              const locationParts = [
-                w.country,
-                w.region,
-                w.city,
-                w.commune,
-                w.district,
-              ]
-                .filter(Boolean)
-                .join(" • ");
-              const needsPayment = requiresPayment(w.plan_code);
-
-              return (
-                <div
-                  key={w.id}
-                  className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="text-xs text-slate-500">
-                      {formatDateTime(w.created_at)}
-                    </div>
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusBadgeClass(
-                        w.status
-                      )}`}
-                    >
-                      {statusLabel(w.status)}
-                    </span>
-                  </div>
-
-                  <div className="mb-2">
-                    <div className="text-[11px] font-semibold text-slate-500 uppercase">
-                      {text.colWorker}
-                    </div>
-                    <div className="font-semibold text-slate-900">
-                      {fullName || "—"}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {w.profession || ""}
-                    </div>
-                    {w.years_experience != null && (
-                      <div className="text-xs text-slate-500">
-                        {w.years_experience}{" "}
-                        {language === "fr"
-                          ? "ans d'expérience"
-                          : "years of experience"}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mb-2">
-                    <div className="text-[11px] font-semibold text-slate-500 uppercase">
-                      {text.colContact}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {w.email || "—"}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {w.phone || ""}
-                    </div>
-                  </div>
-
-                  <div className="mb-2">
-                    <div className="text-[11px] font-semibold text-slate-500 uppercase">
-                      {text.colLocation}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {locationParts || "—"}
-                    </div>
-                  </div>
-
-                  <div className="mb-2 flex flex-wrap gap-2 items-start">
-                    <div>
-                      <div className="text-[11px] font-semibold text-slate-500 uppercase">
-                        {text.colPlan}
-                      </div>
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${planBadgeClass(
-                          w.plan_code
-                        )}`}
-                      >
-                        {planLabel(w.plan_code)}
-                      </span>
-                    </div>
-                    <div>
-                      <div className="text-[11px] font-semibold text-slate-500 uppercase">
-                        {text.colPayment}
-                      </div>
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${paymentStatusBadgeClass(
-                          w.payment_status
-                        )}`}
-                      >
-                        {paymentStatusLabel(w.payment_status)}
-                      </span>
-                      <div className="mt-1 text-[11px] text-slate-500">
-                        {language === "fr" ? "Mode : " : "Method: "}
-                        {paymentProviderLabel(w.payment_provider)}
-                      </div>
-                      {w.payment_at && (
-                        <div className="text-[11px] text-slate-500">
-                          {language === "fr" ? "Le " : "On "}{" "}
-                          {formatDateTime(w.payment_at)}
-                        </div>
-                      )}
-                      {w.payment_reference && (
-                        <div className="text-[11px] text-slate-500 truncate">
-                          {language === "fr" ? "Réf. " : "Ref. "}{" "}
-                          {w.payment_reference}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {needsPayment && w.payment_status !== "paid" && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                        disabled={actionLoadingId === w.id}
-                        onClick={() => handleMarkPaymentPaid(w)}
-                      >
-                        {language === "fr"
-                          ? "Valider paiement"
-                          : "Confirm payment"}
-                      </Button>
-                    )}
-
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={
-                        actionLoadingId === w.id || w.status === "approved"
-                      }
-                      onClick={() => handleValidate(w)}
-                    >
-                      {language === "fr" ? "Validé" : "Approve"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-red-300 text-red-700 hover:bg-red-50"
-                      disabled={
-                        actionLoadingId === w.id || w.status === "rejected"
-                      }
-                      onClick={() => handleReject(w)}
-                    >
-                      {language === "fr" ? "Refusé" : "Reject"}
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-        </div>
-
-        {/* ✅ Vue desktop (tableau) */}
-        <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* Table */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
@@ -1098,9 +981,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
                       colSpan={8}
                       className="px-4 py-6 text-center text-slate-500 text-sm"
                     >
-                      {language === "fr"
-                        ? "Chargement..."
-                        : "Loading..."}
+                      {language === "fr" ? "Chargement..." : "Loading..."}
                     </td>
                   </tr>
                 )}
@@ -1206,6 +1087,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
                             {statusLabel(w.status)}
                           </span>
 
+                          {/* Infos qui a validé / refusé */}
                           {w.validated_at && (
                             <div className="mt-1 text-[11px] text-slate-500">
                               {language === "fr"
@@ -1220,13 +1102,13 @@ const AdminOuvrierInscriptions: React.FC = () => {
                                 ? "Refusé le "
                                 : "Rejected on "}
                               {formatDateTime(w.rejected_at)}
-                              {w.rejection_reason &&
-                                ` – ${w.rejection_reason}`}
+                              {w.rejection_reason && ` – ${w.rejection_reason}`}
                             </div>
                           )}
                         </td>
                         {/* Actions */}
                         <td className="px-4 py-3 align-top text-right space-x-2 whitespace-nowrap">
+                          {/* Valider paiement pour les plans payants non encore payés */}
                           {needsPayment && w.payment_status !== "paid" && (
                             <Button
                               size="sm"
@@ -1246,12 +1128,14 @@ const AdminOuvrierInscriptions: React.FC = () => {
                             variant="outline"
                             disabled={
                               actionLoadingId === w.id ||
-                              w.status === "approved"
+                              w.status === "approved" ||
+                              w.status === "suspended"
                             }
                             onClick={() => handleValidate(w)}
                           >
                             {language === "fr" ? "Validé" : "Approve"}
                           </Button>
+
                           <Button
                             size="sm"
                             variant="outline"
@@ -1263,6 +1147,17 @@ const AdminOuvrierInscriptions: React.FC = () => {
                             onClick={() => handleReject(w)}
                           >
                             {language === "fr" ? "Refusé" : "Reject"}
+                          </Button>
+
+                          {/* 🛑 Bouton Suspendre */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-slate-400 text-slate-800 hover:bg-slate-50"
+                            disabled={actionLoadingId === w.id || w.status === "suspended"}
+                            onClick={() => handleSuspend(w)}
+                          >
+                            {language === "fr" ? "Suspendre" : "Suspend"}
                           </Button>
                         </td>
                       </tr>
