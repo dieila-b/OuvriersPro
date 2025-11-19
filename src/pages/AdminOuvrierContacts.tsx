@@ -16,9 +16,9 @@ type DbContact = {
   client_email: string | null;
   client_phone: string | null;
   message: string | null;
-  status: string | null; // "new" | "in_progress" | "done"
+  status: string | null;
   created_at: string;
-  origin?: string | null;
+  origin?: string | null; // peut ne pas exister si la colonne n'est pas encore créée
 };
 
 const statusOptions = ["new", "in_progress", "done"] as const;
@@ -40,6 +40,7 @@ const AdminOuvrierContacts: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<"" | ContactStatus>("");
   const [search, setSearch] = useState("");
 
+  // 🔹 filtres de date
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
 
@@ -86,7 +87,7 @@ const AdminOuvrierContacts: React.FC = () => {
     };
   }, [navigate]);
 
-  // 🔹 Chargement des demandes
+  // 🔹 Chargement des demandes (uniquement admin)
   useEffect(() => {
     if (authLoading || !isAdmin) return;
 
@@ -96,7 +97,7 @@ const AdminOuvrierContacts: React.FC = () => {
 
       const { data, error } = await supabase
         .from<DbContact>("op_ouvrier_contacts")
-        .select("*")
+        .select("*") // ✅ toutes les colonnes, y compris origin
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -117,7 +118,7 @@ const AdminOuvrierContacts: React.FC = () => {
     fetchContacts();
   }, [language, authLoading, isAdmin]);
 
-  // 🔎 Filtrage (statut, recherche, dates)
+  // 🔎 Filtrage (statut, texte, dates)
   const filtered = useMemo(() => {
     return contacts.filter((c) => {
       const matchStatus = !statusFilter || c.status === statusFilter;
@@ -139,6 +140,7 @@ const AdminOuvrierContacts: React.FC = () => {
         !search || haystack.includes(search.trim().toLowerCase());
 
       const created = new Date(c.created_at);
+
       let matchDateFrom = true;
       let matchDateTo = true;
 
@@ -223,7 +225,7 @@ const AdminOuvrierContacts: React.FC = () => {
   const stats = useMemo(() => {
     const total = filtered.length;
 
-    const todayISO = new Date().toISOString().slice(0, 10);
+    const todayISO = new Date().toISOString().slice(0, 10); // yyyy-mm-dd
     let today = 0;
     let last7 = 0;
 
@@ -279,8 +281,7 @@ const AdminOuvrierContacts: React.FC = () => {
         : "No requests yet.",
     refresh: language === "fr" ? "Rafraîchir" : "Refresh",
     exportCsv: language === "fr" ? "Exporter CSV" : "Export CSV",
-    statTotal:
-      language === "fr" ? "Total (période filtrée)" : "Total (filtered)",
+    statTotal: language === "fr" ? "Total (période filtrée)" : "Total (filtered)",
     statToday: language === "fr" ? "Aujourd’hui" : "Today",
     statLast7:
       language === "fr" ? "7 derniers jours" : "Last 7 days",
@@ -313,7 +314,7 @@ const AdminOuvrierContacts: React.FC = () => {
     setLoading(false);
   };
 
-  // 🔄 Export CSV (résultats filtrés)
+  // 🔄 Export CSV (avec les résultats filtrés)
   const exportCsv = () => {
     if (!filtered.length) return;
 
@@ -353,9 +354,7 @@ const AdminOuvrierContacts: React.FC = () => {
       "\n" +
       rows.map((r) => r.join(";")).join("\n");
 
-    const blob = new Blob([csvContent], {
-      type: "text/csv;charset=utf-8;",
-    });
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement("a");
@@ -385,14 +384,13 @@ const AdminOuvrierContacts: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 py-4 md:py-8">
-      {/* conteneur pleine largeur, avec padding responsive */}
-      <div className="w-full px-2 sm:px-4 lg:px-8">
-        {/* Tabs admin */}
+    <div className="min-h-screen bg-slate-50 py-10">
+      <div className="max-w-6xl mx-auto px-4 md:px-8">
+        {/* Menu admin (contacts / inscriptions / retour site) */}
         <AdminNavTabs />
 
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4 mt-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
               {text.title}
@@ -473,8 +471,8 @@ const AdminOuvrierContacts: React.FC = () => {
         </div>
 
         {/* Filtres */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
-          <div>
+        <div className="flex flex-col md:flex-row gap-3 mb-6">
+          <div className="md:w-1/4">
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.statusFilter}
             </label>
@@ -490,7 +488,7 @@ const AdminOuvrierContacts: React.FC = () => {
             </select>
           </div>
 
-          <div>
+          <div className="md:w-1/4">
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.dateFrom}
             </label>
@@ -502,7 +500,7 @@ const AdminOuvrierContacts: React.FC = () => {
             />
           </div>
 
-          <div>
+          <div className="md:w-1/4">
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.dateTo}
             </label>
@@ -514,7 +512,7 @@ const AdminOuvrierContacts: React.FC = () => {
             />
           </div>
 
-          <div>
+          <div className="flex-1">
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {text.searchLabel}
             </label>
@@ -527,101 +525,8 @@ const AdminOuvrierContacts: React.FC = () => {
           </div>
         </div>
 
-        {/* ✅ Vue mobile (cartes) */}
-        <div className="md:hidden space-y-3 mb-6">
-          {filtered.length === 0 && !loading && (
-            <div className="bg-white border border-slate-200 rounded-xl px-4 py-6 text-center text-slate-500 text-sm">
-              {text.empty}
-            </div>
-          )}
-
-          {loading && (
-            <div className="bg-white border border-slate-200 rounded-xl px-4 py-6 text-center text-slate-500 text-sm">
-              {language === "fr" ? "Chargement..." : "Loading..."}
-            </div>
-          )}
-
-          {!loading &&
-            filtered.map((c) => (
-              <div
-                key={c.id}
-                className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="text-xs text-slate-500">
-                    {formatDate(c.created_at)}
-                  </div>
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusColor(
-                      c.status
-                    )}`}
-                  >
-                    {statusLabel(c.status)}
-                  </span>
-                </div>
-
-                <div className="mb-2">
-                  <div className="text-[11px] font-semibold text-slate-500 uppercase">
-                    {text.colWorker}
-                  </div>
-                  <div className="font-semibold text-slate-900">
-                    {c.worker_name || "—"}
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {c.worker_profession || ""}
-                  </div>
-                </div>
-
-                <div className="mb-2">
-                  <div className="text-[11px] font-semibold text-slate-500 uppercase">
-                    {text.colClient}
-                  </div>
-                  <div className="font-medium text-slate-900">
-                    {c.client_name || "—"}
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {c.client_email || ""}
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {c.client_phone || ""}
-                  </div>
-                </div>
-
-                <div className="mb-2">
-                  <div className="text-[11px] font-semibold text-slate-500 uppercase">
-                    {text.colMessage}
-                  </div>
-                  <div className="text-xs text-slate-700 whitespace-pre-line line-clamp-4">
-                    {c.message || "—"}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between mt-3">
-                  <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-slate-50 text-slate-700 border border-slate-200">
-                    {originLabel(c.origin)}
-                  </span>
-                  <select
-                    disabled={savingId === c.id}
-                    value={(c.status as ContactStatus) || "new"}
-                    onChange={(e) =>
-                      handleStatusChange(
-                        c.id,
-                        e.target.value as ContactStatus
-                      )
-                    }
-                    className="text-xs border border-slate-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
-                  >
-                    <option value="new">{text.new}</option>
-                    <option value="in_progress">{text.inProgress}</option>
-                    <option value="done">{text.done}</option>
-                  </select>
-                </div>
-              </div>
-            ))}
-        </div>
-
-        {/* ✅ Vue desktop (tableau) */}
-        <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* Table */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
@@ -667,9 +572,7 @@ const AdminOuvrierContacts: React.FC = () => {
                       colSpan={7}
                       className="px-4 py-6 text-center text-slate-500 text-sm"
                     >
-                      {language === "fr"
-                        ? "Chargement..."
-                        : "Loading..."}
+                      {language === "fr" ? "Chargement..." : "Loading..."}
                     </td>
                   </tr>
                 )}
