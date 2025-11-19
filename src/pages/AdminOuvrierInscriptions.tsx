@@ -36,7 +36,7 @@ type DbWorker = {
   payment_at: string | null;
 };
 
-type WorkerStatus = "pending" | "approved" | "rejected" | "suspended";
+type WorkerStatus = "pending" | "approved" | "rejected";
 
 const AdminOuvrierInscriptions: React.FC = () => {
   const { language } = useLanguage();
@@ -53,7 +53,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [statusFilter, setStatusFilter] = useState<WorkerStatus | "all">("pending");
+  const [statusFilter, setStatusFilter] = useState<WorkerStatus | "all">(
+    "pending"
+  );
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
@@ -231,12 +233,10 @@ const AdminOuvrierInscriptions: React.FC = () => {
     if (language === "fr") {
       if (s === "approved") return "Validé";
       if (s === "rejected") return "Refusé";
-      if (s === "suspended") return "Suspendu";
       return "En attente";
     } else {
       if (s === "approved") return "Approved";
       if (s === "rejected") return "Rejected";
-      if (s === "suspended") return "Suspended";
       return "Pending";
     }
   };
@@ -246,8 +246,6 @@ const AdminOuvrierInscriptions: React.FC = () => {
       return "bg-emerald-50 text-emerald-700 border-emerald-200";
     if (s === "rejected")
       return "bg-red-50 text-red-700 border-red-200";
-    if (s === "suspended")
-      return "bg-slate-100 text-slate-700 border-slate-300";
     return "bg-amber-50 text-amber-700 border-amber-200";
   };
 
@@ -331,7 +329,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
       toast({
         variant: "destructive",
         title:
-          language === "fr" ? "Validation impossible" : "Cannot approve",
+          language === "fr"
+            ? "Validation impossible"
+            : "Cannot approve",
         description:
           language === "fr"
             ? "Email, téléphone et métier doivent être renseignés avant validation."
@@ -345,7 +345,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
       toast({
         variant: "destructive",
         title:
-          language === "fr" ? "Paiement non confirmé" : "Payment not confirmed",
+          language === "fr"
+            ? "Paiement non confirmé"
+            : "Payment not confirmed",
         description:
           language === "fr"
             ? `Impossible de valider l'ouvrier tant que le paiement n'est pas marqué comme "Payé". Statut actuel : ${paymentStatusLabel(
@@ -552,71 +554,6 @@ const AdminOuvrierInscriptions: React.FC = () => {
     setActionLoadingId(null);
   };
 
-  // 🛑 Suspension
-  const handleSuspend = async (w: DbWorker) => {
-    if (!currentAdminId) return;
-
-    const reason =
-      language === "fr"
-        ? window.prompt(
-            "Motif de la suspension (optionnel) :",
-            w.rejection_reason || ""
-          )
-        : window.prompt(
-            "Suspension reason (optional):",
-            w.rejection_reason || ""
-          );
-
-    setActionLoadingId(w.id);
-    setError(null);
-
-    const { error } = await supabase
-      .from("op_ouvriers")
-      .update({
-        status: "suspended",
-        // on réutilise éventuellement rejection_reason pour garder une trace
-        rejection_reason: reason || w.rejection_reason || null,
-      })
-      .eq("id", w.id);
-
-    if (error) {
-      console.error(error);
-      toast({
-        variant: "destructive",
-        title:
-          language === "fr"
-            ? "Erreur lors de la suspension"
-            : "Error while suspending",
-        description: error.message,
-      });
-    } else {
-      setWorkers((prev) =>
-        prev.map((x) =>
-          x.id === w.id
-            ? {
-                ...x,
-                status: "suspended",
-                rejection_reason: reason || x.rejection_reason || null,
-              }
-            : x
-        )
-      );
-
-      toast({
-        title:
-          language === "fr"
-            ? "Ouvrier suspendu"
-            : "Worker suspended",
-        description:
-          language === "fr"
-            ? "Cet ouvrier ne sera plus visible dans la recherche publique."
-            : "This worker will no longer appear in public search.",
-      });
-    }
-
-    setActionLoadingId(null);
-  };
-
   // 🔄 Rafraîchir
   const refresh = async () => {
     if (authLoading || !isAdmin) return;
@@ -657,7 +594,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
       )
       .order("created_at", { ascending: false });
 
-  if (error) {
+    if (error) {
       console.error(error);
       setError(
         language === "fr"
@@ -668,7 +605,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
       setWorkers(data ?? []);
       toast({
         title:
-          language === "fr" ? "Données actualisées" : "Data refreshed",
+          language === "fr"
+            ? "Données actualisées"
+            : "Data refreshed",
       });
     }
 
@@ -748,7 +687,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
     );
 
     const csvContent =
-      headers.join(";") + "\n" + rows.map((r) => r.join(";")).join("\n");
+      headers.join(";") +
+      "\n" +
+      rows.map((r) => r.join(";")).join("\n");
 
     const blob = new Blob([csvContent], {
       type: "text/csv;charset=utf-8;",
@@ -765,7 +706,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
 
     toast({
       title:
-        language === "fr" ? "Export CSV créé" : "CSV export created",
+        language === "fr"
+          ? "Export CSV créé"
+          : "CSV export created",
       description:
         language === "fr"
           ? "Le fichier a été téléchargé."
@@ -789,9 +732,13 @@ const AdminOuvrierInscriptions: React.FC = () => {
         ? "Rechercher (nom, métier, email, téléphone...)"
         : "Search (name, job, email, phone...)",
     dateFrom:
-      language === "fr" ? "Du (date de création)" : "From (created at)",
+      language === "fr"
+        ? "Du (date de création)"
+        : "From (created at)",
     dateTo:
-      language === "fr" ? "Au (date de création)" : "To (created at)",
+      language === "fr"
+        ? "Au (date de création)"
+        : "To (created at)",
     colDate: language === "fr" ? "Date" : "Date",
     colWorker: language === "fr" ? "Ouvrier" : "Worker",
     colContact: language === "fr" ? "Contact" : "Contact",
@@ -884,9 +831,6 @@ const AdminOuvrierInscriptions: React.FC = () => {
               </option>
               <option value="rejected">
                 {language === "fr" ? "Refusé" : "Rejected"}
-              </option>
-              <option value="suspended">
-                {language === "fr" ? "Suspendu" : "Suspended"}
               </option>
               <option value="all">
                 {language === "fr" ? "Tous" : "All"}
@@ -981,7 +925,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
                       colSpan={8}
                       className="px-4 py-6 text-center text-slate-500 text-sm"
                     >
-                      {language === "fr" ? "Chargement..." : "Loading..."}
+                      {language === "fr"
+                        ? "Chargement..."
+                        : "Loading..."}
                     </td>
                   </tr>
                 )}
@@ -1102,13 +1048,14 @@ const AdminOuvrierInscriptions: React.FC = () => {
                                 ? "Refusé le "
                                 : "Rejected on "}
                               {formatDateTime(w.rejected_at)}
-                              {w.rejection_reason && ` – ${w.rejection_reason}`}
+                              {w.rejection_reason &&
+                                ` – ${w.rejection_reason}`}
                             </div>
                           )}
                         </td>
                         {/* Actions */}
                         <td className="px-4 py-3 align-top text-right space-x-2 whitespace-nowrap">
-                          {/* Valider paiement pour les plans payants non encore payés */}
+                          {/* Bouton "Valider paiement" pour les plans payants non encore payés */}
                           {needsPayment && w.payment_status !== "paid" && (
                             <Button
                               size="sm"
@@ -1128,14 +1075,12 @@ const AdminOuvrierInscriptions: React.FC = () => {
                             variant="outline"
                             disabled={
                               actionLoadingId === w.id ||
-                              w.status === "approved" ||
-                              w.status === "suspended"
+                              w.status === "approved"
                             }
                             onClick={() => handleValidate(w)}
                           >
                             {language === "fr" ? "Validé" : "Approve"}
                           </Button>
-
                           <Button
                             size="sm"
                             variant="outline"
@@ -1147,17 +1092,6 @@ const AdminOuvrierInscriptions: React.FC = () => {
                             onClick={() => handleReject(w)}
                           >
                             {language === "fr" ? "Refusé" : "Reject"}
-                          </Button>
-
-                          {/* 🛑 Bouton Suspendre */}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-slate-400 text-slate-800 hover:bg-slate-50"
-                            disabled={actionLoadingId === w.id || w.status === "suspended"}
-                            onClick={() => handleSuspend(w)}
-                          >
-                            {language === "fr" ? "Suspendre" : "Suspend"}
                           </Button>
                         </td>
                       </tr>
