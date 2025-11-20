@@ -36,7 +36,7 @@ type DbWorker = {
   payment_at: string | null;
 };
 
-// 🔹 nouveau statut "suspended"
+// 🔹 statut avec "suspended"
 type WorkerStatus = "pending" | "approved" | "rejected" | "suspended";
 
 const AdminOuvrierInscriptions: React.FC = () => {
@@ -618,6 +618,98 @@ const AdminOuvrierInscriptions: React.FC = () => {
     setActionLoadingId(null);
   };
 
+  // ✅ Réactivation (suspended → approved)
+  const handleReactivate = async (w: DbWorker) => {
+    if (!currentAdminId) return;
+
+    // mêmes contrôles que pour une validation
+    if (!w.email || !w.phone || !w.profession) {
+      toast({
+        variant: "destructive",
+        title:
+          language === "fr"
+            ? "Réactivation impossible"
+            : "Cannot reactivate",
+        description:
+          language === "fr"
+            ? "Email, téléphone et métier doivent être renseignés avant réactivation."
+            : "Email, phone and profession must be filled before reactivation.",
+      });
+      return;
+    }
+
+    if (requiresPayment(w.plan_code) && w.payment_status !== "paid") {
+      toast({
+        variant: "destructive",
+        title:
+          language === "fr"
+            ? "Paiement non confirmé"
+            : "Payment not confirmed",
+        description:
+          language === "fr"
+            ? `Impossible de réactiver l'ouvrier tant que le paiement n'est pas marqué comme "Payé". Statut actuel : ${paymentStatusLabel(
+                w.payment_status
+              )}.`
+            : `You cannot reactivate this worker while the payment is not marked as "Paid". Current status: ${paymentStatusLabel(
+                w.payment_status
+              )}.`,
+      });
+      return;
+    }
+
+    setActionLoadingId(w.id);
+    setError(null);
+
+    const nowIso = new Date().toISOString();
+
+    const { error } = await supabase
+      .from("op_ouvriers")
+      .update({
+        status: "approved",
+        validated_at: nowIso,
+        validated_by: currentAdminId,
+      })
+      .eq("id", w.id);
+
+    if (error) {
+      console.error(error);
+      toast({
+        variant: "destructive",
+        title:
+          language === "fr"
+            ? "Erreur lors de la réactivation"
+            : "Error while reactivating",
+        description: error.message,
+      });
+    } else {
+      setWorkers((prev) =>
+        prev.map((x) =>
+          x.id === w.id
+            ? {
+                ...x,
+                status: "approved",
+                validated_at: nowIso,
+                validated_by: currentAdminId,
+              }
+            : x
+        )
+      );
+
+      toast({
+        title:
+          language === "fr"
+            ? "Ouvrier réactivé"
+            : "Worker reactivated",
+        description:
+          language === "fr"
+            ? "Cet ouvrier est de nouveau visible dans la recherche publique."
+            : "This worker is now visible again in public search.",
+      });
+    }
+
+    setActionLoadingId(null);
+  };
+
   // 🔄 Rafraîchir
   const refresh = async () => {
     if (authLoading || !isAdmin) return;
@@ -1105,17 +1197,27 @@ const AdminOuvrierInscriptions: React.FC = () => {
                       {language === "fr" ? "Refusé" : "Reject"}
                     </Button>
 
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-slate-400 text-slate-800 hover:bg-slate-50"
-                      disabled={
-                        actionLoadingId === w.id || w.status === "suspended"
-                      }
-                      onClick={() => handleSuspend(w)}
-                    >
-                      {language === "fr" ? "Suspendre" : "Suspend"}
-                    </Button>
+                    {w.status === "suspended" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-emerald-400 text-emerald-700 hover:bg-emerald-50"
+                        disabled={actionLoadingId === w.id}
+                        onClick={() => handleReactivate(w)}
+                      >
+                        {language === "fr" ? "Réactiver" : "Reactivate"}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-slate-400 text-slate-800 hover:bg-slate-50"
+                        disabled={actionLoadingId === w.id}
+                        onClick={() => handleSuspend(w)}
+                      >
+                        {language === "fr" ? "Suspendre" : "Suspend"}
+                      </Button>
+                    )}
                   </div>
                 </div>
               );
@@ -1339,18 +1441,29 @@ const AdminOuvrierInscriptions: React.FC = () => {
                             {language === "fr" ? "Refusé" : "Reject"}
                           </Button>
 
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-slate-400 text-slate-800 hover:bg-slate-50"
-                            disabled={
-                              actionLoadingId === w.id ||
-                              w.status === "suspended"
-                            }
-                            onClick={() => handleSuspend(w)}
-                          >
-                            {language === "fr" ? "Suspendre" : "Suspend"}
-                          </Button>
+                          {w.status === "suspended" ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-emerald-400 text-emerald-700 hover:bg-emerald-50"
+                              disabled={actionLoadingId === w.id}
+                              onClick={() => handleReactivate(w)}
+                            >
+                              {language === "fr"
+                                ? "Réactiver"
+                                : "Reactivate"}
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-slate-400 text-slate-800 hover:bg-slate-50"
+                              disabled={actionLoadingId === w.id}
+                              onClick={() => handleSuspend(w)}
+                            >
+                              {language === "fr" ? "Suspendre" : "Suspend"}
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     );
