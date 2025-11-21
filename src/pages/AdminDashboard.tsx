@@ -6,6 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useNavigate, Link } from "react-router-dom";
 import AdminNavTabs from "@/components/AdminNavTabs";
+import {
+  Users,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Ban,
+  PhoneCall,
+  TrendingUp,
+  Percent,
+} from "lucide-react";
 
 type DbWorkerSummary = {
   id: string;
@@ -42,7 +52,54 @@ type ChartData = {
 
 type PlanKey = "free" | "monthly" | "yearly" | "other";
 
-// 🔧 normalisation du plan (free / monthly / yearly / other)
+/* -----------------------------
+   ✅ UI helpers (design moderne)
+-------------------------------- */
+const cardClass =
+  "bg-white/80 backdrop-blur border border-slate-100 rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)]";
+
+const statCardBase =
+  "relative overflow-hidden rounded-2xl border border-slate-100 bg-white/90 backdrop-blur p-4 md:p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)] flex flex-col justify-between";
+
+function StatCard({
+  label,
+  value,
+  subtitle,
+  icon: Icon,
+  gradient,
+}: {
+  label: string;
+  value: string | number;
+  subtitle?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  gradient: string; // ex: "from-sky-500/10 to-sky-500/40"
+}) {
+  return (
+    <div className={statCardBase}>
+      <div
+        className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${gradient} opacity-70`}
+      />
+      <div className="relative flex items-center justify-between mb-3">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[.16em] text-slate-500">
+            {label}
+          </p>
+          <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
+        </div>
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/80 border border-white/60 shadow-sm">
+          <Icon className="h-5 w-5 text-slate-700" />
+        </div>
+      </div>
+      {subtitle && (
+        <p className="relative text-xs text-slate-600">{subtitle}</p>
+      )}
+    </div>
+  );
+}
+
+/* -----------------------------
+   🔧 normalisation du plan
+-------------------------------- */
 const normalizePlan = (code: string | null | undefined): PlanKey => {
   const c = (code || "").toLowerCase().trim();
 
@@ -95,7 +152,7 @@ const planBadgeClass = (code: string | null | undefined): string => {
   if (plan === "free")
     return "bg-slate-50 text-slate-700 border-slate-200";
   if (plan === "monthly")
-    return "bg-blue-50 text-blue-700 border-blue-200";
+    return "bg-sky-50 text-sky-700 border-sky-200";
   if (plan === "yearly")
     return "bg-indigo-50 text-indigo-700 border-indigo-200";
   return "bg-slate-50 text-slate-400 border-slate-200";
@@ -119,7 +176,7 @@ const AdminDashboard: React.FC = () => {
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
 
-  // 📊 Graphique : mode jour / semaine + volume / conversion
+  // 📊 Graphique
   const [chartMode, setChartMode] = useState<ChartMode>("daily");
   const [metricMode, setMetricMode] = useState<MetricMode>("volume");
 
@@ -276,11 +333,11 @@ const AdminDashboard: React.FC = () => {
 
   // 🔢 Stats globales (dont plans)
   const stats = useMemo(() => {
-    // Ouvriers
     const totalWorkers = filteredWorkers.length;
     let pendingWorkers = 0;
     let approvedWorkers = 0;
     let rejectedWorkers = 0;
+    let suspendedWorkers = 0;
 
     let planFree = 0;
     let planMonthly = 0;
@@ -291,6 +348,7 @@ const AdminDashboard: React.FC = () => {
       if (w.status === "pending") pendingWorkers += 1;
       if (w.status === "approved") approvedWorkers += 1;
       if (w.status === "rejected") rejectedWorkers += 1;
+      if (w.status === "suspended") suspendedWorkers += 1;
 
       const p = normalizePlan(w.plan_code);
       if (p === "free") planFree += 1;
@@ -299,7 +357,6 @@ const AdminDashboard: React.FC = () => {
       else planOther += 1;
     });
 
-    // Contacts
     const totalContacts = filteredContacts.length;
 
     const todayISO = new Date().toISOString().slice(0, 10);
@@ -321,6 +378,7 @@ const AdminDashboard: React.FC = () => {
       pendingWorkers,
       approvedWorkers,
       rejectedWorkers,
+      suspendedWorkers,
       totalContacts,
       contactsToday,
       contactsLast7,
@@ -345,7 +403,6 @@ const AdminDashboard: React.FC = () => {
   // 📈 Graphique Volume = demandes de contact
   const volumeChartData: ChartData = useMemo(() => {
     if (chartMode === "daily") {
-      // 7 derniers jours
       const days: ChartPoint[] = [];
       const today = new Date();
       for (let i = 6; i >= 0; i--) {
@@ -356,7 +413,7 @@ const AdminDashboard: React.FC = () => {
             today.getDate() - i
           )
         );
-        const key = d.toISOString().slice(0, 10); // yyyy-mm-dd
+        const key = d.toISOString().slice(0, 10);
         const label =
           language === "fr"
             ? d.toLocaleDateString("fr-FR", { weekday: "short" })
@@ -367,9 +424,7 @@ const AdminDashboard: React.FC = () => {
       filteredContacts.forEach((c) => {
         const dateStr = c.created_at.slice(0, 10);
         const day = days.find((d) => d.key === dateStr);
-        if (day) {
-          day.value += 1;
-        }
+        if (day) day.value += 1;
       });
 
       const maxValue =
@@ -377,7 +432,6 @@ const AdminDashboard: React.FC = () => {
 
       return { points: days, maxValue };
     } else {
-      // weekly : 8 dernières semaines
       const weeksMap: Record<
         string,
         { label: string; key: string; value: number; orderKey: string }
@@ -387,14 +441,8 @@ const AdminDashboard: React.FC = () => {
         const d = new Date(c.created_at);
         const { key, week } = getWeekKey(d);
         if (!weeksMap[key]) {
-          const label =
-            language === "fr" ? `S${week}` : `W${week}`;
-          weeksMap[key] = {
-            label,
-            key,
-            value: 0,
-            orderKey: key,
-          };
+          const label = language === "fr" ? `S${week}` : `W${week}`;
+          weeksMap[key] = { label, key, value: 0, orderKey: key };
         }
         weeksMap[key].value += 1;
       });
@@ -403,9 +451,7 @@ const AdminDashboard: React.FC = () => {
         a.orderKey.localeCompare(b.orderKey)
       );
 
-      if (weeks.length > 8) {
-        weeks = weeks.slice(weeks.length - 8);
-      }
+      if (weeks.length > 8) weeks = weeks.slice(weeks.length - 8);
 
       const maxValue =
         weeks.reduce((max, d) => (d.value > max ? d.value : max), 0) || 1;
@@ -414,10 +460,9 @@ const AdminDashboard: React.FC = () => {
     }
   }, [filteredContacts, chartMode, language]);
 
-  // 📈 Graphique Conversion = % ouvriers validés parmi les inscriptions
+  // 📈 Graphique Conversion
   const conversionChartData: ChartData = useMemo(() => {
     if (chartMode === "daily") {
-      // 7 derniers jours
       const daysBase: { key: string; label: string }[] = [];
       const today = new Date();
       for (let i = 6; i >= 0; i--) {
@@ -449,78 +494,45 @@ const AdminDashboard: React.FC = () => {
         const dateStr = w.created_at.slice(0, 10);
         if (meta[dateStr]) {
           meta[dateStr].total += 1;
-          if (w.status === "approved") {
-            meta[dateStr].approved += 1;
-          }
+          if (w.status === "approved") meta[dateStr].approved += 1;
         }
       });
 
       const points: ChartPoint[] = daysBase.map((d) => {
         const m = meta[d.key];
-        const rate =
-          m.total > 0 ? (m.approved / m.total) * 100 : 0;
-        return {
-          key: d.key,
-          label: d.label,
-          value: rate,
-        };
+        const rate = m.total > 0 ? (m.approved / m.total) * 100 : 0;
+        return { key: d.key, label: d.label, value: rate };
       });
 
-      const maxValue = 100; // taux max 100%
-
-      return { points, maxValue };
+      return { points, maxValue: 100 };
     } else {
-      // weekly
       const weeksMeta: Record<
         string,
-        {
-          label: string;
-          orderKey: string;
-          total: number;
-          approved: number;
-        }
+        { label: string; orderKey: string; total: number; approved: number }
       > = {};
 
       filteredWorkers.forEach((w) => {
         const d = new Date(w.created_at);
         const { key, week } = getWeekKey(d);
         if (!weeksMeta[key]) {
-          const label =
-            language === "fr" ? `S${week}` : `W${week}`;
-          weeksMeta[key] = {
-            label,
-            orderKey: key,
-            total: 0,
-            approved: 0,
-          };
+          const label = language === "fr" ? `S${week}` : `W${week}`;
+          weeksMeta[key] = { label, orderKey: key, total: 0, approved: 0 };
         }
         weeksMeta[key].total += 1;
-        if (w.status === "approved") {
-          weeksMeta[key].approved += 1;
-        }
+        if (w.status === "approved") weeksMeta[key].approved += 1;
       });
 
       let weeksArr = Object.values(weeksMeta).sort((a, b) =>
         a.orderKey.localeCompare(b.orderKey)
       );
-
-      if (weeksArr.length > 8) {
-        weeksArr = weeksArr.slice(weeksArr.length - 8);
-      }
+      if (weeksArr.length > 8) weeksArr = weeksArr.slice(weeksArr.length - 8);
 
       const points: ChartPoint[] = weeksArr.map((w) => {
-        const rate =
-          w.total > 0 ? (w.approved / w.total) * 100 : 0;
-        return {
-          key: w.orderKey,
-          label: w.label,
-          value: rate,
-        };
+        const rate = w.total > 0 ? (w.approved / w.total) * 100 : 0;
+        return { key: w.orderKey, label: w.label, value: rate };
       });
 
-      const maxValue = 100;
-
-      return { points, maxValue };
+      return { points, maxValue: 100 };
     }
   }, [filteredWorkers, chartMode, language]);
 
@@ -542,10 +554,12 @@ const AdminDashboard: React.FC = () => {
     if (language === "fr") {
       if (s === "approved") return "Validé";
       if (s === "rejected") return "Refusé";
+      if (s === "suspended") return "Suspendu";
       return "En attente";
     } else {
       if (s === "approved") return "Approved";
       if (s === "rejected") return "Rejected";
+      if (s === "suspended") return "Suspended";
       return "Pending";
     }
   };
@@ -554,7 +568,9 @@ const AdminDashboard: React.FC = () => {
     if (s === "approved")
       return "bg-emerald-50 text-emerald-700 border-emerald-200";
     if (s === "rejected")
-      return "bg-red-50 text-red-700 border-red-200";
+      return "bg-rose-50 text-rose-700 border-rose-200";
+    if (s === "suspended")
+      return "bg-slate-100 text-slate-700 border-slate-300";
     return "bg-amber-50 text-amber-700 border-amber-200";
   };
 
@@ -581,46 +597,23 @@ const AdminDashboard: React.FC = () => {
   const recentContacts = filteredContacts.slice(0, 5);
 
   const text = {
-    title:
-      language === "fr"
-        ? "Tableau de bord admin"
-        : "Admin dashboard",
+    title: language === "fr" ? "Tableau de bord admin" : "Admin dashboard",
     subtitle:
       language === "fr"
         ? "Vue d’ensemble des inscriptions et demandes de contact."
         : "Global view of registrations and contact requests.",
     dateFrom:
-      language === "fr"
-        ? "Du (filtre global)"
-        : "From (global filter)",
+      language === "fr" ? "Du (filtre global)" : "From (global filter)",
     dateTo:
-      language === "fr"
-        ? "Au (filtre global)"
-        : "To (global filter)",
+      language === "fr" ? "Au (filtre global)" : "To (global filter)",
     statsWorkers:
       language === "fr" ? "Inscriptions ouvriers" : "Workers registrations",
-    statTotalWorkers:
-      language === "fr" ? "Total ouvriers" : "Total workers",
-    statPending:
-      language === "fr" ? "En attente" : "Pending",
-    statApproved:
-      language === "fr" ? "Validés" : "Approved",
-    statRejected:
-      language === "fr" ? "Refusés" : "Rejected",
     statsContacts:
-      language === "fr"
-        ? "Demandes de contact"
-        : "Contact requests",
-    statTotalContacts:
-      language === "fr" ? "Total demandes" : "Total requests",
-    statToday:
-      language === "fr" ? "Aujourd’hui" : "Today",
-    statLast7:
-      language === "fr" ? "7 derniers jours" : "Last 7 days",
+      language === "fr" ? "Demandes de contact" : "Contact requests",
+    statRejected: language === "fr" ? "Refusés" : "Rejected",
+    statSuspended: language === "fr" ? "Suspendus" : "Suspended",
     recentWorkers:
-      language === "fr"
-        ? "Dernières inscriptions"
-        : "Latest registrations",
+      language === "fr" ? "Dernières inscriptions" : "Latest registrations",
     recentContacts:
       language === "fr"
         ? "Dernières demandes de contact"
@@ -661,12 +654,9 @@ const AdminDashboard: React.FC = () => {
       language === "fr"
         ? "Roadmap indicative pour l’app mobile OuvriersPro."
         : "Indicative roadmap for the OuvriersPro mobile app.",
-    chartModeDaily:
-      language === "fr" ? "Jour" : "Daily",
-    chartModeWeekly:
-      language === "fr" ? "Semaine" : "Weekly",
-    metricModeVolume:
-      language === "fr" ? "Volume" : "Volume",
+    chartModeDaily: language === "fr" ? "Jour" : "Daily",
+    chartModeWeekly: language === "fr" ? "Semaine" : "Weekly",
+    metricModeVolume: language === "fr" ? "Volume" : "Volume",
     metricModeConversion:
       language === "fr" ? "Conversion" : "Conversion",
   };
@@ -688,23 +678,23 @@ const AdminDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* ✅ pleine largeur + padding fluide */}
-      <div className="w-full px-4 sm:px-6 lg:px-10 py-8">
-        {/* Menu admin (tabs + retour site) */}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50 to-indigo-50">
+      <div className="w-full px-3 sm:px-6 lg:px-10 py-6 md:py-10">
         <AdminNavTabs />
 
         {/* Header + filtres globaux */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6 mt-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
               {text.title}
+              <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-semibold">
+                Admin
+              </span>
             </h1>
-            <p className="text-sm text-slate-600 mt-1">
-              {text.subtitle}
-            </p>
+            <p className="text-sm text-slate-600 mt-1">{text.subtitle}</p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
+
+          <div className={`${cardClass} p-3 flex flex-col sm:flex-row gap-3`}>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">
                 {text.dateFrom}
@@ -713,7 +703,7 @@ const AdminDashboard: React.FC = () => {
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="text-sm"
+                className="text-sm bg-white"
               />
             </div>
             <div>
@@ -724,67 +714,90 @@ const AdminDashboard: React.FC = () => {
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="text-sm"
+                className="text-sm bg-white"
               />
             </div>
           </div>
         </div>
 
-        {/* Statistiques globales */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-5 mb-8">
-          {/* Bloc stats ouvriers */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-xs font-semibold text-slate-800 uppercase tracking-wide">
-                {text.statsWorkers}
-              </h2>
-            </div>
-            <div className="grid grid-cols-3 gap-4 mt-3">
-              <div>
-                <div className="text-xs text-slate-500">
-                  {text.statTotalWorkers}
-                </div>
-                <div className="text-2xl font-bold text-slate-900">
-                  {stats.totalWorkers}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-slate-500">
-                  {text.statPending}
-                </div>
-                <div className="text-2xl font-bold text-amber-600">
-                  {stats.pendingWorkers}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-slate-500">
-                  {text.statApproved}
-                </div>
-                <div className="text-2xl font-bold text-emerald-700">
-                  {stats.approvedWorkers}
-                </div>
-              </div>
-            </div>
-            <div className="mt-4">
-              <div className="text-xs text-slate-500">
-                {text.statRejected}
-              </div>
-              <div className="text-lg font-semibold text-red-600">
-                {stats.rejectedWorkers}
-              </div>
-            </div>
+        {/* ✅ Stat cards workers */}
+        <div className="grid gap-4 md:gap-5 md:grid-cols-5 mb-6">
+          <StatCard
+            label={language === "fr" ? "Total ouvriers" : "Total workers"}
+            value={stats.totalWorkers}
+            subtitle={language === "fr" ? "Tous statuts" : "All statuses"}
+            icon={Users}
+            gradient="from-sky-500/10 via-sky-400/20 to-sky-500/40"
+          />
+          <StatCard
+            label={language === "fr" ? "En attente" : "Pending"}
+            value={stats.pendingWorkers}
+            subtitle={language === "fr" ? "À traiter" : "To review"}
+            icon={Clock}
+            gradient="from-amber-400/10 via-amber-300/20 to-amber-500/40"
+          />
+          <StatCard
+            label={language === "fr" ? "Validés" : "Approved"}
+            value={stats.approvedWorkers}
+            subtitle={language === "fr" ? "Actifs" : "Active"}
+            icon={CheckCircle2}
+            gradient="from-emerald-400/10 via-emerald-300/20 to-emerald-500/40"
+          />
+          <StatCard
+            label={text.statRejected}
+            value={stats.rejectedWorkers}
+            subtitle={language === "fr" ? "Non retenus" : "Not accepted"}
+            icon={XCircle}
+            gradient="from-rose-400/10 via-rose-300/20 to-rose-500/40"
+          />
+          <StatCard
+            label={text.statSuspended}
+            value={stats.suspendedWorkers}
+            subtitle={language === "fr" ? "Masqués" : "Hidden"}
+            icon={Ban}
+            gradient="from-slate-400/10 via-slate-300/20 to-slate-500/30"
+          />
+        </div>
 
-            {/* 🔹 Répartition par plan (Gratuit / Mensuel / Annuel) */}
-            <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
+        {/* ✅ Stat cards contacts */}
+        <div className="grid gap-4 md:gap-5 md:grid-cols-3 mb-8">
+          <StatCard
+            label={language === "fr" ? "Total demandes" : "Total requests"}
+            value={stats.totalContacts}
+            subtitle={language === "fr" ? "Contacts reçus" : "Requests received"}
+            icon={PhoneCall}
+            gradient="from-indigo-500/10 via-indigo-400/20 to-indigo-500/40"
+          />
+          <StatCard
+            label={language === "fr" ? "Aujourd’hui" : "Today"}
+            value={stats.contactsToday}
+            subtitle={language === "fr" ? "Dernières 24h" : "Last 24h"}
+            icon={TrendingUp}
+            gradient="from-fuchsia-500/10 via-fuchsia-400/20 to-fuchsia-500/40"
+          />
+          <StatCard
+            label={language === "fr" ? "7 derniers jours" : "Last 7 days"}
+            value={stats.contactsLast7}
+            subtitle={language === "fr" ? "Semaine" : "Weekly"}
+            icon={TrendingUp}
+            gradient="from-teal-500/10 via-teal-400/20 to-teal-500/40"
+          />
+        </div>
+
+        {/* ✅ Répartition plans + liens */}
+        <div className={`${cardClass} p-5 mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4`}>
+          <div>
+            <h2 className="text-sm font-semibold text-slate-800">
+              {text.statsWorkers}
+            </h2>
+            <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
               <span
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass(
                   "free"
                 )}`}
               >
                 <span>{language === "fr" ? "Gratuit" : "Free"}</span>
-                <span className="font-semibold">
-                  {stats.planFree}
-                </span>
+                <span className="font-semibold">{stats.planFree}</span>
               </span>
               <span
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass(
@@ -792,9 +805,7 @@ const AdminDashboard: React.FC = () => {
                 )}`}
               >
                 <span>{language === "fr" ? "Mensuel" : "Monthly"}</span>
-                <span className="font-semibold">
-                  {stats.planMonthly}
-                </span>
+                <span className="font-semibold">{stats.planMonthly}</span>
               </span>
               <span
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass(
@@ -802,82 +813,57 @@ const AdminDashboard: React.FC = () => {
                 )}`}
               >
                 <span>{language === "fr" ? "Annuel" : "Yearly"}</span>
-                <span className="font-semibold">
-                  {stats.planYearly}
-                </span>
+                <span className="font-semibold">{stats.planYearly}</span>
               </span>
-            </div>
-
-            <div className="mt-5">
-              <Link to="/admin/ouvriers">
-                <Button size="sm" variant="outline">
-                  {text.goToInscriptions}
-                </Button>
-              </Link>
             </div>
           </div>
 
-          {/* Bloc stats contacts */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-xs font-semibold text-slate-800 uppercase tracking-wide">
-                {text.statsContacts}
-              </h2>
-            </div>
-            <div className="grid grid-cols-3 gap-4 mt-3">
-              <div>
-                <div className="text-xs text-slate-500">
-                  {text.statTotalContacts}
-                </div>
-                <div className="text-2xl font-bold text-slate-900">
-                  {stats.totalContacts}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-slate-500">
-                  {text.statToday}
-                </div>
-                <div className="text-2xl font-bold text-slate-900">
-                  {stats.contactsToday}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-slate-500">
-                  {text.statLast7}
-                </div>
-                <div className="text-2xl font-bold text-slate-900">
-                  {stats.contactsLast7}
-                </div>
-              </div>
-            </div>
-            <div className="mt-5">
-              <Link to="/admin/ouvrier-contacts">
-                <Button size="sm" variant="outline">
-                  {text.goToContacts}
-                </Button>
-              </Link>
-            </div>
+          <div className="flex gap-2">
+            <Link to="/admin/ouvriers">
+              <Button size="sm" variant="outline">
+                {text.goToInscriptions}
+              </Button>
+            </Link>
+            <Link to="/admin/ouvrier-contacts">
+              <Button size="sm" variant="outline">
+                {text.goToContacts}
+              </Button>
+            </Link>
           </div>
         </div>
 
-        {/* Ligne : graphique + widget mobile */}
+        {/* Graphique + roadmap mobile */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
-          {/* Graphique d’évolution avec double toggle */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          {/* Graphique */}
+          <div className={`${cardClass} p-5`}>
             <div className="flex items-start justify-between mb-2">
-              <h2 className="text-sm font-semibold text-slate-800">
+              <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 {text.chartTitle}
+                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200">
+                  {metricMode === "volume" ? (
+                    <span className="inline-flex items-center gap-1">
+                      <TrendingUp className="h-3 w-3" />
+                      {text.metricModeVolume}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1">
+                      <Percent className="h-3 w-3" />
+                      {text.metricModeConversion}
+                    </span>
+                  )}
+                </span>
               </h2>
+
               <div className="flex flex-col items-end gap-2">
                 {/* Toggle Jour / Semaine */}
-                <div className="inline-flex items-center rounded-full bg-slate-100 p-0.5 text-[11px]">
+                <div className="inline-flex items-center rounded-full bg-slate-100/80 p-1 text-[11px] shadow-inner">
                   <button
                     type="button"
                     onClick={() => setChartMode("daily")}
-                    className={`px-2 py-1 rounded-full ${
+                    className={`px-3 py-1 rounded-full transition ${
                       chartMode === "daily"
-                        ? "bg-white shadow text-slate-900"
-                        : "text-slate-500"
+                        ? "bg-white shadow text-slate-900 font-medium"
+                        : "text-slate-500 hover:text-slate-900"
                     }`}
                   >
                     {text.chartModeDaily}
@@ -885,24 +871,25 @@ const AdminDashboard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setChartMode("weekly")}
-                    className={`px-2 py-1 rounded-full ${
+                    className={`px-3 py-1 rounded-full transition ${
                       chartMode === "weekly"
-                        ? "bg-white shadow text-slate-900"
-                        : "text-slate-500"
+                        ? "bg-white shadow text-slate-900 font-medium"
+                        : "text-slate-500 hover:text-slate-900"
                     }`}
                   >
                     {text.chartModeWeekly}
                   </button>
                 </div>
+
                 {/* Toggle Volume / Conversion */}
-                <div className="inline-flex items-center rounded-full bg-slate-100 p-0.5 text-[11px]">
+                <div className="inline-flex items-center rounded-full bg-slate-100/80 p-1 text-[11px] shadow-inner">
                   <button
                     type="button"
                     onClick={() => setMetricMode("volume")}
-                    className={`px-2 py-1 rounded-full ${
+                    className={`px-3 py-1 rounded-full transition ${
                       metricMode === "volume"
-                        ? "bg-white shadow text-slate-900"
-                        : "text-slate-500"
+                        ? "bg-white shadow text-slate-900 font-medium"
+                        : "text-slate-500 hover:text-slate-900"
                     }`}
                   >
                     {text.metricModeVolume}
@@ -910,10 +897,10 @@ const AdminDashboard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setMetricMode("conversion")}
-                    className={`px-2 py-1 rounded-full ${
+                    className={`px-3 py-1 rounded-full transition ${
                       metricMode === "conversion"
-                        ? "bg-white shadow text-slate-900"
-                        : "text-slate-500"
+                        ? "bg-white shadow text-slate-900 font-medium"
+                        : "text-slate-500 hover:text-slate-900"
                     }`}
                   >
                     {text.metricModeConversion}
@@ -921,6 +908,7 @@ const AdminDashboard: React.FC = () => {
                 </div>
               </div>
             </div>
+
             <p className="text-xs text-slate-500 mb-4">
               {chartMode === "daily"
                 ? metricMode === "volume"
@@ -930,6 +918,7 @@ const AdminDashboard: React.FC = () => {
                 ? text.chartSubtitleWeeklyVolume
                 : text.chartSubtitleWeeklyConversion}
             </p>
+
             <div className="h-44 flex items-end gap-2 border-b border-slate-100 pb-3">
               {activeChartData.points.length === 0 ? (
                 <div className="text-xs text-slate-400">
@@ -940,22 +929,28 @@ const AdminDashboard: React.FC = () => {
               ) : (
                 activeChartData.points.map((p) => {
                   const height =
-                    (p.value / activeChartData.maxValue) * 140; // px
+                    (p.value / activeChartData.maxValue) * 140;
                   const labelValue =
                     metricMode === "volume"
                       ? p.value
                       : `${Math.round(p.value)}%`;
+
+                  const barClass =
+                    metricMode === "volume"
+                      ? "bg-gradient-to-t from-sky-200 to-sky-500/70 border-sky-300"
+                      : "bg-gradient-to-t from-emerald-200 to-emerald-500/70 border-emerald-300";
+
                   return (
                     <div
                       key={p.key}
                       className="flex-1 flex flex-col items-center justify-end"
                     >
                       <div
-                        className="w-6 rounded-t-md bg-blue-100 border border-blue-200 flex items-end justify-center"
+                        className={`w-7 rounded-t-lg border flex items-end justify-center ${barClass}`}
                         style={{ height: `${height || 4}px` }}
                       >
                         {p.value > 0 && (
-                          <span className="text-[10px] text-blue-700 font-semibold mb-1">
+                          <span className="text-[10px] text-white font-semibold mb-1 drop-shadow">
                             {labelValue}
                           </span>
                         )}
@@ -971,7 +966,7 @@ const AdminDashboard: React.FC = () => {
           </div>
 
           {/* Widget roadmap mobile */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          <div className={`${cardClass} p-5`}>
             <h2 className="text-sm font-semibold text-slate-800 mb-1">
               {text.mobileWidgetTitle}
             </h2>
@@ -1025,7 +1020,7 @@ const AdminDashboard: React.FC = () => {
                 </div>
               </li>
               <li className="flex items-start gap-2 mt-1">
-                <span className="mt-[3px] h-2 w-2 rounded-full bg-blue-500" />
+                <span className="mt-[3px] h-2 w-2 rounded-full bg-sky-500" />
                 <div>
                   <span className="font-semibold">
                     {language === "fr"
@@ -1043,10 +1038,10 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Listes récentes + liens rapides */}
+        {/* Listes récentes */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {/* Dernières inscriptions ouvriers */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          {/* Dernières inscriptions */}
+          <div className={`${cardClass} p-5`}>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-slate-800">
                 {text.recentWorkers}
@@ -1057,6 +1052,7 @@ const AdminDashboard: React.FC = () => {
                 </span>
               </Link>
             </div>
+
             {recentWorkers.length === 0 && !loading && (
               <div className="text-sm text-slate-500">
                 {language === "fr"
@@ -1069,6 +1065,7 @@ const AdminDashboard: React.FC = () => {
                 {language === "fr" ? "Chargement..." : "Loading..."}
               </div>
             )}
+
             {!loading && recentWorkers.length > 0 && (
               <ul className="divide-y divide-slate-100">
                 {recentWorkers.map((w) => {
@@ -1101,8 +1098,8 @@ const AdminDashboard: React.FC = () => {
                           </Link>
                         </div>
                       </div>
+
                       <div className="flex flex-col items-end gap-1">
-                        {/* Statut */}
                         <span
                           className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${workerStatusClass(
                             w.status
@@ -1110,7 +1107,7 @@ const AdminDashboard: React.FC = () => {
                         >
                           {workerStatusLabel(w.status)}
                         </span>
-                        {/* 🔹 Pastille plan (Gratuit / Mensuel / Annuel) */}
+
                         <span
                           className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full border ${planBadgeClass(
                             w.plan_code
@@ -1126,13 +1123,14 @@ const AdminDashboard: React.FC = () => {
             )}
           </div>
 
-          {/* Dernières demandes de contact */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          {/* Dernières demandes */}
+          <div className={`${cardClass} p-5`}>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-slate-800">
                 {text.recentContacts}
               </h2>
             </div>
+
             {recentContacts.length === 0 && !loading && (
               <div className="text-sm text-slate-500">
                 {language === "fr"
@@ -1145,6 +1143,7 @@ const AdminDashboard: React.FC = () => {
                 {language === "fr" ? "Chargement..." : "Loading..."}
               </div>
             )}
+
             {!loading && recentContacts.length > 0 && (
               <ul className="divide-y divide-slate-100">
                 {recentContacts.map((c) => (
@@ -1173,6 +1172,7 @@ const AdminDashboard: React.FC = () => {
                         </Link>
                       </div>
                     </div>
+
                     <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-50 text-slate-700 border-slate-200">
                       {contactStatusLabel(c.status)}
                     </span>
