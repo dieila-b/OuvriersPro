@@ -6,6 +6,18 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import AdminNavTabs from "@/components/AdminNavTabs";
+import {
+  PhoneCall,
+  CalendarDays,
+  Search,
+  Filter,
+  CheckCircle2,
+  Clock,
+  Sparkles,
+  Smartphone,
+  Globe,
+  Layers,
+} from "lucide-react";
 
 type DbContact = {
   id: string;
@@ -18,11 +30,51 @@ type DbContact = {
   message: string | null;
   status: string | null;
   created_at: string;
-  origin?: string | null; // peut ne pas exister si la colonne n'est pas encore créée
+  origin?: string | null;
 };
 
 const statusOptions = ["new", "in_progress", "done"] as const;
 type ContactStatus = (typeof statusOptions)[number];
+
+/* -----------------------------
+   ✅ UI helpers (design moderne)
+-------------------------------- */
+const cardClass =
+  "bg-white/80 backdrop-blur border border-slate-100 rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)]";
+
+const statCardBase =
+  "relative overflow-hidden rounded-2xl border border-slate-100 bg-white/90 backdrop-blur p-4 shadow-[0_18px_45px_rgba(15,23,42,0.06)] flex flex-col justify-between";
+
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  gradient,
+}: {
+  label: string;
+  value: string | number;
+  icon: React.ComponentType<{ className?: string }>;
+  gradient: string;
+}) {
+  return (
+    <div className={statCardBase}>
+      <div
+        className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${gradient} opacity-70`}
+      />
+      <div className="relative flex items-center justify-between">
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-[.16em] text-slate-500">
+            {label}
+          </p>
+          <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
+        </div>
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/80 border border-white/60 shadow-sm">
+          <Icon className="h-5 w-5 text-slate-700" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const AdminOuvrierContacts: React.FC = () => {
   const { language } = useLanguage();
@@ -87,7 +139,7 @@ const AdminOuvrierContacts: React.FC = () => {
     };
   }, [navigate]);
 
-  // 🔹 Chargement des demandes (uniquement admin)
+  // 🔹 Chargement des demandes
   useEffect(() => {
     if (authLoading || !isAdmin) return;
 
@@ -97,7 +149,7 @@ const AdminOuvrierContacts: React.FC = () => {
 
       const { data, error } = await supabase
         .from<DbContact>("op_ouvrier_contacts")
-        .select("*") // ✅ toutes les colonnes, y compris origin
+        .select("*")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -186,7 +238,7 @@ const AdminOuvrierContacts: React.FC = () => {
       return "bg-emerald-50 text-emerald-700 border-emerald-200";
     if (s === "in_progress")
       return "bg-amber-50 text-amber-700 border-amber-200";
-    return "bg-blue-50 text-blue-700 border-blue-200";
+    return "bg-sky-50 text-sky-700 border-sky-200";
   };
 
   const originLabel = (o: string | null | undefined) => {
@@ -194,6 +246,13 @@ const AdminOuvrierContacts: React.FC = () => {
     if (o === "mobile") return "mobile";
     if (o === "other") return language === "fr" ? "autre" : "other";
     return o;
+  };
+
+  const originIcon = (o: string | null | undefined) => {
+    const key = originLabel(o);
+    if (key === "mobile") return Smartphone;
+    if (key === "web") return Globe;
+    return Layers;
   };
 
   const handleStatusChange = async (id: string, newStatus: ContactStatus) => {
@@ -225,7 +284,7 @@ const AdminOuvrierContacts: React.FC = () => {
   const stats = useMemo(() => {
     const total = filtered.length;
 
-    const todayISO = new Date().toISOString().slice(0, 10); // yyyy-mm-dd
+    const todayISO = new Date().toISOString().slice(0, 10);
     let today = 0;
     let last7 = 0;
 
@@ -281,7 +340,8 @@ const AdminOuvrierContacts: React.FC = () => {
         : "No requests yet.",
     refresh: language === "fr" ? "Rafraîchir" : "Refresh",
     exportCsv: language === "fr" ? "Exporter CSV" : "Export CSV",
-    statTotal: language === "fr" ? "Total (période filtrée)" : "Total (filtered)",
+    statTotal:
+      language === "fr" ? "Total (période filtrée)" : "Total (filtered)",
     statToday: language === "fr" ? "Aujourd’hui" : "Today",
     statLast7:
       language === "fr" ? "7 derniers jours" : "Last 7 days",
@@ -314,7 +374,7 @@ const AdminOuvrierContacts: React.FC = () => {
     setLoading(false);
   };
 
-  // 🔄 Export CSV (avec les résultats filtrés)
+  // 🔄 Export CSV
   const exportCsv = () => {
     if (!filtered.length) return;
 
@@ -366,7 +426,6 @@ const AdminOuvrierContacts: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  // Écrans d’attente / blocage
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -384,31 +443,28 @@ const AdminOuvrierContacts: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 py-10">
-      <div className="max-w-6xl mx-auto px-4 md:px-8">
-        {/* Menu admin (contacts / inscriptions / retour site) */}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50 to-indigo-50">
+      <div className="w-full px-3 sm:px-6 lg:px-10 py-6 md:py-10">
         <AdminNavTabs />
 
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4 mt-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
               {text.title}
+              <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-3 py-1 text-xs font-semibold">
+                <Sparkles className="h-3.5 w-3.5 mr-1" />
+                Back-office
+              </span>
             </h1>
-            <p className="text-sm text-slate-600 mt-1">
-              {text.subtitle}
-            </p>
+            <p className="text-sm text-slate-600 mt-1">{text.subtitle}</p>
           </div>
+
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-500">
               {filtered.length} / {contacts.length}
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={refresh}
-              disabled={loading}
-            >
+            <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
               {text.refresh}
             </Button>
             <Button
@@ -422,111 +478,212 @@ const AdminOuvrierContacts: React.FC = () => {
           </div>
         </div>
 
-        {/* Mini dashboard */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
-          <div className="bg-white border border-slate-200 rounded-lg p-3">
-            <div className="text-xs text-slate-500 uppercase">
-              {text.statTotal}
-            </div>
-            <div className="text-2xl font-bold text-slate-900">
-              {stats.total}
-            </div>
-          </div>
-          <div className="bg-white border border-slate-200 rounded-lg p-3">
-            <div className="text-xs text-slate-500 uppercase">
-              {text.statToday}
-            </div>
-            <div className="text-2xl font-bold text-slate-900">
-              {stats.today}
-            </div>
-          </div>
-          <div className="bg-white border border-slate-200 rounded-lg p-3">
-            <div className="text-xs text-slate-500 uppercase">
-              {text.statLast7}
-            </div>
-            <div className="text-2xl font-bold text-slate-900">
-              {stats.last7}
-            </div>
-          </div>
-          <div className="bg-white border border-slate-200 rounded-lg p-3">
-            <div className="text-xs text-slate-500 uppercase mb-1">
-              {text.statByOrigin}
+        {/* Mini dashboard modernisé */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <StatCard
+            label={text.statTotal}
+            value={stats.total}
+            icon={PhoneCall}
+            gradient="from-indigo-500/10 via-indigo-400/20 to-indigo-500/40"
+          />
+          <StatCard
+            label={text.statToday}
+            value={stats.today}
+            icon={CalendarDays}
+            gradient="from-fuchsia-500/10 via-fuchsia-400/20 to-fuchsia-500/40"
+          />
+          <StatCard
+            label={text.statLast7}
+            value={stats.last7}
+            icon={Clock}
+            gradient="from-emerald-500/10 via-emerald-400/20 to-emerald-500/40"
+          />
+          <div className={cardClass + " p-4"}>
+            <div className="flex items-center gap-2 mb-2">
+              <Filter className="h-4 w-4 text-slate-600" />
+              <p className="text-[11px] font-medium uppercase tracking-[.16em] text-slate-500">
+                {text.statByOrigin}
+              </p>
             </div>
             {Object.keys(stats.originCounts).length === 0 ? (
               <div className="text-sm text-slate-500">—</div>
             ) : (
               <div className="flex flex-wrap gap-1 text-xs">
-                {Object.entries(stats.originCounts).map(([key, value]) => (
-                  <span
-                    key={key}
-                    className="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200"
-                  >
-                    {key}:{" "}
-                    <span className="font-semibold ml-1">{value}</span>
-                  </span>
-                ))}
+                {Object.entries(stats.originCounts).map(([key, value]) => {
+                  const Icon = originIcon(key);
+                  return (
+                    <span
+                      key={key}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200"
+                    >
+                      <Icon className="h-3 w-3" />
+                      {key}
+                      <span className="font-semibold ml-1">{value}</span>
+                    </span>
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
 
         {/* Filtres */}
-        <div className="flex flex-col md:flex-row gap-3 mb-6">
-          <div className="md:w-1/4">
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              {text.statusFilter}
-            </label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pro-blue"
-            >
-              <option value="">{text.allStatuses}</option>
-              <option value="new">{text.new}</option>
-              <option value="in_progress">{text.inProgress}</option>
-              <option value="done">{text.done}</option>
-            </select>
-          </div>
+        <div className={`${cardClass} p-4 mb-6`}>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                {text.statusFilter}
+              </label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pro-blue"
+              >
+                <option value="">{text.allStatuses}</option>
+                <option value="new">{text.new}</option>
+                <option value="in_progress">{text.inProgress}</option>
+                <option value="done">{text.done}</option>
+              </select>
+            </div>
 
-          <div className="md:w-1/4">
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              {text.dateFrom}
-            </label>
-            <Input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="text-sm"
-            />
-          </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                {text.dateFrom}
+              </label>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="text-sm bg-white"
+              />
+            </div>
 
-          <div className="md:w-1/4">
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              {text.dateTo}
-            </label>
-            <Input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="text-sm"
-            />
-          </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                {text.dateTo}
+              </label>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="text-sm bg-white"
+              />
+            </div>
 
-          <div className="flex-1">
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              {text.searchLabel}
-            </label>
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={text.searchPlaceholder}
-              className="text-sm"
-            />
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                {text.searchLabel}
+              </label>
+              <div className="relative">
+                <Search className="h-4 w-4 text-slate-400 absolute left-2 top-2.5" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={text.searchPlaceholder}
+                  className="text-sm pl-8 bg-white"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Table */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* ✅ Vue mobile (cartes) */}
+        <div className="md:hidden space-y-3 mb-6">
+          {filtered.length === 0 && !loading && (
+            <div className={cardClass + " px-4 py-6 text-center text-slate-500 text-sm"}>
+              {text.empty}
+            </div>
+          )}
+
+          {loading && (
+            <div className={cardClass + " px-4 py-6 text-center text-slate-500 text-sm"}>
+              {language === "fr" ? "Chargement..." : "Loading..."}
+            </div>
+          )}
+
+          {!loading &&
+            filtered.map((c) => {
+              const OriginIcon = originIcon(c.origin);
+              return (
+                <div key={c.id} className={cardClass + " p-4"}>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="text-xs text-slate-500">
+                      {formatDate(c.created_at)}
+                    </div>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusColor(
+                        c.status
+                      )}`}
+                    >
+                      {statusLabel(c.status)}
+                    </span>
+                  </div>
+
+                  <div className="mb-2">
+                    <div className="text-[11px] font-semibold text-slate-500 uppercase">
+                      {text.colWorker}
+                    </div>
+                    <div className="font-semibold text-slate-900">
+                      {c.worker_name || "—"}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {c.worker_profession || ""}
+                    </div>
+                  </div>
+
+                  <div className="mb-2">
+                    <div className="text-[11px] font-semibold text-slate-500 uppercase">
+                      {text.colClient}
+                    </div>
+                    <div className="text-xs text-slate-600">
+                      {c.client_name || "—"}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {c.client_email || ""}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {c.client_phone || ""}
+                    </div>
+                  </div>
+
+                  <div className="mb-2">
+                    <div className="text-[11px] font-semibold text-slate-500 uppercase">
+                      {text.colMessage}
+                    </div>
+                    <div className="text-xs whitespace-pre-line text-slate-700">
+                      {c.message || "—"}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-slate-50 text-slate-700 border border-slate-200">
+                      <OriginIcon className="h-3 w-3" />
+                      {originLabel(c.origin)}
+                    </span>
+
+                    <select
+                      disabled={savingId === c.id}
+                      value={(c.status as ContactStatus) || "new"}
+                      onChange={(e) =>
+                        handleStatusChange(
+                          c.id,
+                          e.target.value as ContactStatus
+                        )
+                      }
+                      className="text-xs border border-slate-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                    >
+                      <option value="new">{text.new}</option>
+                      <option value="in_progress">{text.inProgress}</option>
+                      <option value="done">{text.done}</option>
+                    </select>
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+
+        {/* ✅ Vue desktop (tableau) */}
+        <div className="hidden md:block bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
@@ -557,10 +714,7 @@ const AdminOuvrierContacts: React.FC = () => {
               <tbody>
                 {filtered.length === 0 && !loading && (
                   <tr>
-                    <td
-                      colSpan={7}
-                      className="px-4 py-6 text-center text-slate-500 text-sm"
-                    >
+                    <td colSpan={7} className="px-4 py-6 text-center text-slate-500 text-sm">
                       {text.empty}
                     </td>
                   </tr>
@@ -568,83 +722,90 @@ const AdminOuvrierContacts: React.FC = () => {
 
                 {loading && (
                   <tr>
-                    <td
-                      colSpan={7}
-                      className="px-4 py-6 text-center text-slate-500 text-sm"
-                    >
+                    <td colSpan={7} className="px-4 py-6 text-center text-slate-500 text-sm">
                       {language === "fr" ? "Chargement..." : "Loading..."}
                     </td>
                   </tr>
                 )}
 
                 {!loading &&
-                  filtered.map((c) => (
-                    <tr
-                      key={c.id}
-                      className="border-t border-slate-100 hover:bg-slate-50/60"
-                    >
-                      <td className="px-4 py-3 align-top text-slate-700 whitespace-nowrap">
-                        {formatDate(c.created_at)}
-                      </td>
-                      <td className="px-4 py-3 align-top text-slate-800">
-                        <div className="font-semibold">
-                          {c.worker_name || "—"}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {c.worker_profession || ""}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 align-top text-slate-800">
-                        <div className="font-medium">
-                          {c.client_name || "—"}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {c.client_email || ""}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {c.client_phone || ""}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 align-top text-slate-700 max-w-xs">
-                        <div className="text-xs whitespace-pre-line line-clamp-3">
-                          {c.message || "—"}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusColor(
-                            c.status
-                          )}`}
-                        >
-                          {statusLabel(c.status)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-slate-50 text-slate-700 border border-slate-200">
-                          {originLabel(c.origin)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 align-top text-right">
-                        <select
-                          disabled={savingId === c.id}
-                          value={(c.status as ContactStatus) || "new"}
-                          onChange={(e) =>
-                            handleStatusChange(
-                              c.id,
-                              e.target.value as ContactStatus
-                            )
-                          }
-                          className="text-xs border border-slate-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
-                        >
-                          <option value="new">{text.new}</option>
-                          <option value="in_progress">
-                            {text.inProgress}
-                          </option>
-                          <option value="done">{text.done}</option>
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
+                  filtered.map((c) => {
+                    const OriginIcon = originIcon(c.origin);
+                    return (
+                      <tr
+                        key={c.id}
+                        className="border-t border-slate-100 hover:bg-slate-50/60"
+                      >
+                        <td className="px-4 py-3 align-top text-slate-700 whitespace-nowrap">
+                          {formatDate(c.created_at)}
+                        </td>
+
+                        <td className="px-4 py-3 align-top text-slate-800">
+                          <div className="font-semibold">
+                            {c.worker_name || "—"}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {c.worker_profession || ""}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3 align-top text-slate-800">
+                          <div className="font-medium">
+                            {c.client_name || "—"}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {c.client_email || ""}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {c.client_phone || ""}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3 align-top text-slate-700 max-w-xs">
+                          <div className="text-xs whitespace-pre-line line-clamp-3">
+                            {c.message || "—"}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3 align-top">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusColor(
+                              c.status
+                            )}`}
+                          >
+                            {statusLabel(c.status)}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-3 align-top">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-slate-50 text-slate-700 border border-slate-200">
+                            <OriginIcon className="h-3 w-3" />
+                            {originLabel(c.origin)}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-3 align-top text-right">
+                          <select
+                            disabled={savingId === c.id}
+                            value={(c.status as ContactStatus) || "new"}
+                            onChange={(e) =>
+                              handleStatusChange(
+                                c.id,
+                                e.target.value as ContactStatus
+                              )
+                            }
+                            className="text-xs border border-slate-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                          >
+                            <option value="new">{text.new}</option>
+                            <option value="in_progress">
+                              {text.inProgress}
+                            </option>
+                            <option value="done">{text.done}</option>
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>
