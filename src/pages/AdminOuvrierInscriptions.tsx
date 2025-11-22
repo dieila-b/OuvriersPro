@@ -18,6 +18,7 @@ import {
   User2,
   CalendarDays,
   Search,
+  Clock, // ✅ manquait, utilisé dans StatCard
 } from "lucide-react";
 
 type DbWorker = {
@@ -105,8 +106,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // ✅ par défaut sur "all" pour éviter écran vide
   const [statusFilter, setStatusFilter] = useState<WorkerStatus | "all">(
-    "pending"
+    "all"
   );
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState<string>("");
@@ -749,7 +751,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
       )
       .order("created_at", { ascending: false });
 
-    if (error) {
+  if (error) {
       console.error(error);
       setError(
         language === "fr"
@@ -969,7 +971,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
         </div>
 
         {/* Filtres */}
-        <div className={`${cardClass} p-4 mb-6`}>
+        <div className={cardClass + " p-4 mb-6"}>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -982,11 +984,11 @@ const AdminOuvrierInscriptions: React.FC = () => {
                 }
                 className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
+                <option value="all">{language === "fr" ? "Tous" : "All"}</option>
                 <option value="pending">{language === "fr" ? "En attente" : "Pending"}</option>
                 <option value="approved">{language === "fr" ? "Validé" : "Approved"}</option>
                 <option value="rejected">{language === "fr" ? "Refusé" : "Rejected"}</option>
                 <option value="suspended">{language === "fr" ? "Suspendu" : "Suspended"}</option>
-                <option value="all">{language === "fr" ? "Tous" : "All"}</option>
               </select>
             </div>
 
@@ -1214,10 +1216,10 @@ const AdminOuvrierInscriptions: React.FC = () => {
         </div>
 
         {/* ✅ Vue desktop (tableau) */}
-        <div className="hidden md:block bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className={cardClass + " hidden md:block overflow-hidden"}>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
+              <thead className="bg-slate-50/80 border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">
                     {text.colDate}
