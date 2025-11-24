@@ -71,7 +71,7 @@ const WorkerSearchSection: React.FC = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from("op_ouvriers")
+        .from<DbWorker>("op_ouvriers")
         .select(
           `
           id,

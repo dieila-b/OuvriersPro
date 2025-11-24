@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
-type UserRole = "user" | "admin" | "worker";
+type UserRole = "user" | "admin";
 
 interface OpUserProfile {
   id: string;
@@ -35,7 +35,7 @@ export function useAuthProfile() {
 
       if (currentUser) {
         const { data: rows, error: profileError } = await supabase
-          .from("op_users")
+          .from<OpUserProfile>("op_users")
           .select("id, full_name, phone, role")
           .eq("id", currentUser.id)
           .limit(1);
@@ -68,7 +68,7 @@ export function useAuthProfile() {
 
         (async () => {
           const { data: rows } = await supabase
-            .from("op_users")
+            .from<OpUserProfile>("op_users")
             .select("id, full_name, phone, role")
             .eq("id", sUser.id)
             .limit(1);
