@@ -1,6 +1,6 @@
 // src/components/WorkerSearchSection.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Slider } from "@/components/ui/slider";
@@ -44,13 +44,15 @@ interface WorkerCard {
 
 const WorkerSearchSection: React.FC = () => {
   const { language } = useLanguage();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [initializedFromUrl, setInitializedFromUrl] = useState(false);
 
   // Données
   const [workers, setWorkers] = useState<WorkerCard[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Filtres
+  // Filtres (identiques à SearchSection)
   const [keyword, setKeyword] = useState("");
   const [selectedJob, setSelectedJob] = useState<string>("all");
   const [maxPrice, setMaxPrice] = useState<number>(300000);
@@ -64,7 +66,7 @@ const WorkerSearchSection: React.FC = () => {
   // Vue liste / mosaïque
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
-  // Chargement Supabase
+  // 1) Chargement Supabase
   useEffect(() => {
     const fetchWorkers = async () => {
       setLoading(true);
@@ -129,6 +131,64 @@ const WorkerSearchSection: React.FC = () => {
 
     fetchWorkers();
   }, [language]);
+
+  // 2) Init filtres depuis URL (1 seule fois)
+  useEffect(() => {
+    if (initializedFromUrl) return;
+
+    const spKeyword = searchParams.get("keyword") ?? "";
+    const spJob = searchParams.get("job") ?? "all";
+    const spRegion = searchParams.get("region") ?? "";
+    const spCity = searchParams.get("city") ?? "";
+    const spCommune = searchParams.get("commune") ?? "";
+    const spDistrict = searchParams.get("district") ?? "";
+    const spMaxPrice = Number(searchParams.get("maxPrice") ?? "300000");
+    const spMinRating = Number(searchParams.get("minRating") ?? "0");
+    const spView = (searchParams.get("view") as "list" | "grid") ?? "list";
+
+    setKeyword(spKeyword);
+    setSelectedJob(spJob);
+    setSelectedRegion(spRegion);
+    setSelectedCity(spCity);
+    setSelectedCommune(spCommune);
+    setSelectedDistrict(spDistrict);
+    setMaxPrice(Number.isFinite(spMaxPrice) ? spMaxPrice : 300000);
+    setMinRating(Number.isFinite(spMinRating) ? spMinRating : 0);
+    setViewMode(spView);
+
+    setInitializedFromUrl(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, initializedFromUrl]);
+
+  // 3) Sync filtres -> URL
+  useEffect(() => {
+    if (!initializedFromUrl) return;
+
+    const next: Record<string, string> = {};
+    if (keyword.trim()) next.keyword = keyword.trim();
+    if (selectedJob !== "all") next.job = selectedJob;
+    if (selectedRegion) next.region = selectedRegion;
+    if (selectedCity) next.city = selectedCity;
+    if (selectedCommune) next.commune = selectedCommune;
+    if (selectedDistrict) next.district = selectedDistrict;
+    if (maxPrice !== 300000) next.maxPrice = String(maxPrice);
+    if (minRating !== 0) next.minRating = String(minRating);
+    if (viewMode !== "list") next.view = viewMode;
+
+    setSearchParams(next, { replace: true });
+  }, [
+    initializedFromUrl,
+    keyword,
+    selectedJob,
+    selectedRegion,
+    selectedCity,
+    selectedCommune,
+    selectedDistrict,
+    maxPrice,
+    minRating,
+    viewMode,
+    setSearchParams,
+  ]);
 
   // Listes de filtres dynamiques
   const jobs = useMemo(
@@ -256,6 +316,7 @@ const WorkerSearchSection: React.FC = () => {
     setSelectedCity("");
     setSelectedCommune("");
     setSelectedDistrict("");
+    setViewMode("list");
   };
 
   const formatCurrency = (value: number, currency: string) => {
