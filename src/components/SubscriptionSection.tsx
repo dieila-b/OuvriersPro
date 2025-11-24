@@ -1,3 +1,4 @@
+// src/components/SubscriptionSection.tsx
 import React from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,6 @@ import { Check, Star, BarChart3, Headphones, User } from "lucide-react";
 const SubscriptionSection = () => {
   const { t, language } = useLanguage();
 
-  // Petite fonction utilitaire pour formater les montants (5 000, 50 000…)
   const formatPrice = (amount: number) => {
     try {
       return amount.toLocaleString(language === "fr" ? "fr-FR" : "en-US");
@@ -43,7 +43,7 @@ const SubscriptionSection = () => {
     {
       code: "MONTHLY",
       name: t("subscription.monthly"),
-      price: 5000, // 5 000 FG / mois
+      price: 5000,
       period: t("subscription.month"),
       popular: true,
       isFree: false,
@@ -58,7 +58,7 @@ const SubscriptionSection = () => {
     {
       code: "YEARLY",
       name: t("subscription.yearly"),
-      price: 50000, // 50 000 FG / an
+      price: 50000,
       period: t("subscription.year"),
       popular: false,
       isFree: false,
@@ -75,23 +75,25 @@ const SubscriptionSection = () => {
   return (
     <section
       id="subscription"
-      className="py-20 bg-gradient-to-br from-gray-50 to-gray-100"
+      className="w-full py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-gray-50 to-gray-100"
     >
-      <div className="container mx-auto px-4">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-pro-gray mb-4">
+      {/* ✅ on remplace container par un wrapper responsive contrôlé */}
+      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-10 sm:mb-12 lg:mb-16">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray mb-3 sm:mb-4">
             {t("subscription.title")}
           </h2>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+          <p className="text-sm sm:text-base md:text-xl text-gray-600 max-w-2xl mx-auto">
             {t("subscription.subtitle")}
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+        {/* Plans */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 max-w-5xl mx-auto">
           {plans.map((plan, index) => (
             <Card
               key={index}
-              className={`relative overflow-hidden transition-transform hover:scale-105 ${
+              className={`relative overflow-hidden transition-transform md:hover:scale-105 ${
                 plan.popular ? "ring-2 ring-pro-blue shadow-xl" : "shadow-lg"
               }`}
             >
@@ -107,16 +109,20 @@ const SubscriptionSection = () => {
               <CardHeader
                 className={`text-center ${plan.popular ? "pt-12" : "pt-6"}`}
               >
-                <CardTitle className="text-2xl font-bold text-pro-gray">
+                <CardTitle className="text-xl sm:text-2xl font-bold text-pro-gray">
                   {plan.name}
                 </CardTitle>
+
                 <div className="mt-4">
-                  <span className="text-4xl font-bold text-pro-blue">
+                  <span className="text-3xl sm:text-4xl font-bold text-pro-blue">
                     {formatPrice(plan.price)}{" "}
-                    <span className="text-2xl">FG</span>
+                    <span className="text-xl sm:text-2xl">FG</span>
                   </span>
-                  <span className="text-gray-600">/{plan.period}</span>
+                  <span className="text-gray-600 text-sm sm:text-base">
+                    /{plan.period}
+                  </span>
                 </div>
+
                 {plan.savings && (
                   <Badge
                     variant="secondary"
@@ -128,17 +134,19 @@ const SubscriptionSection = () => {
               </CardHeader>
 
               <CardContent className="pt-0">
-                <ul className="space-y-4 mb-8">
+                <ul className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
                   {plan.features.map((feature, featureIndex) => (
                     <li key={featureIndex} className="flex items-center">
                       <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
-                      <span className="text-gray-700">{feature}</span>
+                      <span className="text-gray-700 text-sm sm:text-base">
+                        {feature}
+                      </span>
                     </li>
                   ))}
                 </ul>
 
                 <Button
-                  className={`w-full py-3 ${
+                  className={`w-full py-3 text-sm sm:text-base ${
                     plan.popular
                       ? "bg-pro-blue hover:bg-blue-700"
                       : plan.isFree
@@ -157,7 +165,7 @@ const SubscriptionSection = () => {
         </div>
 
         {/* Avantages additionnels */}
-        <div className="grid md:grid-cols-3 gap-8 mt-16 max-w-4xl mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mt-10 sm:mt-14 lg:mt-16 max-w-4xl mx-auto">
           {[
             {
               icon: User,
@@ -179,10 +187,12 @@ const SubscriptionSection = () => {
               <div className="w-12 h-12 bg-pro-blue/10 rounded-lg flex items-center justify-center mx-auto mb-4">
                 <benefit.icon className="w-6 h-6 text-pro-blue" />
               </div>
-              <h3 className="font-semibold text-pro-gray mb-2">
+              <h3 className="font-semibold text-pro-gray mb-2 text-sm sm:text-base">
                 {benefit.title}
               </h3>
-              <p className="text-gray-600 text-sm">{benefit.description}</p>
+              <p className="text-gray-600 text-xs sm:text-sm">
+                {benefit.description}
+              </p>
             </div>
           ))}
         </div>
