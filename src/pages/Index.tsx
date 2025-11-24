@@ -8,27 +8,27 @@ import Footer from "@/components/Footer";
 
 const Index = () => {
   return (
-    <div className="min-h-screen w-full bg-white">
+    <div className="min-h-screen w-full bg-white overflow-x-hidden">
       <Header />
 
-      <main className="w-full overflow-x-hidden">
+      <main className="w-full">
         {/* Hero en pleine largeur */}
-        <section className="w-full bg-pro-blue text-white overflow-hidden">
+        <section className="w-full bg-pro-blue text-white">
           <HeroSection />
         </section>
 
-        {/* Bloc "Pourquoi nous choisir" */}
-        <section className="w-full bg-white overflow-hidden">
+        {/* Bloc “Pourquoi nous choisir” */}
+        <section className="w-full bg-white">
           <FeaturesSection />
         </section>
 
-        {/* Recherche d'ouvriers */}
-        <section id="search" className="w-full bg-white overflow-hidden">
+        {/* Recherche d’ouvriers */}
+        <section id="search" className="w-full bg-white">
           <WorkerSearchSection />
         </section>
 
-        {/* Formules d'abonnement */}
-        <section id="subscription" className="w-full bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
+        {/* Formules d’abonnement */}
+        <section id="subscription" className="w-full bg-gradient-to-br from-gray-50 to-gray-100">
           <SubscriptionSection />
         </section>
       </main>

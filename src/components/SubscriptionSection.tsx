@@ -75,19 +75,19 @@ const SubscriptionSection = () => {
   return (
     <section
       id="subscription"
-      className="py-8 sm:py-12 md:py-16 bg-gradient-to-br from-gray-50 to-gray-100"
+      className="py-12 sm:py-16 md:py-20 bg-gradient-to-br from-gray-50 to-gray-100"
     >
-      <div className="container mx-auto px-3 sm:px-4 md:px-6">
-        <div className="text-center mb-6 sm:mb-8 md:mb-10">
-          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-pro-gray mb-2 sm:mb-3">
+      <div className="container mx-auto px-4 sm:px-6 md:px-8">
+        <div className="text-center mb-10 sm:mb-12 md:mb-16">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray mb-3 sm:mb-4 px-2">
             {t("subscription.title")}
           </h2>
-          <p className="text-sm sm:text-base text-gray-600 max-w-2xl mx-auto px-2">
+          <p className="text-base sm:text-lg md:text-xl text-gray-600 max-w-2xl mx-auto px-4">
             {t("subscription.subtitle")}
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto">
           {plans.map((plan, index) => (
             <Card
               key={index}
@@ -96,8 +96,8 @@ const SubscriptionSection = () => {
               }`}
             >
               {plan.popular && (
-                <div className="absolute top-0 left-0 right-0 bg-pro-blue text-white text-center py-1.5">
-                  <Badge className="bg-white text-pro-blue text-xs">
+                <div className="absolute top-0 left-0 right-0 bg-pro-blue text-white text-center py-2">
+                  <Badge className="bg-white text-pro-blue">
                     <Star className="w-3 h-3 mr-1" />
                     Populaire
                   </Badge>
@@ -105,40 +105,40 @@ const SubscriptionSection = () => {
               )}
 
               <CardHeader
-                className={`text-center ${plan.popular ? "pt-10" : "pt-4"}`}
+                className={`text-center ${plan.popular ? "pt-12" : "pt-6"}`}
               >
-                <CardTitle className="text-lg sm:text-xl font-bold text-pro-gray">
+                <CardTitle className="text-2xl font-bold text-pro-gray">
                   {plan.name}
                 </CardTitle>
-                <div className="mt-3">
-                  <span className="text-2xl sm:text-3xl font-bold text-pro-blue">
+                <div className="mt-4">
+                  <span className="text-4xl font-bold text-pro-blue">
                     {formatPrice(plan.price)}{" "}
-                    <span className="text-lg sm:text-xl">FG</span>
+                    <span className="text-2xl">FG</span>
                   </span>
-                  <span className="text-sm text-gray-600">/{plan.period}</span>
+                  <span className="text-gray-600">/{plan.period}</span>
                 </div>
                 {plan.savings && (
                   <Badge
                     variant="secondary"
-                    className="mt-2 bg-green-100 text-green-700 text-xs"
+                    className="mt-2 bg-green-100 text-green-700"
                   >
                     {plan.savings}
                   </Badge>
                 )}
               </CardHeader>
 
-              <CardContent className="pt-0 pb-4">
-                <ul className="space-y-2 sm:space-y-3 mb-6">
+              <CardContent className="pt-0">
+                <ul className="space-y-4 mb-8">
                   {plan.features.map((feature, featureIndex) => (
-                    <li key={featureIndex} className="flex items-start">
-                      <Check className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                      <span className="text-sm text-gray-700">{feature}</span>
+                    <li key={featureIndex} className="flex items-center">
+                      <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                      <span className="text-gray-700">{feature}</span>
                     </li>
                   ))}
                 </ul>
 
                 <Button
-                  className={`w-full py-2.5 text-sm ${
+                  className={`w-full py-3 ${
                     plan.popular
                       ? "bg-pro-blue hover:bg-blue-700"
                       : plan.isFree
@@ -157,7 +157,7 @@ const SubscriptionSection = () => {
         </div>
 
         {/* Avantages additionnels */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mt-8 sm:mt-12 max-w-4xl mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 mt-12 sm:mt-16 max-w-4xl mx-auto">
           {[
             {
               icon: User,
@@ -176,13 +176,13 @@ const SubscriptionSection = () => {
             },
           ].map((benefit, index) => (
             <div key={index} className="text-center">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-pro-blue/10 rounded-lg flex items-center justify-center mx-auto mb-2 sm:mb-3">
-                <benefit.icon className="w-5 h-5 text-pro-blue" />
+              <div className="w-12 h-12 bg-pro-blue/10 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <benefit.icon className="w-5 h-5 sm:w-6 sm:h-6 text-pro-blue" />
               </div>
-              <h3 className="font-semibold text-pro-gray mb-1.5 text-sm">
+              <h3 className="font-semibold text-pro-gray mb-2 text-sm sm:text-base">
                 {benefit.title}
               </h3>
-              <p className="text-gray-600 text-xs">{benefit.description}</p>
+              <p className="text-gray-600 text-xs sm:text-sm">{benefit.description}</p>
             </div>
           ))}
         </div>
