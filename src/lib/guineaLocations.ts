@@ -1,48 +1,100 @@
 // src/lib/guineaLocations.ts
+
+// 1) Régions
 export const GUINEA_REGIONS = [
-  'Conakry',
-  'Kindia',
-  'Boké',
-  'Mamou',
-  'Labé',
-  'Kankan',
-  'Faranah',
-  'N’Zérékoré'
-];
+  "Conakry",
+  "Kindia",
+  "Boké",
+  "Mamou",
+  "Labé",
+  "Kankan",
+  "Faranah",
+  "N’Zérékoré",
+] as const;
 
+// 2) Villes par région
 export const GUINEA_CITIES_BY_REGION: Record<string, string[]> = {
-  Conakry: ['Conakry'],
-  Kindia: ['Kindia'],
-  Boké: ['Boké'],
-  Mamou: ['Mamou'],
-  Labé: ['Labé'],
-  Kankan: ['Kankan'],
-  Faranah: ['Faranah'],
-  'N’Zérékoré': ['N’Zérékoré']
+  Conakry: ["Conakry"],
+  Kindia: ["Kindia"],
+  Boké: ["Boké"],
+  Mamou: ["Mamou"],
+  Labé: ["Labé"],
+  Kankan: ["Kankan"],
+  Faranah: ["Faranah"],
+  "N’Zérékoré": ["N’Zérékoré"],
 };
 
+// 3) Communes par ville
 export const GUINEA_COMMUNES_BY_CITY: Record<string, string[]> = {
-  Conakry: ['Kaloum', 'Dixinn', 'Ratoma', 'Matam', 'Matoto'],
-  Kindia: ['Kindia-Centre''Coyah''Dubreka''Forecariah''Telemele''Fria'],
-  Boké: ['Boké-Centre''Boffa''Koundara''Gaoul'],
-  Mamou: ['Mamou-Centre''Pita''Dalaba'],
-  Labé: ['Labé-Centre''Mali''Lelouma''Koubia''Tougué'],
-  Kankan: ['Kankan-Centre''Siguiri''Kouroussa''Mandiana''Kerouané'],
-  Faranah: ['Faranah-Centre''Dabola''Dinguiraye''Kissidougou'],
-  'N’Zérékoré': ['N’Zérékoré-Centre''Youmou''Lola''Gueckedou''Beyla''Macenta']
+  Conakry: ["Kaloum", "Dixinn", "Ratoma", "Matam", "Matoto"],
+
+  Kindia: [
+    "Kindia-Centre",
+    "Coyah",
+    "Dubreka",
+    "Forecariah",
+    "Telemele",
+    "Fria",
+  ],
+
+  Boké: ["Boké-Centre", "Boffa", "Koundara", "Gaoual"],
+
+  Mamou: ["Mamou-Centre", "Pita", "Dalaba"],
+
+  Labé: ["Labé-Centre", "Mali", "Lelouma", "Koubia", "Tougué"],
+
+  Kankan: [
+    "Kankan-Centre",
+    "Siguiri",
+    "Kouroussa",
+    "Mandiana",
+    "Kerouané",
+  ],
+
+  Faranah: ["Faranah-Centre", "Dabola", "Dinguiraye", "Kissidougou"],
+
+  "N’Zérékoré": [
+    "N’Zérékoré-Centre",
+    "Youmou",
+    "Lola",
+    "Gueckedou",
+    "Beyla",
+    "Macenta",
+  ],
 };
 
+// 4) Quartiers par commune
 export const GUINEA_DISTRICTS_BY_COMMUNE: Record<string, string[]> = {
-  Kaloum: ['Boulbinet', 'Sandervalia', 'Coronthie'],
-  Dixinn: ['Bellevue', 'Taouyah', 'Camayenne'],
-  Ratoma: ['Lambanyi', 'Kipé', 'Nongo'],
-  Matam: ['Madina', 'Bonfi', 'Matam-Centre'],
-  Matoto: ['Sangoyah', 'Yimbaya', 'Tombolia'],
-  'Kindia-Centre': ['Marché', 'Carrefour'],
-  'Boké-Centre': ['Quartier 1', 'Quartier 2'],
-  'Mamou-Centre': ['Quartier 1', 'Quartier 2'],
-  'Labé-Centre': ['Quartier 1', 'Quartier 2'],
-  'Kankan-Centre': ['Quartier 1', 'Quartier 2'],
-  'Faranah-Centre': ['Quartier 1', 'Quartier 2'],
-  'N’Zérékoré-Centre': ['Quartier 1', 'Quartier 2']
+  // Conakry
+  Kaloum: ["Boulbinet", "Sandervalia", "Coronthie"],
+  Dixinn: ["Bellevue", "Taouyah", "Camayenne"],
+  Ratoma: ["Lambanyi", "Kipé", "Nongo"],
+  Matam: ["Madina", "Bonfi", "Matam-Centre"],
+  Matoto: ["Sangoyah", "Yimbaya", "Tombolia"],
+
+  // Exemples centres (à compléter au besoin)
+  "Kindia-Centre": ["Marché", "Carrefour"],
+  "Boké-Centre": ["Quartier 1", "Quartier 2"],
+  "Mamou-Centre": ["Quartier 1", "Quartier 2"],
+  "Labé-Centre": ["Quartier 1", "Quartier 2"],
+  "Kankan-Centre": ["Quartier 1", "Quartier 2"],
+  "Faranah-Centre": ["Quartier 1", "Quartier 2"],
+  "N’Zérékoré-Centre": ["Quartier 1", "Quartier 2"],
 };
+
+// --------------------------------------------------------------------
+// 5) Export structuré (recommandé pour SELECT dépendants)
+//    région -> villes -> communes -> quartiers
+// --------------------------------------------------------------------
+export const guineaLocations = GUINEA_REGIONS.map((region) => {
+  const cities = GUINEA_CITIES_BY_REGION[region]?.map((city) => {
+    const communes = GUINEA_COMMUNES_BY_CITY[city]?.map((commune) => {
+      const districts = GUINEA_DISTRICTS_BY_COMMUNE[commune] ?? [];
+      return { commune, districts };
+    }) ?? [];
+
+    return { city, communes };
+  }) ?? [];
+
+  return { region, cities };
+});
