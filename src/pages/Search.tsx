@@ -1,10 +1,16 @@
-const { filters } = useWorkerSearchFilters();
+// src/pages/Search.tsx
+import Header from "@/components/Header";
+import SearchSection from "@/components/SearchSection";
+import Footer from "@/components/Footer";
 
-let q = supabase.from("workers").select("*");
-
-if (filters.service) q = q.ilike("metier", `%${filters.service}%`);
-if (filters.ville) q = q.ilike("ville", `%${filters.ville}%`);
-if (filters.commune) q = q.ilike("commune", `%${filters.commune}%`);
-if (filters.quartier) q = q.ilike("quartier", `%${filters.quartier}%`);
-
-const { data, error } = await q;
+export default function SearchPage() {
+  return (
+    <div className="min-h-screen flex flex-col bg-slate-50">
+      <Header />
+      <main className="flex-1 w-full">
+        <SearchSection />
+      </main>
+      <Footer />
+    </div>
+  );
+}
