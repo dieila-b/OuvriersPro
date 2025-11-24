@@ -1,7 +1,8 @@
-import React from "react";
+// src/components/Header.tsx
+import React, { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
-import { Languages, Search, User, Menu } from "lucide-react";
+import { Languages, Search, User, Menu, X } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,19 +15,24 @@ import { useAuthProfile } from "@/hooks/useAuthProfile";
 const Header = () => {
   const { language, setLanguage, t } = useLanguage();
   const { isAdmin } = useAuthProfile();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const closeMobile = () => setMobileOpen(false);
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
       {/* wrapper full-width + max-w */}
-      <div className="w-full max-w-6xl mx-auto px-4 py-4">
-        <div className="flex items-center justify-between">
+      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="h-16 flex items-center justify-between">
           {/* Logo */}
-          <div className="flex items-center space-x-2">
+          <Link to="/" className="flex items-center space-x-2">
             <div className="w-10 h-10 bg-pro-blue rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-lg">OP</span>
             </div>
-            <span className="text-xl font-bold text-pro-gray">OuvriersPro</span>
-          </div>
+            <span className="text-lg sm:text-xl font-bold text-pro-gray">
+              OuvriersPro
+            </span>
+          </Link>
 
           {/* Navigation Desktop */}
           <nav className="hidden md:flex items-center space-x-6">
@@ -50,23 +56,23 @@ const Header = () => {
             </a>
           </nav>
 
-          {/* Actions */}
-          <div className="flex items-center space-x-3">
-            {/* Bouton Admin : visible uniquement si role = admin (desktop) */}
+          {/* Actions Desktop */}
+          <div className="hidden md:flex items-center space-x-3">
+            {/* Bouton Admin : visible uniquement si role = admin */}
             {isAdmin && (
               <Link
                 to="/admin/ouvrier-contacts"
-                className="hidden md:inline-flex items-center rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                className="inline-flex items-center rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
               >
                 Admin
               </Link>
             )}
 
-            {/* CTA Devenir Ouvrier Pro (desktop) */}
+            {/* CTA Devenir Ouvrier Pro */}
             <a href="#subscription">
               <Button
                 size="sm"
-                className="hidden md:inline-flex bg-pro-blue text-white hover:bg-pro-blue/90"
+                className="bg-pro-blue text-white hover:bg-pro-blue/90"
               >
                 Devenir Ouvrier Pro
               </Button>
@@ -99,44 +105,105 @@ const Header = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          </div>
 
-            {/* Mobile Menu */}
+          {/* Mobile actions */}
+          <div className="md:hidden flex items-center gap-2">
+            {/* Language Switcher mobile */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="md:hidden">
-                  <Menu className="w-4 h-4" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center space-x-1"
+                >
+                  <Languages className="w-4 h-4" />
+                  <span className="uppercase">{language}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white">
-                <DropdownMenuItem asChild>
-                  <a href="#search" className="flex items-center">
-                    <Search className="w-4 h-4 mr-2" />
-                    {t("nav.search")}
-                  </a>
+                <DropdownMenuItem
+                  onClick={() => setLanguage("fr")}
+                  className="cursor-pointer"
+                >
+                  🇫🇷 Français
                 </DropdownMenuItem>
-
-                {/* Lien Admin dans le menu mobile – visible seulement si admin */}
-                {isAdmin && (
-                  <DropdownMenuItem asChild>
-                    <Link to="/admin/ouvrier-contacts" className="flex items-center">
-                      <User className="w-4 h-4 mr-2" />
-                      Admin
-                    </Link>
-                  </DropdownMenuItem>
-                )}
-
-                {/* CTA Devenir Ouvrier Pro (mobile) */}
-                <DropdownMenuItem asChild className="cursor-pointer">
-                  <a href="#subscription" className="flex items-center">
-                    <User className="w-4 h-4 mr-2" />
-                    Devenir Ouvrier Pro
-                  </a>
+                <DropdownMenuItem
+                  onClick={() => setLanguage("en")}
+                  className="cursor-pointer"
+                >
+                  🇬🇧 English
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* Hamburger */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setMobileOpen((v) => !v)}
+              aria-label="Menu mobile"
+            >
+              {mobileOpen ? (
+                <X className="w-4 h-4" />
+              ) : (
+                <Menu className="w-4 h-4" />
+              )}
+            </Button>
           </div>
         </div>
       </div>
+
+      {/* Mobile menu panel */}
+      {mobileOpen && (
+        <div className="md:hidden border-t bg-white">
+          <div className="w-full max-w-6xl mx-auto px-4 py-3 flex flex-col gap-2">
+            <a
+              href="#search"
+              onClick={closeMobile}
+              className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
+            >
+              <Search className="w-4 h-4" />
+              {t("nav.search")}
+            </a>
+
+            <a
+              href="#faq"
+              onClick={closeMobile}
+              className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
+            >
+              {t("nav.faq")}
+            </a>
+
+            <a
+              href="#contact"
+              onClick={closeMobile}
+              className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
+            >
+              {t("nav.contact")}
+            </a>
+
+            {/* Admin mobile */}
+            {isAdmin && (
+              <Link
+                to="/admin/ouvrier-contacts"
+                onClick={closeMobile}
+                className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
+              >
+                <User className="w-4 h-4" />
+                Admin
+              </Link>
+            )}
+
+            {/* CTA mobile */}
+            <a href="#subscription" onClick={closeMobile} className="pt-2">
+              <Button className="w-full bg-pro-blue text-white hover:bg-pro-blue/90">
+                Devenir Ouvrier Pro
+              </Button>
+            </a>
+          </div>
+        </div>
+      )}
     </header>
   );
 };
