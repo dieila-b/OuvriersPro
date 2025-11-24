@@ -2,7 +2,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
-import { guineaLocations } from "@/lib/guineaLocations";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -21,10 +20,10 @@ type DbWorker = {
   last_name: string | null;
   profession: string | null;
   country: string | null;
-  region: string | null; // gardé côté DB mais non filtré
-  city: string | null;
-  commune: string | null;
-  district: string | null;
+  region: string | null;   // non filtré
+  city: string | null;     // non filtré
+  commune: string | null;  // non filtré
+  district: string | null; // filtré
   hourly_rate: number | null;
   currency: string | null;
   years_experience: number | null;
@@ -59,14 +58,13 @@ const SearchSection: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   // ✅ Etats de filtres (zone de recherche + sidebar)
-  const [keyword, setKeyword] = useState("");
+  const [keyword, setKeyword] = useState(""); // Champ Métier
   const [selectedJob, setSelectedJob] = useState<string>("all");
   const [maxPrice, setMaxPrice] = useState<number>(300000);
   const [minRating, setMinRating] = useState<number>(0);
 
-  const [selectedCity, setSelectedCity] = useState<string>("");       // Ville
-  const [selectedCommune, setSelectedCommune] = useState<string>(""); // Commune
-  const [selectedDistrict, setSelectedDistrict] = useState<string>(""); // Quartier (DB = district)
+  // ✅ On garde seulement Quartier
+  const [selectedDistrict, setSelectedDistrict] = useState<string>("");
 
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
@@ -140,8 +138,8 @@ const SearchSection: React.FC = () => {
 
   // -------------------------
   // 2) Init filtres depuis URL (une seule fois)
-  //    ✅ accepte nouveaux noms : service, ville, commune, quartier
-  //    ✅ accepte anciens noms : keyword, city, district
+  //    ✅ accepte nouveaux noms : service, quartier
+  //    ✅ accepte anciens noms : keyword, district
   // -------------------------
   useEffect(() => {
     if (initializedFromUrl) return;
@@ -150,14 +148,6 @@ const SearchSection: React.FC = () => {
       searchParams.get("service") ??
       searchParams.get("keyword") ??
       "";
-
-    const spCity =
-      searchParams.get("ville") ??
-      searchParams.get("city") ??
-      "";
-
-    const spCommune =
-      searchParams.get("commune") ?? "";
 
     const spDistrict =
       searchParams.get("quartier") ??
@@ -171,8 +161,6 @@ const SearchSection: React.FC = () => {
     const spView = (searchParams.get("view") as "list" | "grid") ?? "list";
 
     setKeyword(spKeyword);
-    setSelectedCity(spCity);
-    setSelectedCommune(spCommune);
     setSelectedDistrict(spDistrict);
 
     setSelectedJob(spJob);
@@ -186,7 +174,7 @@ const SearchSection: React.FC = () => {
 
   // -------------------------
   // 3) Sync filtres -> URL
-  //    ✅ écrit les nouveaux noms (service/ville/commune/quartier)
+  //    ✅ écrit les nouveaux noms (service/quartier)
   // -------------------------
   useEffect(() => {
     if (!initializedFromUrl) return;
@@ -194,8 +182,6 @@ const SearchSection: React.FC = () => {
     const next: Record<string, string> = {};
 
     if (keyword.trim()) next.service = keyword.trim();
-    if (selectedCity) next.ville = selectedCity;
-    if (selectedCommune) next.commune = selectedCommune;
     if (selectedDistrict) next.quartier = selectedDistrict;
 
     if (selectedJob !== "all") next.job = selectedJob;
@@ -208,8 +194,6 @@ const SearchSection: React.FC = () => {
     initializedFromUrl,
     keyword,
     selectedJob,
-    selectedCity,
-    selectedCommune,
     selectedDistrict,
     maxPrice,
     minRating,
@@ -220,8 +204,6 @@ const SearchSection: React.FC = () => {
   // -------------------------
   // Collections dynamiques
   // -------------------------
-
-  // Jobs depuis workers
   const jobs = useMemo(
     () =>
       Array.from(
@@ -234,37 +216,18 @@ const SearchSection: React.FC = () => {
     [workers]
   );
 
-  // Villes : toutes les villes connues dans guineaLocations
-  const cities = useMemo(() => {
-    const list: string[] = [];
-    guineaLocations.forEach((r: any) =>
-      (r.cities ?? []).forEach((c: any) => list.push(c.city))
-    );
-    return Array.from(new Set(list)).filter(Boolean);
-  }, []);
-
-  // Communes dépendantes ville
-  const communes = useMemo(() => {
-    if (!selectedCity) return [];
-    const reg = guineaLocations.find((r: any) =>
-      (r.cities ?? []).some((c: any) => c.city === selectedCity)
-    );
-    const cityObj = (reg?.cities ?? []).find((c: any) => c.city === selectedCity);
-    return (cityObj?.communes ?? []).map((c: any) => c.commune).filter(Boolean);
-  }, [selectedCity]);
-
-  // Quartiers dépendants commune
-  const districts = useMemo(() => {
-    if (!selectedCity || !selectedCommune) return [];
-    const reg = guineaLocations.find((r: any) =>
-      (r.cities ?? []).some((c: any) => c.city === selectedCity)
-    );
-    const cityObj = (reg?.cities ?? []).find((c: any) => c.city === selectedCity);
-    const communeObj = (cityObj?.communes ?? []).find(
-      (c: any) => c.commune === selectedCommune
-    );
-    return (communeObj?.districts ?? []).filter(Boolean);
-  }, [selectedCity, selectedCommune]);
+  // ✅ Quartiers depuis les ouvriers approuvés
+  const districts = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          workers
+            .map((w) => w.district)
+            .filter((d) => d && d.trim().length > 0)
+        )
+      ),
+    [workers]
+  );
 
   // -------------------------
   // Filtrage
@@ -281,9 +244,6 @@ const SearchSection: React.FC = () => {
         const matchPrice = w.hourlyRate <= maxPrice;
         const matchRating = w.rating >= minRating;
 
-        const matchCity = !selectedCity || w.city === selectedCity;
-        const matchCommune =
-          !selectedCommune || w.commune === selectedCommune;
         const matchDistrict =
           !selectedDistrict || w.district === selectedDistrict;
 
@@ -292,8 +252,6 @@ const SearchSection: React.FC = () => {
           matchJob &&
           matchPrice &&
           matchRating &&
-          matchCity &&
-          matchCommune &&
           matchDistrict
         );
       }),
@@ -303,8 +261,6 @@ const SearchSection: React.FC = () => {
       selectedJob,
       maxPrice,
       minRating,
-      selectedCity,
-      selectedCommune,
       selectedDistrict,
     ]
   );
@@ -314,8 +270,6 @@ const SearchSection: React.FC = () => {
     setSelectedJob("all");
     setMaxPrice(300000);
     setMinRating(0);
-    setSelectedCity("");
-    setSelectedCommune("");
     setSelectedDistrict("");
     setViewMode("list");
   };
@@ -334,8 +288,8 @@ const SearchSection: React.FC = () => {
         : "Find your professional",
     subtitle:
       language === "fr"
-        ? "Filtrez par métier, zone géographique et tarif pour trouver l’ouvrier le plus proche."
-        : "Filter by trade, location and rate to find the closest professional.",
+        ? "Filtrez par métier, quartier et tarif pour trouver l’ouvrier le plus proche."
+        : "Filter by trade, district and rate to find the closest professional.",
     filters: language === "fr" ? "Filtres" : "Filters",
     keywordLabel: language === "fr" ? "Métier ou nom" : "Trade or name",
     searchPlaceholder:
@@ -348,12 +302,7 @@ const SearchSection: React.FC = () => {
       language === "fr" ? "Tarif horaire max" : "Max hourly rate",
     ratingLabel:
       language === "fr" ? "Note minimum" : "Minimum rating",
-    city: language === "fr" ? "Ville" : "City",
-    commune: language === "fr" ? "Commune" : "Commune",
     district: language === "fr" ? "Quartier" : "District",
-    allCities: language === "fr" ? "Toutes les villes" : "All cities",
-    allCommunes:
-      language === "fr" ? "Toutes les communes" : "All communes",
     allDistricts:
       language === "fr" ? "Tous les quartiers" : "All districts",
     reset:
@@ -386,7 +335,7 @@ const SearchSection: React.FC = () => {
     <section id="search" className="w-full py-12 sm:py-16 lg:py-20 bg-white">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
 
-        {/* ✅ ZONE DE RECHERCHE HAUT (identique sidebar, sans région) */}
+        {/* ✅ ZONE DE RECHERCHE HAUT (identique sidebar) */}
         <div className="mb-6 sm:mb-8">
           <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-3 sm:p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -406,7 +355,7 @@ const SearchSection: React.FC = () => {
               "
             >
               {/* Métier / service */}
-              <div>
+              <div className="lg:col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   {text.keywordLabel}
                 </label>
@@ -418,62 +367,15 @@ const SearchSection: React.FC = () => {
                 />
               </div>
 
-              {/* Ville */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  {text.city}
-                </label>
-                <select
-                  value={selectedCity}
-                  onChange={(e) => {
-                    setSelectedCity(e.target.value);
-                    setSelectedCommune("");
-                    setSelectedDistrict("");
-                  }}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
-                >
-                  <option value="">{text.allCities}</option>
-                  {cities.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Commune */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  {text.commune}
-                </label>
-                <select
-                  value={selectedCommune}
-                  onChange={(e) => {
-                    setSelectedCommune(e.target.value);
-                    setSelectedDistrict("");
-                  }}
-                  disabled={!selectedCity}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-pro-blue"
-                >
-                  <option value="">{text.allCommunes}</option>
-                  {communes.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               {/* Quartier */}
-              <div>
+              <div className="lg:col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   {text.district}
                 </label>
                 <select
                   value={selectedDistrict}
                   onChange={(e) => setSelectedDistrict(e.target.value)}
-                  disabled={!selectedCommune}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
                 >
                   <option value="">{text.allDistricts}</option>
                   {districts.map((d) => (
@@ -635,52 +537,6 @@ const SearchSection: React.FC = () => {
               </select>
             </div>
 
-            {/* Ville */}
-            <div className="mb-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {text.city}
-              </label>
-              <select
-                value={selectedCity}
-                onChange={(e) => {
-                  setSelectedCity(e.target.value);
-                  setSelectedCommune("");
-                  setSelectedDistrict("");
-                }}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
-              >
-                <option value="">{text.allCities}</option>
-                {cities.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Commune */}
-            <div className="mb-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {text.commune}
-              </label>
-              <select
-                value={selectedCommune}
-                onChange={(e) => {
-                  setSelectedCommune(e.target.value);
-                  setSelectedDistrict("");
-                }}
-                disabled={!selectedCity}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-pro-blue"
-              >
-                <option value="">{text.allCommunes}</option>
-                {communes.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             {/* Quartier */}
             <div className="mb-6">
               <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -689,8 +545,7 @@ const SearchSection: React.FC = () => {
               <select
                 value={selectedDistrict}
                 onChange={(e) => setSelectedDistrict(e.target.value)}
-                disabled={!selectedCommune}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="">{text.allDistricts}</option>
                 {districts.map((d) => (
