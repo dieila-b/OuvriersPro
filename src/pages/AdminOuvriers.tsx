@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 
-type WorkerStatus = "pending" | "approved" | "rejected" | null;
+type WorkerStatus = "pending" | "approved" | "rejected" | "suspended" | null;
 
 type DbWorker = {
   id: string;
@@ -35,7 +35,7 @@ type DbWorker = {
   rejection_reason?: string | null;
 };
 
-const statusOptions: WorkerStatus[] = ["pending", "approved", "rejected"];
+const statusOptions: WorkerStatus[] = ["pending", "approved", "rejected", "suspended"];
 
 const AdminOuvriers: React.FC = () => {
   const { language } = useLanguage();
