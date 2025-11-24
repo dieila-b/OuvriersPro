@@ -3,16 +3,29 @@ import React, { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, MapPin } from "lucide-react";
+import { Search, MapPin, Building2, Map } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const HeroSection = () => {
   const { t } = useLanguage();
+  const navigate = useNavigate();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [location, setLocation] = useState("");
+  const [commune, setCommune] = useState("");
+  const [quartier, setQuartier] = useState("");
 
-  const handleSearch = () => {
-    console.log("Searching for:", searchTerm, "in:", location);
-    // TODO: redirection / filtrage
+  const handleSearch = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    const params = new URLSearchParams();
+    if (searchTerm.trim()) params.set("service", searchTerm.trim());
+    if (location.trim()) params.set("ville", location.trim());
+    if (commune.trim()) params.set("commune", commune.trim());
+    if (quartier.trim()) params.set("quartier", quartier.trim());
+
+    // ⚠️ Si ta route de recherche s'appelle autrement, change juste "/search"
+    navigate(`/search?${params.toString()}`);
   };
 
   return (
@@ -28,9 +41,20 @@ const HeroSection = () => {
           </p>
 
           {/* Search Form */}
-          <div className="bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl max-w-3xl mx-auto">
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 md:gap-4">
-              <div className="flex-1 relative">
+          <form
+            onSubmit={handleSearch}
+            className="bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl max-w-5xl mx-auto"
+          >
+            <div
+              className="
+                grid grid-cols-1 gap-2
+                sm:grid-cols-2 sm:gap-3
+                lg:grid-cols-4 lg:gap-4
+                items-center
+              "
+            >
+              {/* Métier / Service */}
+              <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
                   placeholder={t("home.search.placeholder")}
@@ -40,7 +64,8 @@ const HeroSection = () => {
                 />
               </div>
 
-              <div className="flex-1 relative">
+              {/* Ville / Code postal */}
+              <div className="relative">
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
                   placeholder={t("home.location.placeholder")}
@@ -50,14 +75,41 @@ const HeroSection = () => {
                 />
               </div>
 
+              {/* Commune */}
+              <div className="relative">
+                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Input
+                  placeholder={t("home.commune.placeholder") || "Commune"}
+                  value={commune}
+                  onChange={(e) => setCommune(e.target.value)}
+                  className="pl-10 py-3 text-gray-900 text-sm sm:text-base w-full"
+                />
+              </div>
+
+              {/* Quartier */}
+              <div className="relative">
+                <Map className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Input
+                  placeholder={t("home.quartier.placeholder") || "Quartier"}
+                  value={quartier}
+                  onChange={(e) => setQuartier(e.target.value)}
+                  className="pl-10 py-3 text-gray-900 text-sm sm:text-base w-full"
+                />
+              </div>
+
+              {/* Bouton */}
               <Button
-                onClick={handleSearch}
-                className="w-full sm:w-auto bg-pro-blue hover:bg-blue-700 px-6 md:px-8 py-3 text-sm sm:text-base"
+                type="submit"
+                className="
+                  lg:col-span-4
+                  w-full bg-pro-blue hover:bg-blue-700
+                  px-6 md:px-8 py-3 text-sm sm:text-base
+                "
               >
                 {t("home.search.button")}
               </Button>
             </div>
-          </div>
+          </form>
         </div>
       </div>
     </section>
