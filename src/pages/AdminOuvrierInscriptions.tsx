@@ -18,6 +18,7 @@ import {
   User2,
   CalendarDays,
   Search,
+  Clock,
 } from "lucide-react";
 
 type DbWorker = {
@@ -170,7 +171,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from<DbWorker>("op_ouvriers")
+        .from("op_ouvriers")
         .select(
           `
           id,
@@ -717,7 +718,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
     setError(null);
 
     const { data, error } = await supabase
-      .from<DbWorker>("op_ouvriers")
+      .from("op_ouvriers")
       .select(
         `
         id,

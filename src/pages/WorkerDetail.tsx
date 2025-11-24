@@ -67,7 +67,7 @@ const WorkerDetail: React.FC = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from<DbWorker>("op_ouvriers")
+        .from("op_ouvriers")
         .select(
           `
           id,
