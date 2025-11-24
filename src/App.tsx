@@ -8,7 +8,6 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 
 // Pages publiques
 import Index from "./pages/Index";
-import SearchPage from "./pages/Search"; // ✅ AJOUT
 import NotFound from "./pages/NotFound";
 import InscriptionOuvrier from "./pages/InscriptionOuvrier";
 import WorkerDetail from "./pages/WorkerDetail";
@@ -38,9 +37,6 @@ const App = () => (
           <Routes>
             {/* 🏠 Page d'accueil */}
             <Route path="/" element={<Index />} />
-
-            {/* 🔎 Page recherche / liste ouvriers */}
-            <Route path="/search" element={<SearchPage />} />
 
             {/* 🔐 Connexion (admin + ouvriers) */}
             <Route path="/login" element={<Login />} />
