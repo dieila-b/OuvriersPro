@@ -21,16 +21,18 @@ import {
 
 type DbContact = {
   id: string;
-  worker_id: string | null;
+  worker_id: string;
   worker_name: string | null;
-  worker_profession: string | null;
   client_name: string | null;
   client_email: string | null;
   client_phone: string | null;
-  message: string | null;
-  status: string | null;
+  message: string;
+  status: string;
   created_at: string;
-  origin?: string | null;
+  origin: string | null;
+  phone: string | null;
+  full_name: string;
+  email: string | null;
 };
 
 const statusOptions = ["new", "in_progress", "done"] as const;
@@ -178,7 +180,6 @@ const AdminOuvrierContacts: React.FC = () => {
       const haystack =
         [
           c.worker_name,
-          c.worker_profession,
           c.client_name,
           c.client_email,
           c.client_phone,
@@ -401,7 +402,6 @@ const AdminOuvrierContacts: React.FC = () => {
         c.status ?? "",
         originLabel(c.origin),
         c.worker_name ?? "",
-        c.worker_profession ?? "",
         c.client_name ?? "",
         c.client_email ?? "",
         c.client_phone ?? "",
@@ -626,9 +626,6 @@ const AdminOuvrierContacts: React.FC = () => {
                     <div className="font-semibold text-slate-900">
                       {c.worker_name || "—"}
                     </div>
-                    <div className="text-xs text-slate-500">
-                      {c.worker_profession || ""}
-                    </div>
                   </div>
 
                   <div className="mb-2">
@@ -743,9 +740,6 @@ const AdminOuvrierContacts: React.FC = () => {
                         <td className="px-4 py-3 align-top text-slate-800">
                           <div className="font-semibold">
                             {c.worker_name || "—"}
-                          </div>
-                          <div className="text-xs text-slate-500">
-                            {c.worker_profession || ""}
                           </div>
                         </td>
 

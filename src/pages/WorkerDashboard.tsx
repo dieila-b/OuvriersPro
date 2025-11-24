@@ -18,7 +18,7 @@ type WorkerProfile = {
   district: string | null;
   profession: string | null;
   description: string | null;
-  plan_code: "FREE" | "MONTHLY" | "YEARLY" | null;
+  plan_code: string | null;
   status: string | null;
   hourly_rate: number | null;
   currency: string | null;

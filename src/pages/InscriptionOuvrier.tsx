@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabaseClient";
+import type { TablesInsert } from "@/integrations/supabase/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -612,15 +613,15 @@ const InscriptionOuvrier: React.FC = () => {
         isFreePlan || (paymentCompleted && !isManualMobileMoney);
 
       // Statut initial de paiement enregistré en base
-      const initialPaymentStatus: "unpaid" | "pending" | "paid" = isFreePlan
+      const initialPaymentStatus: "unpaid" | "paid" = isFreePlan
         ? "paid"
         : isManualMobileMoney
-        ? "pending" // Mobile Money = à vérifier manuellement par l'admin
+        ? "unpaid"
         : isPaymentReallyPaid
         ? "paid"
         : "unpaid";
 
-      const { error: insertError } = await supabase.from("op_ouvriers").insert({
+      const workerData: TablesInsert<"op_ouvriers"> = {
         user_id: user.id,
         first_name: form.firstName,
         last_name: form.lastName,
@@ -635,7 +636,7 @@ const InscriptionOuvrier: React.FC = () => {
         profession: form.profession,
         description: form.description,
         plan_code: plan,
-        status: "pending", // en attente validation admin
+        status: "pending",
         hourly_rate: hourlyRateNumber,
         currency: currency.code,
         avatar_url: avatarUrl,
@@ -644,7 +645,9 @@ const InscriptionOuvrier: React.FC = () => {
         payment_provider: isFreePlan ? "free_plan" : paymentMethod || "unknown",
         payment_reference: paymentReference,
         payment_at: isPaymentReallyPaid ? new Date().toISOString() : null,
-      });
+      };
+
+      const { error: insertError } = await supabase.from("op_ouvriers").insert(workerData);
 
       if (insertError) throw insertError;
 
