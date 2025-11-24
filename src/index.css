@@ -118,3 +118,31 @@ svg {
   max-width: 100%;
   height: auto;
 }
+/* --------------------------- */
+/* ✅ HARD RESPONSIVE OVERRIDES */
+/* --------------------------- */
+
+/* Empêche toute largeur minimale globale (souvent la cause) */
+html,
+body,
+#root {
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: clip !important; /* plus strict que hidden */
+}
+
+/* Tous les blocs peuvent rétrécir */
+*,
+*::before,
+*::after {
+  min-width: 0;
+}
+
+/* Les sections/layouts ne doivent jamais dépasser la largeur écran */
+main,
+header,
+section,
+div {
+  max-width: 100%;
+}
