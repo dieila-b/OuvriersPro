@@ -5,7 +5,14 @@ import { supabase } from "@/lib/supabase";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Star, MapPin, Search, LayoutList, LayoutGrid } from "lucide-react";
+import {
+  Star,
+  MapPin,
+  Search,
+  LayoutList,
+  LayoutGrid,
+} from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 
 type DbWorker = {
   id: string;
@@ -43,11 +50,14 @@ interface WorkerCard {
 
 const SearchSection: React.FC = () => {
   const { language } = useLanguage();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [initializedFromUrl, setInitializedFromUrl] = useState(false);
 
   const [workers, setWorkers] = useState<WorkerCard[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ✅ Etats de filtres (partagés entre zone de recherche et sidebar)
   const [keyword, setKeyword] = useState("");
   const [selectedJob, setSelectedJob] = useState<string>("all");
   const [maxPrice, setMaxPrice] = useState<number>(300000);
@@ -60,6 +70,9 @@ const SearchSection: React.FC = () => {
 
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
+  // -------------------------
+  // 1) Charge ouvriers
+  // -------------------------
   useEffect(() => {
     const fetchWorkers = async () => {
       setLoading(true);
@@ -125,6 +138,71 @@ const SearchSection: React.FC = () => {
     fetchWorkers();
   }, [language]);
 
+  // -------------------------
+  // 2) Init filtres depuis URL (une seule fois)
+  // -------------------------
+  useEffect(() => {
+    if (initializedFromUrl) return;
+
+    const spKeyword = searchParams.get("keyword") ?? "";
+    const spJob = searchParams.get("job") ?? "all";
+    const spRegion = searchParams.get("region") ?? "";
+    const spCity = searchParams.get("city") ?? "";
+    const spCommune = searchParams.get("commune") ?? "";
+    const spDistrict = searchParams.get("district") ?? "";
+    const spMaxPrice = Number(searchParams.get("maxPrice") ?? "300000");
+    const spMinRating = Number(searchParams.get("minRating") ?? "0");
+    const spView = (searchParams.get("view") as "list" | "grid") ?? "list";
+
+    setKeyword(spKeyword);
+    setSelectedJob(spJob);
+    setSelectedRegion(spRegion);
+    setSelectedCity(spCity);
+    setSelectedCommune(spCommune);
+    setSelectedDistrict(spDistrict);
+    setMaxPrice(Number.isFinite(spMaxPrice) ? spMaxPrice : 300000);
+    setMinRating(Number.isFinite(spMinRating) ? spMinRating : 0);
+    setViewMode(spView);
+
+    setInitializedFromUrl(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, initializedFromUrl]);
+
+  // -------------------------
+  // 3) Sync filtres -> URL
+  // -------------------------
+  useEffect(() => {
+    if (!initializedFromUrl) return;
+
+    const next: Record<string, string> = {};
+    if (keyword.trim()) next.keyword = keyword.trim();
+    if (selectedJob !== "all") next.job = selectedJob;
+    if (selectedRegion) next.region = selectedRegion;
+    if (selectedCity) next.city = selectedCity;
+    if (selectedCommune) next.commune = selectedCommune;
+    if (selectedDistrict) next.district = selectedDistrict;
+    if (maxPrice !== 300000) next.maxPrice = String(maxPrice);
+    if (minRating !== 0) next.minRating = String(minRating);
+    if (viewMode !== "list") next.view = viewMode;
+
+    setSearchParams(next, { replace: true });
+  }, [
+    initializedFromUrl,
+    keyword,
+    selectedJob,
+    selectedRegion,
+    selectedCity,
+    selectedCommune,
+    selectedDistrict,
+    maxPrice,
+    minRating,
+    viewMode,
+    setSearchParams,
+  ]);
+
+  // -------------------------
+  // Collections dynamiques
+  // -------------------------
   const jobs = useMemo(
     () =>
       Array.from(
@@ -197,6 +275,9 @@ const SearchSection: React.FC = () => {
     [workers, selectedRegion, selectedCity, selectedCommune]
   );
 
+  // -------------------------
+  // Filtrage
+  // -------------------------
   const filteredWorkers = useMemo(
     () =>
       workers.filter((w) => {
@@ -249,6 +330,7 @@ const SearchSection: React.FC = () => {
     setSelectedCity("");
     setSelectedCommune("");
     setSelectedDistrict("");
+    setViewMode("list");
   };
 
   const formatCurrency = (value: number, currency: string) => {
@@ -308,11 +390,93 @@ const SearchSection: React.FC = () => {
       language === "fr"
         ? `${count} résultat${count > 1 ? "s" : ""} trouvé${count > 1 ? "s" : ""}`
         : `${count} result${count > 1 ? "s" : ""} found`,
+    topSearchTitle:
+      language === "fr" ? "Rechercher un ouvrier" : "Search a worker",
+    topServicePlaceholder:
+      language === "fr" ? "Métier / service" : "Job / service",
+    topCityPlaceholder:
+      language === "fr" ? "Ville ou code postal" : "City or postal code",
+    topCommunePlaceholder:
+      language === "fr" ? "Commune" : "Commune",
+    topDistrictPlaceholder:
+      language === "fr" ? "Quartier" : "District",
+    topSearchBtn: language === "fr" ? "Rechercher" : "Search",
   };
 
   return (
     <section id="search" className="w-full py-12 sm:py-16 lg:py-20 bg-white">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+
+        {/* ✅ ZONE DE RECHERCHE HAUT (synchro avec filtres) */}
+        <div className="mb-6 sm:mb-8">
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-3 sm:p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Search className="w-4 h-4 text-pro-blue" />
+              <h3 className="font-semibold text-pro-gray text-sm sm:text-base">
+                {text.topSearchTitle}
+              </h3>
+            </div>
+
+            <form
+              onSubmit={(e) => e.preventDefault()}
+              className="
+                grid grid-cols-1 gap-2
+                sm:grid-cols-2 sm:gap-3
+                lg:grid-cols-4 lg:gap-3
+                items-center
+              "
+            >
+              <Input
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder={text.topServicePlaceholder}
+                className="text-sm"
+              />
+
+              <Input
+                value={selectedCity}
+                onChange={(e) => {
+                  setSelectedCity(e.target.value);
+                  setSelectedCommune("");
+                  setSelectedDistrict("");
+                }}
+                placeholder={text.topCityPlaceholder}
+                className="text-sm"
+              />
+
+              <Input
+                value={selectedCommune}
+                onChange={(e) => {
+                  setSelectedCommune(e.target.value);
+                  setSelectedDistrict("");
+                }}
+                placeholder={text.topCommunePlaceholder}
+                className="text-sm"
+              />
+
+              <Input
+                value={selectedDistrict}
+                onChange={(e) => setSelectedDistrict(e.target.value)}
+                placeholder={text.topDistrictPlaceholder}
+                className="text-sm"
+              />
+
+              <Button
+                type="button"
+                className="lg:col-span-4 w-full bg-pro-blue hover:bg-blue-700"
+                onClick={() => {
+                  // pas de navigation, filtre en live
+                  // si tu veux scroller vers résultats :
+                  const el = document.getElementById("results");
+                  el?.scrollIntoView({ behavior: "smooth" });
+                }}
+              >
+                {text.topSearchBtn}
+              </Button>
+            </form>
+          </div>
+        </div>
+
         {/* En-tête global */}
         <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-6 sm:mb-8 border-b border-gray-200 pb-4">
           <div>
@@ -548,7 +712,7 @@ const SearchSection: React.FC = () => {
           </aside>
 
           {/* Résultats */}
-          <div className="lg:col-span-3">
+          <div id="results" className="lg:col-span-3">
             {error && (
               <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">
                 {error}
