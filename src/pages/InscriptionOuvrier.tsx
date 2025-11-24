@@ -612,15 +612,15 @@ const InscriptionOuvrier: React.FC = () => {
         isFreePlan || (paymentCompleted && !isManualMobileMoney);
 
       // Statut initial de paiement enregistré en base
-      const initialPaymentStatus: "unpaid" | "pending" | "paid" = isFreePlan
+      const initialPaymentStatus: "unpaid" | "paid" | "failed" = isFreePlan
         ? "paid"
         : isManualMobileMoney
-        ? "pending" // Mobile Money = à vérifier manuellement par l'admin
+        ? "unpaid" // Mobile Money = à vérifier manuellement par l'admin
         : isPaymentReallyPaid
         ? "paid"
         : "unpaid";
 
-      const { error: insertError } = await supabase.from("op_ouvriers").insert({
+      const { error: insertError } = await supabase.from("op_ouvriers").insert([{
         user_id: user.id,
         first_name: form.firstName,
         last_name: form.lastName,
@@ -644,7 +644,7 @@ const InscriptionOuvrier: React.FC = () => {
         payment_provider: isFreePlan ? "free_plan" : paymentMethod || "unknown",
         payment_reference: paymentReference,
         payment_at: isPaymentReallyPaid ? new Date().toISOString() : null,
-      });
+      }]);
 
       if (insertError) throw insertError;
 
