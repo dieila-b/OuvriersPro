@@ -5,7 +5,13 @@ import { supabase } from "@/lib/supabase";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Star, MapPin, Search, LayoutList, LayoutGrid } from "lucide-react";
+import {
+  Star,
+  MapPin,
+  Search,
+  LayoutList,
+  LayoutGrid,
+} from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 type DbWorker = {
@@ -25,6 +31,7 @@ type DbWorker = {
   rating_count: number | null;
   status: string | null;
 
+  // coords optionnelles
   lat: number | null;
   lng: number | null;
 };
@@ -46,17 +53,11 @@ interface WorkerCard {
   lat?: number | null;
   lng?: number | null;
 
+  // distance calculée (runtime)
   _distanceKm?: number | null;
 }
 
 type GeoPoint = { lat: number; lng: number };
-
-// normalise simple (casse / espaces)
-const normalize = (s: string) => s.trim().toLowerCase();
-
-// enlève accents (Kipé = Kipe)
-const stripAccents = (s: string) =>
-  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
 const haversineKm = (a: GeoPoint, b: GeoPoint) => {
   const R = 6371;
@@ -78,32 +79,35 @@ const haversineKm = (a: GeoPoint, b: GeoPoint) => {
   return 2 * R * Math.asin(Math.sqrt(h));
 };
 
-// valeurs "near me" à ignorer comme quartier réel
-const NEAR_ME_VALUES = ["autour de moi", "near me"];
+// 🔧 Normalisation pour comparer sans accents / casse
+const norm = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    // enlève les accents
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 
 const SearchSection: React.FC = () => {
   const { language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [initializedFromUrl, setInitializedFromUrl] = useState(false);
 
   const [workers, setWorkers] = useState<WorkerCard[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Filtres
-  const [keyword, setKeyword] = useState("");
+  // ✅ Filtres
+  const [keyword, setKeyword] = useState(""); // Métier
   const [selectedJob, setSelectedJob] = useState<string>("all");
-  const [selectedDistrict, setSelectedDistrict] = useState<string>("");
-
+  const [selectedDistrict, setSelectedDistrict] = useState<string>(""); // Quartier
   const [maxPrice, setMaxPrice] = useState<number>(300000);
   const [minRating, setMinRating] = useState<number>(0);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
-  // Géoloc
+  // ✅ Géoloc URL
   const [userGeo, setUserGeo] = useState<GeoPoint | null>(null);
   const [radiusKm, setRadiusKm] = useState<number>(10);
-
-  // Hydratation URL -> états
-  const [hydratedFromUrl, setHydratedFromUrl] = useState(false);
 
   // -------------------------
   // 1) Charge ouvriers
@@ -178,7 +182,7 @@ const SearchSection: React.FC = () => {
   }, [language]);
 
   // -------------------------
-  // 2) URL -> états
+  // 2) Lecture URL -> états (à CHAQUE changement URL)
   // -------------------------
   useEffect(() => {
     const spKeyword =
@@ -186,7 +190,7 @@ const SearchSection: React.FC = () => {
       searchParams.get("keyword") ??
       "";
 
-    const rawDistrict =
+    const spDistrict =
       searchParams.get("quartier") ??
       searchParams.get("district") ??
       "";
@@ -200,15 +204,9 @@ const SearchSection: React.FC = () => {
     const spLng = searchParams.get("lng");
     const spRadius = Number(searchParams.get("radiusKm") ?? "10");
 
-    // ✅ si "Autour de moi"/"Near me" on le traite comme vide
-    const districtNorm = normalize(rawDistrict);
-    const spDistrict =
-      NEAR_ME_VALUES.includes(districtNorm) ? "" : rawDistrict;
-
     setKeyword(spKeyword);
     setSelectedDistrict(spDistrict);
     setSelectedJob(spJob);
-
     setMaxPrice(Number.isFinite(spMaxPrice) ? spMaxPrice : 300000);
     setMinRating(Number.isFinite(spMinRating) ? spMinRating : 0);
     setViewMode(spView);
@@ -225,14 +223,15 @@ const SearchSection: React.FC = () => {
       setRadiusKm(10);
     }
 
-    setHydratedFromUrl(true);
+    // ✅ très important : on marque l'init une fois l'URL lue
+    setInitializedFromUrl(true);
   }, [searchParams]);
 
   // -------------------------
-  // 3) Etats -> URL (après hydratation)
+  // 3) Sync états -> URL (APRES init)
   // -------------------------
   useEffect(() => {
-    if (!hydratedFromUrl) return;
+    if (!initializedFromUrl) return;
 
     const next: Record<string, string> = {};
 
@@ -256,7 +255,7 @@ const SearchSection: React.FC = () => {
       setSearchParams(next, { replace: true });
     }
   }, [
-    hydratedFromUrl,
+    initializedFromUrl,
     keyword,
     selectedDistrict,
     selectedJob,
@@ -280,7 +279,7 @@ const SearchSection: React.FC = () => {
             .map((w) => w.job)
             .filter((j) => j && j.trim().length > 0)
         )
-      ).sort((a, b) => a.localeCompare(b, "fr")),
+      ),
     [workers]
   );
 
@@ -300,37 +299,36 @@ const SearchSection: React.FC = () => {
   // Filtrage + distance
   // -------------------------
   const filteredWorkers = useMemo(() => {
-    const kw = stripAccents(normalize(keyword));
-    const dist = stripAccents(normalize(selectedDistrict));
-    const jobSel = stripAccents(normalize(selectedJob));
+    const keywordN = norm(keyword);
+    const districtN = norm(selectedDistrict);
 
     const base = workers.filter((w) => {
-      const wJob = stripAccents(normalize(w.job));
-      const wName = stripAccents(normalize(w.name));
-      const wDistrict = stripAccents(normalize(w.district));
+      const nameN = norm(w.name);
+      const jobN = norm(w.job);
+      const wDistrictN = norm(w.district);
 
       const matchKeyword =
-        !kw || wName.includes(kw) || wJob.includes(kw);
+        !keywordN ||
+        nameN.includes(keywordN) ||
+        jobN.includes(keywordN);
 
-      const matchJob = selectedJob === "all" || wJob === jobSel;
-
-      // ✅ match quartier tolérant (includes)
-      const matchDistrict =
-        !dist || wDistrict.includes(dist);
-
+      const matchJob = selectedJob === "all" || w.job === selectedJob;
       const matchPrice = w.hourlyRate <= maxPrice;
       const matchRating = w.rating >= minRating;
+
+      // ✅ quartier sans accents/casse
+      const matchDistrict =
+        !districtN || wDistrictN === districtN;
 
       return (
         matchKeyword &&
         matchJob &&
-        matchDistrict &&
         matchPrice &&
-        matchRating
+        matchRating &&
+        matchDistrict
       );
     });
 
-    // ✅ si géoloc présente, on filtre par distance
     if (userGeo) {
       return base
         .map((w) => {
@@ -341,7 +339,7 @@ const SearchSection: React.FC = () => {
             });
             return { ...w, _distanceKm: dKm };
           }
-          return { ...w, _distanceKm: null };
+          return { ...w, _distanceKm: null as number | null };
         })
         .filter((w) => w._distanceKm !== null && w._distanceKm <= radiusKm)
         .sort((a, b) => (a._distanceKm! - b._distanceKm!));
@@ -352,9 +350,9 @@ const SearchSection: React.FC = () => {
     workers,
     keyword,
     selectedJob,
-    selectedDistrict,
     maxPrice,
     minRating,
+    selectedDistrict,
     userGeo,
     radiusKm,
   ]);
@@ -410,7 +408,9 @@ const SearchSection: React.FC = () => {
     contact: language === "fr" ? "Contacter" : "Contact",
     perHour: "/h",
     years:
-      language === "fr" ? "ans d'expérience" : "years of experience",
+      language === "fr"
+        ? "ans d'expérience"
+        : "years of experience",
     viewMode: language === "fr" ? "Affichage" : "View",
     viewList: language === "fr" ? "Liste" : "List",
     viewGrid: language === "fr" ? "Mosaïque" : "Grid",
