@@ -67,7 +67,7 @@ const WorkerDetail: React.FC = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from<DbWorker>("op_ouvriers")
+        .from("op_ouvriers")
         .select(
           `
           id,
@@ -172,17 +172,17 @@ const WorkerDetail: React.FC = () => {
       worker.last_name ?? ""
     }`.trim();
 
-    const { error } = await supabase.from("op_ouvrier_contacts").insert({
+    const { error } = await supabase.from("op_ouvrier_contacts").insert([{
       worker_id: worker.id,
       worker_name: fullWorkerName || null,
-      worker_profession: worker.profession,
       client_name: form.name,
       client_email: form.email,
       client_phone: form.phone,
       message: form.message,
+      full_name: form.name,
       status: "new",
       origin: "web", // ✅ toutes les demandes venant du site seront marquées "web"
-    });
+    }]);
 
     if (error) {
       console.error(error);

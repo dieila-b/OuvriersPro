@@ -18,7 +18,7 @@ type WorkerProfile = {
   district: string | null;
   profession: string | null;
   description: string | null;
-  plan_code: "FREE" | "MONTHLY" | "YEARLY" | null;
+  plan_code: string | null;
   status: string | null;
   hourly_rate: number | null;
   currency: string | null;
@@ -79,7 +79,7 @@ const WorkerDashboard: React.FC = () => {
 
       // 2) Récupérer l'ouvrier lié à ce user_id
       const { data: worker, error: workerError } = await supabase
-        .from<WorkerProfile>("op_ouvriers")
+        .from("op_ouvriers")
         .select(
           `
           id,
@@ -136,7 +136,7 @@ const WorkerDashboard: React.FC = () => {
       setContactsError(null);
 
       const { data: contactsData, error: contactsErr } = await supabase
-        .from<WorkerContact>("op_ouvrier_contacts")
+        .from("op_ouvrier_contacts")
         .select(
           `
           id,

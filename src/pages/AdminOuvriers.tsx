@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 
-type WorkerStatus = "pending" | "approved" | "rejected" | null;
+type WorkerStatus = "pending" | "approved" | "rejected" | "suspended" | null;
 
 type DbWorker = {
   id: string;
@@ -109,7 +109,7 @@ const AdminOuvriers: React.FC = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from<DbWorker>("op_ouvriers")
+        .from("op_ouvriers")
         .select("*")
         .order("created_at", { ascending: false });
 
@@ -291,7 +291,7 @@ const AdminOuvriers: React.FC = () => {
     setError(null);
 
     const { data, error } = await supabase
-      .from<DbWorker>("op_ouvriers")
+      .from("op_ouvriers")
       .select("*")
       .order("created_at", { ascending: false });
 

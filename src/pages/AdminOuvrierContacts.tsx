@@ -23,7 +23,7 @@ type DbContact = {
   id: string;
   worker_id: string | null;
   worker_name: string | null;
-  worker_profession: string | null;
+  worker_profession?: string | null;
   client_name: string | null;
   client_email: string | null;
   client_phone: string | null;
@@ -148,7 +148,7 @@ const AdminOuvrierContacts: React.FC = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from<DbContact>("op_ouvrier_contacts")
+        .from("op_ouvrier_contacts")
         .select("*")
         .order("created_at", { ascending: false });
 
@@ -356,7 +356,7 @@ const AdminOuvrierContacts: React.FC = () => {
     setError(null);
 
     const { data, error } = await supabase
-      .from<DbContact>("op_ouvrier_contacts")
+      .from("op_ouvrier_contacts")
       .select("*")
       .order("created_at", { ascending: false });
 
