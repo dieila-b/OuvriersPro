@@ -56,6 +56,14 @@ interface WorkerCard {
 
 type GeoPoint = { lat: number; lng: number };
 
+// ---- normalisation robuste (accents, casse, espaces)
+const norm = (v: string) =>
+  v
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
 const haversineKm = (a: GeoPoint, b: GeoPoint) => {
   const R = 6371;
   const toRad = (v: number) => (v * Math.PI) / 180;
@@ -144,14 +152,15 @@ const SearchSection: React.FC = () => {
         (data ?? []).map((w) => ({
           id: w.id,
           name:
-            ((w.first_name || "") +
-              (w.last_name ? ` ${w.last_name}` : "")) || "Ouvrier",
-          job: w.profession ?? "",
-          country: w.country ?? "",
-          region: w.region ?? "",
-          city: w.city ?? "",
-          commune: w.commune ?? "",
-          district: w.district ?? "",
+            ((w.first_name || "").trim() +
+              (w.last_name ? ` ${w.last_name.trim()}` : "")).trim() ||
+            "Ouvrier",
+          job: (w.profession ?? "").trim(),
+          country: (w.country ?? "").trim(),
+          region: (w.region ?? "").trim(),
+          city: (w.city ?? "").trim(),
+          commune: (w.commune ?? "").trim(),
+          district: (w.district ?? "").trim(),
           experienceYears: w.years_experience ?? 0,
           hourlyRate: w.hourly_rate ?? 0,
           currency: w.currency ?? "GNF",
@@ -191,9 +200,10 @@ const SearchSection: React.FC = () => {
     const spLng = searchParams.get("lng");
     const spRadius = Number(searchParams.get("radiusKm") ?? "10");
 
-    // ✅ n’assigner que si différent (évite re-render inutile)
     setKeyword((prev) => (prev !== spKeyword ? spKeyword : prev));
-    setSelectedDistrict((prev) => (prev !== spDistrict ? spDistrict : prev));
+    setSelectedDistrict((prev) =>
+      prev !== spDistrict ? spDistrict : prev
+    );
     setSelectedJob((prev) => (prev !== spJob ? spJob : prev));
     setMaxPrice((prev) =>
       Number.isFinite(spMaxPrice) && prev !== spMaxPrice ? spMaxPrice : prev
@@ -218,7 +228,6 @@ const SearchSection: React.FC = () => {
         );
       }
     } else {
-      // Si URL ne contient plus lat/lng, on désactive le filtre geo
       setUserGeo(null);
       setRadiusKm(10);
     }
@@ -231,7 +240,7 @@ const SearchSection: React.FC = () => {
     const next: Record<string, string> = {};
 
     if (keyword.trim()) next.service = keyword.trim();
-    if (selectedDistrict) next.quartier = selectedDistrict;
+    if (selectedDistrict.trim()) next.quartier = selectedDistrict.trim();
     if (selectedJob !== "all") next.job = selectedJob;
     if (maxPrice !== 300000) next.maxPrice = String(maxPrice);
     if (minRating !== 0) next.minRating = String(minRating);
@@ -243,10 +252,8 @@ const SearchSection: React.FC = () => {
       if (radiusKm !== 10) next.radiusKm = String(radiusKm);
     }
 
-    // ✅ Compare URL actuelle vs next
     const current = Object.fromEntries(searchParams.entries());
-    const same =
-      JSON.stringify(current) === JSON.stringify(next);
+    const same = JSON.stringify(current) === JSON.stringify(next);
 
     if (!same) {
       setSearchParams(next, { replace: true });
@@ -267,45 +274,54 @@ const SearchSection: React.FC = () => {
   // -------------------------
   // Options métiers / quartiers
   // -------------------------
-  const jobs = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          workers
-            .map((w) => w.job)
-            .filter((j) => j && j.trim().length > 0)
-        )
-      ),
-    [workers]
-  );
+  const jobs = useMemo(() => {
+    return Array.from(
+      new Set(
+        workers
+          .map((w) => w.job.trim())
+          .filter((j) => j.length > 0)
+      )
+    ).sort((a, b) => a.localeCompare(b, "fr"));
+  }, [workers]);
 
-  const districts = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          workers
-            .map((w) => w.district)
-            .filter((d) => d && d.trim().length > 0)
-        )
-      ),
-    [workers]
-  );
+  const districts = useMemo(() => {
+    return Array.from(
+      new Set(
+        workers
+          .map((w) => w.district.trim())
+          .filter((d) => d.length > 0)
+      )
+    ).sort((a, b) => a.localeCompare(b, "fr"));
+  }, [workers]);
 
   // -------------------------
-  // Filtrage + distance
+  // Filtrage + distance (robuste accents/casse)
   // -------------------------
   const filteredWorkers = useMemo(() => {
-    const base = workers.filter((w) => {
-      const matchKeyword =
-        !keyword ||
-        w.name.toLowerCase().includes(keyword.toLowerCase()) ||
-        w.job.toLowerCase().includes(keyword.toLowerCase());
+    const kw = norm(keyword || "");
+    const dist = norm(selectedDistrict || "");
+    const selJobNorm =
+      selectedJob === "all" ? "" : norm(selectedJob);
 
-      const matchJob = selectedJob === "all" || w.job === selectedJob;
+    const base = workers.filter((w) => {
+      const wName = norm(w.name);
+      const wJob = norm(w.job);
+      const wDistrict = norm(w.district);
+
+      // Métier / service (recherche souple)
+      const matchKeyword =
+        !kw || wName.includes(kw) || wJob.includes(kw);
+
+      // Select métier sidebar (égalité normalisée)
+      const matchJob =
+        selectedJob === "all" || wJob === selJobNorm;
+
+      // Quartier (égalité normalisée)
+      const matchDistrict =
+        !dist || wDistrict === dist;
+
       const matchPrice = w.hourlyRate <= maxPrice;
       const matchRating = w.rating >= minRating;
-      const matchDistrict =
-        !selectedDistrict || w.district === selectedDistrict;
 
       return (
         matchKeyword &&
