@@ -1,3 +1,4 @@
+// src/components/WorkerSearchSection.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -317,18 +318,18 @@ const WorkerSearchSection: React.FC = () => {
   };
 
   return (
-    <section className="w-full py-20 bg-white">
-      <div className="w-full max-w-6xl mx-auto px-4 md:px-8">
-        {/* EN-TÊTE GLOBAL : titre + boutons LISTE / MOSAÏQUE */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-8 border-b border-gray-200 pb-4">
+    <section className="w-full py-12 sm:py-16 lg:py-20 bg-white">
+      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* EN-TÊTE GLOBAL */}
+        <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-6 sm:mb-8 border-b border-gray-200 pb-4">
           <div>
-            <h2 className="text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
               {text.title}
             </h2>
-            <p className="text-gray-600 mt-2 text-sm md:text-base">
+            <p className="text-gray-600 mt-1.5 sm:mt-2 text-sm sm:text-base">
               {text.subtitle}
             </p>
-            <div className="mt-2 flex items-center gap-1 text-xs text-gray-500">
+            <div className="mt-2 flex items-center gap-1 text-[11px] sm:text-xs text-gray-500">
               <Search className="w-3 h-3" />
               {loading ? (
                 <span>
@@ -342,15 +343,16 @@ const WorkerSearchSection: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-gray-500 uppercase tracking-wide">
+          {/* Boutons LISTE / MOSAÏQUE */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <span className="text-[10px] sm:text-[11px] text-gray-500 uppercase tracking-wide">
               {text.viewMode}
             </span>
             <div className="flex border border-gray-300 rounded-lg bg-white overflow-hidden">
               <button
                 type="button"
                 onClick={() => setViewMode("list")}
-                className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs ${
+                className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
                   viewMode === "list"
                     ? "bg-pro-blue text-white"
                     : "text-gray-600 hover:bg-gray-100"
@@ -362,7 +364,7 @@ const WorkerSearchSection: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setViewMode("grid")}
-                className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs ${
+                className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
                   viewMode === "grid"
                     ? "bg-pro-blue text-white"
                     : "text-gray-600 hover:bg-gray-100"
@@ -376,9 +378,9 @@ const WorkerSearchSection: React.FC = () => {
         </div>
 
         {/* Grille filtres + résultats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8 items-start">
           {/* Filtres */}
-          <aside className="md:col-span-1 bg-gray-50 rounded-xl p-5 border border-gray-200">
+          <aside className="lg:col-span-1 bg-gray-50 rounded-xl p-4 sm:p-5 border border-gray-200">
             <h3 className="text-base font-semibold text-pro-gray mb-4">
               {text.filters}
             </h3>
@@ -552,7 +554,7 @@ const WorkerSearchSection: React.FC = () => {
           </aside>
 
           {/* Résultats */}
-          <div className="md:col-span-2">
+          <div className="lg:col-span-3">
             {error && (
               <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">
                 {error}
@@ -575,11 +577,11 @@ const WorkerSearchSection: React.FC = () => {
 
             {/* VUE LISTE */}
             {viewMode === "list" && (
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {filteredWorkers.map((w) => (
                   <div
                     key={w.id}
-                    className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center gap-4"
+                    className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4"
                   >
                     <div className="flex-shrink-0">
                       <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">
@@ -592,7 +594,7 @@ const WorkerSearchSection: React.FC = () => {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-pro-gray text-base md:text-lg truncate">
+                        <h3 className="font-semibold text-pro-gray text-base sm:text-lg truncate">
                           {w.name}
                         </h3>
                         {w.job && (
@@ -602,7 +604,7 @@ const WorkerSearchSection: React.FC = () => {
                         )}
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-3 mt-1 text-xs md:text-sm text-gray-600">
+                      <div className="flex flex-wrap items-center gap-3 mt-1 text-xs sm:text-sm text-gray-600">
                         <span className="flex items-center gap-1">
                           <MapPin className="w-3 h-3" />
                           {[w.region, w.city, w.commune, w.district]
@@ -619,17 +621,18 @@ const WorkerSearchSection: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex flex-col items-end gap-2 text-right">
-                      <div className="text-pro-blue font-bold text-base md:text-lg">
+                    {/* Prix + CTA responsive */}
+                    <div className="w-full sm:w-auto flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 text-right">
+                      <div className="text-pro-blue font-bold text-base sm:text-lg">
                         {formatCurrency(w.hourlyRate, w.currency)}
-                        <span className="text-xs md:text-sm text-gray-600 ml-1">
+                        <span className="text-xs sm:text-sm text-gray-600 ml-1">
                           {text.perHour}
                         </span>
                       </div>
                       <Link to={`/ouvrier/${w.id}`}>
                         <Button
                           size="sm"
-                          className="bg-pro-blue hover:bg-blue-700 text-xs md:text-sm"
+                          className="bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm"
                         >
                           {text.contact}
                         </Button>
