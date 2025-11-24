@@ -70,7 +70,7 @@ const WorkerSearchSection: React.FC = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from<DbWorker>("op_ouvriers")
+        .from("op_ouvriers")
         .select(
           `
           id,
@@ -317,15 +317,15 @@ const WorkerSearchSection: React.FC = () => {
   };
 
   return (
-    <section className="w-full py-20 bg-white">
-      <div className="w-full max-w-6xl mx-auto px-4 md:px-8">
+    <section className="w-full py-12 sm:py-16 md:py-20 bg-white">
+      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 md:px-8">
         {/* EN-TÊTE GLOBAL : titre + boutons LISTE / MOSAÏQUE */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-8 border-b border-gray-200 pb-4">
+        <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-6 sm:mb-8 border-b border-gray-200 pb-4">
           <div>
-            <h2 className="text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
               {text.title}
             </h2>
-            <p className="text-gray-600 mt-2 text-sm md:text-base">
+            <p className="text-gray-600 mt-2 text-xs sm:text-sm md:text-base">
               {text.subtitle}
             </p>
             <div className="mt-2 flex items-center gap-1 text-xs text-gray-500">
@@ -343,42 +343,42 @@ const WorkerSearchSection: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-gray-500 uppercase tracking-wide">
+            <span className="text-[10px] sm:text-[11px] text-gray-500 uppercase tracking-wide">
               {text.viewMode}
             </span>
             <div className="flex border border-gray-300 rounded-lg bg-white overflow-hidden">
               <button
                 type="button"
                 onClick={() => setViewMode("list")}
-                className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs ${
+                className={`inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs ${
                   viewMode === "list"
                     ? "bg-pro-blue text-white"
                     : "text-gray-600 hover:bg-gray-100"
                 }`}
               >
                 <LayoutList className="w-3 h-3" />
-                {text.viewList}
+                <span className="hidden sm:inline">{text.viewList}</span>
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode("grid")}
-                className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs ${
+                className={`inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs ${
                   viewMode === "grid"
                     ? "bg-pro-blue text-white"
                     : "text-gray-600 hover:bg-gray-100"
                 }`}
               >
                 <LayoutGrid className="w-3 h-3" />
-                {text.viewGrid}
+                <span className="hidden sm:inline">{text.viewGrid}</span>
               </button>
             </div>
           </div>
         </div>
 
         {/* Grille filtres + résultats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 items-start">
           {/* Filtres */}
-          <aside className="md:col-span-1 bg-gray-50 rounded-xl p-5 border border-gray-200">
+          <aside className="lg:col-span-1 bg-gray-50 rounded-xl p-4 sm:p-5 border border-gray-200">
             <h3 className="text-base font-semibold text-pro-gray mb-4">
               {text.filters}
             </h3>

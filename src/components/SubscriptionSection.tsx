@@ -75,19 +75,19 @@ const SubscriptionSection = () => {
   return (
     <section
       id="subscription"
-      className="py-20 bg-gradient-to-br from-gray-50 to-gray-100"
+      className="py-12 sm:py-16 md:py-20 bg-gradient-to-br from-gray-50 to-gray-100"
     >
-      <div className="container mx-auto px-4">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-pro-gray mb-4">
+      <div className="container mx-auto px-4 sm:px-6 md:px-8">
+        <div className="text-center mb-10 sm:mb-12 md:mb-16">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray mb-3 sm:mb-4 px-2">
             {t("subscription.title")}
           </h2>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg md:text-xl text-gray-600 max-w-2xl mx-auto px-4">
             {t("subscription.subtitle")}
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto">
           {plans.map((plan, index) => (
             <Card
               key={index}
@@ -157,7 +157,7 @@ const SubscriptionSection = () => {
         </div>
 
         {/* Avantages additionnels */}
-        <div className="grid md:grid-cols-3 gap-8 mt-16 max-w-4xl mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 mt-12 sm:mt-16 max-w-4xl mx-auto">
           {[
             {
               icon: User,
@@ -176,13 +176,13 @@ const SubscriptionSection = () => {
             },
           ].map((benefit, index) => (
             <div key={index} className="text-center">
-              <div className="w-12 h-12 bg-pro-blue/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <benefit.icon className="w-6 h-6 text-pro-blue" />
+              <div className="w-12 h-12 bg-pro-blue/10 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <benefit.icon className="w-5 h-5 sm:w-6 sm:h-6 text-pro-blue" />
               </div>
-              <h3 className="font-semibold text-pro-gray mb-2">
+              <h3 className="font-semibold text-pro-gray mb-2 text-sm sm:text-base">
                 {benefit.title}
               </h3>
-              <p className="text-gray-600 text-sm">{benefit.description}</p>
+              <p className="text-gray-600 text-xs sm:text-sm">{benefit.description}</p>
             </div>
           ))}
         </div>
