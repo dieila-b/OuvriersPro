@@ -3,29 +3,24 @@ import React, { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, MapPin, Building2, Map } from "lucide-react";
+import { Search, MapPin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const HeroSection = () => {
   const { t } = useLanguage();
   const navigate = useNavigate();
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [location, setLocation] = useState("");
-  const [commune, setCommune] = useState("");
-  const [quartier, setQuartier] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");   // Métier / service
+  const [district, setDistrict] = useState("");       // Quartier
 
-  const handleSearch = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-
+  const handleSearch = () => {
     const params = new URLSearchParams();
-    if (searchTerm.trim()) params.set("service", searchTerm.trim());
-    if (location.trim()) params.set("ville", location.trim());
-    if (commune.trim()) params.set("commune", commune.trim());
-    if (quartier.trim()) params.set("quartier", quartier.trim());
 
-    // ⚠️ Si ta route de recherche s'appelle autrement, change juste "/search"
-    navigate(`/search?${params.toString()}`);
+    if (searchTerm.trim()) params.set("service", searchTerm.trim());
+    if (district.trim()) params.set("quartier", district.trim());
+
+    // Va vers la section de recherche (SearchSection) avec les filtres
+    navigate(`/?${params.toString()}#search`);
   };
 
   return (
@@ -40,76 +35,41 @@ const HeroSection = () => {
             {t("home.subtitle")}
           </p>
 
-          {/* Search Form */}
-          <form
-            onSubmit={handleSearch}
-            className="bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl max-w-5xl mx-auto"
-          >
-            <div
-              className="
-                grid grid-cols-1 gap-2
-                sm:grid-cols-2 sm:gap-3
-                lg:grid-cols-4 lg:gap-4
-                items-center
-              "
-            >
-              {/* Métier / Service */}
+          {/* Search Form (SEULEMENT Métier + Quartier) */}
+          <div className="bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl max-w-3xl mx-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 md:gap-4">
+              
+              {/* Métier */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
-                  placeholder={t("home.search.placeholder")}
+                  placeholder={t("home.search.placeholder") || "Rechercher un métier"}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 py-3 text-gray-900 text-sm sm:text-base w-full"
                 />
               </div>
 
-              {/* Ville / Code postal */}
+              {/* Quartier */}
               <div className="relative">
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
-                  placeholder={t("home.location.placeholder")}
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="pl-10 py-3 text-gray-900 text-sm sm:text-base w-full"
-                />
-              </div>
-
-              {/* Commune */}
-              <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <Input
-                  placeholder={t("home.commune.placeholder") || "Commune"}
-                  value={commune}
-                  onChange={(e) => setCommune(e.target.value)}
-                  className="pl-10 py-3 text-gray-900 text-sm sm:text-base w-full"
-                />
-              </div>
-
-              {/* Quartier */}
-              <div className="relative">
-                <Map className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <Input
                   placeholder={t("home.quartier.placeholder") || "Quartier"}
-                  value={quartier}
-                  onChange={(e) => setQuartier(e.target.value)}
+                  value={district}
+                  onChange={(e) => setDistrict(e.target.value)}
                   className="pl-10 py-3 text-gray-900 text-sm sm:text-base w-full"
                 />
               </div>
 
               {/* Bouton */}
               <Button
-                type="submit"
-                className="
-                  lg:col-span-4
-                  w-full bg-pro-blue hover:bg-blue-700
-                  px-6 md:px-8 py-3 text-sm sm:text-base
-                "
+                onClick={handleSearch}
+                className="sm:col-span-2 w-full bg-pro-blue hover:bg-blue-700 px-6 md:px-8 py-3 text-sm sm:text-base"
               >
-                {t("home.search.button")}
+                {t("home.search.button") || "Rechercher"}
               </Button>
             </div>
-          </form>
+          </div>
         </div>
       </div>
     </section>
