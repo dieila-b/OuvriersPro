@@ -57,16 +57,16 @@ const SearchSection: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ Etats de filtres (partagés entre zone de recherche et sidebar)
+  // ✅ Etats de filtres (zone de recherche + sidebar)
   const [keyword, setKeyword] = useState("");
   const [selectedJob, setSelectedJob] = useState<string>("all");
   const [maxPrice, setMaxPrice] = useState<number>(300000);
   const [minRating, setMinRating] = useState<number>(0);
 
   const [selectedRegion, setSelectedRegion] = useState<string>("");
-  const [selectedCity, setSelectedCity] = useState<string>("");
-  const [selectedCommune, setSelectedCommune] = useState<string>("");
-  const [selectedDistrict, setSelectedDistrict] = useState<string>("");
+  const [selectedCity, setSelectedCity] = useState<string>("");       // Ville
+  const [selectedCommune, setSelectedCommune] = useState<string>(""); // Commune
+  const [selectedDistrict, setSelectedDistrict] = useState<string>(""); // Quartier (DB = district)
 
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
@@ -140,26 +140,44 @@ const SearchSection: React.FC = () => {
 
   // -------------------------
   // 2) Init filtres depuis URL (une seule fois)
+  //    ✅ accepte nouveaux noms : service, ville, commune, quartier
+  //    ✅ accepte anciens noms : keyword, city, district
   // -------------------------
   useEffect(() => {
     if (initializedFromUrl) return;
 
-    const spKeyword = searchParams.get("keyword") ?? "";
+    const spKeyword =
+      searchParams.get("service") ??
+      searchParams.get("keyword") ??
+      "";
+
+    const spCity =
+      searchParams.get("ville") ??
+      searchParams.get("city") ??
+      "";
+
+    const spCommune =
+      searchParams.get("commune") ?? "";
+
+    const spDistrict =
+      searchParams.get("quartier") ??
+      searchParams.get("district") ??
+      "";
+
     const spJob = searchParams.get("job") ?? "all";
     const spRegion = searchParams.get("region") ?? "";
-    const spCity = searchParams.get("city") ?? "";
-    const spCommune = searchParams.get("commune") ?? "";
-    const spDistrict = searchParams.get("district") ?? "";
+
     const spMaxPrice = Number(searchParams.get("maxPrice") ?? "300000");
     const spMinRating = Number(searchParams.get("minRating") ?? "0");
     const spView = (searchParams.get("view") as "list" | "grid") ?? "list";
 
     setKeyword(spKeyword);
-    setSelectedJob(spJob);
-    setSelectedRegion(spRegion);
     setSelectedCity(spCity);
     setSelectedCommune(spCommune);
     setSelectedDistrict(spDistrict);
+
+    setSelectedJob(spJob);
+    setSelectedRegion(spRegion);
     setMaxPrice(Number.isFinite(spMaxPrice) ? spMaxPrice : 300000);
     setMinRating(Number.isFinite(spMinRating) ? spMinRating : 0);
     setViewMode(spView);
@@ -170,17 +188,20 @@ const SearchSection: React.FC = () => {
 
   // -------------------------
   // 3) Sync filtres -> URL
+  //    ✅ écrit les nouveaux noms (service/ville/commune/quartier)
   // -------------------------
   useEffect(() => {
     if (!initializedFromUrl) return;
 
     const next: Record<string, string> = {};
-    if (keyword.trim()) next.keyword = keyword.trim();
+
+    if (keyword.trim()) next.service = keyword.trim();
+    if (selectedCity) next.ville = selectedCity;
+    if (selectedCommune) next.commune = selectedCommune;
+    if (selectedDistrict) next.quartier = selectedDistrict;
+
     if (selectedJob !== "all") next.job = selectedJob;
     if (selectedRegion) next.region = selectedRegion;
-    if (selectedCity) next.city = selectedCity;
-    if (selectedCommune) next.commune = selectedCommune;
-    if (selectedDistrict) next.district = selectedDistrict;
     if (maxPrice !== 300000) next.maxPrice = String(maxPrice);
     if (minRating !== 0) next.minRating = String(minRating);
     if (viewMode !== "list") next.view = viewMode;
@@ -465,8 +486,6 @@ const SearchSection: React.FC = () => {
                 type="button"
                 className="lg:col-span-4 w-full bg-pro-blue hover:bg-blue-700"
                 onClick={() => {
-                  // pas de navigation, filtre en live
-                  // si tu veux scroller vers résultats :
                   const el = document.getElementById("results");
                   el?.scrollIntoView({ behavior: "smooth" });
                 }}
