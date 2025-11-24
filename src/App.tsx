@@ -7,7 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 
 // Pages publiques
-import Home from "./pages/Home";
+import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import InscriptionOuvrier from "./pages/InscriptionOuvrier";
 import WorkerDetail from "./pages/WorkerDetail";
@@ -34,8 +34,8 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            {/* 🏠 Page d'accueil (nouveau Home.tsx) */}
-            <Route path="/" element={<Home />} />
+            {/* 🏠 Page d'accueil */}
+            <Route path="/" element={<Index />} />
 
             {/* 🔐 Connexion (admin + ouvriers) */}
             <Route path="/login" element={<Login />} />
