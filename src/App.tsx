@@ -32,6 +32,7 @@ const App = () => (
       <LanguageProvider>
         <Toaster />
         <Sonner />
+
         <BrowserRouter>
           <Routes>
             {/* 🏠 Page d'accueil */}
@@ -41,10 +42,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
 
             {/* 📝 Inscription ouvrier */}
-            <Route
-              path="/inscription-ouvrier"
-              element={<InscriptionOuvrier />}
-            />
+            <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
 
             {/* 👤 Fiche publique ouvrier */}
             <Route path="/ouvrier/:id" element={<WorkerDetail />} />
