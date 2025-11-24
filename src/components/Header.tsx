@@ -1,5 +1,5 @@
 // src/components/Header.tsx
-import React, { useState } from "react";
+import { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Languages, Search, User, Menu, X } from "lucide-react";
@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 
 const Header = () => {
@@ -17,7 +17,25 @@ const Header = () => {
   const { isAdmin } = useAuthProfile();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const closeMobile = () => setMobileOpen(false);
+
+  // Scroll vers une section si on est sur la Home,
+  // sinon on navigue vers /#section
+  const goToSection = (id: string) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    closeMobile();
+
+    if (location.pathname !== "/") {
+      navigate(`/#${id}`);
+      return;
+    }
+
+    const el = document.getElementById(id);
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -36,20 +54,25 @@ const Header = () => {
 
           {/* Navigation Desktop */}
           <nav className="hidden md:flex items-center space-x-6">
-            <a
-              href="#search"
+            {/* ✅ Rechercher = vraie page */}
+            <Link
+              to="/search"
               className="text-pro-gray hover:text-pro-blue transition-colors"
             >
               {t("nav.search")}
-            </a>
+            </Link>
+
+            {/* Sections Home */}
             <a
               href="#faq"
+              onClick={goToSection("faq")}
               className="text-pro-gray hover:text-pro-blue transition-colors"
             >
               {t("nav.faq")}
             </a>
             <a
               href="#contact"
+              onClick={goToSection("contact")}
               className="text-pro-gray hover:text-pro-blue transition-colors"
             >
               {t("nav.contact")}
@@ -68,8 +91,8 @@ const Header = () => {
               </Link>
             )}
 
-            {/* CTA Devenir Ouvrier Pro */}
-            <a href="#subscription">
+            {/* CTA Devenir Ouvrier Pro (section Home) */}
+            <a href="#subscription" onClick={goToSection("subscription")}>
               <Button
                 size="sm"
                 className="bg-pro-blue text-white hover:bg-pro-blue/90"
@@ -158,18 +181,20 @@ const Header = () => {
       {mobileOpen && (
         <div className="md:hidden border-t bg-white">
           <div className="w-full max-w-6xl mx-auto px-4 py-3 flex flex-col gap-2">
-            <a
-              href="#search"
+            {/* ✅ Rechercher vers /search */}
+            <Link
+              to="/search"
               onClick={closeMobile}
               className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
             >
               <Search className="w-4 h-4" />
               {t("nav.search")}
-            </a>
+            </Link>
 
+            {/* Sections Home */}
             <a
               href="#faq"
-              onClick={closeMobile}
+              onClick={goToSection("faq")}
               className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
             >
               {t("nav.faq")}
@@ -177,7 +202,7 @@ const Header = () => {
 
             <a
               href="#contact"
-              onClick={closeMobile}
+              onClick={goToSection("contact")}
               className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
             >
               {t("nav.contact")}
@@ -196,7 +221,7 @@ const Header = () => {
             )}
 
             {/* CTA mobile */}
-            <a href="#subscription" onClick={closeMobile} className="pt-2">
+            <a href="#subscription" onClick={goToSection("subscription")} className="pt-2">
               <Button className="w-full bg-pro-blue text-white hover:bg-pro-blue/90">
                 Devenir Ouvrier Pro
               </Button>
