@@ -1,3 +1,4 @@
+// src/pages/Index.tsx
 import React from "react";
 import Header from "@/components/Header";
 import HeroSection from "@/components/HeroSection";
@@ -8,27 +9,31 @@ import Footer from "@/components/Footer";
 
 const Index = () => {
   return (
-    <div className="min-h-screen w-full bg-white overflow-x-hidden">
+    <div className="min-h-screen w-full bg-white overflow-x-hidden flex flex-col">
       <Header />
 
-      <main className="w-full">
-        {/* Hero en pleine largeur */}
-        <section className="w-full bg-pro-blue text-white">
-          <HeroSection />
-        </section>
+      {/* important: main full width sans wrappers bloquants */}
+      <main className="w-full flex-1">
+        {/* Hero (gère déjà son background + padding responsive) */}
+        <HeroSection />
 
-        {/* Bloc “Pourquoi nous choisir” */}
+        {/* Pourquoi nous choisir (gère son layout) */}
         <section className="w-full bg-white">
           <FeaturesSection />
         </section>
 
         {/* Recherche d’ouvriers */}
+        {/* ⚠️ ne pas remettre id="search" si WorkerSearchSection l’a déjà.
+            Sinon garde ici pour l’ancre. */}
         <section id="search" className="w-full bg-white">
           <WorkerSearchSection />
         </section>
 
         {/* Formules d’abonnement */}
-        <section id="subscription" className="w-full bg-gradient-to-br from-gray-50 to-gray-100">
+        <section
+          id="subscription"
+          className="w-full bg-gradient-to-br from-gray-50 to-gray-100"
+        >
           <SubscriptionSection />
         </section>
       </main>
