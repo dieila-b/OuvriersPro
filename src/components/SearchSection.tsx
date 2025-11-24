@@ -5,13 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Star,
-  MapPin,
-  Search,
-  LayoutList,
-  LayoutGrid,
-} from "lucide-react";
+import { Star, MapPin, Search, LayoutList, LayoutGrid } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 type DbWorker = {
@@ -30,8 +24,6 @@ type DbWorker = {
   average_rating: number | null;
   rating_count: number | null;
   status: string | null;
-
-  // coords optionnelles
   lat: number | null;
   lng: number | null;
 };
@@ -52,9 +44,6 @@ interface WorkerCard {
   ratingCount: number;
   lat?: number | null;
   lng?: number | null;
-
-  // distance calculée (runtime)
-  _distanceKm?: number | null;
 }
 
 type GeoPoint = { lat: number; lng: number };
@@ -65,7 +54,6 @@ const haversineKm = (a: GeoPoint, b: GeoPoint) => {
 
   const dLat = toRad(b.lat - a.lat);
   const dLng = toRad(b.lng - a.lng);
-
   const lat1 = toRad(a.lat);
   const lat2 = toRad(b.lat);
 
@@ -79,14 +67,7 @@ const haversineKm = (a: GeoPoint, b: GeoPoint) => {
   return 2 * R * Math.asin(Math.sqrt(h));
 };
 
-// 🔧 Normalisation pour comparer sans accents / casse
-const norm = (s: string) =>
-  s
-    .toLowerCase()
-    .normalize("NFD")
-    // enlève les accents
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
+const normalize = (v: string) => v.trim().toLowerCase();
 
 const SearchSection: React.FC = () => {
   const { language } = useLanguage();
@@ -97,10 +78,11 @@ const SearchSection: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ Filtres
-  const [keyword, setKeyword] = useState(""); // Métier
-  const [selectedJob, setSelectedJob] = useState<string>("all");
-  const [selectedDistrict, setSelectedDistrict] = useState<string>(""); // Quartier
+  // ✅ Filtres restants
+  const [keyword, setKeyword] = useState(""); // Métier (free text)
+  const [selectedJob, setSelectedJob] = useState<string>("all"); // Métier (select)
+  const [selectedDistrict, setSelectedDistrict] = useState<string>(""); // Quartier (select)
+
   const [maxPrice, setMaxPrice] = useState<number>(300000);
   const [minRating, setMinRating] = useState<number>(0);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
@@ -110,7 +92,7 @@ const SearchSection: React.FC = () => {
   const [radiusKm, setRadiusKm] = useState<number>(10);
 
   // -------------------------
-  // 1) Charge ouvriers
+  // 1) Charger ouvriers
   // -------------------------
   useEffect(() => {
     const fetchWorkers = async () => {
@@ -159,12 +141,12 @@ const SearchSection: React.FC = () => {
           name:
             ((w.first_name || "") +
               (w.last_name ? ` ${w.last_name}` : "")) || "Ouvrier",
-          job: w.profession ?? "",
+          job: (w.profession ?? "").trim(),
           country: w.country ?? "",
           region: w.region ?? "",
           city: w.city ?? "",
           commune: w.commune ?? "",
-          district: w.district ?? "",
+          district: (w.district ?? "").trim(),
           experienceYears: w.years_experience ?? 0,
           hourlyRate: w.hourly_rate ?? 0,
           currency: w.currency ?? "GNF",
@@ -182,7 +164,8 @@ const SearchSection: React.FC = () => {
   }, [language]);
 
   // -------------------------
-  // 2) Lecture URL -> états (à CHAQUE changement URL)
+  // 2) URL -> State
+  //    IMPORTANT: ne réécrit pas l'URL au premier rendu
   // -------------------------
   useEffect(() => {
     const spKeyword =
@@ -223,18 +206,17 @@ const SearchSection: React.FC = () => {
       setRadiusKm(10);
     }
 
-    // ✅ très important : on marque l'init une fois l'URL lue
-    setInitializedFromUrl(true);
+    if (!initializedFromUrl) setInitializedFromUrl(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   // -------------------------
-  // 3) Sync états -> URL (APRES init)
+  // 3) State -> URL (après init)
   // -------------------------
   useEffect(() => {
     if (!initializedFromUrl) return;
 
     const next: Record<string, string> = {};
-
     if (keyword.trim()) next.service = keyword.trim();
     if (selectedDistrict) next.quartier = selectedDistrict;
     if (selectedJob !== "all") next.job = selectedJob;
@@ -251,9 +233,7 @@ const SearchSection: React.FC = () => {
     const current = Object.fromEntries(searchParams.entries());
     const same = JSON.stringify(current) === JSON.stringify(next);
 
-    if (!same) {
-      setSearchParams(next, { replace: true });
-    }
+    if (!same) setSearchParams(next, { replace: true });
   }, [
     initializedFromUrl,
     keyword,
@@ -274,23 +254,15 @@ const SearchSection: React.FC = () => {
   const jobs = useMemo(
     () =>
       Array.from(
-        new Set(
-          workers
-            .map((w) => w.job)
-            .filter((j) => j && j.trim().length > 0)
-        )
-      ),
+        new Set(workers.map((w) => w.job).filter((j) => j.length > 0))
+      ).sort((a, b) => a.localeCompare(b, "fr")),
     [workers]
   );
 
   const districts = useMemo(
     () =>
       Array.from(
-        new Set(
-          workers
-            .map((w) => w.district)
-            .filter((d) => d && d.trim().length > 0)
-        )
+        new Set(workers.map((w) => w.district).filter((d) => d.length > 0))
       ).sort((a, b) => a.localeCompare(b, "fr")),
     [workers]
   );
@@ -299,33 +271,33 @@ const SearchSection: React.FC = () => {
   // Filtrage + distance
   // -------------------------
   const filteredWorkers = useMemo(() => {
-    const keywordN = norm(keyword);
-    const districtN = norm(selectedDistrict);
+    const kw = normalize(keyword);
+    const dj = normalize(selectedJob === "all" ? "" : selectedJob);
+    const dd = normalize(selectedDistrict);
 
     const base = workers.filter((w) => {
-      const nameN = norm(w.name);
-      const jobN = norm(w.job);
-      const wDistrictN = norm(w.district);
+      const wName = normalize(w.name);
+      const wJob = normalize(w.job);
+      const wDistrict = normalize(w.district);
 
       const matchKeyword =
-        !keywordN ||
-        nameN.includes(keywordN) ||
-        jobN.includes(keywordN);
+        !kw || wName.includes(kw) || wJob.includes(kw);
 
-      const matchJob = selectedJob === "all" || w.job === selectedJob;
+      const matchJob =
+        selectedJob === "all" || wJob === dj;
+
+      const matchDistrict =
+        !dd || wDistrict === dd;
+
       const matchPrice = w.hourlyRate <= maxPrice;
       const matchRating = w.rating >= minRating;
-
-      // ✅ quartier sans accents/casse
-      const matchDistrict =
-        !districtN || wDistrictN === districtN;
 
       return (
         matchKeyword &&
         matchJob &&
+        matchDistrict &&
         matchPrice &&
-        matchRating &&
-        matchDistrict
+        matchRating
       );
     });
 
@@ -333,16 +305,13 @@ const SearchSection: React.FC = () => {
       return base
         .map((w) => {
           if (typeof w.lat === "number" && typeof w.lng === "number") {
-            const dKm = haversineKm(userGeo, {
-              lat: w.lat,
-              lng: w.lng,
-            });
+            const dKm = haversineKm(userGeo, { lat: w.lat, lng: w.lng });
             return { ...w, _distanceKm: dKm };
           }
           return { ...w, _distanceKm: null as number | null };
         })
-        .filter((w) => w._distanceKm !== null && w._distanceKm <= radiusKm)
-        .sort((a, b) => (a._distanceKm! - b._distanceKm!));
+        .filter((w) => w._distanceKm != null && w._distanceKm <= radiusKm)
+        .sort((a, b) => a._distanceKm! - b._distanceKm!);
     }
 
     return base;
@@ -350,9 +319,9 @@ const SearchSection: React.FC = () => {
     workers,
     keyword,
     selectedJob,
+    selectedDistrict,
     maxPrice,
     minRating,
-    selectedDistrict,
     userGeo,
     radiusKm,
   ]);
@@ -369,17 +338,12 @@ const SearchSection: React.FC = () => {
   };
 
   const formatCurrency = (value: number, currency: string) => {
-    if (currency === "GNF") {
-      return `${value.toLocaleString("fr-FR")} GNF`;
-    }
+    if (currency === "GNF") return `${value.toLocaleString("fr-FR")} GNF`;
     return `${value} ${currency}`;
   };
 
   const text = {
-    title:
-      language === "fr"
-        ? "Trouvez votre professionnel"
-        : "Find your professional",
+    title: language === "fr" ? "Trouvez votre professionnel" : "Find your professional",
     subtitle:
       language === "fr"
         ? "Filtrez par métier, quartier et tarif pour trouver l’ouvrier le plus proche."
@@ -393,24 +357,17 @@ const SearchSection: React.FC = () => {
     job: language === "fr" ? "Métier" : "Job",
     allJobs: language === "fr" ? "Tous les métiers" : "All trades",
     district: language === "fr" ? "Quartier" : "District",
-    allDistricts:
-      language === "fr" ? "Tous les quartiers" : "All districts",
-    priceLabel:
-      language === "fr" ? "Tarif horaire max" : "Max hourly rate",
-    ratingLabel:
-      language === "fr" ? "Note minimum" : "Minimum rating",
-    reset:
-      language === "fr" ? "Réinitialiser les filtres" : "Reset filters",
+    allDistricts: language === "fr" ? "Tous les quartiers" : "All districts",
+    priceLabel: language === "fr" ? "Tarif horaire max" : "Max hourly rate",
+    ratingLabel: language === "fr" ? "Note minimum" : "Minimum rating",
+    reset: language === "fr" ? "Réinitialiser les filtres" : "Reset filters",
     noResults:
       language === "fr"
         ? "Aucun professionnel ne correspond à ces critères pour le moment."
         : "No professional matches your criteria yet.",
     contact: language === "fr" ? "Contacter" : "Contact",
     perHour: "/h",
-    years:
-      language === "fr"
-        ? "ans d'expérience"
-        : "years of experience",
+    years: language === "fr" ? "ans d'expérience" : "years of experience",
     viewMode: language === "fr" ? "Affichage" : "View",
     viewList: language === "fr" ? "Liste" : "List",
     viewGrid: language === "fr" ? "Mosaïque" : "Grid",
@@ -418,11 +375,9 @@ const SearchSection: React.FC = () => {
       language === "fr"
         ? `${count} résultat${count > 1 ? "s" : ""} trouvé${count > 1 ? "s" : ""}`
         : `${count} result${count > 1 ? "s" : ""} found`,
-    geoRadiusLabel:
-      language === "fr" ? "Rayon autour de moi" : "Radius around me",
+    geoRadiusLabel: language === "fr" ? "Rayon autour de moi" : "Radius around me",
     km: "km",
-    topSearchTitle:
-      language === "fr" ? "Rechercher un ouvrier" : "Search a worker",
+    topSearchTitle: language === "fr" ? "Rechercher un ouvrier" : "Search a worker",
     topSearchBtn: language === "fr" ? "Rechercher" : "Search",
   };
 
@@ -441,12 +396,7 @@ const SearchSection: React.FC = () => {
 
             <form
               onSubmit={(e) => e.preventDefault()}
-              className="
-                grid grid-cols-1 gap-3
-                sm:grid-cols-2
-                lg:grid-cols-4
-                items-end
-              "
+              className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 items-end"
             >
               {/* Métier */}
               <div className="lg:col-span-2">
@@ -499,6 +449,7 @@ const SearchSection: React.FC = () => {
                 </div>
               )}
 
+              {/* Bouton */}
               <Button
                 type="button"
                 className="lg:col-span-4 w-full bg-pro-blue hover:bg-blue-700"
@@ -527,9 +478,7 @@ const SearchSection: React.FC = () => {
               <Search className="w-3 h-3" />
               {loading ? (
                 <span>
-                  {language === "fr"
-                    ? "Chargement des résultats..."
-                    : "Loading results..."}
+                  {language === "fr" ? "Chargement des résultats..." : "Loading results..."}
                 </span>
               ) : (
                 <span>{text.resultCount(filteredWorkers.length)}</span>
@@ -592,7 +541,7 @@ const SearchSection: React.FC = () => {
               />
             </div>
 
-            {/* Métier */}
+            {/* Métier select */}
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.job}
@@ -655,9 +604,7 @@ const SearchSection: React.FC = () => {
                 <span>{text.priceLabel}</span>
                 <span className="text-[11px] text-gray-500">
                   {maxPrice >= 300000
-                    ? language === "fr"
-                      ? "Aucune limite"
-                      : "No limit"
+                    ? language === "fr" ? "Aucune limite" : "No limit"
                     : formatCurrency(maxPrice, "GNF")}
                 </span>
               </div>
@@ -713,16 +660,14 @@ const SearchSection: React.FC = () => {
 
             {loading && filteredWorkers.length === 0 && (
               <div className="border border-gray-100 rounded-xl p-6 text-sm text-gray-500">
-                {language === "fr"
-                  ? "Chargement des professionnels..."
-                  : "Loading professionals..."}
+                {language === "fr" ? "Chargement des professionnels..." : "Loading professionals..."}
               </div>
             )}
 
             {/* LIST */}
             {viewMode === "list" && (
               <div className="space-y-3 sm:space-y-4">
-                {filteredWorkers.map((w) => (
+                {filteredWorkers.map((w: any) => (
                   <div
                     key={w.id}
                     className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4"
@@ -731,7 +676,7 @@ const SearchSection: React.FC = () => {
                       <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">
                         {w.name
                           .split(" ")
-                          .map((n) => n[0])
+                          .map((n: string) => n[0])
                           .join("")}
                       </div>
                     </div>
@@ -795,7 +740,7 @@ const SearchSection: React.FC = () => {
             {/* GRID */}
             {viewMode === "grid" && (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {filteredWorkers.map((w) => (
+                {filteredWorkers.map((w: any) => (
                   <div
                     key={w.id}
                     className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-3"
@@ -804,7 +749,7 @@ const SearchSection: React.FC = () => {
                       <div className="w-10 h-10 rounded-full bg-pro-blue text-white flex items-center justify-center text-sm font-semibold">
                         {w.name
                           .split(" ")
-                          .map((n) => n[0])
+                          .map((n: string) => n[0])
                           .join("")}
                       </div>
                       <div className="min-w-0">
