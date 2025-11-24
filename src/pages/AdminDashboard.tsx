@@ -233,7 +233,7 @@ const AdminDashboard: React.FC = () => {
 
       // 1) Ouvriers
       const { data: workersData, error: workersError } = await supabase
-        .from("op_ouvriers")
+        .from<DbWorkerSummary>("op_ouvriers")
         .select(
           `
           id,
@@ -260,7 +260,7 @@ const AdminDashboard: React.FC = () => {
 
       // 2) Contacts
       const { data: contactsData, error: contactsError } = await supabase
-        .from("op_ouvrier_contacts")
+        .from<DbContactSummary>("op_ouvrier_contacts")
         .select(
           `
           id,
