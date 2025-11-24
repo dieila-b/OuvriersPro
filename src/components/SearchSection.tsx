@@ -5,13 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Star,
-  MapPin,
-  Search,
-  LayoutList,
-  LayoutGrid,
-} from "lucide-react";
+import { Star, MapPin, Search, LayoutList, LayoutGrid } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 type DbWorker = {
@@ -31,7 +25,6 @@ type DbWorker = {
   rating_count: number | null;
   status: string | null;
 
-  // coords optionnelles
   lat: number | null;
   lng: number | null;
 };
@@ -52,17 +45,13 @@ interface WorkerCard {
   ratingCount: number;
   lat?: number | null;
   lng?: number | null;
+
+  _distanceKm?: number | null;
 }
 
 type GeoPoint = { lat: number; lng: number };
 
-// ---- normalisation robuste (accents, casse, espaces)
-const norm = (v: string) =>
-  v
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
+const normalize = (s: string) => s.trim().toLowerCase();
 
 const haversineKm = (a: GeoPoint, b: GeoPoint) => {
   const R = 6371;
@@ -92,10 +81,11 @@ const SearchSection: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ Filtres
-  const [keyword, setKeyword] = useState(""); // Métier
-  const [selectedJob, setSelectedJob] = useState<string>("all");
-  const [selectedDistrict, setSelectedDistrict] = useState<string>(""); // Quartier
+  // ✅ Filtres (uniquement Métier + Quartier)
+  const [keyword, setKeyword] = useState("");
+  const [selectedJob, setSelectedJob] = useState<string>("all"); // optionnel mais utile
+  const [selectedDistrict, setSelectedDistrict] = useState<string>("");
+
   const [maxPrice, setMaxPrice] = useState<number>(300000);
   const [minRating, setMinRating] = useState<number>(0);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
@@ -103,6 +93,9 @@ const SearchSection: React.FC = () => {
   // ✅ Géoloc URL
   const [userGeo, setUserGeo] = useState<GeoPoint | null>(null);
   const [radiusKm, setRadiusKm] = useState<number>(10);
+
+  // ✅ IMPORTANT: empêcher l’effet "états -> URL" de tourner avant l’hydratation
+  const [hydratedFromUrl, setHydratedFromUrl] = useState(false);
 
   // -------------------------
   // 1) Charge ouvriers
@@ -152,15 +145,14 @@ const SearchSection: React.FC = () => {
         (data ?? []).map((w) => ({
           id: w.id,
           name:
-            ((w.first_name || "").trim() +
-              (w.last_name ? ` ${w.last_name.trim()}` : "")).trim() ||
-            "Ouvrier",
-          job: (w.profession ?? "").trim(),
-          country: (w.country ?? "").trim(),
-          region: (w.region ?? "").trim(),
-          city: (w.city ?? "").trim(),
-          commune: (w.commune ?? "").trim(),
-          district: (w.district ?? "").trim(),
+            ((w.first_name || "") +
+              (w.last_name ? ` ${w.last_name}` : "")) || "Ouvrier",
+          job: w.profession ?? "",
+          country: w.country ?? "",
+          region: w.region ?? "",
+          city: w.city ?? "",
+          commune: w.commune ?? "",
+          district: w.district ?? "",
           experienceYears: w.years_experience ?? 0,
           hourlyRate: w.hourly_rate ?? 0,
           currency: w.currency ?? "GNF",
@@ -178,7 +170,8 @@ const SearchSection: React.FC = () => {
   }, [language]);
 
   // -------------------------
-  // 2) Lecture URL -> états (à CHAQUE changement URL)
+  // 2) Lecture URL -> états
+  //    (à chaque changement URL)
   // -------------------------
   useEffect(() => {
     const spKeyword =
@@ -200,47 +193,40 @@ const SearchSection: React.FC = () => {
     const spLng = searchParams.get("lng");
     const spRadius = Number(searchParams.get("radiusKm") ?? "10");
 
-    setKeyword((prev) => (prev !== spKeyword ? spKeyword : prev));
-    setSelectedDistrict((prev) =>
-      prev !== spDistrict ? spDistrict : prev
-    );
-    setSelectedJob((prev) => (prev !== spJob ? spJob : prev));
-    setMaxPrice((prev) =>
-      Number.isFinite(spMaxPrice) && prev !== spMaxPrice ? spMaxPrice : prev
-    );
-    setMinRating((prev) =>
-      Number.isFinite(spMinRating) && prev !== spMinRating ? spMinRating : prev
-    );
-    setViewMode((prev) => (prev !== spView ? spView : prev));
+    setKeyword(spKeyword);
+    setSelectedDistrict(spDistrict);
+    setSelectedJob(spJob);
+
+    setMaxPrice(Number.isFinite(spMaxPrice) ? spMaxPrice : 300000);
+    setMinRating(Number.isFinite(spMinRating) ? spMinRating : 0);
+    setViewMode(spView);
 
     if (spLat && spLng) {
       const latNum = Number(spLat);
       const lngNum = Number(spLng);
       if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
-        setUserGeo((prev) => {
-          if (!prev || prev.lat !== latNum || prev.lng !== lngNum) {
-            return { lat: latNum, lng: lngNum };
-          }
-          return prev;
-        });
-        setRadiusKm((prev) =>
-          Number.isFinite(spRadius) && prev !== spRadius ? spRadius : prev
-        );
+        setUserGeo({ lat: latNum, lng: lngNum });
+        setRadiusKm(Number.isFinite(spRadius) ? spRadius : 10);
       }
     } else {
       setUserGeo(null);
       setRadiusKm(10);
     }
+
+    setHydratedFromUrl(true);
   }, [searchParams]);
 
   // -------------------------
-  // 3) Sync états -> URL (sans boucle)
+  // 3) Sync états -> URL
+  //    ✅ ne tourne qu'après l’hydratation
   // -------------------------
   useEffect(() => {
+    if (!hydratedFromUrl) return;
+
     const next: Record<string, string> = {};
 
     if (keyword.trim()) next.service = keyword.trim();
-    if (selectedDistrict.trim()) next.quartier = selectedDistrict.trim();
+    if (selectedDistrict) next.quartier = selectedDistrict;
     if (selectedJob !== "all") next.job = selectedJob;
     if (maxPrice !== 300000) next.maxPrice = String(maxPrice);
     if (minRating !== 0) next.minRating = String(minRating);
@@ -259,6 +245,7 @@ const SearchSection: React.FC = () => {
       setSearchParams(next, { replace: true });
     }
   }, [
+    hydratedFromUrl,
     keyword,
     selectedDistrict,
     selectedJob,
@@ -274,49 +261,48 @@ const SearchSection: React.FC = () => {
   // -------------------------
   // Options métiers / quartiers
   // -------------------------
-  const jobs = useMemo(() => {
-    return Array.from(
-      new Set(
-        workers
-          .map((w) => w.job.trim())
-          .filter((j) => j.length > 0)
-      )
-    ).sort((a, b) => a.localeCompare(b, "fr"));
-  }, [workers]);
+  const jobs = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          workers
+            .map((w) => w.job)
+            .filter((j) => j && j.trim().length > 0)
+        )
+      ).sort((a, b) => a.localeCompare(b, "fr")),
+    [workers]
+  );
 
-  const districts = useMemo(() => {
-    return Array.from(
-      new Set(
-        workers
-          .map((w) => w.district.trim())
-          .filter((d) => d.length > 0)
-      )
-    ).sort((a, b) => a.localeCompare(b, "fr"));
-  }, [workers]);
+  const districts = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          workers
+            .map((w) => w.district)
+            .filter((d) => d && d.trim().length > 0)
+        )
+      ).sort((a, b) => a.localeCompare(b, "fr")),
+    [workers]
+  );
 
   // -------------------------
-  // Filtrage + distance (robuste accents/casse)
+  // Filtrage + distance
   // -------------------------
   const filteredWorkers = useMemo(() => {
-    const kw = norm(keyword || "");
-    const dist = norm(selectedDistrict || "");
-    const selJobNorm =
-      selectedJob === "all" ? "" : norm(selectedJob);
+    const kw = normalize(keyword);
+    const dist = normalize(selectedDistrict);
+    const jobSel = normalize(selectedJob);
 
     const base = workers.filter((w) => {
-      const wName = norm(w.name);
-      const wJob = norm(w.job);
-      const wDistrict = norm(w.district);
+      const wJob = normalize(w.job);
+      const wName = normalize(w.name);
+      const wDistrict = normalize(w.district);
 
-      // Métier / service (recherche souple)
       const matchKeyword =
         !kw || wName.includes(kw) || wJob.includes(kw);
 
-      // Select métier sidebar (égalité normalisée)
-      const matchJob =
-        selectedJob === "all" || wJob === selJobNorm;
+      const matchJob = selectedJob === "all" || wJob === jobSel;
 
-      // Quartier (égalité normalisée)
       const matchDistrict =
         !dist || wDistrict === dist;
 
@@ -326,9 +312,9 @@ const SearchSection: React.FC = () => {
       return (
         matchKeyword &&
         matchJob &&
+        matchDistrict &&
         matchPrice &&
-        matchRating &&
-        matchDistrict
+        matchRating
       );
     });
 
@@ -342,10 +328,10 @@ const SearchSection: React.FC = () => {
             });
             return { ...w, _distanceKm: dKm };
           }
-          return { ...w, _distanceKm: null as number | null };
+          return { ...w, _distanceKm: null };
         })
         .filter((w) => w._distanceKm !== null && w._distanceKm <= radiusKm)
-        .sort((a, b) => a._distanceKm! - b._distanceKm!);
+        .sort((a, b) => (a._distanceKm! - b._distanceKm!));
     }
 
     return base;
@@ -353,9 +339,9 @@ const SearchSection: React.FC = () => {
     workers,
     keyword,
     selectedJob,
+    selectedDistrict,
     maxPrice,
     minRating,
-    selectedDistrict,
     userGeo,
     radiusKm,
   ]);
@@ -411,9 +397,7 @@ const SearchSection: React.FC = () => {
     contact: language === "fr" ? "Contacter" : "Contact",
     perHour: "/h",
     years:
-      language === "fr"
-        ? "ans d'expérience"
-        : "years of experience",
+      language === "fr" ? "ans d'expérience" : "years of experience",
     viewMode: language === "fr" ? "Affichage" : "View",
     viewList: language === "fr" ? "Liste" : "List",
     viewGrid: language === "fr" ? "Mosaïque" : "Grid",
@@ -725,7 +709,7 @@ const SearchSection: React.FC = () => {
             {/* LIST */}
             {viewMode === "list" && (
               <div className="space-y-3 sm:space-y-4">
-                {filteredWorkers.map((w: any) => (
+                {filteredWorkers.map((w) => (
                   <div
                     key={w.id}
                     className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4"
@@ -734,7 +718,7 @@ const SearchSection: React.FC = () => {
                       <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">
                         {w.name
                           .split(" ")
-                          .map((n: string) => n[0])
+                          .map((n) => n[0])
                           .join("")}
                       </div>
                     </div>
@@ -798,7 +782,7 @@ const SearchSection: React.FC = () => {
             {/* GRID */}
             {viewMode === "grid" && (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {filteredWorkers.map((w: any) => (
+                {filteredWorkers.map((w) => (
                   <div
                     key={w.id}
                     className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-3"
@@ -807,7 +791,7 @@ const SearchSection: React.FC = () => {
                       <div className="w-10 h-10 rounded-full bg-pro-blue text-white flex items-center justify-center text-sm font-semibold">
                         {w.name
                           .split(" ")
-                          .map((n: string) => n[0])
+                          .map((n) => n[0])
                           .join("")}
                       </div>
                       <div className="min-w-0">
