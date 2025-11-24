@@ -1,5 +1,4 @@
 // src/pages/Index.tsx
-import React from "react";
 import Header from "@/components/Header";
 import HeroSection from "@/components/HeroSection";
 import FeaturesSection from "@/components/FeaturesSection";
@@ -12,27 +11,29 @@ const Index = () => {
     <div className="min-h-screen w-full bg-white overflow-x-hidden flex flex-col">
       <Header />
 
-      {/* important: main full width sans wrappers bloquants */}
+      {/* Main full width */}
       <main className="w-full flex-1">
-        {/* Hero (gère déjà son background + padding responsive) */}
+        {/* HERO : contient la zone de recherche */}
         <HeroSection />
 
-        {/* Pourquoi nous choisir (gère son layout) */}
-        <section className="w-full bg-white">
+        {/* FEATURES */}
+        <section className="w-full bg-white py-10 sm:py-14 lg:py-16">
           <FeaturesSection />
         </section>
 
-        {/* Recherche d’ouvriers */}
-        {/* ⚠️ ne pas remettre id="search" si WorkerSearchSection l’a déjà.
-            Sinon garde ici pour l’ancre. */}
-        <section id="search" className="w-full bg-white">
+        {/* RECHERCHE OUVRIERS (aperçu / section) */}
+        {/* Si WorkerSearchSection contient déjà un id="search", retire celui-ci */}
+        <section
+          id="search"
+          className="w-full bg-white py-10 sm:py-14 lg:py-16 scroll-mt-20"
+        >
           <WorkerSearchSection />
         </section>
 
-        {/* Formules d’abonnement */}
+        {/* ABONNEMENTS */}
         <section
           id="subscription"
-          className="w-full bg-gradient-to-br from-gray-50 to-gray-100"
+          className="w-full bg-gradient-to-br from-gray-50 to-gray-100 py-10 sm:py-14 lg:py-16 scroll-mt-20"
         >
           <SubscriptionSection />
         </section>
