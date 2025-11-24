@@ -148,7 +148,7 @@ const AdminOuvrierContacts: React.FC = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from<DbContact>("op_ouvrier_contacts")
+        .from("op_ouvrier_contacts")
         .select("*")
         .order("created_at", { ascending: false });
 
@@ -356,7 +356,7 @@ const AdminOuvrierContacts: React.FC = () => {
     setError(null);
 
     const { data, error } = await supabase
-      .from<DbContact>("op_ouvrier_contacts")
+      .from("op_ouvrier_contacts")
       .select("*")
       .order("created_at", { ascending: false });
 
