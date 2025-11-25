@@ -2,19 +2,22 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useWorkerSearch } from "@/hooks/useWorkerSearch";
+import { useGeolocation } from "@/hooks/useGeolocation";
+import { calculateDistance, formatDistance } from "@/lib/geoUtils";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Star,
   MapPin,
   Search,
   LayoutList,
   LayoutGrid,
+  Navigation,
+  Loader2,
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
-
-type GeoPoint = { lat: number; lng: number };
 
 const SearchSection: React.FC = () => {
   const { language } = useLanguage();
@@ -34,8 +37,18 @@ const SearchSection: React.FC = () => {
   const [minRating, setMinRating] = useState<number>(0);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
-  // ✅ Géoloc (optionnel)
-  const [userGeo, setUserGeo] = useState<GeoPoint | null>(null);
+  // ✅ Géolocalisation
+  const {
+    latitude,
+    longitude,
+    error: geoError,
+    loading: geoLoading,
+    getLocation,
+    clearLocation,
+    hasLocation,
+  } = useGeolocation();
+  
+  const [useGeoFilter, setUseGeoFilter] = useState<boolean>(false);
   const [radiusKm, setRadiusKm] = useState<number>(10);
 
   // Synchroniser les états locaux avec l'URL
@@ -91,22 +104,67 @@ const SearchSection: React.FC = () => {
     [workers]
   );
 
-  // ✅ Filtrage côté client UNIQUEMENT pour prix et note
-  // (profession et district sont déjà filtrés par Supabase)
+  // ✅ Calcul des distances et filtrage
+  const workersWithDistance = useMemo(() => {
+    if (!hasLocation || !latitude || !longitude) {
+      return workers.map(w => ({ ...w, distance: null }));
+    }
+
+    return workers.map((w) => {
+      if (w.lat && w.lng) {
+        const distance = calculateDistance(latitude, longitude, w.lat, w.lng);
+        return { ...w, distance };
+      }
+      return { ...w, distance: null };
+    });
+  }, [workers, latitude, longitude, hasLocation]);
+
+  // ✅ Filtrage côté client: prix, note, géolocalisation
   const filteredWorkers = useMemo(() => {
-    return workers.filter((w) => {
+    let filtered = workersWithDistance.filter((w) => {
       const matchPrice = w.hourlyRate <= maxPrice;
       const matchRating = w.rating >= minRating;
+      
+      // Filtre géographique si activé
+      if (useGeoFilter && hasLocation) {
+        if (w.distance === null) return false; // Exclure les ouvriers sans coordonnées
+        return matchPrice && matchRating && w.distance <= radiusKm;
+      }
+      
       return matchPrice && matchRating;
     });
-  }, [workers, maxPrice, minRating]);
+
+    // Trier par distance si géolocalisation activée
+    if (useGeoFilter && hasLocation) {
+      filtered = filtered.sort((a, b) => {
+        if (a.distance === null) return 1;
+        if (b.distance === null) return -1;
+        return a.distance - b.distance;
+      });
+    }
+
+    return filtered;
+  }, [workersWithDistance, maxPrice, minRating, useGeoFilter, hasLocation, radiusKm]);
 
   const resetFilters = () => {
     setKeyword("");
     setSelectedDistrict("");
     setMaxPrice(300000);
     setMinRating(0);
+    setUseGeoFilter(false);
+    setRadiusKm(10);
+    clearLocation();
     setSearchParams({}, { replace: false });
+  };
+
+  // Activer/désactiver le filtre géographique
+  const handleGeoToggle = (checked: boolean) => {
+    setUseGeoFilter(checked);
+    if (checked && !hasLocation) {
+      getLocation();
+    } else if (!checked) {
+      clearLocation();
+    }
   };
 
   const formatCurrency = (value: number, currency: string) => {
@@ -139,6 +197,12 @@ const SearchSection: React.FC = () => {
     priceLabel:
       language === "fr" ? "Tarif horaire max" : "Max hourly rate",
     ratingLabel: language === "fr" ? "Note minimum" : "Minimum rating",
+    geoLabel: language === "fr" ? "Recherche par proximité" : "Search by proximity",
+    geoRadius: language === "fr" ? "Rayon de recherche" : "Search radius",
+    geoEnable: language === "fr" ? "Activer" : "Enable",
+    geoLoading: language === "fr" ? "Obtention de votre position..." : "Getting your location...",
+    geoError: language === "fr" ? "Erreur de géolocalisation" : "Geolocation error",
+    noCoordinates: language === "fr" ? "Sans position GPS" : "No GPS location",
     reset: language === "fr" ? "Réinitialiser les filtres" : "Reset filters",
     noResults:
       language === "fr"
@@ -361,6 +425,54 @@ const SearchSection: React.FC = () => {
               />
             </div>
 
+            {/* Géolocalisation */}
+            <div className="mb-6 pb-6 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Navigation className="w-4 h-4 text-pro-blue" />
+                  <label className="text-xs font-medium text-gray-600">
+                    {text.geoLabel}
+                  </label>
+                </div>
+                <Switch
+                  checked={useGeoFilter}
+                  onCheckedChange={handleGeoToggle}
+                  disabled={geoLoading}
+                />
+              </div>
+
+              {geoLoading && (
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>{text.geoLoading}</span>
+                </div>
+              )}
+
+              {geoError && useGeoFilter && (
+                <div className="text-xs text-red-600 bg-red-50 rounded p-2">
+                  {geoError}
+                </div>
+              )}
+
+              {useGeoFilter && hasLocation && (
+                <div className="mt-3">
+                  <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
+                    <span>{text.geoRadius}</span>
+                    <span className="text-[11px] text-gray-500">
+                      {radiusKm} km
+                    </span>
+                  </div>
+                  <Slider
+                    value={[radiusKm]}
+                    min={1}
+                    max={50}
+                    step={1}
+                    onValueChange={(v) => setRadiusKm(v[0])}
+                  />
+                </div>
+              )}
+            </div>
+
             <Button
               className="w-full border-gray-300 text-sm"
               variant="outline"
@@ -430,6 +542,13 @@ const SearchSection: React.FC = () => {
                             .join(" • ")}
                         </span>
 
+                        {w.distance !== null && useGeoFilter && (
+                          <span className="flex items-center gap-1 text-pro-blue font-medium">
+                            <Navigation className="w-3 h-3" />
+                            {formatDistance(w.distance, language)}
+                          </span>
+                        )}
+
                         <span className="flex items-center gap-1">
                           <Star className="w-3 h-3 text-yellow-400" />
                           {w.rating.toFixed(1)} ({w.ratingCount})
@@ -494,6 +613,13 @@ const SearchSection: React.FC = () => {
                           .filter(Boolean)
                           .join(" • ")}
                       </span>
+
+                      {w.distance !== null && useGeoFilter && (
+                        <span className="flex items-center gap-1 text-pro-blue font-medium">
+                          <Navigation className="w-3 h-3" />
+                          {formatDistance(w.distance, language)}
+                        </span>
+                      )}
 
                       <span className="flex items-center gap-1">
                         <Star className="w-3 h-3 text-yellow-400" />
