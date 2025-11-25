@@ -6,6 +6,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   MapPin,
   Star,
@@ -17,6 +19,12 @@ import {
   Send,
   Info,
   Lock,
+  Award,
+  Briefcase,
+  Clock,
+  DollarSign,
+  CheckCircle,
+  StarIcon,
 } from "lucide-react";
 
 type DbWorker = {
@@ -37,6 +45,15 @@ type DbWorker = {
   rating_count: number | null;
   phone: string | null;
   email: string | null;
+  avatar_url: string | null;
+};
+
+type Review = {
+  id: string;
+  author_name: string | null;
+  rating: number | null;
+  comment: string | null;
+  created_at: string | null;
 };
 
 type ContactForm = {
@@ -61,6 +78,7 @@ const WorkerDetail: React.FC = () => {
 
   // 👷 Données ouvrier
   const [worker, setWorker] = useState<DbWorker | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,7 +98,7 @@ const WorkerDetail: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // -------------------------
-  // 🔐 Vérifier que l’utilisateur est connecté
+  // 🔐 Vérifier que l'utilisateur est connecté
   // -------------------------
   useEffect(() => {
     const checkAuth = async () => {
@@ -103,17 +121,16 @@ const WorkerDetail: React.FC = () => {
   }, []);
 
   // -------------------------
-  // 👷 Charger l’ouvrier (uniquement si connecté)
+  // 👷 Charger l'ouvrier et ses avis
   // -------------------------
   useEffect(() => {
-    const fetchWorker = async () => {
+    const fetchWorkerData = async () => {
       if (!id) {
         setError("missing-id");
         setLoading(false);
         return;
       }
       if (!isAuthenticated) {
-        // on ne charge rien si non connecté
         setLoading(false);
         return;
       }
@@ -121,7 +138,8 @@ const WorkerDetail: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
+      // Charger l'ouvrier
+      const { data: workerData, error: workerError } = await supabase
         .from("op_ouvriers")
         .select(
           `
@@ -141,26 +159,39 @@ const WorkerDetail: React.FC = () => {
           average_rating,
           rating_count,
           phone,
-          email
+          email,
+          avatar_url
         `
         )
         .eq("id", id)
         .maybeSingle();
 
-      if (error || !data) {
-        console.error(error);
+      if (workerError || !workerData) {
+        console.error(workerError);
         setError("load-failed");
         setLoading(false);
         return;
       }
 
-      setWorker(data as DbWorker);
+      setWorker(workerData as DbWorker);
+
+      // Charger les avis
+      const { data: reviewsData } = await supabase
+        .from("op_ouvrier_reviews")
+        .select("id, author_name, rating, comment, created_at")
+        .eq("worker_id", id)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (reviewsData) {
+        setReviews(reviewsData as Review[]);
+      }
+
       setLoading(false);
     };
 
-    // on ne lance le fetch que si l’auth a été vérifiée
     if (authChecked && isAuthenticated) {
-      fetchWorker();
+      fetchWorkerData();
     }
   }, [id, authChecked, isAuthenticated]);
 
@@ -186,8 +217,8 @@ const WorkerDetail: React.FC = () => {
       language === "fr" ? "Contacter cet ouvrier" : "Contact this worker",
     contactSubtitle:
       language === "fr"
-        ? "Expliquez brièvement votre besoin, il vous répondra directement."
-        : "Briefly explain your need, they will contact you back.",
+        ? "Remplissez le formulaire ci-dessous pour être recontacté"
+        : "Fill the form below to be contacted back",
     yourName: language === "fr" ? "Votre nom" : "Your name",
     yourEmail: language === "fr" ? "Votre email" : "Your email",
     yourPhone: language === "fr" ? "Votre téléphone" : "Your phone",
@@ -196,36 +227,36 @@ const WorkerDetail: React.FC = () => {
     sending: language === "fr" ? "Envoi en cours..." : "Sending...",
     success:
       language === "fr"
-        ? "Votre demande a bien été envoyée. L’ouvrier vous contactera directement."
+        ? "Votre demande a bien été envoyée. L'ouvrier vous contactera directement."
         : "Your request has been sent. The worker will contact you directly.",
     error:
       language === "fr"
-        ? "Une erreur est survenue lors de l’envoi de votre demande."
+        ? "Une erreur est survenue lors de l'envoi de votre demande."
         : "An error occurred while sending your request.",
     experience:
       language === "fr" ? "ans d'expérience" : "years of experience",
     rating: language === "fr" ? "Note moyenne" : "Average rating",
     perHour: language === "fr" ? "/h" : "/h",
     contactInfos:
-      language === "fr" ? "Coordonnées directes" : "Direct contact details",
+      language === "fr" ? "Coordonnées directes" : "Direct contact",
     phoneLabel: language === "fr" ? "Téléphone" : "Phone",
     emailLabel: language === "fr" ? "Email" : "Email",
     whatsappLabel:
-      language === "fr" ? "WhatsApp (même numéro)" : "WhatsApp (same number)",
+      language === "fr" ? "WhatsApp" : "WhatsApp",
     quickActions:
       language === "fr" ? "Actions rapides" : "Quick actions",
     callBtn: language === "fr" ? "Appeler" : "Call",
     whatsappBtn: language === "fr" ? "WhatsApp" : "WhatsApp",
     emailBtn:
-      language === "fr" ? "Envoyer un e-mail" : "Send an email",
+      language === "fr" ? "Email" : "Email",
     devisBtn:
-      language === "fr" ? "Pré-remplir une demande de devis" : "Pre-fill quote request",
+      language === "fr" ? "Demander un devis" : "Request quote",
     requestTypeLabel:
       language === "fr" ? "Type de demande" : "Request type",
     requestTypeDevis:
       language === "fr" ? "Demande de devis" : "Quote request",
     requestTypeInfo:
-      language === "fr" ? "Demande d’informations" : "Information request",
+      language === "fr" ? "Demande d'informations" : "Information request",
     requestTypeUrgence:
       language === "fr" ? "Intervention urgente" : "Emergency",
     budgetLabel:
@@ -238,38 +269,46 @@ const WorkerDetail: React.FC = () => {
         : "Desired date (optional)",
     consentLabel:
       language === "fr"
-        ? "J’accepte que mes coordonnées soient transmises à cet ouvrier pour être recontacté."
-        : "I agree that my contact details may be shared with this worker to be contacted back.",
+        ? "J'accepte que mes coordonnées soient transmises à cet ouvrier."
+        : "I agree to share my contact details with this worker.",
     privacyNote:
       language === "fr"
-        ? "Vos coordonnées sont transmises uniquement à cet ouvrier pour la gestion de votre demande."
-        : "Your contact details are shared only with this worker to handle your request.",
-    // Textes auth
+        ? "Vos données sont uniquement transmises à ce professionnel."
+        : "Your data is only shared with this professional.",
     loginRequiredTitle:
       language === "fr"
         ? "Connexion requise"
         : "Login required",
     loginRequiredDesc:
       language === "fr"
-        ? "Vous devez être connecté pour voir la fiche détaillée des ouvriers et les contacter."
-        : "You must be logged in to view worker details and contact them.",
+        ? "Vous devez être connecté pour voir les détails et contacter les ouvriers."
+        : "You must be logged in to view details and contact workers.",
     loginBtn: language === "fr" ? "Se connecter" : "Log in",
+    about: language === "fr" ? "À propos" : "About",
+    reviewsTitle: language === "fr" ? "Avis clients" : "Customer reviews",
+    noReviews: language === "fr" ? "Aucun avis pour le moment" : "No reviews yet",
+    location: language === "fr" ? "Localisation" : "Location",
+    experienceTitle: language === "fr" ? "Expérience" : "Experience",
+    hourlyRateTitle: language === "fr" ? "Tarif horaire" : "Hourly rate",
   };
 
   const handleChange = (
     e:
       | React.ChangeEvent<HTMLInputElement>
       | React.ChangeEvent<HTMLTextAreaElement>
+      | React.ChangeEvent<HTMLSelectElement>
   ) => {
-    const { name, value, type, checked } = e.target as HTMLInputElement;
+    const target = e.target as HTMLInputElement;
+    const { name, value, type } = target;
+    
     if (type === "checkbox") {
+      const checked = (target as HTMLInputElement).checked;
       setForm((prev) => ({ ...prev, [name]: checked }));
     } else {
       setForm((prev) => ({ ...prev, [name]: value }));
     }
   };
 
-  // 🔹 Envoi du formulaire avec origin = 'web'
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!worker) return;
@@ -330,86 +369,82 @@ const WorkerDetail: React.FC = () => {
     setSending(false);
   };
 
-  // -------------------------
-  // Rendus conditionnels
-  // -------------------------
-
   // Auth pas encore vérifiée
   if (!authChecked) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-sm text-slate-500">
-          {language === "fr" ? "Vérification de la session..." : "Checking session..."}
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-sm text-muted-foreground">
+          {language === "fr" ? "Vérification..." : "Checking..."}
         </div>
       </div>
     );
   }
 
-  // Pas authentifié → écran "Connexion requise"
+  // Pas authentifié
   if (authChecked && !isAuthenticated) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-white border border-slate-200 rounded-xl shadow-sm p-6 text-center">
-          <div className="flex items-center justify-center mb-3">
-            <div className="w-10 h-10 rounded-full bg-pro-blue/10 flex items-center justify-center">
-              <Lock className="w-5 h-5 text-pro-blue" />
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <Card className="max-w-md w-full p-6 text-center">
+          <div className="flex items-center justify-center mb-4">
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <Lock className="w-6 h-6 text-primary" />
             </div>
           </div>
-          <h1 className="text-lg font-semibold text-slate-900 mb-2">
+          <h1 className="text-xl font-semibold mb-2">
             {text.loginRequiredTitle}
           </h1>
-          <p className="text-sm text-slate-600 mb-5">
+          <p className="text-sm text-muted-foreground mb-6">
             {text.loginRequiredDesc}
           </p>
           <div className="flex flex-col gap-2">
             <Button
-              className="w-full bg-pro-blue hover:bg-blue-700"
+              className="w-full"
               onClick={() =>
-                navigate(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`)
+                navigate(`/login?redirect=${encodeURIComponent(window.location.pathname)}`)
               }
             >
               {text.loginBtn}
             </Button>
             <Button
               variant="outline"
-              className="w-full text-sm"
+              className="w-full"
               onClick={() => navigate(-1)}
             >
               {text.back}
             </Button>
           </div>
-        </div>
+        </Card>
       </div>
     );
   }
 
-  // Chargement des données de l’ouvrier
+  // Chargement
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-sm text-slate-500">
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-sm text-muted-foreground">
           {language === "fr" ? "Chargement..." : "Loading..."}
         </div>
       </div>
     );
   }
 
-  // Erreur / pas d’ouvrier
+  // Erreur / pas d'ouvrier
   if (!worker || error) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <div className="max-w-3xl mx-auto px-4 py-10">
-          <button
-            type="button"
+      <div className="min-h-screen bg-background">
+        <div className="max-w-6xl mx-auto px-4 py-10">
+          <Button
+            variant="ghost"
             onClick={() => navigate(-1)}
-            className="inline-flex items-center gap-2 text-pro-blue text-sm mb-6"
+            className="mb-6"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4 mr-2" />
             {text.back}
-          </button>
-          <div className="bg-white rounded-xl border border-red-200 text-red-600 p-6">
-            {text.notFound}
-          </div>
+          </Button>
+          <Card className="p-6 border-destructive/50">
+            <p className="text-destructive">{text.notFound}</p>
+          </Card>
         </div>
       </div>
     );
@@ -417,144 +452,191 @@ const WorkerDetail: React.FC = () => {
 
   const fullName = `${worker.first_name ?? ""} ${
     worker.last_name ?? ""
-  }`.trim();
+  }`.trim() || "Professionnel";
 
   const locationParts = [
-    worker.region,
-    worker.city,
-    worker.commune,
     worker.district,
+    worker.commune,
+    worker.city,
+    worker.region,
   ]
     .filter(Boolean)
-    .join(" • ");
+    .join(", ");
 
   const phoneNumber = (worker.phone || "").replace(/\s+/g, "");
-  const whatsappNumber = phoneNumber;
   const whatsappUrl =
-    whatsappNumber && whatsappNumber.length >= 8
+    phoneNumber && phoneNumber.length >= 8
       ? `https://wa.me/${
-          whatsappNumber.startsWith("+")
-            ? whatsappNumber.slice(1)
-            : whatsappNumber
+          phoneNumber.startsWith("+")
+            ? phoneNumber.slice(1)
+            : phoneNumber
         }`
       : "";
   const mailtoUrl = worker.email
     ? `mailto:${worker.email}?subject=${encodeURIComponent(
-        `Demande de ${worker.profession || "travaux"} via OuvriersPro`
+        `Demande via OuvriersPro`
       )}`
     : "";
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="max-w-5xl mx-auto px-4 py-10">
-        <Link
-          to="/"
-          className="inline-flex items-center gap-2 text-pro-blue text-sm mb-6"
+    <div className="min-h-screen bg-background">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <Button
+          variant="ghost"
+          onClick={() => navigate(-1)}
+          className="mb-6"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4 mr-2" />
           {text.back}
-        </Link>
+        </Button>
 
-        <div className="grid gap-8 md:grid-cols-[2fr,1.6fr] items-start">
-          {/* Fiche ouvrier */}
-          <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-            <div className="flex items-start gap-4 mb-4">
-              <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">
-                {(fullName || "O")
-                  .split(" ")
-                  .filter(Boolean)
-                  .map((n) => n[0])
-                  .join("")}
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900">
-                  {fullName || "—"}
-                </h1>
-                {worker.profession && (
-                  <div className="text-pro-blue text-sm font-medium mt-1">
-                    {worker.profession}
-                  </div>
-                )}
-                {locationParts && (
-                  <div className="mt-2 flex items-center gap-1 text-xs text-slate-600">
-                    <MapPin className="w-3 h-3" />
-                    {locationParts}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-4 text-sm text-slate-700 mb-4">
-              <div>
-                <div className="text-xs text-slate-500">{text.rating}</div>
-                <div className="flex items-center gap-1">
-                  <Star className="w-4 h-4 text-yellow-400" />
-                  <span className="font-semibold">
-                    {worker.average_rating?.toFixed(1) || "—"}
-                  </span>
-                  {worker.rating_count != null && (
-                    <span className="text-xs text-slate-500">
-                      ({worker.rating_count})
-                    </span>
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* Colonne principale */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* En-tête avec avatar et infos principales */}
+            <Card className="p-6">
+              <div className="flex items-start gap-6 mb-6">
+                <div className="w-24 h-24 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-2xl font-bold flex-shrink-0">
+                  {fullName
+                    .split(" ")
+                    .map((n) => n[0])
+                    .join("")
+                    .toUpperCase()}
+                </div>
+                <div className="flex-1">
+                  <h1 className="text-3xl font-bold mb-2">{fullName}</h1>
+                  {worker.profession && (
+                    <Badge variant="secondary" className="mb-3 text-base">
+                      {worker.profession}
+                    </Badge>
+                  )}
+                  {locationParts && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <MapPin className="w-4 h-4" />
+                      <span className="text-sm">{locationParts}</span>
+                    </div>
                   )}
                 </div>
               </div>
 
-              <div>
-                <div className="text-xs text-slate-500">
-                  {language === "fr" ? "Expérience" : "Experience"}
+              {/* Stats rapides */}
+              <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+                    <span className="text-2xl font-bold">
+                      {worker.average_rating?.toFixed(1) || "—"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {worker.rating_count || 0} avis
+                  </p>
                 </div>
-                <div className="font-semibold">
-                  {worker.years_experience || 0} {text.experience}
-                </div>
-              </div>
 
-              <div>
-                <div className="text-xs text-slate-500">
-                  {language === "fr" ? "Tarif horaire" : "Hourly rate"}
+                <div className="text-center border-x border-border">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <Briefcase className="w-5 h-5 text-primary" />
+                    <span className="text-2xl font-bold">
+                      {worker.years_experience || 0}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {text.experience}
+                  </p>
                 </div>
-                <div className="font-semibold text-pro-blue">
-                  {formatCurrency(worker.hourly_rate, worker.currency)}
-                  <span className="ml-1 text-xs text-slate-600">
+
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <DollarSign className="w-5 h-5 text-primary" />
+                    <span className="text-lg font-bold">
+                      {formatCurrency(worker.hourly_rate, worker.currency)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
                     {text.perHour}
-                  </span>
+                  </p>
                 </div>
               </div>
-            </div>
+            </Card>
 
+            {/* Description */}
             {worker.description && (
-              <div className="mt-4 border-t border-slate-100 pt-4">
-                <h2 className="text-sm font-semibold text-slate-800 mb-1">
-                  {language === "fr" ? "Présentation" : "About"}
+              <Card className="p-6">
+                <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                  <Info className="w-5 h-5 text-primary" />
+                  {text.about}
                 </h2>
-                <p className="text-sm text-slate-700 whitespace-pre-line">
+                <p className="text-muted-foreground whitespace-pre-line leading-relaxed">
                   {worker.description}
                 </p>
-              </div>
+              </Card>
             )}
-          </section>
 
-          {/* Bloc contact enrichi */}
-          <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-slate-900 mb-1">
-              {text.contactTitle}
-            </h2>
-            <p className="text-xs text-slate-500 mb-4">
-              {text.contactSubtitle}
-            </p>
+            {/* Avis clients */}
+            <Card className="p-6">
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <Award className="w-5 h-5 text-primary" />
+                {text.reviewsTitle}
+              </h2>
+              
+              {reviews.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  {text.noReviews}
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {reviews.map((review) => (
+                    <div
+                      key={review.id}
+                      className="p-4 bg-muted/30 rounded-lg border border-border"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium">
+                          {review.author_name || "Client anonyme"}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {[...Array(5)].map((_, i) => (
+                            <StarIcon
+                              key={i}
+                              className={`w-4 h-4 ${
+                                i < (review.rating || 0)
+                                  ? "text-yellow-500 fill-yellow-500"
+                                  : "text-muted-foreground/30"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      {review.comment && (
+                        <p className="text-sm text-muted-foreground">
+                          {review.comment}
+                        </p>
+                      )}
+                      {review.created_at && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {new Date(review.created_at).toLocaleDateString(
+                            language === "fr" ? "fr-FR" : "en-US",
+                            { year: "numeric", month: "long", day: "numeric" }
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </div>
 
+          {/* Sidebar contact */}
+          <div className="space-y-6">
             {/* Coordonnées directes */}
-            <div className="mb-4 border border-slate-100 rounded-lg p-3 bg-slate-50">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-slate-700">
-                  {text.contactInfos}
-                </span>
-              </div>
-              <div className="space-y-1 text-xs text-slate-700">
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4">{text.contactInfos}</h3>
+              
+              <div className="space-y-3 mb-4">
                 {worker.phone && (
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-3 h-3 text-pro-blue" />
-                    <span className="font-medium">{text.phoneLabel} :</span>
+                  <div className="flex items-center gap-3 text-sm">
+                    <Phone className="w-4 h-4 text-primary" />
                     <a
                       href={`tel:${worker.phone}`}
                       className="hover:underline"
@@ -564,121 +646,86 @@ const WorkerDetail: React.FC = () => {
                   </div>
                 )}
                 {worker.email && (
-                  <div className="flex items-center gap-2">
-                    <Mail className="w-3 h-3 text-pro-blue" />
-                    <span className="font-medium">{text.emailLabel} :</span>
+                  <div className="flex items-center gap-3 text-sm">
+                    <Mail className="w-4 h-4 text-primary" />
                     <a
-                      href={`mailto:${worker.email}`}
+                      href={mailtoUrl}
                       className="hover:underline break-all"
                     >
                       {worker.email}
                     </a>
                   </div>
                 )}
-                {whatsappNumber && (
-                  <div className="flex items-center gap-2">
-                    <MessageCircle className="w-3 h-3 text-green-600" />
-                    <span className="font-medium">
-                      {text.whatsappLabel} :
-                    </span>
-                    <span>{whatsappNumber}</span>
-                  </div>
-                )}
               </div>
 
               {/* Actions rapides */}
-              <div className="mt-3">
-                <div className="text-[11px] text-slate-500 mb-1">
-                  {text.quickActions}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {worker.phone && (
-                    <Button
-                      variant="outline"
-                      className="w-full flex items-center justify-center gap-1 text-xs"
-                      asChild
-                    >
-                      <a href={`tel:${worker.phone}`}>
-                        <Phone className="w-3 h-3" />
-                        {text.callBtn}
-                      </a>
-                    </Button>
-                  )}
-
-                  {whatsappUrl && (
-                    <Button
-                      className="w-full flex items-center justify-center gap-1 text-xs bg-green-500 hover:bg-green-600"
-                      asChild
-                    >
-                      <a
-                        href={whatsappUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <MessageCircle className="w-3 h-3" />
-                        {text.whatsappBtn}
-                      </a>
-                    </Button>
-                  )}
-
-                  {mailtoUrl && (
-                    <Button
-                      variant="outline"
-                      className="w-full flex items-center justify-center gap-1 text-xs"
-                      asChild
-                    >
-                      <a href={mailtoUrl}>
-                        <Mail className="w-3 h-3" />
-                        {text.emailBtn}
-                      </a>
-                    </Button>
-                  )}
-
+              <div className="space-y-2">
+                {worker.phone && (
                   <Button
-                    type="button"
-                    variant="secondary"
-                    className="w-full flex items-center justify-center gap-1 text-xs"
-                    onClick={() =>
-                      setForm((prev) => ({
-                        ...prev,
-                        requestType: "devis",
-                        message:
-                          prev.message ||
-                          (language === "fr"
-                            ? "Bonjour, je souhaite obtenir un devis pour des travaux."
-                            : "Hello, I would like to get a quote for some work."),
-                      }))
-                    }
+                    variant="outline"
+                    className="w-full justify-start"
+                    asChild
                   >
-                    <FileText className="w-3 h-3" />
-                    {text.devisBtn}
+                    <a href={`tel:${worker.phone}`}>
+                      <Phone className="w-4 h-4 mr-2" />
+                      {text.callBtn}
+                    </a>
                   </Button>
+                )}
+
+                {whatsappUrl && (
+                  <Button
+                    className="w-full justify-start bg-green-600 hover:bg-green-700"
+                    asChild
+                  >
+                    <a
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <MessageCircle className="w-4 h-4 mr-2" />
+                      {text.whatsappBtn}
+                    </a>
+                  </Button>
+                )}
+
+                {mailtoUrl && (
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    asChild
+                  >
+                    <a href={mailtoUrl}>
+                      <Mail className="w-4 h-4 mr-2" />
+                      {text.emailBtn}
+                    </a>
+                  </Button>
+                )}
+              </div>
+            </Card>
+
+            {/* Formulaire de contact */}
+            <Card className="p-6">
+              <h3 className="font-semibold mb-2">{text.contactTitle}</h3>
+              <p className="text-xs text-muted-foreground mb-4">
+                {text.contactSubtitle}
+              </p>
+
+              {successMsg && (
+                <div className="mb-4 p-3 text-sm bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 rounded-md">
+                  {successMsg}
                 </div>
-              </div>
+              )}
 
-              <div className="mt-3 flex items-start gap-1 text-[11px] text-slate-500">
-                <Info className="w-3 h-3 mt-[2px]" />
-                <span>{text.privacyNote}</span>
-              </div>
-            </div>
+              {errorMsg && (
+                <div className="mb-4 p-3 text-sm bg-destructive/10 text-destructive border border-destructive/20 rounded-md">
+                  {errorMsg}
+                </div>
+              )}
 
-            {successMsg && (
-              <div className="mb-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">
-                {successMsg}
-              </div>
-            )}
-
-            {errorMsg && (
-              <div className="mb-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-                {errorMsg}
-              </div>
-            )}
-
-            {/* Formulaire détaillé */}
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                  <label className="block text-sm font-medium mb-1">
                     {text.yourName}
                   </label>
                   <Input
@@ -686,12 +733,11 @@ const WorkerDetail: React.FC = () => {
                     value={form.name}
                     onChange={handleChange}
                     required
-                    className="text-sm"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                  <label className="block text-sm font-medium mb-1">
                     {text.yourPhone}
                   </label>
                   <Input
@@ -699,133 +745,121 @@ const WorkerDetail: React.FC = () => {
                     value={form.phone}
                     onChange={handleChange}
                     required
-                    className="text-sm"
-                    placeholder={
-                      language === "fr"
-                        ? "Numéro pour vous joindre"
-                        : "Phone number"
-                    }
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  {text.yourEmail}{" "}
-                  <span className="text-[10px] text-slate-400">
-                    ({language === "fr" ? "facultatif" : "optional"})
-                  </span>
-                </label>
-                <Input
-                  type="email"
-                  name="email"
-                  value={form.email}
-                  onChange={handleChange}
-                  className="text-sm"
-                  placeholder="email@exemple.com"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                  <label className="block text-sm font-medium mb-1">
+                    {text.yourEmail}{" "}
+                    <span className="text-xs text-muted-foreground">
+                      (facultatif)
+                    </span>
+                  </label>
+                  <Input
+                    type="email"
+                    name="email"
+                    value={form.email}
+                    onChange={handleChange}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
                     {text.requestTypeLabel}
                   </label>
                   <select
                     name="requestType"
                     value={form.requestType}
                     onChange={handleChange}
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     <option value="devis">{text.requestTypeDevis}</option>
                     <option value="info">{text.requestTypeInfo}</option>
-                    <option value="urgence">
-                      {text.requestTypeUrgence}
-                    </option>
+                    <option value="urgence">{text.requestTypeUrgence}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                  <label className="block text-sm font-medium mb-1">
                     {text.budgetLabel}
                   </label>
                   <Input
                     name="budget"
                     value={form.budget}
                     onChange={handleChange}
-                    className="text-sm"
+                    placeholder="Ex: 1,000,000 GNF"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    {text.dateLabel}
+                  </label>
+                  <Input
+                    type="date"
+                    name="preferredDate"
+                    value={form.preferredDate}
+                    onChange={handleChange}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    {text.yourMessage}
+                  </label>
+                  <Textarea
+                    name="message"
+                    value={form.message}
+                    onChange={handleChange}
+                    required
+                    rows={4}
                     placeholder={
                       language === "fr"
-                        ? "Ex : 1 000 000 GNF"
-                        : "e.g. 1,000,000 GNF"
+                        ? "Décrivez votre besoin..."
+                        : "Describe your need..."
                     }
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  {text.dateLabel}
-                </label>
-                <Input
-                  type="date"
-                  name="preferredDate"
-                  value={form.preferredDate}
-                  onChange={handleChange}
-                  className="text-sm"
-                />
-              </div>
+                <div className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    name="consent"
+                    checked={form.consent}
+                    onChange={handleChange}
+                    className="mt-1 rounded"
+                    required
+                  />
+                  <label className="text-xs text-muted-foreground">
+                    {text.consentLabel}
+                  </label>
+                </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  {text.yourMessage}
-                </label>
-                <Textarea
-                  name="message"
-                  value={form.message}
-                  onChange={handleChange}
-                  required
-                  rows={5}
-                  className="text-sm"
-                  placeholder={
-                    language === "fr"
-                      ? "Expliquez brièvement les travaux à réaliser, l’adresse, les contraintes éventuelles…"
-                      : "Briefly describe the work to be done, address, constraints…"
-                  }
-                />
-              </div>
+                <Button
+                  type="submit"
+                  disabled={sending}
+                  className="w-full"
+                >
+                  {sending ? (
+                    <>
+                      <Send className="w-4 h-4 mr-2 animate-pulse" />
+                      {text.sending}
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4 mr-2" />
+                      {text.send}
+                    </>
+                  )}
+                </Button>
 
-              <div className="flex items-start gap-2 text-[11px] text-slate-600">
-                <input
-                  type="checkbox"
-                  name="consent"
-                  checked={form.consent}
-                  onChange={handleChange}
-                  className="mt-[2px] rounded border-slate-300"
-                  required
-                />
-                <span>{text.consentLabel}</span>
-              </div>
-
-              <Button
-                type="submit"
-                disabled={sending}
-                className="w-full bg-pro-blue hover:bg-blue-700 flex items-center justify-center gap-2 text-sm"
-              >
-                {sending ? (
-                  <>
-                    <Send className="w-4 h-4 animate-pulse" />
-                    {text.sending}
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    {text.send}
-                  </>
-                )}
-              </Button>
-            </form>
-          </section>
+                <p className="text-xs text-muted-foreground text-center">
+                  <Info className="w-3 h-3 inline mr-1" />
+                  {text.privacyNote}
+                </p>
+              </form>
+            </Card>
+          </div>
         </div>
       </div>
     </div>
