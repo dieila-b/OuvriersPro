@@ -5,7 +5,13 @@ import { supabase } from "@/lib/supabase";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Star, MapPin, Search, LayoutList, LayoutGrid } from "lucide-react";
+import {
+  Star,
+  MapPin,
+  Search,
+  LayoutList,
+  LayoutGrid,
+} from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 type DbWorker = {
@@ -24,6 +30,8 @@ type DbWorker = {
   average_rating: number | null;
   rating_count: number | null;
   status: string | null;
+
+  // coords optionnelles (si tu les utilises plus tard)
   lat: number | null;
   lng: number | null;
 };
@@ -44,7 +52,6 @@ interface WorkerCard {
   ratingCount: number;
   lat?: number | null;
   lng?: number | null;
-  _distanceKm?: number | null;
 }
 
 type GeoPoint = { lat: number; lng: number };
@@ -73,81 +80,54 @@ const SearchSection: React.FC = () => {
   const { language } = useLanguage();
   const [searchParams] = useSearchParams();
 
+  // On lit une fois les paramètres de l’URL
+  const urlService =
+    searchParams.get("service") ??
+    searchParams.get("keyword") ??
+    "";
+  const urlDistrict =
+    searchParams.get("quartier") ??
+    searchParams.get("district") ??
+    "";
+
   const [workers, setWorkers] = useState<WorkerCard[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // paramètres reçus depuis le Hero via l’URL
-  const [initialService, setInitialService] = useState<string>("");
-  const [initialDistrict, setInitialDistrict] = useState<string>("");
-
-  // filtres “vivants” sur la page
-  const [keyword, setKeyword] = useState("");
+  // ✅ Filtres UI (initialisés à partir de l’URL à la première charge)
+  const [keyword, setKeyword] = useState<string>(urlService);
   const [selectedJob, setSelectedJob] = useState<string>("all");
-  const [selectedDistrict, setSelectedDistrict] = useState<string>("");
+  const [selectedDistrict, setSelectedDistrict] = useState<string>(urlDistrict);
   const [maxPrice, setMaxPrice] = useState<number>(300000);
   const [minRating, setMinRating] = useState<number>(0);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
+  // ✅ Géoloc (optionnel, utilisée seulement si tu la branches depuis Hero)
   const [userGeo, setUserGeo] = useState<GeoPoint | null>(null);
   const [radiusKm, setRadiusKm] = useState<number>(10);
 
-  // --------------------------------------------------
-  // 1) Lecture des paramètres d’URL
-  // --------------------------------------------------
-  useEffect(() => {
-    const service =
-      searchParams.get("service") ??
-      searchParams.get("keyword") ??
-      "";
-
-    const quartier =
-      searchParams.get("quartier") ??
-      searchParams.get("district") ??
-      "";
-
-    const spLat = searchParams.get("lat");
-    const spLng = searchParams.get("lng");
-    const spRadius = Number(searchParams.get("radiusKm") ?? "10");
-
-    const s = service.trim();
-    const q = quartier.trim();
-
-    setInitialService(s);
-    setInitialDistrict(q);
-
-    // init des champs si vides
-    setKeyword((prev) => (prev || s ? prev || s : ""));
-    setSelectedJob((prev) => (prev === "all" && s ? s : prev));
-    setSelectedDistrict((prev) => (prev || q ? prev || q : ""));
-
-    if (spLat && spLng) {
-      const latNum = Number(spLat);
-      const lngNum = Number(spLng);
-      if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
-        setUserGeo({ lat: latNum, lng: lngNum });
-        setRadiusKm(Number.isFinite(spRadius) ? spRadius : 10);
-      }
-    }
-
-    console.log("SearchSection – URL params lus :", {
-      service: s,
-      quartier: q,
-      lat: spLat,
-      lng: spLng,
-      radiusKm: spRadius,
-    });
-  }, [searchParams]);
-
-  // --------------------------------------------------
-  // 2) Requête Supabase avec filtres métier + quartier
-  // --------------------------------------------------
+  // -------------------------
+  // 1) Charger depuis Supabase avec filtre SQL métier + quartier
+  // -------------------------
   useEffect(() => {
     const fetchWorkers = async () => {
       setLoading(true);
       setError(null);
 
       try {
+        // On repart de la valeur actuelle dans l’URL
+        const service = (
+          searchParams.get("service") ??
+          searchParams.get("keyword") ??
+          ""
+        ).trim();
+
+        const district = (
+          searchParams.get("quartier") ??
+          searchParams.get("district") ??
+          ""
+        ).trim();
+
         let query = supabase
           .from<DbWorker>("op_ouvriers")
           .select(
@@ -173,31 +153,20 @@ const SearchSection: React.FC = () => {
           )
           .eq("status", "approved");
 
-        if (initialService) {
-          // filtre souple sur le métier
-          query = query.ilike(
-            "profession",
-            `%${initialService}%`
-          );
+        // ✅ Filtre SQL métier (profession) si fourni
+        if (service) {
+          query = query.ilike("profession", `%${service}%`);
         }
 
-        if (initialDistrict) {
-          // filtre souple sur le quartier
-          query = query.ilike(
-            "district",
-            `%${initialDistrict}%`
-          );
+        // ✅ Filtre SQL quartier (district) si fourni
+        if (district) {
+          query = query.ilike("district", `%${district}%`);
         }
-
-        console.log("Requête Supabase – filtres appliqués :", {
-          profession: initialService,
-          district: initialDistrict,
-        });
 
         const { data, error } = await query;
 
         if (error) {
-          console.error(error);
+          console.error("Supabase error:", error);
           setError(
             language === "fr"
               ? "Impossible de charger les professionnels pour le moment."
@@ -228,31 +197,30 @@ const SearchSection: React.FC = () => {
             lng: w.lng ?? null,
           })) ?? [];
 
-        console.log(
-          "Supabase renvoie",
-          mapped.length,
-          "ouvrier(s) avant filtrage front"
-        );
-
         setWorkers(mapped);
-      } catch (err) {
-        console.error(err);
+
+        // ✅ On synchronise l’UI avec l’URL (si l’URL change, l’UI suit)
+        setKeyword(service);
+        setSelectedDistrict(district);
+      } catch (e) {
+        console.error(e);
         setError(
           language === "fr"
-            ? "Erreur inattendue lors du chargement."
-            : "Unexpected error while loading."
+            ? "Une erreur est survenue lors du chargement."
+            : "An error occurred while loading."
         );
       } finally {
         setLoading(false);
       }
     };
 
+    // On relance dès que langue ou searchParams changent (ex : depuis Hero)
     fetchWorkers();
-  }, [language, initialService, initialDistrict]);
+  }, [language, searchParams]);
 
-  // --------------------------------------------------
-  // 3) Options pour les listes déroulantes
-  // --------------------------------------------------
+  // -------------------------
+  // 2) Options métiers / quartiers (à partir des ouvriers déjà filtrés SQL)
+  // -------------------------
   const jobs = useMemo(
     () =>
       Array.from(
@@ -277,82 +245,57 @@ const SearchSection: React.FC = () => {
     [workers]
   );
 
-  // --------------------------------------------------
-  // 4) Filtrage front (tarif, note, recherche texte)
-  // --------------------------------------------------
+  // -------------------------
+  // 3) Filtrage côté front (complément : job, prix, note, etc.)
+  // -------------------------
   const filteredWorkers = useMemo(() => {
-    const norm = (v: string) =>
-      v
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-        .trim();
-
-    const kw = norm(keyword || "");
-    const jobFilter =
-      selectedJob === "all" ? norm(initialService || "") : norm(selectedJob);
-    const districtFilter = norm(selectedDistrict || initialDistrict || "");
-
-    console.log("Filtres front :", {
-      keyword,
-      selectedJob,
-      jobFilter,
-      selectedDistrict,
-      districtFilter,
-    });
+    const kwNorm = keyword.trim().toLowerCase();
+    const districtNorm = selectedDistrict.trim().toLowerCase();
 
     const base = workers.filter((w) => {
-      const jobNorm = norm(w.job || "");
-      const nameNorm = norm(w.name || "");
-      const districtNorm = norm(w.district || "");
+      const jobNorm = (w.job || "").toLowerCase();
+      const nameNorm = (w.name || "").toLowerCase();
+      const workerDistrictNorm = (w.district || "").toLowerCase();
 
-      const matchJob = !jobFilter || jobNorm === jobFilter;
-      const matchDistrict = !districtFilter || districtNorm === districtFilter;
       const matchKeyword =
-        !kw || nameNorm.includes(kw) || jobNorm.includes(kw);
+        !kwNorm ||
+        nameNorm.includes(kwNorm) ||
+        jobNorm.includes(kwNorm);
+
+      const matchJob =
+        selectedJob === "all" || jobNorm === selectedJob.toLowerCase();
+
       const matchPrice = w.hourlyRate <= maxPrice;
       const matchRating = w.rating >= minRating;
 
+      const matchDistrict =
+        !districtNorm || workerDistrictNorm === districtNorm;
+
       return (
-        matchJob &&
-        matchDistrict &&
         matchKeyword &&
+        matchJob &&
         matchPrice &&
-        matchRating
+        matchRating &&
+        matchDistrict
       );
     });
 
-    if (userGeo) {
-      return base
-        .map((w) => {
-          if (typeof w.lat === "number" && typeof w.lng === "number") {
-            const dKm = haversineKm(userGeo, { lat: w.lat, lng: w.lng });
-            return { ...w, _distanceKm: dKm };
-          }
-          return { ...w, _distanceKm: null };
-        })
-        .filter((w) => w._distanceKm !== null && w._distanceKm! <= radiusKm)
-        .sort((a, b) => (a._distanceKm ?? 0) - (b._distanceKm ?? 0));
-    }
-
+    // Si tu veux réactiver plus tard le filtre distance, tu peux le
+    // remettre ici sur `base` à partir de userGeo et radiusKm.
     return base;
   }, [
     workers,
     keyword,
     selectedJob,
-    selectedDistrict,
-    initialService,
-    initialDistrict,
     maxPrice,
     minRating,
-    userGeo,
-    radiusKm,
+    selectedDistrict,
   ]);
 
   const resetFilters = () => {
-    setKeyword(initialService || "");
-    setSelectedJob(initialService || "all");
-    setSelectedDistrict(initialDistrict || "");
+    setKeyword("");
+    setSelectedJob("all");
+    setSelectedDistrict("");
     setMaxPrice(300000);
     setMinRating(0);
     setViewMode("list");
@@ -421,13 +364,11 @@ const SearchSection: React.FC = () => {
   return (
     <section id="search" className="w-full py-12 sm:py-16 lg:py-20 bg-white">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Petit bloc debug pour voir les paramètres réellement reçus */}
+        {/* Debug léger : ce que nous lisons réellement dans l’URL */}
+        {/* Tu peux supprimer ce bloc après test */}
         <div className="mb-4 text-xs text-gray-500">
-          <div>
-            <strong>Paramètres reçus :</strong>{" "}
-            service = "<code>{initialService || "∅"}</code>", quartier = "
-            <code>{initialDistrict || "∅"}</code>"
-          </div>
+          <strong>URL service :</strong> "{urlService || "∅"}" —{" "}
+          <strong>URL quartier :</strong> "{urlDistrict || "∅"}"
         </div>
 
         {/* ZONE DE RECHERCHE HAUT */}
@@ -449,7 +390,7 @@ const SearchSection: React.FC = () => {
                 items-end
               "
             >
-              {/* Métier / nom */}
+              {/* Métier */}
               <div className="lg:col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   {text.keywordLabel}
@@ -480,25 +421,6 @@ const SearchSection: React.FC = () => {
                   ))}
                 </select>
               </div>
-
-              {/* Rayon si géoloc */}
-              {userGeo && (
-                <div className="lg:col-span-4">
-                  <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
-                    <span>{text.geoRadiusLabel}</span>
-                    <span className="text-[11px] text-gray-500">
-                      {radiusKm} {text.km}
-                    </span>
-                  </div>
-                  <Slider
-                    value={[radiusKm]}
-                    min={1}
-                    max={50}
-                    step={1}
-                    onValueChange={(v) => setRadiusKm(v[0])}
-                  />
-                </div>
-              )}
 
               <Button
                 type="button"
@@ -599,7 +521,7 @@ const SearchSection: React.FC = () => {
                 {text.job}
               </label>
               <select
-                value={selectedJob === "all" && initialService ? initialService : selectedJob}
+                value={selectedJob}
                 onChange={(e) => setSelectedJob(e.target.value)}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
@@ -618,7 +540,7 @@ const SearchSection: React.FC = () => {
                 {text.district}
               </label>
               <select
-                value={selectedDistrict || initialDistrict}
+                value={selectedDistrict}
                 onChange={(e) => setSelectedDistrict(e.target.value)}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
@@ -630,25 +552,6 @@ const SearchSection: React.FC = () => {
                 ))}
               </select>
             </div>
-
-            {/* Rayon geo */}
-            {userGeo && (
-              <div className="mb-6">
-                <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
-                  <span>{text.geoRadiusLabel}</span>
-                  <span className="text-[11px] text-gray-500">
-                    {radiusKm} {text.km}
-                  </span>
-                </div>
-                <Slider
-                  value={[radiusKm]}
-                  min={1}
-                  max={50}
-                  step={1}
-                  onValueChange={(v) => setRadiusKm(v[0])}
-                />
-              </div>
-            )}
 
             {/* Prix max */}
             <div className="mb-6">
@@ -723,7 +626,7 @@ const SearchSection: React.FC = () => {
             {/* LIST */}
             {viewMode === "list" && (
               <div className="space-y-3 sm:space-y-4">
-                {filteredWorkers.map((w) => (
+                {filteredWorkers.map((w: any) => (
                   <div
                     key={w.id}
                     className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4"
@@ -732,7 +635,7 @@ const SearchSection: React.FC = () => {
                       <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">
                         {w.name
                           .split(" ")
-                          .map((n) => n[0])
+                          .map((n: string) => n[0])
                           .join("")}
                       </div>
                     </div>
@@ -756,12 +659,6 @@ const SearchSection: React.FC = () => {
                             .filter(Boolean)
                             .join(" • ")}
                         </span>
-
-                        {userGeo && w._distanceKm != null && (
-                          <span className="text-[11px] text-gray-500">
-                            {w._distanceKm!.toFixed(1)} {text.km}
-                          </span>
-                        )}
 
                         <span className="flex items-center gap-1">
                           <Star className="w-3 h-3 text-yellow-400" />
@@ -796,7 +693,7 @@ const SearchSection: React.FC = () => {
             {/* GRID */}
             {viewMode === "grid" && (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {filteredWorkers.map((w) => (
+                {filteredWorkers.map((w: any) => (
                   <div
                     key={w.id}
                     className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-3"
@@ -805,7 +702,7 @@ const SearchSection: React.FC = () => {
                       <div className="w-10 h-10 rounded-full bg-pro-blue text-white flex items-center justify-center text-sm font-semibold">
                         {w.name
                           .split(" ")
-                          .map((n) => n[0])
+                          .map((n: string) => n[0])
                           .join("")}
                       </div>
                       <div className="min-w-0">
@@ -827,12 +724,6 @@ const SearchSection: React.FC = () => {
                           .filter(Boolean)
                           .join(" • ")}
                       </span>
-
-                      {userGeo && w._distanceKm != null && (
-                        <span className="text-[11px] text-gray-500">
-                          {w._distanceKm!.toFixed(1)} {text.km}
-                        </span>
-                      )}
 
                       <span className="flex items-center gap-1">
                         <Star className="w-3 h-3 text-yellow-400" />
