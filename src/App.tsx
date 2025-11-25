@@ -12,6 +12,7 @@ import NotFound from "./pages/NotFound";
 import InscriptionOuvrier from "./pages/InscriptionOuvrier";
 import WorkerDetail from "./pages/WorkerDetail";
 import Login from "./pages/Login";
+import Register from "./pages/Register"; // ✅ nouvelle page d'inscription
 
 // Back-office Admin
 import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
@@ -38,13 +39,19 @@ const App = () => (
             {/* 🏠 Page d'accueil */}
             <Route path="/" element={<Index />} />
 
-            {/* 🔐 Connexion (admin + ouvriers) */}
+            {/* 🔐 Connexion (admin + ouvriers + particuliers) */}
             <Route path="/login" element={<Login />} />
 
-            {/* 📝 Inscription ouvrier */}
-            <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
+            {/* 🆕 Création de compte (particulier / ouvrier) */}
+            <Route path="/register" element={<Register />} />
 
-            {/* 👤 Fiche publique ouvrier */}
+            {/* 📝 Inscription ouvrier (formulaire spécifique) */}
+            <Route
+              path="/inscription-ouvrier"
+              element={<InscriptionOuvrier />}
+            />
+
+            {/* 👤 Fiche ouvrier (détails visibles uniquement si connecté – géré dans WorkerDetail) */}
             <Route path="/ouvrier/:id" element={<WorkerDetail />} />
 
             {/* 👷‍♂️ Espace ouvrier (protégé, rôle worker) */}
