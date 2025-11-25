@@ -30,7 +30,12 @@ export function useWorkerSearch() {
     setError(null);
 
     try {
-      console.log("🔍 Recherche avec:", { service: serviceFilter, district: districtFilter });
+      console.log("🔍 [useWorkerSearch] Démarrage recherche avec:", { 
+        serviceFilter, 
+        districtFilter,
+        serviceFilterTrimmed: serviceFilter.trim(),
+        districtFilterTrimmed: districtFilter.trim()
+      });
 
       let query = supabase
         .from("op_ouvriers")
@@ -58,16 +63,26 @@ export function useWorkerSearch() {
         .eq("status", "approved");
 
       // ✅ Filtre SQL métier (profession) si fourni
-      if (serviceFilter.trim()) {
-        query = query.ilike("profession", `%${serviceFilter.trim()}%`);
+      const trimmedService = serviceFilter.trim();
+      if (trimmedService) {
+        console.log("🔍 [useWorkerSearch] Application filtre profession:", trimmedService);
+        query = query.ilike("profession", `%${trimmedService}%`);
       }
 
       // ✅ Filtre SQL quartier (district) si fourni
-      if (districtFilter.trim()) {
-        query = query.ilike("district", `%${districtFilter.trim()}%`);
+      const trimmedDistrict = districtFilter.trim();
+      if (trimmedDistrict) {
+        console.log("🔍 [useWorkerSearch] Application filtre district:", trimmedDistrict);
+        query = query.ilike("district", `%${trimmedDistrict}%`);
       }
 
+      console.log("🔍 [useWorkerSearch] Exécution requête Supabase...");
       const { data, error } = await query;
+      console.log("🔍 [useWorkerSearch] Résultat requête:", { 
+        success: !error, 
+        count: data?.length,
+        error: error?.message 
+      });
 
       if (error) {
         console.error("Supabase error:", error);
