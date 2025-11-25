@@ -7,10 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
+type LocationState = {
+  from?: string;
+};
+
 const Login: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
-  const location = useLocation() as { state?: { from?: string } };
+  const location = useLocation() as { state?: LocationState };
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,12 +28,11 @@ const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      const { data, error: authError } = await supabase.auth.signInWithPassword(
-        {
-          email: email.trim().toLowerCase(),
-          password,
-        }
-      );
+      // 1) Auth Supabase
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
 
       if (authError) {
         throw authError;
@@ -44,30 +47,60 @@ const Login: React.FC = () => {
         );
       }
 
-      // Récupérer le rôle dans op_users
-      const { data: profile, error: profileError } = await supabase
+      const userId = user.id;
+      const userEmail = user.email ?? email.trim().toLowerCase();
+      const defaultFullName =
+        (user.user_metadata?.full_name as string | undefined) ||
+        (user.user_metadata?.name as string | undefined) ||
+        "";
+
+      // 2) Récupérer / créer le profil dans op_users
+      let { data: profile, error: profileError } = await supabase
         .from("op_users")
-        .select("role")
-        .eq("id", user.id)
+        .select("id, role, full_name")
+        .eq("id", userId)
         .maybeSingle();
 
-      if (profileError || !profile) {
-        throw new Error(
-          language === "fr"
-            ? "Aucun rôle associé à ce compte."
-            : "No role associated to this account."
-        );
+      if (profileError) {
+        throw profileError;
       }
 
-      const role = profile.role as "admin" | "worker";
+      if (!profile) {
+        // ➜ Création automatique d’un profil "user" simple
+        const { data: inserted, error: insertError } = await supabase
+          .from("op_users")
+          .insert({
+            id: userId,
+            email: userEmail,
+            full_name: defaultFullName || null,
+            role: "user",
+          })
+          .select("id, role, full_name")
+          .maybeSingle();
 
-      // Redirection selon le rôle
+        if (insertError) {
+          throw insertError;
+        }
+        profile = inserted;
+      }
+
+      const role = (profile?.role as string) || "user";
+
+      // 3) Redirection selon le rôle
+      const from = location.state?.from;
+
       if (role === "admin") {
         navigate("/admin/dashboard", { replace: true });
       } else if (role === "worker") {
+        // les vrais ouvriers validés
         navigate("/espace-ouvrier", { replace: true });
       } else {
-        navigate("/", { replace: true });
+        // role "user" ou autre ➜ simple compte utilisateur
+        if (from) {
+          navigate(from, { replace: true });
+        } else {
+          navigate("/", { replace: true });
+        }
       }
     } catch (err: any) {
       console.error(err);
@@ -118,9 +151,7 @@ const Login: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={
-                  language === "fr"
-                    ? "Votre mot de passe"
-                    : "Your password"
+                  language === "fr" ? "Votre mot de passe" : "Your password"
                 }
               />
             </div>
@@ -145,25 +176,35 @@ const Login: React.FC = () => {
                 : "Sign in"}
             </Button>
 
-            {/* Lien création de compte */}
-            <p className="mt-3 text-xs text-center text-slate-600">
-              {language === "fr"
-                ? "Vous n'avez pas encore de compte ? "
-                : "Don't have an account yet? "}
-              <Link
-                to="/register"
-                className="font-medium text-pro-blue hover:underline"
-              >
-                {language === "fr"
-                  ? "Créer un compte"
-                  : "Create an account"}
-              </Link>
+            {/* Lien "Créer un compte" */}
+            <p className="mt-3 text-sm text-center text-slate-600">
+              {language === "fr" ? (
+                <>
+                  Vous n&apos;avez pas encore de compte ?{" "}
+                  <Link
+                    to="/register"
+                    className="text-pro-blue hover:underline font-medium"
+                  >
+                    Créer un compte
+                  </Link>
+                </>
+              ) : (
+                <>
+                  Don&apos;t have an account yet?{" "}
+                  <Link
+                    to="/register"
+                    className="text-pro-blue hover:underline font-medium"
+                  >
+                    Create an account
+                  </Link>
+                </>
+              )}
             </p>
 
-            <p className="mt-3 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-slate-500">
               {language === "fr"
-                ? "Les administrateurs seront redirigés vers le back-office, les ouvriers vers leur espace personnel."
-                : "Admins will be redirected to the back-office, workers to their personal dashboard."}
+                ? "Les administrateurs seront redirigés vers le back-office, les ouvriers vers leur espace personnel. Les autres utilisateurs restent sur le site public."
+                : "Admins are redirected to the back-office, workers to their dashboard. Other users stay on the public site."}
             </p>
           </form>
         </CardContent>
