@@ -5,13 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Star,
-  MapPin,
-  Search,
-  LayoutList,
-  LayoutGrid,
-} from "lucide-react";
+import { Star, MapPin, Search, LayoutList, LayoutGrid } from "lucide-react";
 import { useLocation } from "react-router-dom";
 
 type DbWorker = {
@@ -30,8 +24,6 @@ type DbWorker = {
   average_rating: number | null;
   rating_count: number | null;
   status: string | null;
-
-  // coords optionnelles
   lat: number | null;
   lng: number | null;
 };
@@ -56,7 +48,6 @@ interface WorkerCard {
 
 type GeoPoint = { lat: number; lng: number };
 
-// Normalisation simple (casse + accents + espaces)
 const normalize = (value: string | null | undefined) =>
   (value ?? "")
     .normalize("NFD")
@@ -92,21 +83,19 @@ const SearchSection: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ Filtres
-  const [keyword, setKeyword] = useState(""); // Métier ou nom
-  const [selectedJob, setSelectedJob] = useState<string>("all");
-  const [selectedDistrict, setSelectedDistrict] = useState<string>(""); // Quartier
+  // Champs utilisés dans les filtres
+  const [keyword, setKeyword] = useState(""); // texte libre
+  const [selectedJob, setSelectedJob] = useState<string>("all"); // métier exact à filtrer
+  const [selectedDistrict, setSelectedDistrict] = useState<string>(""); // quartier exact
   const [maxPrice, setMaxPrice] = useState<number>(300000);
   const [minRating, setMinRating] = useState<number>(0);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
-  // ✅ Géoloc (lat/lng reçus depuis le Hero)
+  // Géoloc
   const [userGeo, setUserGeo] = useState<GeoPoint | null>(null);
   const [radiusKm, setRadiusKm] = useState<number>(10);
 
-  // -------------------------
-  // 1) Charge ouvriers
-  // -------------------------
+  // 1) Charger les ouvriers
   useEffect(() => {
     const fetchWorkers = async () => {
       setLoading(true);
@@ -176,24 +165,23 @@ const SearchSection: React.FC = () => {
     fetchWorkers();
   }, [language]);
 
-  // -------------------------
-  // 2) Lecture des paramètres de l’URL
-  //    -> service, quartier, lat, lng, radiusKm
-  // -------------------------
+  // 2) Lire les paramètres de l’URL venant du Hero
   useEffect(() => {
     const params = new URLSearchParams(location.search);
 
-    const spKeyword =
+    // service = métier choisi dans le Hero
+    const spService =
       params.get("service") ??
       params.get("keyword") ??
       "";
 
+    // quartier = district choisi dans le Hero
     const spDistrict =
       params.get("quartier") ??
       params.get("district") ??
       "";
 
-    const spJob = params.get("job") ?? "all";
+    // éventuellement d’autres filtres
     const spMaxPrice = Number(params.get("maxPrice") ?? "300000");
     const spMinRating = Number(params.get("minRating") ?? "0");
     const spView = (params.get("view") as "list" | "grid") ?? "list";
@@ -202,9 +190,17 @@ const SearchSection: React.FC = () => {
     const spLng = params.get("lng");
     const spRadius = Number(params.get("radiusKm") ?? "10");
 
-    setKeyword(spKeyword);
+    // On aligne les états internes sur l’URL
+    setKeyword(spService); // juste pour afficher dans le champ texte
+
+    // Très important : on utilise spService comme filtre métier principal
+    if (spService && spService.trim().length > 0) {
+      setSelectedJob(spService);
+    } else {
+      setSelectedJob("all");
+    }
+
     setSelectedDistrict(spDistrict);
-    setSelectedJob(spJob);
     setMaxPrice(Number.isFinite(spMaxPrice) ? spMaxPrice : 300000);
     setMinRating(Number.isFinite(spMinRating) ? spMinRating : 0);
     setViewMode(spView);
@@ -220,11 +216,17 @@ const SearchSection: React.FC = () => {
       setUserGeo(null);
       setRadiusKm(10);
     }
+
+    console.log("SearchSection URL params =>", {
+      spService,
+      spDistrict,
+      spLat,
+      spLng,
+      spRadius,
+    });
   }, [location.search]);
 
-  // -------------------------
-  // Options métiers / quartiers
-  // -------------------------
+  // 3) Options métiers / quartiers pour les selects
   const jobs = useMemo(
     () =>
       Array.from(
@@ -249,38 +251,49 @@ const SearchSection: React.FC = () => {
     [workers]
   );
 
-  // -------------------------
-  // Filtrage + distance
-  // -------------------------
+  // 4) Filtrage
   const filteredWorkers = useMemo(() => {
     const normKeyword = normalize(keyword);
-    const normDistrict = normalize(selectedDistrict);
+    const normJobFilter = normalize(selectedJob === "all" ? "" : selectedJob);
+    const normDistrictFilter = normalize(selectedDistrict);
+
+    console.log("Search filters appliqués =>", {
+      keyword,
+      selectedJob,
+      selectedDistrict,
+      normKeyword,
+      normJobFilter,
+      normDistrictFilter,
+    });
 
     const base = workers.filter((w) => {
       const jobNorm = normalize(w.job);
       const nameNorm = normalize(w.name);
+      const districtNorm = normalize(w.district);
 
+      // 1) Filtre métier strict (si renseigné)
+      const matchJob =
+        !normJobFilter || jobNorm === normJobFilter;
+
+      // 2) Filtre quartier strict (si renseigné)
+      const matchDistrict =
+        !normDistrictFilter || districtNorm === normDistrictFilter;
+
+      // 3) Optionnel : texte libre (nom ou métier) – on peut le laisser
       const matchKeyword =
         !normKeyword ||
         nameNorm.includes(normKeyword) ||
         jobNorm.includes(normKeyword);
 
-      const matchJob =
-        selectedJob === "all" || jobNorm === normalize(selectedJob);
-
       const matchPrice = w.hourlyRate <= maxPrice;
       const matchRating = w.rating >= minRating;
 
-      const districtNorm = normalize(w.district);
-      const matchDistrict =
-        !normDistrict || districtNorm === normDistrict;
-
       return (
-        matchKeyword &&
         matchJob &&
+        matchDistrict &&
+        matchKeyword &&
         matchPrice &&
-        matchRating &&
-        matchDistrict
+        matchRating
       );
     });
 
@@ -305,9 +318,9 @@ const SearchSection: React.FC = () => {
     workers,
     keyword,
     selectedJob,
+    selectedDistrict,
     maxPrice,
     minRating,
-    selectedDistrict,
     userGeo,
     radiusKm,
   ]);
@@ -403,7 +416,7 @@ const SearchSection: React.FC = () => {
                 items-end
               "
             >
-              {/* Métier */}
+              {/* Métier / nom (texte libre) */}
               <div className="lg:col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   {text.keywordLabel}
@@ -416,7 +429,7 @@ const SearchSection: React.FC = () => {
                 />
               </div>
 
-              {/* Quartier */}
+              {/* Quartier (select) */}
               <div className="lg:col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   {text.district}
@@ -435,7 +448,7 @@ const SearchSection: React.FC = () => {
                 </select>
               </div>
 
-              {/* Rayon si geo */}
+              {/* Rayon si géoloc active */}
               {userGeo && (
                 <div className="lg:col-span-4">
                   <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
@@ -492,7 +505,7 @@ const SearchSection: React.FC = () => {
             </div>
           </div>
 
-          {/* View modes */}
+          {/* Modes d’affichage */}
           <div className="flex items-center gap-2 sm:gap-3">
             <span className="text-[10px] sm:text-[11px] text-gray-500 uppercase tracking-wide">
               {text.viewMode}
@@ -526,7 +539,7 @@ const SearchSection: React.FC = () => {
           </div>
         </div>
 
-        {/* Layout */}
+        {/* Layout global */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8 items-start">
           {/* Sidebar */}
           <aside className="lg:col-span-1 bg-gray-50 rounded-xl p-4 sm:p-5 border border-gray-200">
@@ -547,7 +560,7 @@ const SearchSection: React.FC = () => {
               />
             </div>
 
-            {/* Métier */}
+            {/* Métier (liste complète si besoin) */}
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.job}
@@ -585,10 +598,10 @@ const SearchSection: React.FC = () => {
               </select>
             </div>
 
-            {/* Rayon geo */}
+            {/* Rayon géoloc */}
             {userGeo && (
               <div className="mb-6">
-                <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
+                <div className="flex items-center justify_between text-xs font-medium text-gray-600 mb-1">
                   <span>{text.geoRadiusLabel}</span>
                   <span className="text-[11px] text-gray-500">
                     {radiusKm} {text.km}
