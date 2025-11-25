@@ -150,7 +150,7 @@ const HeroSection = () => {
   };
 
   // -------------------------
-  // Lancer la recherche -> synchroniser avec SearchSection via URL
+  // Lancer la recherche -> synchroniser avec WorkerSearchSection via URL
   // -------------------------
   const handleSearch = () => {
     const job = searchTerm.trim();
@@ -158,14 +158,14 @@ const HeroSection = () => {
 
     const params: Record<string, string> = {};
 
-    // Champ "Métier / service"
+    // Champ "Métier / service" -> keyword (recherche partielle)
     if (job) {
-      params.service = job;
+      params.keyword = job;
     }
 
-    // Champ "Quartier"
+    // Champ "Quartier" -> district
     if (qDistrict) {
-      params.quartier = qDistrict;
+      params.district = qDistrict;
     }
 
     // Géoloc (optionnel)
@@ -174,7 +174,7 @@ const HeroSection = () => {
       params.lng = String(geo.lng);
     }
 
-    // Met à jour les paramètres URL pour déclencher la recherche dans SearchSection
+    // Met à jour les paramètres URL pour déclencher la recherche
     setSearchParams(params, { replace: false });
 
     // Scroll vers les résultats
