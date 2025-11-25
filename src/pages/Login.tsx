@@ -1,6 +1,6 @@
 // src/pages/Login.tsx
 import React, { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,8 +61,7 @@ const Login: React.FC = () => {
 
       const role = profile.role as "admin" | "worker";
 
-      // Si on venait d’une route protégée, tu peux décider de respecter "from"
-      // MAIS on suit ta demande : redirection automatique par rôle.
+      // Redirection selon le rôle
       if (role === "admin") {
         navigate("/admin/dashboard", { replace: true });
       } else if (role === "worker") {
@@ -146,7 +145,22 @@ const Login: React.FC = () => {
                 : "Sign in"}
             </Button>
 
-            <p className="mt-2 text-xs text-slate-500">
+            {/* Lien création de compte */}
+            <p className="mt-3 text-xs text-center text-slate-600">
+              {language === "fr"
+                ? "Vous n'avez pas encore de compte ? "
+                : "Don't have an account yet? "}
+              <Link
+                to="/register"
+                className="font-medium text-pro-blue hover:underline"
+              >
+                {language === "fr"
+                  ? "Créer un compte"
+                  : "Create an account"}
+              </Link>
+            </p>
+
+            <p className="mt-3 text-xs text-slate-500">
               {language === "fr"
                 ? "Les administrateurs seront redirigés vers le back-office, les ouvriers vers leur espace personnel."
                 : "Admins will be redirected to the back-office, workers to their personal dashboard."}
