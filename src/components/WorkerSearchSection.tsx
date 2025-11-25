@@ -45,22 +45,26 @@ interface WorkerCard {
 const WorkerSearchSection: React.FC = () => {
   const { language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [initializedFromUrl, setInitializedFromUrl] = useState(false);
 
   // Données
   const [workers, setWorkers] = useState<WorkerCard[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Lire les filtres directement depuis l'URL (source unique de vérité)
-  const keyword = searchParams.get("keyword") || "";
-  const selectedJob = searchParams.get("job") || "all";
-  const selectedRegion = searchParams.get("region") || "";
-  const selectedCity = searchParams.get("city") || "";
-  const selectedCommune = searchParams.get("commune") || "";
-  const selectedDistrict = searchParams.get("district") || "";
-  const maxPrice = Number(searchParams.get("maxPrice") || "300000");
-  const minRating = Number(searchParams.get("minRating") || "0");
-  const viewMode = (searchParams.get("view") as "list" | "grid") || "list";
+  // Filtres (identiques à SearchSection)
+  const [keyword, setKeyword] = useState("");
+  const [selectedJob, setSelectedJob] = useState<string>("all");
+  const [maxPrice, setMaxPrice] = useState<number>(300000);
+  const [minRating, setMinRating] = useState<number>(0);
+
+  const [selectedRegion, setSelectedRegion] = useState<string>("");
+  const [selectedCity, setSelectedCity] = useState<string>("");
+  const [selectedCommune, setSelectedCommune] = useState<string>("");
+  const [selectedDistrict, setSelectedDistrict] = useState<string>("");
+
+  // Vue liste / mosaïque
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
   // 1) Chargement Supabase
   useEffect(() => {
@@ -128,20 +132,71 @@ const WorkerSearchSection: React.FC = () => {
     fetchWorkers();
   }, [language]);
 
-  // Fonctions pour modifier les filtres (mettent à jour l'URL)
-  const updateFilter = (key: string, value: string | number) => {
-    const params = new URLSearchParams(searchParams);
-    
-    if (!value || value === "all" || value === "" || 
-        (key === "maxPrice" && value === 300000) || 
-        (key === "minRating" && value === 0)) {
-      params.delete(key);
-    } else {
-      params.set(key, String(value));
+  // 2) Sync filtres depuis URL (à chaque changement d'URL)
+  useEffect(() => {
+    const spKeyword = searchParams.get("keyword") ?? "";
+    const spJob = searchParams.get("job") ?? "all";
+    const spRegion = searchParams.get("region") ?? "";
+    const spCity = searchParams.get("city") ?? "";
+    const spCommune = searchParams.get("commune") ?? "";
+    const spDistrict = searchParams.get("district") ?? "";
+    const spMaxPrice = Number(searchParams.get("maxPrice") ?? "300000");
+    const spMinRating = Number(searchParams.get("minRating") ?? "0");
+    const spView = (searchParams.get("view") as "list" | "grid") ?? "list";
+
+    console.log("📥 [WorkerSearchSection] Sync depuis URL:", { 
+      spKeyword, 
+      spJob, 
+      spDistrict,
+      spRegion,
+      spCity,
+      spCommune
+    });
+
+    setKeyword(spKeyword);
+    setSelectedJob(spJob);
+    setSelectedRegion(spRegion);
+    setSelectedCity(spCity);
+    setSelectedCommune(spCommune);
+    setSelectedDistrict(spDistrict);
+    setMaxPrice(Number.isFinite(spMaxPrice) ? spMaxPrice : 300000);
+    setMinRating(Number.isFinite(spMinRating) ? spMinRating : 0);
+    setViewMode(spView);
+
+    if (!initializedFromUrl) {
+      setInitializedFromUrl(true);
     }
-    
-    setSearchParams(params, { replace: true });
-  };
+  }, [searchParams, initializedFromUrl]);
+
+  // 3) Sync filtres -> URL
+  useEffect(() => {
+    if (!initializedFromUrl) return;
+
+    const next: Record<string, string> = {};
+    if (keyword.trim()) next.keyword = keyword.trim();
+    if (selectedJob !== "all") next.job = selectedJob;
+    if (selectedRegion) next.region = selectedRegion;
+    if (selectedCity) next.city = selectedCity;
+    if (selectedCommune) next.commune = selectedCommune;
+    if (selectedDistrict) next.district = selectedDistrict;
+    if (maxPrice !== 300000) next.maxPrice = String(maxPrice);
+    if (minRating !== 0) next.minRating = String(minRating);
+    if (viewMode !== "list") next.view = viewMode;
+
+    setSearchParams(next, { replace: true });
+  }, [
+    initializedFromUrl,
+    keyword,
+    selectedJob,
+    selectedRegion,
+    selectedCity,
+    selectedCommune,
+    selectedDistrict,
+    maxPrice,
+    minRating,
+    viewMode,
+    setSearchParams,
+  ]);
 
   // Listes de filtres dynamiques
   const jobs = useMemo(
@@ -253,6 +308,12 @@ const WorkerSearchSection: React.FC = () => {
         return result;
       });
 
+      console.log("🔍 [WorkerSearchSection] Filtrage:", {
+        total: workers.length,
+        filtered: filtered.length,
+        filters: { keyword, selectedJob, selectedDistrict, selectedRegion, selectedCity, selectedCommune }
+      });
+
       return filtered;
     },
     [
@@ -269,7 +330,15 @@ const WorkerSearchSection: React.FC = () => {
   );
 
   const resetFilters = () => {
-    setSearchParams({}, { replace: true });
+    setKeyword("");
+    setSelectedJob("all");
+    setMaxPrice(300000);
+    setMinRating(0);
+    setSelectedRegion("");
+    setSelectedCity("");
+    setSelectedCommune("");
+    setSelectedDistrict("");
+    setViewMode("list");
   };
 
   const formatCurrency = (value: number, currency: string) => {
@@ -365,7 +434,7 @@ const WorkerSearchSection: React.FC = () => {
             <div className="flex border border-gray-300 rounded-lg bg-white overflow-hidden">
               <button
                 type="button"
-                onClick={() => updateFilter("view", "list")}
+                onClick={() => setViewMode("list")}
                 className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
                   viewMode === "list"
                     ? "bg-pro-blue text-white"
@@ -377,7 +446,7 @@ const WorkerSearchSection: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => updateFilter("view", "grid")}
+                onClick={() => setViewMode("grid")}
                 className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
                   viewMode === "grid"
                     ? "bg-pro-blue text-white"
@@ -406,7 +475,7 @@ const WorkerSearchSection: React.FC = () => {
               </label>
               <Input
                 value={keyword}
-                onChange={(e) => updateFilter("keyword", e.target.value)}
+                onChange={(e) => setKeyword(e.target.value)}
                 placeholder={text.searchPlaceholder}
                 className="text-sm"
               />
@@ -419,7 +488,7 @@ const WorkerSearchSection: React.FC = () => {
               </label>
               <select
                 value={selectedJob}
-                onChange={(e) => updateFilter("job", e.target.value)}
+                onChange={(e) => setSelectedJob(e.target.value)}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="all">{text.allJobs}</option>
@@ -439,16 +508,10 @@ const WorkerSearchSection: React.FC = () => {
               <select
                 value={selectedRegion}
                 onChange={(e) => {
-                  const params = new URLSearchParams(searchParams);
-                  if (e.target.value) {
-                    params.set("region", e.target.value);
-                  } else {
-                    params.delete("region");
-                  }
-                  params.delete("city");
-                  params.delete("commune");
-                  params.delete("district");
-                  setSearchParams(params, { replace: true });
+                  setSelectedRegion(e.target.value);
+                  setSelectedCity("");
+                  setSelectedCommune("");
+                  setSelectedDistrict("");
                 }}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
@@ -469,15 +532,9 @@ const WorkerSearchSection: React.FC = () => {
               <select
                 value={selectedCity}
                 onChange={(e) => {
-                  const params = new URLSearchParams(searchParams);
-                  if (e.target.value) {
-                    params.set("city", e.target.value);
-                  } else {
-                    params.delete("city");
-                  }
-                  params.delete("commune");
-                  params.delete("district");
-                  setSearchParams(params, { replace: true });
+                  setSelectedCity(e.target.value);
+                  setSelectedCommune("");
+                  setSelectedDistrict("");
                 }}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
@@ -498,14 +555,8 @@ const WorkerSearchSection: React.FC = () => {
               <select
                 value={selectedCommune}
                 onChange={(e) => {
-                  const params = new URLSearchParams(searchParams);
-                  if (e.target.value) {
-                    params.set("commune", e.target.value);
-                  } else {
-                    params.delete("commune");
-                  }
-                  params.delete("district");
-                  setSearchParams(params, { replace: true });
+                  setSelectedCommune(e.target.value);
+                  setSelectedDistrict("");
                 }}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
@@ -525,7 +576,7 @@ const WorkerSearchSection: React.FC = () => {
               </label>
               <select
                 value={selectedDistrict}
-                onChange={(e) => updateFilter("district", e.target.value)}
+                onChange={(e) => setSelectedDistrict(e.target.value)}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="">{text.allDistricts}</option>
@@ -554,7 +605,7 @@ const WorkerSearchSection: React.FC = () => {
                 min={50000}
                 max={300000}
                 step={10000}
-                onValueChange={(v) => updateFilter("maxPrice", v[0])}
+                onValueChange={(v) => setMaxPrice(v[0])}
               />
             </div>
 
@@ -571,7 +622,7 @@ const WorkerSearchSection: React.FC = () => {
                 min={0}
                 max={5}
                 step={0.5}
-                onValueChange={(v) => updateFilter("minRating", v[0])}
+                onValueChange={(v) => setMinRating(v[0])}
               />
             </div>
 
