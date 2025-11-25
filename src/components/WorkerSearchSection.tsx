@@ -132,10 +132,8 @@ const WorkerSearchSection: React.FC = () => {
     fetchWorkers();
   }, [language]);
 
-  // 2) Init filtres depuis URL (1 seule fois)
+  // 2) Sync filtres depuis URL (à chaque changement d'URL)
   useEffect(() => {
-    if (initializedFromUrl) return;
-
     const spKeyword = searchParams.get("keyword") ?? "";
     const spJob = searchParams.get("job") ?? "all";
     const spRegion = searchParams.get("region") ?? "";
@@ -145,6 +143,15 @@ const WorkerSearchSection: React.FC = () => {
     const spMaxPrice = Number(searchParams.get("maxPrice") ?? "300000");
     const spMinRating = Number(searchParams.get("minRating") ?? "0");
     const spView = (searchParams.get("view") as "list" | "grid") ?? "list";
+
+    console.log("📥 [WorkerSearchSection] Sync depuis URL:", { 
+      spKeyword, 
+      spJob, 
+      spDistrict,
+      spRegion,
+      spCity,
+      spCommune
+    });
 
     setKeyword(spKeyword);
     setSelectedJob(spJob);
@@ -156,8 +163,9 @@ const WorkerSearchSection: React.FC = () => {
     setMinRating(Number.isFinite(spMinRating) ? spMinRating : 0);
     setViewMode(spView);
 
-    setInitializedFromUrl(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!initializedFromUrl) {
+      setInitializedFromUrl(true);
+    }
   }, [searchParams, initializedFromUrl]);
 
   // 3) Sync filtres -> URL
@@ -265,8 +273,8 @@ const WorkerSearchSection: React.FC = () => {
 
   // Application des filtres
   const filteredWorkers = useMemo(
-    () =>
-      workers.filter((w) => {
+    () => {
+      const filtered = workers.filter((w) => {
         const matchKeyword =
           !keyword ||
           w.name.toLowerCase().includes(keyword.toLowerCase()) ||
@@ -276,14 +284,17 @@ const WorkerSearchSection: React.FC = () => {
         const matchPrice = w.hourlyRate <= maxPrice;
         const matchRating = w.rating >= minRating;
 
-        const matchRegion = !selectedRegion || w.region === selectedRegion;
-        const matchCity = !selectedCity || w.city === selectedCity;
-        const matchCommune =
-          !selectedCommune || w.commune === selectedCommune;
-        const matchDistrict =
-          !selectedDistrict || w.district === selectedDistrict;
+        // Comparaisons case-insensitive avec trim
+        const matchRegion = !selectedRegion || 
+          w.region.trim().toLowerCase() === selectedRegion.trim().toLowerCase();
+        const matchCity = !selectedCity || 
+          w.city.trim().toLowerCase() === selectedCity.trim().toLowerCase();
+        const matchCommune = !selectedCommune || 
+          w.commune.trim().toLowerCase() === selectedCommune.trim().toLowerCase();
+        const matchDistrict = !selectedDistrict || 
+          w.district.trim().toLowerCase() === selectedDistrict.trim().toLowerCase();
 
-        return (
+        const result = (
           matchKeyword &&
           matchJob &&
           matchPrice &&
@@ -293,7 +304,18 @@ const WorkerSearchSection: React.FC = () => {
           matchCommune &&
           matchDistrict
         );
-      }),
+
+        return result;
+      });
+
+      console.log("🔍 [WorkerSearchSection] Filtrage:", {
+        total: workers.length,
+        filtered: filtered.length,
+        filters: { keyword, selectedJob, selectedDistrict, selectedRegion, selectedCity, selectedCommune }
+      });
+
+      return filtered;
+    },
     [
       workers,
       keyword,
