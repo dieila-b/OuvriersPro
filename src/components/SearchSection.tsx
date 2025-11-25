@@ -50,10 +50,17 @@ const SearchSection: React.FC = () => {
 
   // Charger les données quand l'URL change
   useEffect(() => {
-    const service = (searchParams.get("service") ?? searchParams.get("keyword") ?? "").trim();
-    const district = (searchParams.get("quartier") ?? searchParams.get("district") ?? "").trim();
+    const service = searchParams.get("service") ?? searchParams.get("keyword") ?? "";
+    const district = searchParams.get("quartier") ?? searchParams.get("district") ?? "";
     
-    console.log("🔎 Déclenchement recherche avec:", { service, district });
+    console.log("🔎 [SearchSection] useEffect détecté changement searchParams");
+    console.log("🔎 [SearchSection] Paramètres extraits:", { 
+      service, 
+      district,
+      serviceTrimmed: service.trim(),
+      districtTrimmed: district.trim()
+    });
+    
     search(service, district, language);
   }, [language, searchParams, search]);
 
