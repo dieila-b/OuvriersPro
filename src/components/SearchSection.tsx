@@ -29,7 +29,6 @@ const SearchSection: React.FC = () => {
 
   // ✅ Filtres UI
   const [keyword, setKeyword] = useState<string>(urlService);
-  const [selectedJob, setSelectedJob] = useState<string>("all");
   const [selectedDistrict, setSelectedDistrict] = useState<string>(urlDistrict);
   const [maxPrice, setMaxPrice] = useState<number>(300000);
   const [minRating, setMinRating] = useState<number>(0);
@@ -79,17 +78,7 @@ const SearchSection: React.FC = () => {
     }, 100);
   };
 
-  // Options métiers / quartiers
-  const jobs = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          workers.map((w) => w.job).filter((j) => j && j.trim().length > 0)
-        )
-      ),
-    [workers]
-  );
-
+  // Options quartiers (pour le dropdown)
   const districts = useMemo(
     () =>
       Array.from(
@@ -102,28 +91,22 @@ const SearchSection: React.FC = () => {
     [workers]
   );
 
-  // Filtrage côté front (prix, note, etc.)
+  // ✅ Filtrage côté client UNIQUEMENT pour prix et note
+  // (profession et district sont déjà filtrés par Supabase)
   const filteredWorkers = useMemo(() => {
-    const base = workers.filter((w) => {
-      const jobNorm = (w.job || "").toLowerCase();
-      const matchJob =
-        selectedJob === "all" || jobNorm === selectedJob.toLowerCase();
+    return workers.filter((w) => {
       const matchPrice = w.hourlyRate <= maxPrice;
       const matchRating = w.rating >= minRating;
-      return matchJob && matchPrice && matchRating;
+      return matchPrice && matchRating;
     });
-    return base;
-  }, [workers, selectedJob, maxPrice, minRating]);
+  }, [workers, maxPrice, minRating]);
 
   const resetFilters = () => {
     setKeyword("");
-    setSelectedJob("all");
     setSelectedDistrict("");
     setMaxPrice(300000);
     setMinRating(0);
-    setViewMode("list");
-    setUserGeo(null);
-    setRadiusKm(10);
+    setSearchParams({}, { replace: false });
   };
 
   const formatCurrency = (value: number, currency: string) => {
@@ -308,7 +291,7 @@ const SearchSection: React.FC = () => {
               {text.filters}
             </h3>
 
-            {/* Mot clé */}
+            {/* Mot clé / Métier */}
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.keywordLabel}
@@ -319,25 +302,6 @@ const SearchSection: React.FC = () => {
                 placeholder={text.searchPlaceholder}
                 className="text-sm"
               />
-            </div>
-
-            {/* Métier */}
-            <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {text.job}
-              </label>
-              <select
-                value={selectedJob}
-                onChange={(e) => setSelectedJob(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
-              >
-                <option value="all">{text.allJobs}</option>
-                {jobs.map((job) => (
-                  <option key={job} value={job}>
-                    {job}
-                  </option>
-                ))}
-              </select>
             </div>
 
             {/* Quartier */}
