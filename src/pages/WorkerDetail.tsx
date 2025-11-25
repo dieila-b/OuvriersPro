@@ -241,14 +241,12 @@ const WorkerDetail: React.FC = () => {
       language === "fr" ? "Coordonnées directes" : "Direct contact",
     phoneLabel: language === "fr" ? "Téléphone" : "Phone",
     emailLabel: language === "fr" ? "Email" : "Email",
-    whatsappLabel:
-      language === "fr" ? "WhatsApp" : "WhatsApp",
+    whatsappLabel: language === "fr" ? "WhatsApp" : "WhatsApp",
     quickActions:
       language === "fr" ? "Actions rapides" : "Quick actions",
     callBtn: language === "fr" ? "Appeler" : "Call",
     whatsappBtn: language === "fr" ? "WhatsApp" : "WhatsApp",
-    emailBtn:
-      language === "fr" ? "Email" : "Email",
+    emailBtn: language === "fr" ? "Email" : "Email",
     devisBtn:
       language === "fr" ? "Demander un devis" : "Request quote",
     requestTypeLabel:
@@ -276,14 +274,18 @@ const WorkerDetail: React.FC = () => {
         ? "Vos données sont uniquement transmises à ce professionnel."
         : "Your data is only shared with this professional.",
     loginRequiredTitle:
-      language === "fr"
-        ? "Connexion requise"
-        : "Login required",
+      language === "fr" ? "Connexion requise" : "Login required",
     loginRequiredDesc:
       language === "fr"
         ? "Vous devez être connecté pour voir les détails et contacter les ouvriers."
         : "You must be logged in to view details and contact workers.",
     loginBtn: language === "fr" ? "Se connecter" : "Log in",
+    registerBtn:
+      language === "fr" ? "Créer un compte" : "Create an account",
+    noAccountYet:
+      language === "fr"
+        ? "Vous n'avez pas encore de compte ?"
+        : "Don't have an account yet?",
     about: language === "fr" ? "À propos" : "About",
     reviewsTitle: language === "fr" ? "Avis clients" : "Customer reviews",
     noReviews: language === "fr" ? "Aucun avis pour le moment" : "No reviews yet",
@@ -300,7 +302,7 @@ const WorkerDetail: React.FC = () => {
   ) => {
     const target = e.target as HTMLInputElement;
     const { name, value, type } = target;
-    
+
     if (type === "checkbox") {
       const checked = (target as HTMLInputElement).checked;
       setForm((prev) => ({ ...prev, [name]: checked }));
@@ -382,6 +384,8 @@ const WorkerDetail: React.FC = () => {
 
   // Pas authentifié
   if (authChecked && !isAuthenticated) {
+    const redirect = encodeURIComponent(window.location.pathname);
+
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
         <Card className="max-w-md w-full p-6 text-center">
@@ -393,20 +397,29 @@ const WorkerDetail: React.FC = () => {
           <h1 className="text-xl font-semibold mb-2">
             {text.loginRequiredTitle}
           </h1>
-          <p className="text-sm text-muted-foreground mb-6">
+          <p className="text-sm text-muted-foreground mb-4">
             {text.loginRequiredDesc}
           </p>
+          <p className="text-xs text-muted-foreground mb-6">
+            {text.noAccountYet}
+          </p>
+
           <div className="flex flex-col gap-2">
             <Button
               className="w-full"
-              onClick={() =>
-                navigate(`/login?redirect=${encodeURIComponent(window.location.pathname)}`)
-              }
+              onClick={() => navigate(`/login?redirect=${redirect}`)}
             >
               {text.loginBtn}
             </Button>
             <Button
               variant="outline"
+              className="w-full"
+              onClick={() => navigate(`/register?redirect=${redirect}`)}
+            >
+              {text.registerBtn}
+            </Button>
+            <Button
+              variant="ghost"
               className="w-full"
               onClick={() => navigate(-1)}
             >
@@ -578,7 +591,7 @@ const WorkerDetail: React.FC = () => {
                 <Award className="w-5 h-5 text-primary" />
                 {text.reviewsTitle}
               </h2>
-              
+
               {reviews.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">
                   {text.noReviews}
@@ -616,7 +629,11 @@ const WorkerDetail: React.FC = () => {
                         <p className="text-xs text-muted-foreground mt-2">
                           {new Date(review.created_at).toLocaleDateString(
                             language === "fr" ? "fr-FR" : "en-US",
-                            { year: "numeric", month: "long", day: "numeric" }
+                            {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            }
                           )}
                         </p>
                       )}
@@ -632,7 +649,7 @@ const WorkerDetail: React.FC = () => {
             {/* Coordonnées directes */}
             <Card className="p-6">
               <h3 className="font-semibold mb-4">{text.contactInfos}</h3>
-              
+
               <div className="space-y-3 mb-4">
                 {worker.phone && (
                   <div className="flex items-center gap-3 text-sm">
