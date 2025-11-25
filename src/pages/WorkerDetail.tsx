@@ -16,6 +16,7 @@ import {
   FileText,
   Send,
   Info,
+  Lock,
 } from "lucide-react";
 
 type DbWorker = {
@@ -54,10 +55,16 @@ const WorkerDetail: React.FC = () => {
   const navigate = useNavigate();
   const { language } = useLanguage();
 
+  // 🔐 Auth
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // 👷 Données ouvrier
   const [worker, setWorker] = useState<DbWorker | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // 📨 Formulaire
   const [form, setForm] = useState<ContactForm>({
     name: "",
     email: "",
@@ -72,11 +79,41 @@ const WorkerDetail: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // 🔹 Chargement de l'ouvrier
+  // -------------------------
+  // 🔐 Vérifier que l’utilisateur est connecté
+  // -------------------------
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        if (data?.user) {
+          setIsAuthenticated(true);
+        } else {
+          setIsAuthenticated(false);
+        }
+      } catch (e) {
+        console.error("Auth check error:", e);
+        setIsAuthenticated(false);
+      } finally {
+        setAuthChecked(true);
+      }
+    };
+
+    checkAuth();
+  }, []);
+
+  // -------------------------
+  // 👷 Charger l’ouvrier (uniquement si connecté)
+  // -------------------------
   useEffect(() => {
     const fetchWorker = async () => {
       if (!id) {
         setError("missing-id");
+        setLoading(false);
+        return;
+      }
+      if (!isAuthenticated) {
+        // on ne charge rien si non connecté
         setLoading(false);
         return;
       }
@@ -121,8 +158,11 @@ const WorkerDetail: React.FC = () => {
       setLoading(false);
     };
 
-    fetchWorker();
-  }, [id]);
+    // on ne lance le fetch que si l’auth a été vérifiée
+    if (authChecked && isAuthenticated) {
+      fetchWorker();
+    }
+  }, [id, authChecked, isAuthenticated]);
 
   const formatCurrency = (
     value: number | null | undefined,
@@ -166,7 +206,6 @@ const WorkerDetail: React.FC = () => {
       language === "fr" ? "ans d'expérience" : "years of experience",
     rating: language === "fr" ? "Note moyenne" : "Average rating",
     perHour: language === "fr" ? "/h" : "/h",
-    // Nouveau texte pour le formulaire enrichi
     contactInfos:
       language === "fr" ? "Coordonnées directes" : "Direct contact details",
     phoneLabel: language === "fr" ? "Téléphone" : "Phone",
@@ -205,6 +244,16 @@ const WorkerDetail: React.FC = () => {
       language === "fr"
         ? "Vos coordonnées sont transmises uniquement à cet ouvrier pour la gestion de votre demande."
         : "Your contact details are shared only with this worker to handle your request.",
+    // Textes auth
+    loginRequiredTitle:
+      language === "fr"
+        ? "Connexion requise"
+        : "Login required",
+    loginRequiredDesc:
+      language === "fr"
+        ? "Vous devez être connecté pour voir la fiche détaillée des ouvriers et les contacter."
+        : "You must be logged in to view worker details and contact them.",
+    loginBtn: language === "fr" ? "Se connecter" : "Log in",
   };
 
   const handleChange = (
@@ -224,7 +273,7 @@ const WorkerDetail: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!worker) return;
-    if (!form.consent) return; // sécurité : on ne soumet pas sans consentement
+    if (!form.consent) return;
 
     setSending(true);
     setSuccessMsg(null);
@@ -234,7 +283,6 @@ const WorkerDetail: React.FC = () => {
       worker.last_name ?? ""
     }`.trim();
 
-    // On enrichit le message avec les infos structurées
     const composedMessage = [
       `${text.requestTypeLabel} : ${
         form.requestType === "devis"
@@ -259,7 +307,7 @@ const WorkerDetail: React.FC = () => {
       phone: form.phone,
       message: composedMessage,
       status: "new",
-      origin: "web", // ✅ toutes les demandes venant du site seront marquées "web"
+      origin: "web",
     });
 
     if (error) {
@@ -282,6 +330,60 @@ const WorkerDetail: React.FC = () => {
     setSending(false);
   };
 
+  // -------------------------
+  // Rendus conditionnels
+  // -------------------------
+
+  // Auth pas encore vérifiée
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-sm text-slate-500">
+          {language === "fr" ? "Vérification de la session..." : "Checking session..."}
+        </div>
+      </div>
+    );
+  }
+
+  // Pas authentifié → écran "Connexion requise"
+  if (authChecked && !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-xl shadow-sm p-6 text-center">
+          <div className="flex items-center justify-center mb-3">
+            <div className="w-10 h-10 rounded-full bg-pro-blue/10 flex items-center justify-center">
+              <Lock className="w-5 h-5 text-pro-blue" />
+            </div>
+          </div>
+          <h1 className="text-lg font-semibold text-slate-900 mb-2">
+            {text.loginRequiredTitle}
+          </h1>
+          <p className="text-sm text-slate-600 mb-5">
+            {text.loginRequiredDesc}
+          </p>
+          <div className="flex flex-col gap-2">
+            <Button
+              className="w-full bg-pro-blue hover:bg-blue-700"
+              onClick={() =>
+                navigate(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`)
+              }
+            >
+              {text.loginBtn}
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full text-sm"
+              onClick={() => navigate(-1)}
+            >
+              {text.back}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Chargement des données de l’ouvrier
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -292,6 +394,7 @@ const WorkerDetail: React.FC = () => {
     );
   }
 
+  // Erreur / pas d’ouvrier
   if (!worker || error) {
     return (
       <div className="min-h-screen bg-slate-50">
