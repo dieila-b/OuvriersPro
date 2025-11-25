@@ -78,7 +78,7 @@ const haversineKm = (a: GeoPoint, b: GeoPoint) => {
 
 const SearchSection: React.FC = () => {
   const { language } = useLanguage();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // On lit une fois les paramètres de l’URL
   const urlService =
@@ -426,8 +426,18 @@ const SearchSection: React.FC = () => {
                 type="button"
                 className="lg:col-span-4 w-full bg-pro-blue hover:bg-blue-700"
                 onClick={() => {
-                  const el = document.getElementById("results");
-                  el?.scrollIntoView({ behavior: "smooth" });
+                  // Mettre à jour les paramètres de l'URL pour déclencher une nouvelle recherche
+                  const params: Record<string, string> = {};
+                  if (keyword.trim()) params.service = keyword.trim();
+                  if (selectedDistrict) params.quartier = selectedDistrict;
+                  
+                  setSearchParams(params, { replace: false });
+                  
+                  // Scroll vers les résultats après mise à jour
+                  setTimeout(() => {
+                    const el = document.getElementById("results");
+                    el?.scrollIntoView({ behavior: "smooth" });
+                  }, 100);
                 }}
               >
                 {text.topSearchBtn}
