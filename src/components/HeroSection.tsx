@@ -19,7 +19,7 @@ const HeroSection = () => {
 
   // ---- valeurs saisies
   const [searchTerm, setSearchTerm] = useState(""); // Métier
-  const [district, setDistrict] = useState(""); // Quartier (texte)
+  const [district, setDistrict] = useState("");     // Quartier (texte)
   const [geo, setGeo] = useState<{ lat: number; lng: number } | null>(null);
 
   // ---- listes globales (provenant des workers approuvés)
@@ -45,7 +45,7 @@ const HeroSection = () => {
     const loadOptions = async () => {
       setLoadingOptions(true);
       const { data, error } = await supabase
-        .from("op_ouvriers")
+        .from<DbWorkerLite>("op_ouvriers")
         .select("profession, district, status")
         .eq("status", "approved");
 
@@ -90,9 +90,7 @@ const HeroSection = () => {
   const filteredDistricts = useMemo(() => {
     const q = district.trim().toLowerCase();
     if (q.length < 3) return [];
-    return districtOptions
-      .filter((d) => d.toLowerCase().includes(q))
-      .slice(0, 8);
+    return districtOptions.filter((d) => d.toLowerCase().includes(q)).slice(0, 8);
   }, [district, districtOptions]);
 
   // -------------------------
@@ -157,35 +155,33 @@ const HeroSection = () => {
   };
 
   // -------------------------
-  // Rechercher (update URL + scroll résultats)
+  // Lancer la recherche -> synchroniser avec SearchSection via URL
   // -------------------------
   const handleSearch = () => {
     const params = new URLSearchParams();
 
-    if (searchTerm.trim()) params.set("service", searchTerm.trim());
-    if (district.trim()) params.set("quartier", district.trim());
+    const job = searchTerm.trim();
+    const qDistrict = district.trim();
 
-    // ✅ Si géoloc utilisée, on passe lat/lng aussi
+    // Champ "Métier / service" : on alimente service + job
+    if (job) {
+      params.set("service", job);
+      params.set("job", job);
+    }
+
+    // Champ "Quartier"
+    if (qDistrict) {
+      params.set("quartier", qDistrict);
+    }
+
+    // Géoloc (optionnel)
     if (geo) {
       params.set("lat", String(geo.lat));
       params.set("lng", String(geo.lng));
     }
 
-    setOpenJobs(false);
-    setOpenDistricts(false);
-
-    // 1) Met à jour l'URL (SearchSection réagit dessus)
-    navigate({ pathname: "/", search: params.toString() }, { replace: false });
-
-    // 2) Scroll vers résultats après la mise à jour
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const target =
-          document.getElementById("results") ||
-          document.getElementById("search");
-        target?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    });
+    // Redirige vers la section de recherche (SearchSection lit ces query params)
+    navigate(`/?${params.toString()}#search`);
   };
 
   return (
@@ -203,6 +199,7 @@ const HeroSection = () => {
           {/* Search Form (Métier + Quartier avec suggestions + géoloc) */}
           <div className="bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl max-w-3xl mx-auto">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 md:gap-4">
+
               {/* ---- Métier combobox */}
               <div ref={jobsBoxRef} className="relative text-left">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -264,40 +261,35 @@ const HeroSection = () => {
                   onClick={handleGeoLocate}
                   className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-gray-200 px-2 py-1 text-gray-600 hover:bg-gray-50"
                   aria-label="Utiliser ma position"
-                  title={
-                    language === "fr" ? "Utiliser ma position" : "Use my location"
-                  }
+                  title={language === "fr" ? "Utiliser ma position" : "Use my location"}
                 >
-                  <LocateFixed
-                    className={`w-4 h-4 ${geoLoading ? "animate-pulse" : ""}`}
-                  />
+                  <LocateFixed className={`w-4 h-4 ${geoLoading ? "animate-pulse" : ""}`} />
                 </button>
 
-                {openDistricts &&
-                  (filteredDistricts.length > 0 || loadingOptions) && (
-                    <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-                      {loadingOptions && (
-                        <div className="px-3 py-2 text-xs text-gray-500">
-                          Chargement...
-                        </div>
-                      )}
-                      {!loadingOptions &&
-                        filteredDistricts.map((d) => (
-                          <button
-                            key={d}
-                            type="button"
-                            onClick={() => {
-                              setDistrict(d);
-                              setGeo(null);
-                              setOpenDistricts(false);
-                            }}
-                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                          >
-                            {d}
-                          </button>
-                        ))}
-                    </div>
-                  )}
+                {openDistricts && (filteredDistricts.length > 0 || loadingOptions) && (
+                  <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                    {loadingOptions && (
+                      <div className="px-3 py-2 text-xs text-gray-500">
+                        Chargement...
+                      </div>
+                    )}
+                    {!loadingOptions &&
+                      filteredDistricts.map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => {
+                            setDistrict(d);
+                            setGeo(null);
+                            setOpenDistricts(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          {d}
+                        </button>
+                      ))}
+                  </div>
+                )}
               </div>
 
               {/* message erreur géoloc si besoin */}
