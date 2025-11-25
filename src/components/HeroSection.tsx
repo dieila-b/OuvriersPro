@@ -4,18 +4,13 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, MapPin, ChevronDown, LocateFixed } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
-
-type DbWorkerLite = {
-  profession: string | null;
-  district: string | null;
-  status: string | null;
-};
 
 const HeroSection = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
+  const [, setSearchParams] = useSearchParams();
 
   // ---- valeurs saisies
   const [searchTerm, setSearchTerm] = useState(""); // Métier
@@ -45,7 +40,7 @@ const HeroSection = () => {
     const loadOptions = async () => {
       setLoadingOptions(true);
       const { data, error } = await supabase
-        .from<DbWorkerLite>("op_ouvriers")
+        .from("op_ouvriers")
         .select("profession, district, status")
         .eq("status", "approved");
 
@@ -158,30 +153,34 @@ const HeroSection = () => {
   // Lancer la recherche -> synchroniser avec SearchSection via URL
   // -------------------------
   const handleSearch = () => {
-    const params = new URLSearchParams();
-
     const job = searchTerm.trim();
     const qDistrict = district.trim();
 
-    // Champ "Métier / service" : on alimente service + job
+    const params: Record<string, string> = {};
+
+    // Champ "Métier / service"
     if (job) {
-      params.set("service", job);
-      params.set("job", job);
+      params.service = job;
     }
 
     // Champ "Quartier"
     if (qDistrict) {
-      params.set("quartier", qDistrict);
+      params.quartier = qDistrict;
     }
 
     // Géoloc (optionnel)
     if (geo) {
-      params.set("lat", String(geo.lat));
-      params.set("lng", String(geo.lng));
+      params.lat = String(geo.lat);
+      params.lng = String(geo.lng);
     }
 
-    // Redirige vers la section de recherche (SearchSection lit ces query params)
-    navigate(`/?${params.toString()}#search`);
+    // Met à jour les paramètres URL pour déclencher la recherche dans SearchSection
+    setSearchParams(params, { replace: false });
+
+    // Scroll vers les résultats
+    setTimeout(() => {
+      document.getElementById("search")?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
   };
 
   return (
