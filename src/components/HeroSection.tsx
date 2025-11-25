@@ -10,29 +10,12 @@ import { supabase } from "@/lib/supabase";
 const HeroSection = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [, setSearchParams] = useSearchParams();
 
   // ---- valeurs saisies
   const [searchTerm, setSearchTerm] = useState(""); // Métier
   const [district, setDistrict] = useState("");     // Quartier (texte)
   const [geo, setGeo] = useState<{ lat: number; lng: number } | null>(null);
-
-  // ---- Synchroniser les champs avec les URL params
-  useEffect(() => {
-    const keywordParam = searchParams.get("keyword") || "";
-    const districtParam = searchParams.get("district") || "";
-    
-    setSearchTerm(keywordParam);
-    setDistrict(districtParam);
-    
-    const lat = searchParams.get("lat");
-    const lng = searchParams.get("lng");
-    if (lat && lng) {
-      setGeo({ lat: Number(lat), lng: Number(lng) });
-    } else {
-      setGeo(null);
-    }
-  }, [searchParams]);
 
   // ---- listes globales (provenant des workers approuvés)
   const [jobOptions, setJobOptions] = useState<string[]>([]);
@@ -173,28 +156,26 @@ const HeroSection = () => {
     const job = searchTerm.trim();
     const qDistrict = district.trim();
 
-    // Créer de nouveaux paramètres (efface les anciens)
-    const params = new URLSearchParams();
+    const params: Record<string, string> = {};
 
     // Champ "Métier / service" -> keyword (recherche partielle)
     if (job) {
-      params.set("keyword", job);
+      params.keyword = job;
     }
 
     // Champ "Quartier" -> district
     if (qDistrict) {
-      params.set("district", qDistrict);
+      params.district = qDistrict;
     }
 
     // Géoloc (optionnel)
     if (geo) {
-      params.set("lat", String(geo.lat));
-      params.set("lng", String(geo.lng));
+      params.lat = String(geo.lat);
+      params.lng = String(geo.lng);
     }
 
     // Met à jour les paramètres URL pour déclencher la recherche
-    // replace: true pour éviter d'ajouter des entrées dans l'historique
-    setSearchParams(params, { replace: true });
+    setSearchParams(params, { replace: false });
 
     // Scroll vers les résultats
     setTimeout(() => {
