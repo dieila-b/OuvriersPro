@@ -129,7 +129,7 @@ const SearchSection: React.FC = () => {
         ).trim();
 
         let query = supabase
-          .from<DbWorker>("op_ouvriers")
+          .from("op_ouvriers")
           .select(
             `
             id,
@@ -147,8 +147,8 @@ const SearchSection: React.FC = () => {
             average_rating,
             rating_count,
             status,
-            lat,
-            lng
+            latitude,
+            longitude
           `
           )
           .eq("status", "approved");
@@ -193,8 +193,8 @@ const SearchSection: React.FC = () => {
             currency: w.currency ?? "GNF",
             rating: w.average_rating ?? 0,
             ratingCount: w.rating_count ?? 0,
-            lat: w.lat ?? null,
-            lng: w.lng ?? null,
+            lat: w.latitude ?? null,
+            lng: w.longitude ?? null,
           })) ?? [];
 
         setWorkers(mapped);

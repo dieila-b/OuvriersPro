@@ -23,7 +23,6 @@ type DbContact = {
   id: string;
   worker_id: string | null;
   worker_name: string | null;
-  worker_profession: string | null;
   client_name: string | null;
   client_email: string | null;
   client_phone: string | null;
@@ -148,9 +147,9 @@ const AdminOuvrierContacts: React.FC = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from<DbContact>("op_ouvrier_contacts")
+        .from("op_ouvrier_contacts")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false});
 
       if (error) {
         console.error(error);
@@ -163,7 +162,7 @@ const AdminOuvrierContacts: React.FC = () => {
         return;
       }
 
-      setContacts(data ?? []);
+      setContacts((data as DbContact[]) ?? []);
       setLoading(false);
     };
 
@@ -178,7 +177,6 @@ const AdminOuvrierContacts: React.FC = () => {
       const haystack =
         [
           c.worker_name,
-          c.worker_profession,
           c.client_name,
           c.client_email,
           c.client_phone,
@@ -356,7 +354,7 @@ const AdminOuvrierContacts: React.FC = () => {
     setError(null);
 
     const { data, error } = await supabase
-      .from<DbContact>("op_ouvrier_contacts")
+      .from("op_ouvrier_contacts")
       .select("*")
       .order("created_at", { ascending: false });
 
@@ -368,7 +366,7 @@ const AdminOuvrierContacts: React.FC = () => {
           : `Unable to refresh data. (${error.message})`
       );
     } else {
-      setContacts(data ?? []);
+      setContacts((data as DbContact[]) ?? []);
     }
 
     setLoading(false);
@@ -387,7 +385,6 @@ const AdminOuvrierContacts: React.FC = () => {
       "status",
       "origin",
       "worker_name",
-      "worker_profession",
       "client_name",
       "client_email",
       "client_phone",
@@ -401,7 +398,6 @@ const AdminOuvrierContacts: React.FC = () => {
         c.status ?? "",
         originLabel(c.origin),
         c.worker_name ?? "",
-        c.worker_profession ?? "",
         c.client_name ?? "",
         c.client_email ?? "",
         c.client_phone ?? "",
@@ -626,9 +622,6 @@ const AdminOuvrierContacts: React.FC = () => {
                     <div className="font-semibold text-slate-900">
                       {c.worker_name || "—"}
                     </div>
-                    <div className="text-xs text-slate-500">
-                      {c.worker_profession || ""}
-                    </div>
                   </div>
 
                   <div className="mb-2">
@@ -743,9 +736,6 @@ const AdminOuvrierContacts: React.FC = () => {
                         <td className="px-4 py-3 align-top text-slate-800">
                           <div className="font-semibold">
                             {c.worker_name || "—"}
-                          </div>
-                          <div className="text-xs text-slate-500">
-                            {c.worker_profession || ""}
                           </div>
                         </td>
 

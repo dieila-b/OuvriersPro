@@ -35,7 +35,7 @@ export function useAuthProfile() {
 
       if (currentUser) {
         const { data: rows, error: profileError } = await supabase
-          .from<OpUserProfile>("op_users")
+          .from("op_users")
           .select("id, full_name, phone, role")
           .eq("id", currentUser.id)
           .limit(1);
@@ -44,7 +44,7 @@ export function useAuthProfile() {
           console.error("load profile error", profileError);
           setProfile(null);
         } else {
-          setProfile(rows?.[0] ?? null);
+          setProfile((rows?.[0] as OpUserProfile) ?? null);
         }
       } else {
         setProfile(null);
@@ -68,12 +68,12 @@ export function useAuthProfile() {
 
         (async () => {
           const { data: rows } = await supabase
-            .from<OpUserProfile>("op_users")
+            .from("op_users")
             .select("id, full_name, phone, role")
             .eq("id", sUser.id)
             .limit(1);
 
-          setProfile(rows?.[0] ?? null);
+          setProfile((rows?.[0] as OpUserProfile) ?? null);
         })();
       }
     );

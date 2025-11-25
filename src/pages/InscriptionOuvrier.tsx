@@ -644,7 +644,7 @@ const InscriptionOuvrier: React.FC = () => {
         payment_provider: isFreePlan ? "free_plan" : paymentMethod || "unknown",
         payment_reference: paymentReference,
         payment_at: isPaymentReallyPaid ? new Date().toISOString() : null,
-      });
+      } as any);
 
       if (insertError) throw insertError;
 

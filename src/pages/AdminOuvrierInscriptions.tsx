@@ -18,6 +18,7 @@ import {
   User2,
   CalendarDays,
   Search,
+  Clock,
 } from "lucide-react";
 
 type DbWorker = {
@@ -170,7 +171,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from<DbWorker>("op_ouvriers")
+        .from("op_ouvriers")
         .select(
           `
           id,
@@ -210,7 +211,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
             : `Unable to load registrations. (${error.message})`
         );
       } else {
-        setWorkers(data ?? []);
+        setWorkers((data as DbWorker[]) ?? []);
       }
 
       setLoading(false);
@@ -717,7 +718,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
     setError(null);
 
     const { data, error } = await supabase
-      .from<DbWorker>("op_ouvriers")
+      .from("op_ouvriers")
       .select(
         `
         id,
@@ -757,7 +758,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
           : `Unable to refresh data. (${error.message})`
       );
     } else {
-      setWorkers(data ?? []);
+      setWorkers((data as DbWorker[]) ?? []);
       toast({
         title: language === "fr" ? "Données actualisées" : "Data refreshed",
       });

@@ -79,7 +79,7 @@ const WorkerDashboard: React.FC = () => {
 
       // 2) Récupérer l'ouvrier lié à ce user_id
       const { data: worker, error: workerError } = await supabase
-        .from<WorkerProfile>("op_ouvriers")
+        .from("op_ouvriers")
         .select(
           `
           id,
@@ -128,7 +128,7 @@ const WorkerDashboard: React.FC = () => {
         return;
       }
 
-      setProfile(worker);
+      setProfile(worker as WorkerProfile);
       setLoading(false);
 
       // 3) Récupérer les demandes de contact liées à cet ouvrier
@@ -136,7 +136,7 @@ const WorkerDashboard: React.FC = () => {
       setContactsError(null);
 
       const { data: contactsData, error: contactsErr } = await supabase
-        .from<WorkerContact>("op_ouvrier_contacts")
+        .from("op_ouvrier_contacts")
         .select(
           `
           id,
@@ -163,7 +163,7 @@ const WorkerDashboard: React.FC = () => {
             : `Error while loading your requests: ${contactsErr.message}`
         );
       } else {
-        setContacts(contactsData ?? []);
+        setContacts((contactsData as WorkerContact[]) ?? []);
       }
 
       setContactsLoading(false);

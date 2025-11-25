@@ -67,7 +67,7 @@ const WorkerDetail: React.FC = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from<DbWorker>("op_ouvriers")
+        .from("op_ouvriers")
         .select(
           `
           id,
@@ -99,7 +99,7 @@ const WorkerDetail: React.FC = () => {
         return;
       }
 
-      setWorker(data);
+      setWorker(data as DbWorker);
       setLoading(false);
     };
 
@@ -175,10 +175,9 @@ const WorkerDetail: React.FC = () => {
     const { error } = await supabase.from("op_ouvrier_contacts").insert({
       worker_id: worker.id,
       worker_name: fullWorkerName || null,
-      worker_profession: worker.profession,
-      client_name: form.name,
-      client_email: form.email,
-      client_phone: form.phone,
+      full_name: form.name,
+      email: form.email,
+      phone: form.phone,
       message: form.message,
       status: "new",
       origin: "web", // ✅ toutes les demandes venant du site seront marquées "web"
