@@ -14,87 +14,20 @@ import {
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
-type DbWorker = {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  profession: string | null;
-  country: string | null;
-  region: string | null;
-  city: string | null;
-  commune: string | null;
-  district: string | null;
-  hourly_rate: number | null;
-  currency: string | null;
-  years_experience: number | null;
-  average_rating: number | null;
-  rating_count: number | null;
-  status: string | null;
-
-  // coords optionnelles (si tu les utilises plus tard)
-  lat: number | null;
-  lng: number | null;
-};
-
-interface WorkerCard {
-  id: string;
-  name: string;
-  job: string;
-  country: string;
-  region: string;
-  city: string;
-  commune: string;
-  district: string;
-  experienceYears: number;
-  hourlyRate: number;
-  currency: string;
-  rating: number;
-  ratingCount: number;
-  lat?: number | null;
-  lng?: number | null;
-}
-
 type GeoPoint = { lat: number; lng: number };
-
-const haversineKm = (a: GeoPoint, b: GeoPoint) => {
-  const R = 6371;
-  const toRad = (v: number) => (v * Math.PI) / 180;
-
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-
-  const sinDLat = Math.sin(dLat / 2);
-  const sinDLng = Math.sin(dLng / 2);
-
-  const h =
-    sinDLat * sinDLat +
-    Math.cos(lat1) * Math.cos(lat2) * sinDLng * sinDLng;
-
-  return 2 * R * Math.asin(Math.sqrt(h));
-};
 
 const SearchSection: React.FC = () => {
   const { language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { workers, loading, error, search } = useWorkerSearch();
 
-  // On lit une fois les paramètres de l’URL
+  // On lit les paramètres de l'URL
   const urlService =
-    searchParams.get("service") ??
-    searchParams.get("keyword") ??
-    "";
+    searchParams.get("service") ?? searchParams.get("keyword") ?? "";
   const urlDistrict =
-    searchParams.get("quartier") ??
-    searchParams.get("district") ??
-    "";
+    searchParams.get("quartier") ?? searchParams.get("district") ?? "";
 
-  const [workers, setWorkers] = useState<WorkerCard[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // ✅ Filtres UI (initialisés à partir de l’URL à la première charge)
+  // ✅ Filtres UI
   const [keyword, setKeyword] = useState<string>(urlService);
   const [selectedJob, setSelectedJob] = useState<string>("all");
   const [selectedDistrict, setSelectedDistrict] = useState<string>(urlDistrict);
@@ -102,138 +35,41 @@ const SearchSection: React.FC = () => {
   const [minRating, setMinRating] = useState<number>(0);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
-  // ✅ Géoloc (optionnel, utilisée seulement si tu la branches depuis Hero)
+  // ✅ Géoloc (optionnel)
   const [userGeo, setUserGeo] = useState<GeoPoint | null>(null);
   const [radiusKm, setRadiusKm] = useState<number>(10);
 
-  // -------------------------
-  // 1) Charger depuis Supabase avec filtre SQL métier + quartier
-  // -------------------------
+  // Charger depuis l'URL au démarrage
   useEffect(() => {
-    const service = (searchParams.get("service") ?? searchParams.get("keyword") ?? "").trim();
-    const district = (searchParams.get("quartier") ?? searchParams.get("district") ?? "").trim();
+    const service = (
+      searchParams.get("service") ?? searchParams.get("keyword") ?? ""
+    ).trim();
+    const district = (
+      searchParams.get("quartier") ?? searchParams.get("district") ?? ""
+    ).trim();
     search(service, district, language);
   }, [language, searchParams, search]);
 
-  // Fonction locale pour déclencher la recherche depuis le bouton
+  // Fonction pour déclencher la recherche depuis le bouton
   const handleSearchClick = async () => {
-      setLoading(true);
-      setError(null);
+    const params: Record<string, string> = {};
+    if (keyword.trim()) params.service = keyword.trim();
+    if (selectedDistrict) params.quartier = selectedDistrict;
 
-      try {
-        // On repart de la valeur actuelle dans l’URL
-        const service = (
-          searchParams.get("service") ??
-          searchParams.get("keyword") ??
-          ""
-        ).trim();
+    setSearchParams(params, { replace: false });
+    await search(keyword, selectedDistrict, language);
 
-        const district = (
-          searchParams.get("quartier") ??
-          searchParams.get("district") ??
-          ""
-        ).trim();
+    setTimeout(() => {
+      document.getElementById("results")?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
+  };
 
-        let query = supabase
-          .from("op_ouvriers")
-          .select(
-            `
-            id,
-            first_name,
-            last_name,
-            profession,
-            country,
-            region,
-            city,
-            commune,
-            district,
-            hourly_rate,
-            currency,
-            years_experience,
-            average_rating,
-            rating_count,
-            status,
-            latitude,
-            longitude
-          `
-          )
-          .eq("status", "approved");
-
-        // ✅ Filtre SQL métier (profession) si fourni
-        if (service) {
-          query = query.ilike("profession", `%${service}%`);
-        }
-
-        // ✅ Filtre SQL quartier (district) si fourni
-        if (district) {
-          query = query.ilike("district", `%${district}%`);
-        }
-
-        const { data, error } = await query;
-
-        if (error) {
-          console.error("Supabase error:", error);
-          setError(
-            language === "fr"
-              ? "Impossible de charger les professionnels pour le moment."
-              : "Unable to load professionals at the moment."
-          );
-          setLoading(false);
-          return;
-        }
-
-        const mapped: WorkerCard[] =
-          (data ?? []).map((w) => ({
-            id: w.id,
-            name:
-              ((w.first_name || "") +
-                (w.last_name ? ` ${w.last_name}` : "")) || "Ouvrier",
-            job: w.profession ?? "",
-            country: w.country ?? "",
-            region: w.region ?? "",
-            city: w.city ?? "",
-            commune: w.commune ?? "",
-            district: w.district ?? "",
-            experienceYears: w.years_experience ?? 0,
-            hourlyRate: w.hourly_rate ?? 0,
-            currency: w.currency ?? "GNF",
-            rating: w.average_rating ?? 0,
-            ratingCount: w.rating_count ?? 0,
-            lat: w.latitude ?? null,
-            lng: w.longitude ?? null,
-          })) ?? [];
-
-        setWorkers(mapped);
-
-        // ✅ On synchronise l’UI avec l’URL (si l’URL change, l’UI suit)
-        setKeyword(service);
-        setSelectedDistrict(district);
-      } catch (e) {
-        console.error(e);
-        setError(
-          language === "fr"
-            ? "Une erreur est survenue lors du chargement."
-            : "An error occurred while loading."
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    // On relance dès que langue ou searchParams changent (ex : depuis Hero)
-    fetchWorkers();
-  }, [language, searchParams]);
-
-  // -------------------------
-  // 2) Options métiers / quartiers (à partir des ouvriers déjà filtrés SQL)
-  // -------------------------
+  // Options métiers / quartiers
   const jobs = useMemo(
     () =>
       Array.from(
         new Set(
-          workers
-            .map((w) => w.job)
-            .filter((j) => j && j.trim().length > 0)
+          workers.map((w) => w.job).filter((j) => j && j.trim().length > 0)
         )
       ),
     [workers]
@@ -251,36 +87,18 @@ const SearchSection: React.FC = () => {
     [workers]
   );
 
-  // -------------------------
-  // 3) Filtrage côté front (uniquement pour les critères NON filtrés par SQL)
-  //    La requête SQL filtre déjà par profession (keyword) et district
-  // -------------------------
+  // Filtrage côté front (prix, note, etc.)
   const filteredWorkers = useMemo(() => {
     const base = workers.filter((w) => {
       const jobNorm = (w.job || "").toLowerCase();
-
-      // Filtre par sélecteur de métier (dropdown séparé)
       const matchJob =
         selectedJob === "all" || jobNorm === selectedJob.toLowerCase();
-
-      // Filtre par prix max
       const matchPrice = w.hourlyRate <= maxPrice;
-      
-      // Filtre par note minimum
       const matchRating = w.rating >= minRating;
-
       return matchJob && matchPrice && matchRating;
     });
-
-    // Si tu veux réactiver plus tard le filtre distance, tu peux le
-    // remettre ici sur `base` à partir de userGeo et radiusKm.
     return base;
-  }, [
-    workers,
-    selectedJob,
-    maxPrice,
-    minRating,
-  ]);
+  }, [workers, selectedJob, maxPrice, minRating]);
 
   const resetFilters = () => {
     setKeyword("");
@@ -307,7 +125,7 @@ const SearchSection: React.FC = () => {
         : "Find your professional",
     subtitle:
       language === "fr"
-        ? "Filtrez par métier, quartier et tarif pour trouver l’ouvrier le plus proche."
+        ? "Filtrez par métier, quartier et tarif pour trouver l'ouvrier le plus proche."
         : "Filter by trade, district and rate to find the closest professional.",
     filters: language === "fr" ? "Filtres" : "Filters",
     keywordLabel: language === "fr" ? "Métier ou nom" : "Trade or name",
@@ -322,10 +140,8 @@ const SearchSection: React.FC = () => {
       language === "fr" ? "Tous les quartiers" : "All districts",
     priceLabel:
       language === "fr" ? "Tarif horaire max" : "Max hourly rate",
-    ratingLabel:
-      language === "fr" ? "Note minimum" : "Minimum rating",
-    reset:
-      language === "fr" ? "Réinitialiser les filtres" : "Reset filters",
+    ratingLabel: language === "fr" ? "Note minimum" : "Minimum rating",
+    reset: language === "fr" ? "Réinitialiser les filtres" : "Reset filters",
     noResults:
       language === "fr"
         ? "Aucun professionnel ne correspond à ces critères pour le moment."
@@ -333,9 +149,7 @@ const SearchSection: React.FC = () => {
     contact: language === "fr" ? "Contacter" : "Contact",
     perHour: "/h",
     years:
-      language === "fr"
-        ? "ans d'expérience"
-        : "years of experience",
+      language === "fr" ? "ans d'expérience" : "years of experience",
     viewMode: language === "fr" ? "Affichage" : "View",
     viewList: language === "fr" ? "Liste" : "List",
     viewGrid: language === "fr" ? "Mosaïque" : "Grid",
@@ -343,9 +157,6 @@ const SearchSection: React.FC = () => {
       language === "fr"
         ? `${count} résultat${count > 1 ? "s" : ""} trouvé${count > 1 ? "s" : ""}`
         : `${count} result${count > 1 ? "s" : ""} found`,
-    geoRadiusLabel:
-      language === "fr" ? "Rayon autour de moi" : "Radius around me",
-    km: "km",
     topSearchTitle:
       language === "fr" ? "Rechercher un ouvrier" : "Search a worker",
     topSearchBtn: language === "fr" ? "Rechercher" : "Search",
@@ -354,13 +165,6 @@ const SearchSection: React.FC = () => {
   return (
     <section id="search" className="w-full py-12 sm:py-16 lg:py-20 bg-white">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Debug léger : ce que nous lisons réellement dans l’URL */}
-        {/* Tu peux supprimer ce bloc après test */}
-        <div className="mb-4 text-xs text-gray-500">
-          <strong>URL service :</strong> "{urlService || "∅"}" —{" "}
-          <strong>URL quartier :</strong> "{urlDistrict || "∅"}"
-        </div>
-
         {/* ZONE DE RECHERCHE HAUT */}
         <div className="mb-6 sm:mb-8">
           <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-3 sm:p-4">
