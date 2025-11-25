@@ -39,25 +39,33 @@ const SearchSection: React.FC = () => {
   const [userGeo, setUserGeo] = useState<GeoPoint | null>(null);
   const [radiusKm, setRadiusKm] = useState<number>(10);
 
-  // Charger depuis l'URL au démarrage
+  // Synchroniser les états locaux avec l'URL
   useEffect(() => {
-    const service = (
-      searchParams.get("service") ?? searchParams.get("keyword") ?? ""
-    ).trim();
-    const district = (
-      searchParams.get("quartier") ?? searchParams.get("district") ?? ""
-    ).trim();
+    const service = searchParams.get("service") ?? searchParams.get("keyword") ?? "";
+    const district = searchParams.get("quartier") ?? searchParams.get("district") ?? "";
+    
+    setKeyword(service);
+    setSelectedDistrict(district);
+  }, [searchParams]);
+
+  // Charger les données quand l'URL change
+  useEffect(() => {
+    const service = (searchParams.get("service") ?? searchParams.get("keyword") ?? "").trim();
+    const district = (searchParams.get("quartier") ?? searchParams.get("district") ?? "").trim();
+    
+    console.log("🔎 Déclenchement recherche avec:", { service, district });
     search(service, district, language);
   }, [language, searchParams, search]);
 
   // Fonction pour déclencher la recherche depuis le bouton
-  const handleSearchClick = async () => {
+  const handleSearchClick = () => {
+    console.log("🔘 Clic recherche avec:", { keyword, selectedDistrict });
+    
     const params: Record<string, string> = {};
     if (keyword.trim()) params.service = keyword.trim();
-    if (selectedDistrict) params.quartier = selectedDistrict;
+    if (selectedDistrict.trim()) params.quartier = selectedDistrict.trim();
 
     setSearchParams(params, { replace: false });
-    await search(keyword, selectedDistrict, language);
 
     setTimeout(() => {
       document.getElementById("results")?.scrollIntoView({ behavior: "smooth" });
