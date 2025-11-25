@@ -168,17 +168,24 @@ const WorkerSearchSection: React.FC = () => {
     }
   }, [searchParams, initializedFromUrl]);
 
-  // 3) Sync filtres -> URL
+  // 3) Synchronisation URL depuis filtres locaux (pas keyword/district qui viennent de HeroSection)
   useEffect(() => {
     if (!initializedFromUrl) return;
 
+    // Ne mettre à jour l'URL que pour les filtres gérés localement
     const next: Record<string, string> = {};
-    if (keyword.trim()) next.keyword = keyword.trim();
+    
+    // Conserver keyword et district de HeroSection
+    const currentKeyword = searchParams.get("keyword") || "";
+    const currentDistrict = searchParams.get("district") || "";
+    if (currentKeyword) next.keyword = currentKeyword;
+    if (currentDistrict) next.district = currentDistrict;
+    
+    // Ajouter filtres locaux
     if (selectedJob !== "all") next.job = selectedJob;
     if (selectedRegion) next.region = selectedRegion;
     if (selectedCity) next.city = selectedCity;
     if (selectedCommune) next.commune = selectedCommune;
-    if (selectedDistrict) next.district = selectedDistrict;
     if (maxPrice !== 300000) next.maxPrice = String(maxPrice);
     if (minRating !== 0) next.minRating = String(minRating);
     if (viewMode !== "list") next.view = viewMode;
@@ -186,16 +193,15 @@ const WorkerSearchSection: React.FC = () => {
     setSearchParams(next, { replace: true });
   }, [
     initializedFromUrl,
-    keyword,
     selectedJob,
     selectedRegion,
     selectedCity,
     selectedCommune,
-    selectedDistrict,
     maxPrice,
     minRating,
     viewMode,
-    setSearchParams,
+    // Ne PAS inclure keyword et selectedDistrict dans les dépendances
+    // car ils sont gérés par HeroSection
   ]);
 
   // Listes de filtres dynamiques
@@ -468,16 +474,17 @@ const WorkerSearchSection: React.FC = () => {
               {text.filters}
             </h3>
 
-            {/* Mot clé */}
+            {/* Mot clé (lecture seule - géré par HeroSection) */}
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.keywordLabel}
               </label>
               <Input
                 value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
+                readOnly
                 placeholder={text.searchPlaceholder}
-                className="text-sm"
+                className="text-sm bg-gray-100 cursor-not-allowed"
+                title={language === "fr" ? "Utilisez la recherche en haut de page" : "Use the search at the top of the page"}
               />
             </div>
 
@@ -569,15 +576,16 @@ const WorkerSearchSection: React.FC = () => {
               </select>
             </div>
 
-            {/* Quartier */}
+            {/* Quartier (lecture seule - géré par HeroSection) */}
             <div className="mb-6">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.district}
               </label>
               <select
                 value={selectedDistrict}
-                onChange={(e) => setSelectedDistrict(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                disabled
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100 cursor-not-allowed"
+                title={language === "fr" ? "Utilisez la recherche en haut de page" : "Use the search at the top of the page"}
               >
                 <option value="">{text.allDistricts}</option>
                 {districts.map((d) => (
