@@ -6,7 +6,17 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { MapPin, Star, ArrowLeft } from "lucide-react";
+import {
+  MapPin,
+  Star,
+  ArrowLeft,
+  Phone,
+  Mail,
+  MessageCircle,
+  FileText,
+  Send,
+  Info,
+} from "lucide-react";
 
 type DbWorker = {
   id: string;
@@ -33,6 +43,10 @@ type ContactForm = {
   email: string;
   phone: string;
   message: string;
+  requestType: "devis" | "info" | "urgence";
+  budget: string;
+  preferredDate: string;
+  consent: boolean;
 };
 
 const WorkerDetail: React.FC = () => {
@@ -49,6 +63,10 @@ const WorkerDetail: React.FC = () => {
     email: "",
     phone: "",
     message: "",
+    requestType: "devis",
+    budget: "",
+    preferredDate: "",
+    consent: false,
   });
   const [sending, setSending] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -144,25 +162,69 @@ const WorkerDetail: React.FC = () => {
       language === "fr"
         ? "Une erreur est survenue lors de l’envoi de votre demande."
         : "An error occurred while sending your request.",
-    locationLabel:
-      language === "fr" ? "Zone d’intervention" : "Location",
     experience:
       language === "fr" ? "ans d'expérience" : "years of experience",
     rating: language === "fr" ? "Note moyenne" : "Average rating",
     perHour: language === "fr" ? "/h" : "/h",
+    // Nouveau texte pour le formulaire enrichi
+    contactInfos:
+      language === "fr" ? "Coordonnées directes" : "Direct contact details",
+    phoneLabel: language === "fr" ? "Téléphone" : "Phone",
+    emailLabel: language === "fr" ? "Email" : "Email",
+    whatsappLabel:
+      language === "fr" ? "WhatsApp (même numéro)" : "WhatsApp (same number)",
+    quickActions:
+      language === "fr" ? "Actions rapides" : "Quick actions",
+    callBtn: language === "fr" ? "Appeler" : "Call",
+    whatsappBtn: language === "fr" ? "WhatsApp" : "WhatsApp",
+    emailBtn:
+      language === "fr" ? "Envoyer un e-mail" : "Send an email",
+    devisBtn:
+      language === "fr" ? "Pré-remplir une demande de devis" : "Pre-fill quote request",
+    requestTypeLabel:
+      language === "fr" ? "Type de demande" : "Request type",
+    requestTypeDevis:
+      language === "fr" ? "Demande de devis" : "Quote request",
+    requestTypeInfo:
+      language === "fr" ? "Demande d’informations" : "Information request",
+    requestTypeUrgence:
+      language === "fr" ? "Intervention urgente" : "Emergency",
+    budgetLabel:
+      language === "fr"
+        ? "Budget approximatif (facultatif)"
+        : "Approximate budget (optional)",
+    dateLabel:
+      language === "fr"
+        ? "Date souhaitée (facultatif)"
+        : "Desired date (optional)",
+    consentLabel:
+      language === "fr"
+        ? "J’accepte que mes coordonnées soient transmises à cet ouvrier pour être recontacté."
+        : "I agree that my contact details may be shared with this worker to be contacted back.",
+    privacyNote:
+      language === "fr"
+        ? "Vos coordonnées sont transmises uniquement à cet ouvrier pour la gestion de votre demande."
+        : "Your contact details are shared only with this worker to handle your request.",
   };
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e:
+      | React.ChangeEvent<HTMLInputElement>
+      | React.ChangeEvent<HTMLTextAreaElement>
   ) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target as HTMLInputElement;
+    if (type === "checkbox") {
+      setForm((prev) => ({ ...prev, [name]: checked }));
+    } else {
+      setForm((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   // 🔹 Envoi du formulaire avec origin = 'web'
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!worker) return;
+    if (!form.consent) return; // sécurité : on ne soumet pas sans consentement
 
     setSending(true);
     setSuccessMsg(null);
@@ -172,13 +234,30 @@ const WorkerDetail: React.FC = () => {
       worker.last_name ?? ""
     }`.trim();
 
+    // On enrichit le message avec les infos structurées
+    const composedMessage = [
+      `${text.requestTypeLabel} : ${
+        form.requestType === "devis"
+          ? text.requestTypeDevis
+          : form.requestType === "info"
+          ? text.requestTypeInfo
+          : text.requestTypeUrgence
+      }`,
+      form.budget ? `${text.budgetLabel} : ${form.budget}` : "",
+      form.preferredDate ? `${text.dateLabel} : ${form.preferredDate}` : "",
+      "",
+      form.message,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
     const { error } = await supabase.from("op_ouvrier_contacts").insert({
       worker_id: worker.id,
       worker_name: fullWorkerName || null,
       full_name: form.name,
       email: form.email,
       phone: form.phone,
-      message: form.message,
+      message: composedMessage,
       status: "new",
       origin: "web", // ✅ toutes les demandes venant du site seront marquées "web"
     });
@@ -193,6 +272,10 @@ const WorkerDetail: React.FC = () => {
         email: "",
         phone: "",
         message: "",
+        requestType: "devis",
+        budget: "",
+        preferredDate: "",
+        consent: false,
       });
     }
 
@@ -242,6 +325,22 @@ const WorkerDetail: React.FC = () => {
     .filter(Boolean)
     .join(" • ");
 
+  const phoneNumber = (worker.phone || "").replace(/\s+/g, "");
+  const whatsappNumber = phoneNumber;
+  const whatsappUrl =
+    whatsappNumber && whatsappNumber.length >= 8
+      ? `https://wa.me/${
+          whatsappNumber.startsWith("+")
+            ? whatsappNumber.slice(1)
+            : whatsappNumber
+        }`
+      : "";
+  const mailtoUrl = worker.email
+    ? `mailto:${worker.email}?subject=${encodeURIComponent(
+        `Demande de ${worker.profession || "travaux"} via OuvriersPro`
+      )}`
+    : "";
+
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-5xl mx-auto px-4 py-10">
@@ -253,7 +352,7 @@ const WorkerDetail: React.FC = () => {
           {text.back}
         </Link>
 
-        <div className="grid gap-8 md:grid-cols-[2fr,1.5fr] items-start">
+        <div className="grid gap-8 md:grid-cols-[2fr,1.6fr] items-start">
           {/* Fiche ouvrier */}
           <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
             <div className="flex items-start gap-4 mb-4">
@@ -332,7 +431,7 @@ const WorkerDetail: React.FC = () => {
             )}
           </section>
 
-          {/* Formulaire de contact */}
+          {/* Bloc contact enrichi */}
           <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
             <h2 className="text-lg font-semibold text-slate-900 mb-1">
               {text.contactTitle}
@@ -340,6 +439,125 @@ const WorkerDetail: React.FC = () => {
             <p className="text-xs text-slate-500 mb-4">
               {text.contactSubtitle}
             </p>
+
+            {/* Coordonnées directes */}
+            <div className="mb-4 border border-slate-100 rounded-lg p-3 bg-slate-50">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-slate-700">
+                  {text.contactInfos}
+                </span>
+              </div>
+              <div className="space-y-1 text-xs text-slate-700">
+                {worker.phone && (
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-3 h-3 text-pro-blue" />
+                    <span className="font-medium">{text.phoneLabel} :</span>
+                    <a
+                      href={`tel:${worker.phone}`}
+                      className="hover:underline"
+                    >
+                      {worker.phone}
+                    </a>
+                  </div>
+                )}
+                {worker.email && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-3 h-3 text-pro-blue" />
+                    <span className="font-medium">{text.emailLabel} :</span>
+                    <a
+                      href={`mailto:${worker.email}`}
+                      className="hover:underline break-all"
+                    >
+                      {worker.email}
+                    </a>
+                  </div>
+                )}
+                {whatsappNumber && (
+                  <div className="flex items-center gap-2">
+                    <MessageCircle className="w-3 h-3 text-green-600" />
+                    <span className="font-medium">
+                      {text.whatsappLabel} :
+                    </span>
+                    <span>{whatsappNumber}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions rapides */}
+              <div className="mt-3">
+                <div className="text-[11px] text-slate-500 mb-1">
+                  {text.quickActions}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {worker.phone && (
+                    <Button
+                      variant="outline"
+                      className="w-full flex items-center justify-center gap-1 text-xs"
+                      asChild
+                    >
+                      <a href={`tel:${worker.phone}`}>
+                        <Phone className="w-3 h-3" />
+                        {text.callBtn}
+                      </a>
+                    </Button>
+                  )}
+
+                  {whatsappUrl && (
+                    <Button
+                      className="w-full flex items-center justify-center gap-1 text-xs bg-green-500 hover:bg-green-600"
+                      asChild
+                    >
+                      <a
+                        href={whatsappUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <MessageCircle className="w-3 h-3" />
+                        {text.whatsappBtn}
+                      </a>
+                    </Button>
+                  )}
+
+                  {mailtoUrl && (
+                    <Button
+                      variant="outline"
+                      className="w-full flex items-center justify-center gap-1 text-xs"
+                      asChild
+                    >
+                      <a href={mailtoUrl}>
+                        <Mail className="w-3 h-3" />
+                        {text.emailBtn}
+                      </a>
+                    </Button>
+                  )}
+
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full flex items-center justify-center gap-1 text-xs"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        requestType: "devis",
+                        message:
+                          prev.message ||
+                          (language === "fr"
+                            ? "Bonjour, je souhaite obtenir un devis pour des travaux."
+                            : "Hello, I would like to get a quote for some work."),
+                      }))
+                    }
+                  >
+                    <FileText className="w-3 h-3" />
+                    {text.devisBtn}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-start gap-1 text-[11px] text-slate-500">
+                <Info className="w-3 h-3 mt-[2px]" />
+                <span>{text.privacyNote}</span>
+              </div>
+            </div>
 
             {successMsg && (
               <div className="mb-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">
@@ -353,41 +571,103 @@ const WorkerDetail: React.FC = () => {
               </div>
             )}
 
+            {/* Formulaire détaillé */}
             <form onSubmit={handleSubmit} className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  {text.yourName}
-                </label>
-                <Input
-                  name="name"
-                  value={form.name}
-                  onChange={handleChange}
-                  required
-                  className="text-sm"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    {text.yourName}
+                  </label>
+                  <Input
+                    name="name"
+                    value={form.name}
+                    onChange={handleChange}
+                    required
+                    className="text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    {text.yourPhone}
+                  </label>
+                  <Input
+                    name="phone"
+                    value={form.phone}
+                    onChange={handleChange}
+                    required
+                    className="text-sm"
+                    placeholder={
+                      language === "fr"
+                        ? "Numéro pour vous joindre"
+                        : "Phone number"
+                    }
+                  />
+                </div>
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">
-                  {text.yourEmail}
+                  {text.yourEmail}{" "}
+                  <span className="text-[10px] text-slate-400">
+                    ({language === "fr" ? "facultatif" : "optional"})
+                  </span>
                 </label>
                 <Input
                   type="email"
                   name="email"
                   value={form.email}
                   onChange={handleChange}
-                  required
                   className="text-sm"
+                  placeholder="email@exemple.com"
                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    {text.requestTypeLabel}
+                  </label>
+                  <select
+                    name="requestType"
+                    value={form.requestType}
+                    onChange={handleChange}
+                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                  >
+                    <option value="devis">{text.requestTypeDevis}</option>
+                    <option value="info">{text.requestTypeInfo}</option>
+                    <option value="urgence">
+                      {text.requestTypeUrgence}
+                    </option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    {text.budgetLabel}
+                  </label>
+                  <Input
+                    name="budget"
+                    value={form.budget}
+                    onChange={handleChange}
+                    className="text-sm"
+                    placeholder={
+                      language === "fr"
+                        ? "Ex : 1 000 000 GNF"
+                        : "e.g. 1,000,000 GNF"
+                    }
+                  />
+                </div>
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">
-                  {text.yourPhone}
+                  {text.dateLabel}
                 </label>
                 <Input
-                  name="phone"
-                  value={form.phone}
+                  type="date"
+                  name="preferredDate"
+                  value={form.preferredDate}
                   onChange={handleChange}
                   className="text-sm"
                 />
@@ -404,15 +684,42 @@ const WorkerDetail: React.FC = () => {
                   required
                   rows={5}
                   className="text-sm"
+                  placeholder={
+                    language === "fr"
+                      ? "Expliquez brièvement les travaux à réaliser, l’adresse, les contraintes éventuelles…"
+                      : "Briefly describe the work to be done, address, constraints…"
+                  }
                 />
+              </div>
+
+              <div className="flex items-start gap-2 text-[11px] text-slate-600">
+                <input
+                  type="checkbox"
+                  name="consent"
+                  checked={form.consent}
+                  onChange={handleChange}
+                  className="mt-[2px] rounded border-slate-300"
+                  required
+                />
+                <span>{text.consentLabel}</span>
               </div>
 
               <Button
                 type="submit"
                 disabled={sending}
-                className="w-full bg-pro-blue hover:bg-blue-700"
+                className="w-full bg-pro-blue hover:bg-blue-700 flex items-center justify-center gap-2 text-sm"
               >
-                {sending ? text.sending : text.send}
+                {sending ? (
+                  <>
+                    <Send className="w-4 h-4 animate-pulse" />
+                    {text.sending}
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    {text.send}
+                  </>
+                )}
               </Button>
             </form>
           </section>
