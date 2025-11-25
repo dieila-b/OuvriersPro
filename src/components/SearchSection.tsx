@@ -246,38 +246,24 @@ const SearchSection: React.FC = () => {
   );
 
   // -------------------------
-  // 3) Filtrage côté front (complément : job, prix, note, etc.)
+  // 3) Filtrage côté front (uniquement pour les critères NON filtrés par SQL)
+  //    La requête SQL filtre déjà par profession (keyword) et district
   // -------------------------
   const filteredWorkers = useMemo(() => {
-    const kwNorm = keyword.trim().toLowerCase();
-    const districtNorm = selectedDistrict.trim().toLowerCase();
-
     const base = workers.filter((w) => {
       const jobNorm = (w.job || "").toLowerCase();
-      const nameNorm = (w.name || "").toLowerCase();
-      const workerDistrictNorm = (w.district || "").toLowerCase();
 
-      const matchKeyword =
-        !kwNorm ||
-        nameNorm.includes(kwNorm) ||
-        jobNorm.includes(kwNorm);
-
+      // Filtre par sélecteur de métier (dropdown séparé)
       const matchJob =
         selectedJob === "all" || jobNorm === selectedJob.toLowerCase();
 
+      // Filtre par prix max
       const matchPrice = w.hourlyRate <= maxPrice;
+      
+      // Filtre par note minimum
       const matchRating = w.rating >= minRating;
 
-      const matchDistrict =
-        !districtNorm || workerDistrictNorm === districtNorm;
-
-      return (
-        matchKeyword &&
-        matchJob &&
-        matchPrice &&
-        matchRating &&
-        matchDistrict
-      );
+      return matchJob && matchPrice && matchRating;
     });
 
     // Si tu veux réactiver plus tard le filtre distance, tu peux le
@@ -285,11 +271,9 @@ const SearchSection: React.FC = () => {
     return base;
   }, [
     workers,
-    keyword,
     selectedJob,
     maxPrice,
     minRating,
-    selectedDistrict,
   ]);
 
   const resetFilters = () => {
