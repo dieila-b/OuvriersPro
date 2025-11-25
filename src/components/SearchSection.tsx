@@ -71,23 +71,22 @@ const normalize = (v: string) => v.trim().toLowerCase();
 
 const SearchSection: React.FC = () => {
   const { language } = useLanguage();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [initializedFromUrl, setInitializedFromUrl] = useState(false);
+  const [searchParams] = useSearchParams();
 
   const [workers, setWorkers] = useState<WorkerCard[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ Filtres restants
-  const [keyword, setKeyword] = useState(""); // Métier (free text)
-  const [selectedJob, setSelectedJob] = useState<string>("all"); // Métier (select)
-  const [selectedDistrict, setSelectedDistrict] = useState<string>(""); // Quartier (select)
+  // UI states (pour sidebar et filtres locaux)
+  const [keyword, setKeyword] = useState("");
+  const [selectedJob, setSelectedJob] = useState<string>("all");
+  const [selectedDistrict, setSelectedDistrict] = useState<string>("");
 
   const [maxPrice, setMaxPrice] = useState<number>(300000);
   const [minRating, setMinRating] = useState<number>(0);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
-  // ✅ Géoloc URL
+  // Geo states
   const [userGeo, setUserGeo] = useState<GeoPoint | null>(null);
   const [radiusKm, setRadiusKm] = useState<number>(10);
 
@@ -164,8 +163,7 @@ const SearchSection: React.FC = () => {
   }, [language]);
 
   // -------------------------
-  // 2) URL -> State
-  //    IMPORTANT: ne réécrit pas l'URL au premier rendu
+  // 2) URL -> UI states (lecture simple)
   // -------------------------
   useEffect(() => {
     const spKeyword =
@@ -205,48 +203,7 @@ const SearchSection: React.FC = () => {
       setUserGeo(null);
       setRadiusKm(10);
     }
-
-    if (!initializedFromUrl) setInitializedFromUrl(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
-
-  // -------------------------
-  // 3) State -> URL (après init)
-  // -------------------------
-  useEffect(() => {
-    if (!initializedFromUrl) return;
-
-    const next: Record<string, string> = {};
-    if (keyword.trim()) next.service = keyword.trim();
-    if (selectedDistrict) next.quartier = selectedDistrict;
-    if (selectedJob !== "all") next.job = selectedJob;
-    if (maxPrice !== 300000) next.maxPrice = String(maxPrice);
-    if (minRating !== 0) next.minRating = String(minRating);
-    if (viewMode !== "list") next.view = viewMode;
-
-    if (userGeo) {
-      next.lat = String(userGeo.lat);
-      next.lng = String(userGeo.lng);
-      if (radiusKm !== 10) next.radiusKm = String(radiusKm);
-    }
-
-    const current = Object.fromEntries(searchParams.entries());
-    const same = JSON.stringify(current) === JSON.stringify(next);
-
-    if (!same) setSearchParams(next, { replace: true });
-  }, [
-    initializedFromUrl,
-    keyword,
-    selectedDistrict,
-    selectedJob,
-    maxPrice,
-    minRating,
-    viewMode,
-    userGeo,
-    radiusKm,
-    searchParams,
-    setSearchParams,
-  ]);
 
   // -------------------------
   // Options métiers / quartiers
@@ -268,37 +225,40 @@ const SearchSection: React.FC = () => {
   );
 
   // -------------------------
-  // Filtrage + distance
+  // 3) Filtrage ROBUSTE basé sur URL
   // -------------------------
   const filteredWorkers = useMemo(() => {
-    const kw = normalize(keyword);
+    // Valeurs URL prioritaires
+    const urlService =
+      searchParams.get("service") ??
+      searchParams.get("keyword") ??
+      "";
+    const urlQuartier =
+      searchParams.get("quartier") ??
+      searchParams.get("district") ??
+      "";
+
+    // fallback UI si URL vide
+    const effectiveKeyword = urlService || keyword;
+    const effectiveDistrict = urlQuartier || selectedDistrict;
+
+    const kw = normalize(effectiveKeyword);
     const dj = normalize(selectedJob === "all" ? "" : selectedJob);
-    const dd = normalize(selectedDistrict);
+    const dd = normalize(effectiveDistrict);
 
     const base = workers.filter((w) => {
       const wName = normalize(w.name);
       const wJob = normalize(w.job);
       const wDistrict = normalize(w.district);
 
-      const matchKeyword =
-        !kw || wName.includes(kw) || wJob.includes(kw);
-
-      const matchJob =
-        selectedJob === "all" || wJob === dj;
-
-      const matchDistrict =
-        !dd || wDistrict === dd;
+      const matchKeyword = !kw || wName.includes(kw) || wJob.includes(kw);
+      const matchJob = selectedJob === "all" || wJob === dj;
+      const matchDistrict = !dd || wDistrict === dd;
 
       const matchPrice = w.hourlyRate <= maxPrice;
       const matchRating = w.rating >= minRating;
 
-      return (
-        matchKeyword &&
-        matchJob &&
-        matchDistrict &&
-        matchPrice &&
-        matchRating
-      );
+      return matchKeyword && matchJob && matchDistrict && matchPrice && matchRating;
     });
 
     if (userGeo) {
@@ -324,6 +284,7 @@ const SearchSection: React.FC = () => {
     minRating,
     userGeo,
     radiusKm,
+    searchParams,
   ]);
 
   const resetFilters = () => {
@@ -335,6 +296,7 @@ const SearchSection: React.FC = () => {
     setViewMode("list");
     setUserGeo(null);
     setRadiusKm(10);
+    // Ici on ne touche pas l’URL volontairement
   };
 
   const formatCurrency = (value: number, currency: string) => {
@@ -351,9 +313,7 @@ const SearchSection: React.FC = () => {
     filters: language === "fr" ? "Filtres" : "Filters",
     keywordLabel: language === "fr" ? "Métier ou nom" : "Trade or name",
     searchPlaceholder:
-      language === "fr"
-        ? "Plombier, électricien, Mamadou..."
-        : "Plumber, electrician, John...",
+      language === "fr" ? "Plombier, électricien, Mamadou..." : "Plumber, electrician, John...",
     job: language === "fr" ? "Métier" : "Job",
     allJobs: language === "fr" ? "Tous les métiers" : "All trades",
     district: language === "fr" ? "Quartier" : "District",
@@ -449,7 +409,6 @@ const SearchSection: React.FC = () => {
                 </div>
               )}
 
-              {/* Bouton */}
               <Button
                 type="button"
                 className="lg:col-span-4 w-full bg-pro-blue hover:bg-blue-700"
@@ -660,7 +619,9 @@ const SearchSection: React.FC = () => {
 
             {loading && filteredWorkers.length === 0 && (
               <div className="border border-gray-100 rounded-xl p-6 text-sm text-gray-500">
-                {language === "fr" ? "Chargement des professionnels..." : "Loading professionals..."}
+                {language === "fr"
+                  ? "Chargement des professionnels..."
+                  : "Loading professionals..."}
               </div>
             )}
 
