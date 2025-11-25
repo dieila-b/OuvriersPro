@@ -1,7 +1,7 @@
 // src/components/SearchSection.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { supabase } from "@/lib/supabase";
+import { useWorkerSearch } from "@/hooks/useWorkerSearch";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -110,7 +110,13 @@ const SearchSection: React.FC = () => {
   // 1) Charger depuis Supabase avec filtre SQL métier + quartier
   // -------------------------
   useEffect(() => {
-    const fetchWorkers = async () => {
+    const service = (searchParams.get("service") ?? searchParams.get("keyword") ?? "").trim();
+    const district = (searchParams.get("quartier") ?? searchParams.get("district") ?? "").trim();
+    search(service, district, language);
+  }, [language, searchParams, search]);
+
+  // Fonction locale pour déclencher la recherche depuis le bouton
+  const handleSearchClick = async () => {
       setLoading(true);
       setError(null);
 
@@ -409,20 +415,7 @@ const SearchSection: React.FC = () => {
               <Button
                 type="button"
                 className="lg:col-span-4 w-full bg-pro-blue hover:bg-blue-700"
-                onClick={() => {
-                  // Mettre à jour les paramètres de l'URL pour déclencher une nouvelle recherche
-                  const params: Record<string, string> = {};
-                  if (keyword.trim()) params.service = keyword.trim();
-                  if (selectedDistrict) params.quartier = selectedDistrict;
-                  
-                  setSearchParams(params, { replace: false });
-                  
-                  // Scroll vers les résultats après mise à jour
-                  setTimeout(() => {
-                    const el = document.getElementById("results");
-                    el?.scrollIntoView({ behavior: "smooth" });
-                  }, 100);
-                }}
+                onClick={handleSearchClick}
               >
                 {text.topSearchBtn}
               </Button>
