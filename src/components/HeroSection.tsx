@@ -45,7 +45,7 @@ const HeroSection = () => {
     const loadOptions = async () => {
       setLoadingOptions(true);
       const { data, error } = await supabase
-        .from<DbWorkerLite>("op_ouvriers")
+        .from("op_ouvriers")
         .select("profession, district, status")
         .eq("status", "approved");
 
