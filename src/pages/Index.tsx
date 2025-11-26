@@ -11,16 +11,20 @@ const Index = () => {
   // Quand on arrive sur /#subscription, on scrolle automatiquement
   useEffect(() => {
     if (window.location.hash === "#subscription") {
-      // petit délai pour laisser le layout se rendre
+      // petit délai pour laisser la page se rendre
       setTimeout(() => {
         const el = document.getElementById("subscription");
         if (el) {
-          el.scrollIntoView({
+          // On va un peu PLUS BAS que le début de la section
+          const rect = el.getBoundingClientRect();
+          const y = rect.top + window.scrollY + 80; // +80px vers le bas
+
+          window.scrollTo({
+            top: y,
             behavior: "smooth",
-            block: "start",
           });
         }
-      }, 100);
+      }, 150);
     }
   }, []);
 
@@ -38,7 +42,7 @@ const Index = () => {
           <FeaturesSection />
         </section>
 
-        {/* RECHERCHE OUVRIERS (aperçu / section) */}
+        {/* RECHERCHE OUVRIERS */}
         <section
           id="search"
           className="w-full bg-white py-10 sm:py-14 lg:py-16 scroll-mt-20"
@@ -46,7 +50,7 @@ const Index = () => {
           <WorkerSearchSection />
         </section>
 
-        {/* ABONNEMENTS */}
+        {/* FORFAITS / ABONNEMENTS */}
         <section
           id="subscription"
           className="w-full bg-gradient-to-br from-gray-50 to-gray-100 py-10 sm:py-14 lg:py-16 scroll-mt-20"
