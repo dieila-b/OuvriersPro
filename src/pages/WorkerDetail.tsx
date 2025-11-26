@@ -17,6 +17,7 @@ import {
   MessageCircle,
   Send,
   Info,
+  Lock,
   Award,
   Briefcase,
   DollarSign,
@@ -69,9 +70,10 @@ const WorkerDetail: React.FC = () => {
   const navigate = useNavigate();
   const { language } = useLanguage();
 
-  // 🔐 Rôle utilisateur
+  // 🔐 Auth & rôle
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
 
   // 👷 Données ouvrier
   const [worker, setWorker] = useState<DbWorker | null>(null);
@@ -95,8 +97,7 @@ const WorkerDetail: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // -------------------------
-  // 🔐 Vérifier l'utilisateur + rôle
-  // - Si pas connecté : redirection vers /login avec message et URL de retour
+  // 🔐 Vérifier que l'utilisateur est connecté + récupérer son rôle
   // -------------------------
   useEffect(() => {
     const checkAuthAndRole = async () => {
@@ -104,22 +105,15 @@ const WorkerDetail: React.FC = () => {
         const { data } = await supabase.auth.getUser();
         const user = data?.user;
 
-        // Non connecté => on envoie vers /login
         if (!user) {
-          navigate("/login", {
-            replace: true,
-            state: {
-              from: `/ouvrier/${id}`,
-              authMessage:
-                language === "fr"
-                  ? "Connectez-vous ou créez un compte client pour contacter cet ouvrier et voir ses coordonnées complètes."
-                  : "Log in or create a customer account to contact this worker and see their full contact details.",
-            },
-          });
+          setIsAuthenticated(false);
+          setUserRole(null);
+          setAuthChecked(true);
           return;
         }
 
-        // Connecté : récupérer le rôle dans op_users
+        setIsAuthenticated(true);
+
         const { data: profile, error } = await supabase
           .from("op_users")
           .select("role")
@@ -134,24 +128,42 @@ const WorkerDetail: React.FC = () => {
         setUserRole(role);
       } catch (e) {
         console.error("Auth check error:", e);
+        setIsAuthenticated(false);
         setUserRole(null);
       } finally {
-        setAuthLoading(false);
+        setAuthChecked(true);
       }
     };
 
     checkAuthAndRole();
-  }, [id, language, navigate]);
+  }, []);
 
   const isClient = userRole === "user";
 
+  // 🚦 Rediriger automatiquement vers la page de connexion
+  // si l'utilisateur n'est pas authentifié
+  useEffect(() => {
+    if (authChecked && !isAuthenticated) {
+      const redirectPath =
+        window.location.pathname + window.location.search;
+      navigate(
+        `/login?redirect=${encodeURIComponent(redirectPath)}`,
+        { replace: true }
+      );
+    }
+  }, [authChecked, isAuthenticated, navigate]);
+
   // -------------------------
-  // 👷 Charger l'ouvrier et ses avis (uniquement pour comptes client)
+  // 👷 Charger l'ouvrier et ses avis (uniquement pour les comptes client connectés)
   // -------------------------
   useEffect(() => {
     const fetchWorkerData = async () => {
       if (!id) {
         setError("missing-id");
+        setLoading(false);
+        return;
+      }
+      if (!isAuthenticated || !isClient) {
         setLoading(false);
         return;
       }
@@ -209,10 +221,10 @@ const WorkerDetail: React.FC = () => {
       setLoading(false);
     };
 
-    if (!authLoading && isClient) {
+    if (authChecked && isAuthenticated && isClient) {
       fetchWorkerData();
     }
-  }, [id, authLoading, isClient]);
+  }, [id, authChecked, isAuthenticated, isClient]);
 
   const formatCurrency = (
     value: number | null | undefined,
@@ -286,14 +298,25 @@ const WorkerDetail: React.FC = () => {
       language === "fr"
         ? "Vos données sont uniquement transmises à ce professionnel."
         : "Your data is only shared with this professional.",
+    loginRequiredTitle:
+      language === "fr" ? "Connexion requise" : "Login required",
+    loginRequiredDesc:
+      language === "fr"
+        ? "Vous devez être connecté pour voir les détails et contacter les ouvriers."
+        : "You must be logged in to view details and contact workers.",
+    loginBtn: language === "fr" ? "Se connecter" : "Log in",
+    about: language === "fr" ? "À propos" : "About",
+    reviewsTitle: language === "fr" ? "Avis clients" : "Customer reviews",
+    noReviews:
+      language === "fr" ? "Aucun avis pour le moment" : "No reviews yet",
     roleDeniedTitle:
       language === "fr"
         ? "Accès réservé aux comptes client"
         : "Access restricted to client accounts",
     roleDeniedDesc:
       language === "fr"
-        ? "Cet espace est réservé aux comptes client. Pour consulter les coordonnées complètes des ouvriers, utilisez un compte client ou créez-en un nouveau."
-        : "This area is reserved for customer accounts. To view full worker contact details, use a customer account or create a new one.",
+        ? "Pour consulter les coordonnées complètes des ouvriers, connectez-vous à votre compte client ou créez un compte."
+        : "To view full worker contact details, log in with a client account or create one.",
   };
 
   const handleChange = (
@@ -374,11 +397,11 @@ const WorkerDetail: React.FC = () => {
   };
 
   // -------------------------
-  // États d'affichage
+  // RENDU
   // -------------------------
 
-  // Auth en cours
-  if (authLoading) {
+  // Auth pas encore vérifiée
+  if (!authChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-sm text-muted-foreground">
@@ -388,8 +411,21 @@ const WorkerDetail: React.FC = () => {
     );
   }
 
-  // Connecté mais pas un compte client
-  if (!authLoading && userRole && !isClient) {
+  // Auth vérifiée mais pas connecté → redirection vers /login
+  if (authChecked && !isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-sm text-muted-foreground">
+          {language === "fr"
+            ? "Redirection vers la page de connexion..."
+            : "Redirecting to login page..."}
+        </div>
+      </div>
+    );
+  }
+
+  // Auth OK mais pas un compte "client" → écran accès restreint
+  if (authChecked && isAuthenticated && !isClient) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
         <Card className="max-w-md w-full p-6 text-center">
@@ -409,7 +445,9 @@ const WorkerDetail: React.FC = () => {
               className="w-full"
               onClick={() => navigate("/mon-compte")}
             >
-              {language === "fr" ? "Gérer mon compte" : "Manage my account"}
+              {language === "fr"
+                ? "Gérer mon compte"
+                : "Manage my account"}
             </Button>
             <Button
               variant="ghost"
@@ -426,7 +464,7 @@ const WorkerDetail: React.FC = () => {
     );
   }
 
-  // Chargement des données ouvrier
+  // Chargement des données
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
