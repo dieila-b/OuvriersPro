@@ -19,6 +19,8 @@ const Header = () => {
 
   const closeMobile = () => setMobileOpen(false);
 
+  const accountLabel = language === "fr" ? "Mon compte" : "My account";
+
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
       {/* wrapper full-width + max-w */}
@@ -68,15 +70,16 @@ const Header = () => {
               </Link>
             )}
 
-            {/* CTA Devenir Ouvrier Pro */}
-            <a href="#subscription">
+            {/* CTA Mon compte (remplace Devenir Ouvrier Pro) */}
+            <Link to="/mon-compte">
               <Button
                 size="sm"
-                className="bg-pro-blue text-white hover:bg-pro-blue/90"
+                className="bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center gap-2"
               >
-                Devenir Ouvrier Pro
+                <User className="w-4 h-4" />
+                {accountLabel}
               </Button>
-            </a>
+            </Link>
 
             {/* Language Switcher */}
             <DropdownMenu>
@@ -195,12 +198,13 @@ const Header = () => {
               </Link>
             )}
 
-            {/* CTA mobile */}
-            <a href="#subscription" onClick={closeMobile} className="pt-2">
-              <Button className="w-full bg-pro-blue text-white hover:bg-pro-blue/90">
-                Devenir Ouvrier Pro
+            {/* CTA mobile Mon compte */}
+            <Link to="/mon-compte" onClick={closeMobile} className="pt-2">
+              <Button className="w-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center justify-center gap-2">
+                <User className="w-4 h-4" />
+                {accountLabel}
               </Button>
-            </a>
+            </Link>
           </div>
         </div>
       )}
