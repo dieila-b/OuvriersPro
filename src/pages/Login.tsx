@@ -217,8 +217,8 @@ const Login: React.FC = () => {
 
             <p className="mt-2 text-xs text-slate-500">
               {language === "fr"
-                ? "Les administrateurs seront redirigés vers le back-office, les ouvriers vers leur espace personnel. Les autres utilisateurs restent sur le site public."
-                : "Admins are redirected to the back-office, workers to their dashboard. Other users stay on the public site."}
+                ? "Les ouvriers seront redirigés vers leur espace personnel. Les autres utilisateurs restent sur le site public."
+                : "Workers are redirected to their personal dashboard. Other users remain on the public site."}
             </p>
           </form>
         </CardContent>
