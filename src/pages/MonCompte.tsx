@@ -10,7 +10,6 @@ import {
   CheckCircle2,
   HardHat,
   ArrowRight,
-  User,
 } from "lucide-react";
 
 const MonCompte: React.FC = () => {
@@ -41,24 +40,30 @@ const MonCompte: React.FC = () => {
     // Carte compte principal
     clientAccountTitle:
       language === "fr"
-        ? "Compte Client / Ouvrier"
-        : "Client / Worker account",
+        ? "Compte OuvriersPro"
+        : "OuvriersPro account",
     clientAccountDesc:
       language === "fr"
-        ? "Ce même compte est utilisé pour les particuliers, les entreprises ET les ouvriers. Créez un seul compte, puis choisissez comment vous utilisez la plateforme : pour chercher un ouvrier ou pour proposer vos services."
-        : "The same account is used for customers, companies AND workers. Create a single account, then choose how you use the platform: to find a worker or to offer your services.",
+        ? "Un seul compte pour tous : particuliers, entreprises et ouvriers. Commencez ici pour envoyer des demandes de travaux ou, si vous êtes artisan, préparer votre futur profil Ouvrier Pro."
+        : "One account for everyone: customers, companies and workers. Start here to send job requests or, if you are a worker, prepare your future Pro profile.",
     createClientBtn:
       language === "fr"
-        ? "Créer mon compte (client ou ouvrier)"
-        : "Create my account (client or worker)",
+        ? "Créer mon compte"
+        : "Create my account",
+
+    alreadyAccount:
+      language === "fr"
+        ? "Vous avez déjà un compte ?"
+        : "Already have an account?",
+    login: language === "fr" ? "Se connecter" : "Log in",
 
     // Bloc info ouvrier
     workerInfoTitle:
       language === "fr" ? "Vous êtes ouvrier ?" : "Are you a worker?",
     workerInfoText:
       language === "fr"
-        ? "Créez d’abord votre compte OuvriersPro (le même que pour les clients). Depuis votre espace, vous pourrez ensuite activer votre profil Ouvrier Pro et choisir votre forfait."
-        : "First create your OuvriersPro account (the same as customers). From your dashboard, you’ll then be able to activate your Pro worker profile and choose a plan.",
+        ? "Créez d’abord votre compte OuvriersPro. Depuis votre espace, vous pourrez ensuite activer votre profil Ouvrier Pro et choisir votre forfait."
+        : "First create your OuvriersPro account. From your dashboard, you’ll then be able to activate your Pro worker profile and choose a plan.",
   };
 
   return (
@@ -108,7 +113,7 @@ const MonCompte: React.FC = () => {
           </h2>
 
           <div className="grid gap-6 lg:grid-cols-[2fr,1.5fr] items-start">
-            {/* Carte compte Client / Ouvrier */}
+            {/* Carte compte OuvriersPro */}
             <div className="rounded-lg border border-slate-200 bg-white p-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-9 h-9 rounded-full bg-pro-blue/10 flex items-center justify-center">
@@ -123,54 +128,23 @@ const MonCompte: React.FC = () => {
                 {text.clientAccountDesc}
               </p>
 
-              <div className="grid gap-3 sm:grid-cols-2 mb-5">
-                {/* Colonne "Je cherche un ouvrier" */}
-                <div className="rounded-md bg-slate-50 p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <User className="w-4 h-4 text-pro-blue" />
-                    <span className="text-xs font-semibold uppercase text-slate-600">
-                      Je cherche un ouvrier
-                    </span>
-                  </div>
-                  <ul className="space-y-1 text-xs text-slate-700">
-                    <li className="flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                      <span>Recherche et contact direct des ouvriers</span>
-                    </li>
-                    <li className="flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                      <span>Suivi de vos demandes de travaux</span>
-                    </li>
-                  </ul>
-                </div>
-
-                {/* Colonne "Je suis ouvrier" */}
-                <div className="rounded-md bg-slate-50 p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <HardHat className="w-4 h-4 text-amber-600" />
-                    <span className="text-xs font-semibold uppercase text-slate-600">
-                      Je suis ouvrier / artisan
-                    </span>
-                  </div>
-                  <ul className="space-y-1 text-xs text-slate-700">
-                    <li className="flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                      <span>Un seul compte pour gérer vos demandes</span>
-                    </li>
-                    <li className="flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                      <span>
-                        Activation ensuite de votre profil Ouvrier Pro et
-                        choix du forfait
-                      </span>
-                    </li>
-                    <li className="flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                      <span>Visibilité auprès des clients de votre zone</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
+              <ul className="space-y-2 text-sm text-slate-700 mb-5">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  <span>Recherche et contact direct des ouvriers</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  <span>Suivi de vos demandes de travaux</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  <span>
+                    Possibilité d’activer un profil Ouvrier Pro si vous êtes
+                    artisan
+                  </span>
+                </li>
+              </ul>
 
               <Button
                 asChild
@@ -198,8 +172,8 @@ const MonCompte: React.FC = () => {
               </p>
               <ul className="space-y-1 text-xs text-slate-500">
                 <li>• Un seul compte pour tout gérer</li>
-                <li>• Choix du forfait (Gratuit, Mensuel, Annuel) après inscription</li>
-                <li>• Profil mis en avant auprès des clients de votre secteur</li>
+                <li>• Vous pourrez choisir votre forfait (Gratuit, Mensuel, Annuel)</li>
+                <li>• Votre profil sera mis en avant auprès des clients</li>
               </ul>
             </div>
           </div>

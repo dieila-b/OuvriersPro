@@ -6,7 +6,6 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
 
 type LocationState = {
   from?: string;
@@ -117,20 +116,7 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 relative">
-      {/* Bouton retour en haut à gauche */}
-      <div className="absolute top-4 left-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-1 text-slate-600 hover:text-slate-900"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>{language === "fr" ? "Retour" : "Back"}</span>
-        </Button>
-      </div>
-
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader>
           <CardTitle className="text-lg font-semibold text-slate-800">
