@@ -1,6 +1,6 @@
 // src/pages/MonCompte.tsx
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,10 +11,12 @@ import {
   HardHat,
   ArrowRight,
   User,
+  ArrowLeft,
 } from "lucide-react";
 
 const MonCompte: React.FC = () => {
   const { language } = useLanguage();
+  const navigate = useNavigate();
 
   const text = {
     title: language === "fr" ? "Mon compte" : "My account",
@@ -38,7 +40,6 @@ const MonCompte: React.FC = () => {
     newAccountTitle:
       language === "fr" ? "Créer un nouveau compte" : "Create a new account",
 
-    // Carte compte principal
     clientAccountTitle:
       language === "fr"
         ? "Compte Client / Ouvrier"
@@ -52,7 +53,6 @@ const MonCompte: React.FC = () => {
         ? "Créer mon compte (client ou ouvrier)"
         : "Create my account (client or worker)",
 
-    // Bloc info ouvrier
     workerInfoTitle:
       language === "fr" ? "Vous êtes ouvrier ?" : "Are you a worker?",
     workerInfoText:
@@ -62,7 +62,20 @@ const MonCompte: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 relative">
+      {/* Bouton retour vers l'accueil */}
+      <div className="absolute top-4 left-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/")}
+          className="flex items-center gap-1 text-slate-600 hover:text-slate-900"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>{language === "fr" ? "Retour à l'accueil" : "Back to home"}</span>
+        </Button>
+      </div>
+
       <div className="max-w-4xl mx-auto px-4 py-10">
         {/* Titre */}
         <header className="mb-8">
@@ -160,8 +173,8 @@ const MonCompte: React.FC = () => {
                     <li className="flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500" />
                       <span>
-                        Activation ensuite de votre profil Ouvrier Pro et
-                        choix du forfait
+                        Activation ensuite de votre profil Ouvrier Pro et choix
+                        du forfait
                       </span>
                     </li>
                     <li className="flex items-center gap-1">
@@ -198,7 +211,9 @@ const MonCompte: React.FC = () => {
               </p>
               <ul className="space-y-1 text-xs text-slate-500">
                 <li>• Un seul compte pour tout gérer</li>
-                <li>• Choix du forfait (Gratuit, Mensuel, Annuel) après inscription</li>
+                <li>
+                  • Choix du forfait (Gratuit, Mensuel, Annuel) après inscription
+                </li>
                 <li>• Profil mis en avant auprès des clients de votre secteur</li>
               </ul>
             </div>
