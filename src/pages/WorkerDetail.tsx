@@ -1,6 +1,6 @@
 // src/pages/WorkerDetail.tsx
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,6 @@ import {
   Phone,
   Mail,
   MessageCircle,
-  FileText,
   Send,
   Info,
   Lock,
@@ -158,7 +157,6 @@ const WorkerDetail: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Charger l'ouvrier
       const { data: workerData, error: workerError } = await supabase
         .from("op_ouvriers")
         .select(
@@ -195,7 +193,6 @@ const WorkerDetail: React.FC = () => {
 
       setWorker(workerData as DbWorker);
 
-      // Charger les avis
       const { data: reviewsData } = await supabase
         .from("op_ouvrier_reviews")
         .select("id, author_name, rating, comment, created_at")
@@ -259,16 +256,10 @@ const WorkerDetail: React.FC = () => {
     perHour: language === "fr" ? "/h" : "/h",
     contactInfos:
       language === "fr" ? "Coordonnées directes" : "Direct contact",
-    phoneLabel: language === "fr" ? "Téléphone" : "Phone",
-    emailLabel: language === "fr" ? "Email" : "Email",
     whatsappLabel: language === "fr" ? "WhatsApp" : "WhatsApp",
-    quickActions:
-      language === "fr" ? "Actions rapides" : "Quick actions",
     callBtn: language === "fr" ? "Appeler" : "Call",
     whatsappBtn: language === "fr" ? "WhatsApp" : "WhatsApp",
     emailBtn: language === "fr" ? "Email" : "Email",
-    devisBtn:
-      language === "fr" ? "Demander un devis" : "Request quote",
     requestTypeLabel:
       language === "fr" ? "Type de demande" : "Request type",
     requestTypeDevis:
@@ -310,8 +301,8 @@ const WorkerDetail: React.FC = () => {
         : "Access restricted to client accounts",
     roleDeniedDesc:
       language === "fr"
-        ? "Seuls les particuliers / clients connectés peuvent consulter les coordonnées complètes des ouvriers."
-        : "Only logged-in client accounts can view full worker contact details.",
+        ? "Pour consulter les coordonnées complètes des ouvriers, connectez-vous à votre compte client ou créez un compte."
+        : "To view full worker contact details, log in with a client account or create one.",
   };
 
   const handleChange = (
@@ -337,7 +328,7 @@ const WorkerDetail: React.FC = () => {
     if (!form.consent) return;
 
     setSending(true);
-    setSuccessMsg(null    );
+    setSuccessMsg(null);
     setErrorMsg(null);
 
     const fullWorkerName = `${worker.first_name ?? ""} ${
@@ -402,7 +393,7 @@ const WorkerDetail: React.FC = () => {
     );
   }
 
-  // Pas authentifié
+  // Pas authentifié → fenêtre login + inscription
   if (authChecked && !isAuthenticated) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
@@ -434,6 +425,15 @@ const WorkerDetail: React.FC = () => {
             <Button
               variant="outline"
               className="w-full"
+              onClick={() => navigate("/register?type=client")}
+            >
+              {language === "fr"
+                ? "Créer un compte"
+                : "Create an account"}
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full"
               onClick={() => navigate(-1)}
             >
               {text.back}
@@ -444,7 +444,7 @@ const WorkerDetail: React.FC = () => {
     );
   }
 
-  // Auth OK mais pas un compte "client"
+  // Auth OK mais pas un compte "client" → même logique: proposer connexion / inscription
   if (authChecked && isAuthenticated && !isClient) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
@@ -457,25 +457,39 @@ const WorkerDetail: React.FC = () => {
           <h1 className="text-xl font-semibold mb-2">
             {text.roleDeniedTitle}
           </h1>
-          <p className="text-sm text-muted-foreground mb-4">
+          <p className="text-sm text-muted-foreground mb-6">
             {text.roleDeniedDesc}
           </p>
           <div className="flex flex-col gap-2">
             <Button
-              variant="outline"
               className="w-full"
-              onClick={() => navigate("/mon-compte")}
+              onClick={() =>
+                navigate(
+                  `/login?redirect=${encodeURIComponent(
+                    window.location.pathname
+                  )}`
+                )
+              }
             >
-              {language === "fr"
-                ? "Gérer mon compte"
-                : "Manage my account"}
+              {text.loginBtn}
             </Button>
             <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => navigate("/register?type=client")}
+            >
+              {language === "fr"
+                ? "Créer un compte client"
+                : "Create a client account"}
+            </Button>
+            <Button
+              variant="ghost"
               className="w-full"
               onClick={() => navigate("/")}
-              variant="ghost"
             >
-              {language === "fr" ? "Retour à l'accueil" : "Back to home"}
+              {language === "fr"
+                ? "Retour à l'accueil"
+                : "Back to home"}
             </Button>
           </div>
         </Card>
@@ -556,7 +570,7 @@ const WorkerDetail: React.FC = () => {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Colonne principale */}
           <div className="lg:col-span-2 space-y-6">
-            {/* En-tête */}
+            {/* En-tête avec avatar et infos principales */}
             <Card className="p-6">
               <div className="flex items-start gap-6 mb-6">
                 <div className="w-24 h-24 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-2xl font-bold flex-shrink-0">
@@ -722,7 +736,6 @@ const WorkerDetail: React.FC = () => {
                 )}
               </div>
 
-              {/* Actions rapides */}
               <div className="space-y-2">
                 {worker.phone && (
                   <Button
@@ -776,7 +789,7 @@ const WorkerDetail: React.FC = () => {
               </p>
 
               {successMsg && (
-                <div className="mb-4 p-3 text-sm bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 rounded-md">
+                <div className="mb-4 p-3 text-sm bg-green-50 text-green-700 border border-green-200 rounded-md">
                   {successMsg}
                 </div>
               )}
