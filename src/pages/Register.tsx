@@ -37,7 +37,7 @@ type FormState = {
   phone: string;
   password: string;
   confirmPassword: string;
-  profession: string;
+  profession: string; // surtout pour les ouvriers
 };
 
 const Register: React.FC = () => {
@@ -45,6 +45,7 @@ const Register: React.FC = () => {
   const { language } = useLanguage();
   const [searchParams] = useSearchParams();
 
+  // Type de compte (client / worker) détecté via ?type=
   const [accountType, setAccountType] = useState<AccountType>("client");
 
   const [form, setForm] = useState<FormState>({
@@ -59,6 +60,9 @@ const Register: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // ----------------------------
+  //   Textes FR / EN
+  // ----------------------------
   const text = {
     title: language === "fr" ? "Créer un compte" : "Create an account",
     back: language === "fr" ? "Retour" : "Back",
@@ -107,17 +111,24 @@ const Register: React.FC = () => {
         : "An error occurred while creating your account.",
   };
 
-  // Si ?type=worker ou ?type=ouvrier ➜ on renvoie vers Home avec scroll=subscription
+  // ----------------------------
+  //  Détecter ?type=client / worker
+  // ----------------------------
   useEffect(() => {
     const typeParam = (searchParams.get("type") || "").toLowerCase();
     if (typeParam === "worker" || typeParam === "ouvrier") {
-      navigate("/?scroll=subscription", { replace: true });
+      setAccountType("worker");
     } else if (typeParam === "client") {
       setAccountType("client");
     }
-  }, [searchParams, navigate]);
+  }, [searchParams]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ----------------------------
+  //  Gestion des champs
+  // ----------------------------
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const { name, value } = e.target;
     setForm((prev) => ({
       ...prev,
@@ -125,6 +136,9 @@ const Register: React.FC = () => {
     }));
   };
 
+  // ----------------------------
+  //  Soumission formulaire
+  // ----------------------------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -162,9 +176,12 @@ const Register: React.FC = () => {
         return;
       }
 
+      // Succès : on redirige selon le type
       if (accountType === "worker") {
-        navigate("/inscription-ouvrier");
+        // Ouvrier : aller directement aux forfaits sur la page d'accueil
+        window.location.href = "/#subscription";
       } else {
+        // Client : retour à l’accueil classique
         navigate("/");
       }
     } catch (err) {
@@ -175,6 +192,9 @@ const Register: React.FC = () => {
     }
   };
 
+  // ----------------------------
+  //  Render
+  // ----------------------------
   const isWorker = accountType === "worker";
 
   return (
@@ -198,16 +218,18 @@ const Register: React.FC = () => {
             {isWorker ? text.subtitleWorker : text.subtitleClient}
           </p>
 
-          {/* Onglets client / worker */}
+          {/* Tabs client / worker, synchronisés avec ?type */}
           <Tabs
             value={accountType}
             onValueChange={(v) => {
-              if (v === "worker") {
-                // Clic sur "Ouvrier Pro" ➜ retour Home + scroll vers la section forfaits
-                navigate("/?scroll=subscription");
-                return;
+              const value = v as AccountType;
+              setAccountType(value);
+
+              // 👉 Si l'utilisateur clique sur l’onglet "Ouvrier Pro",
+              // on l'envoie directement sur la section forfaits
+              if (value === "worker") {
+                window.location.href = "/#subscription";
               }
-              setAccountType("client");
             }}
             className="mb-4"
           >
@@ -222,8 +244,13 @@ const Register: React.FC = () => {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="client" className="mt-4" />
-            <TabsContent value="worker" className="mt-4" />
+            <TabsContent value="client" className="mt-4">
+              {/* Le formulaire est le même, seul le texte/CTA change */}
+            </TabsContent>
+
+            <TabsContent value="worker" className="mt-4">
+              {/* idem */}
+            </TabsContent>
           </Tabs>
 
           {errorMsg && (
@@ -237,13 +264,15 @@ const Register: React.FC = () => {
               <Label htmlFor="fullName" className="mb-1 block">
                 {text.fullName}
               </Label>
-              <Input
-                id="fullName"
-                name="fullName"
-                value={form.fullName}
-                onChange={handleChange}
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="fullName"
+                  name="fullName"
+                  value={form.fullName}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
             </div>
 
             <div>
@@ -284,6 +313,7 @@ const Register: React.FC = () => {
               </div>
             </div>
 
+            {/* Champ métier surtout utile pour l’ouvrier */}
             {isWorker && (
               <div>
                 <Label htmlFor="profession" className="mb-1 block">
