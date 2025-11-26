@@ -14,7 +14,7 @@ type LocationState = {
 const Login: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
-  const location = useLocation() as { state?: LocationState };
+  const location = useLocation() as { state?: LocationState; search: string };
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,10 +29,11 @@ const Login: React.FC = () => {
 
     try {
       // 1) Auth Supabase
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password,
-      });
+      const { data, error: authError } =
+        await supabase.auth.signInWithPassword({
+          email: email.trim().toLowerCase(),
+          password,
+        });
 
       if (authError) {
         throw authError;
@@ -87,7 +88,9 @@ const Login: React.FC = () => {
       const role = (profile?.role as string) || "user";
 
       // 3) Redirection selon le rôle
-      const from = location.state?.from;
+      const fromState = location.state?.from;
+      const searchParams = new URLSearchParams(location.search);
+      const redirectParam = searchParams.get("redirect");
 
       if (role === "admin") {
         navigate("/admin/dashboard", { replace: true });
@@ -95,12 +98,9 @@ const Login: React.FC = () => {
         // les vrais ouvriers validés
         navigate("/espace-ouvrier", { replace: true });
       } else {
-        // role "user" ou autre ➜ simple compte utilisateur
-        if (from) {
-          navigate(from, { replace: true });
-        } else {
-          navigate("/", { replace: true });
-        }
+        // rôle "user" (client / particulier)
+        const target = redirectParam || fromState || "/espace-client";
+        navigate(target, { replace: true });
       }
     } catch (err: any) {
       console.error(err);
@@ -203,8 +203,8 @@ const Login: React.FC = () => {
 
             <p className="mt-2 text-xs text-slate-500">
               {language === "fr"
-                ? "Les administrateurs seront redirigés vers le back-office, les ouvriers vers leur espace personnel. Les autres utilisateurs restent sur le site public."
-                : "Admins are redirected to the back-office, workers to their dashboard. Other users stay on the public site."}
+                ? "Les ouvriers sont redirigés vers leur espace personnel. Les comptes client / particulier accèdent à leur espace dédié. Les autres utilisateurs restent sur le site public."
+                : "Workers are redirected to their own dashboard. Client / individual accounts access their dedicated space. Other users stay on the public site."}
             </p>
           </form>
         </CardContent>
