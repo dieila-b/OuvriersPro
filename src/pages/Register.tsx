@@ -113,17 +113,17 @@ const Register: React.FC = () => {
 
   // ----------------------------
   //  Détecter ?type=client / worker
-  //  Si type=worker, on redirige vers les forfaits
+  //  Si type=worker, on envoie directement vers la section forfaits
   // ----------------------------
   useEffect(() => {
     const typeParam = (searchParams.get("type") || "").toLowerCase();
     if (typeParam === "worker" || typeParam === "ouvrier") {
-      navigate("/#subscription");
-      setAccountType("client");
+      // Redirection forcée vers la section des forfaits
+      window.location.href = "/#subscription";
     } else if (typeParam === "client") {
       setAccountType("client");
     }
-  }, [searchParams, navigate]);
+  }, [searchParams]);
 
   // ----------------------------
   //  Gestion des champs
@@ -176,7 +176,7 @@ const Register: React.FC = () => {
         return;
       }
 
-      // Succès : on redirige selon le type
+      // Succès : on redirige selon le type (au cas où on utilise encore worker via un autre flux)
       if (accountType === "worker") {
         navigate("/inscription-ouvrier");
       } else {
@@ -190,9 +190,6 @@ const Register: React.FC = () => {
     }
   };
 
-  // ----------------------------
-  //  Render
-  // ----------------------------
   const isWorker = accountType === "worker";
 
   return (
@@ -216,17 +213,16 @@ const Register: React.FC = () => {
             {isWorker ? text.subtitleWorker : text.subtitleClient}
           </p>
 
-          {/* Onglets client / worker.
-              Si on clique sur "worker", on redirige vers /#subscription */}
+          {/* Onglets client / worker */}
           <Tabs
             value={accountType}
             onValueChange={(v) => {
               if (v === "worker") {
-                navigate("/#subscription");
-                setAccountType("client");
-              } else {
-                setAccountType("client");
+                // Clic sur "Ouvrier Pro" => on envoie vers les forfaits
+                window.location.href = "/#subscription";
+                return;
               }
+              setAccountType("client");
             }}
             className="mb-4"
           >
@@ -246,7 +242,7 @@ const Register: React.FC = () => {
             </TabsContent>
 
             <TabsContent value="worker" className="mt-4">
-              {/* On ne reste pas sur ce contenu : redirection faite via onValueChange */}
+              {/* On ne reste pas ici : redirection faite via onValueChange */}
             </TabsContent>
           </Tabs>
 
@@ -310,7 +306,7 @@ const Register: React.FC = () => {
               </div>
             </div>
 
-            {/* Champ métier : toujours là si jamais on utilise encore worker via une autre entrée */}
+            {/* Champ métier (toujours présent si on utilise encore le flux ouvrier ailleurs) */}
             {isWorker && (
               <div>
                 <Label htmlFor="profession" className="mb-1 block">
