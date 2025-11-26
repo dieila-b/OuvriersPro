@@ -16,8 +16,8 @@ const Index = () => {
         if (el) {
           const rect = el.getBoundingClientRect();
 
-          // 🔧 Offset plus important pour descendre sous la liste des ouvriers
-          const EXTRA_OFFSET = 360; // tu peux augmenter/diminuer cette valeur si besoin
+          // 🔧 Offset plus fort pour descendre sous la liste des ouvriers
+          const EXTRA_OFFSET = 520; // augmente / diminue si tu veux ajuster encore
           const y = rect.top + window.scrollY + EXTRA_OFFSET;
 
           window.scrollTo({
