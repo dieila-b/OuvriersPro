@@ -174,8 +174,8 @@ const MonCompte: React.FC = () => {
                       <CheckCircle2 className="mt-[2px] w-3.5 h-3.5 text-emerald-500" />
                       <span>
                         {language === "fr"
-                          ? "Recherche et contact direct des ouvriers"
-                          : "Search and contact workers directly"}
+                          ? "Recherche et contact direct de tous les ouvriers"
+                          : "Search and contact any worker directly"}
                       </span>
                     </li>
                     <li className="flex items-start gap-1.5">
@@ -183,7 +183,15 @@ const MonCompte: React.FC = () => {
                       <span>
                         {language === "fr"
                           ? "Suivi de vos demandes de travaux"
-                          : "Track your work requests"}
+                          : "Track all your work requests"}
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <CheckCircle2 className="mt-[2px] w-3.5 h-3.5 text-emerald-500" />
+                      <span>
+                        {language === "fr"
+                          ? "Historique complet de vos échanges"
+                          : "Full history of your conversations"}
                       </span>
                     </li>
                   </ul>
@@ -234,7 +242,10 @@ const MonCompte: React.FC = () => {
                 asChild
                 className="w-full bg-pro-blue hover:bg-pro-blue/95 rounded-full py-5 text-sm font-semibold shadow-md shadow-pro-blue/20 transition"
               >
-                <Link to="/register?type=client" className="flex items-center justify-center gap-2">
+                <Link
+                  to="/register?type=client"
+                  className="flex items-center justify-center gap-2"
+                >
                   {text.createClientBtn}
                   <ArrowRight className="w-4 h-4" />
                 </Link>
