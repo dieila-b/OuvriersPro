@@ -288,10 +288,15 @@ const WorkerDetail: React.FC = () => {
         : "Don't have an account yet?",
     about: language === "fr" ? "À propos" : "About",
     reviewsTitle: language === "fr" ? "Avis clients" : "Customer reviews",
-    noReviews: language === "fr" ? "Aucun avis pour le moment" : "No reviews yet",
+    noReviews:
+      language === "fr" ? "Aucun avis pour le moment" : "No reviews yet",
     location: language === "fr" ? "Localisation" : "Location",
     experienceTitle: language === "fr" ? "Expérience" : "Experience",
     hourlyRateTitle: language === "fr" ? "Tarif horaire" : "Hourly rate",
+    noUserError:
+      language === "fr"
+        ? "Votre session a expiré. Merci de vous reconnecter."
+        : "Your session has expired. Please log in again.",
   };
 
   const handleChange = (
@@ -320,55 +325,77 @@ const WorkerDetail: React.FC = () => {
     setSuccessMsg(null);
     setErrorMsg(null);
 
-    const fullWorkerName = `${worker.first_name ?? ""} ${
-      worker.last_name ?? ""
-    }`.trim();
+    try {
+      // ✅ Récupérer l'utilisateur connecté pour remplir client_id
+      const { data: authData, error: authErr } =
+        await supabase.auth.getUser();
 
-    const composedMessage = [
-      `${text.requestTypeLabel} : ${
-        form.requestType === "devis"
-          ? text.requestTypeDevis
-          : form.requestType === "info"
-          ? text.requestTypeInfo
-          : text.requestTypeUrgence
-      }`,
-      form.budget ? `${text.budgetLabel} : ${form.budget}` : "",
-      form.preferredDate ? `${text.dateLabel} : ${form.preferredDate}` : "",
-      "",
-      form.message,
-    ]
-      .filter(Boolean)
-      .join("\n");
+      if (authErr) {
+        console.error(authErr);
+      }
 
-    const { error } = await supabase.from("op_ouvrier_contacts").insert({
-      worker_id: worker.id,
-      worker_name: fullWorkerName || null,
-      full_name: form.name,
-      email: form.email,
-      phone: form.phone,
-      message: composedMessage,
-      status: "new",
-      origin: "web",
-    });
+      const currentUser = authData?.user;
 
-    if (error) {
-      console.error(error);
-      setErrorMsg(text.error);
-    } else {
-      setSuccessMsg(text.success);
-      setForm({
-        name: "",
-        email: "",
-        phone: "",
-        message: "",
-        requestType: "devis",
-        budget: "",
-        preferredDate: "",
-        consent: false,
+      if (!currentUser) {
+        setErrorMsg(text.noUserError);
+        setSending(false);
+        return;
+      }
+
+      const fullWorkerName = `${worker.first_name ?? ""} ${
+        worker.last_name ?? ""
+      }`.trim();
+
+      const composedMessage = [
+        `${text.requestTypeLabel} : ${
+          form.requestType === "devis"
+            ? text.requestTypeDevis
+            : form.requestType === "info"
+            ? text.requestTypeInfo
+            : text.requestTypeUrgence
+        }`,
+        form.budget ? `${text.budgetLabel} : ${form.budget}` : "",
+        form.preferredDate ? `${text.dateLabel} : ${form.preferredDate}` : "",
+        "",
+        form.message,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      const { error } = await supabase.from("op_ouvrier_contacts").insert({
+        worker_id: worker.id,
+        client_id: currentUser.id, // ✅ lien avec le client connecté (RLS)
+        worker_name: fullWorkerName || null,
+        full_name: form.name,
+        email: form.email,
+        phone: form.phone,
+        message: composedMessage,
+        status: "new",
+        origin: "web",
       });
-    }
 
-    setSending(false);
+      if (error) {
+        console.error(error);
+        setErrorMsg(text.error);
+      } else {
+        setSuccessMsg(text.success);
+        setForm({
+          name: "",
+          email: "",
+          phone: "",
+          message: "",
+          requestType: "devis",
+          budget: "",
+          preferredDate: "",
+          consent: false,
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(text.error);
+    } finally {
+      setSending(false);
+    }
   };
 
   // Auth pas encore vérifiée
