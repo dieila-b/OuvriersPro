@@ -1,7 +1,5 @@
 // src/pages/Index.tsx
-import React, { useEffect } from "react";
-import { useLocation } from "react-router-dom";
-
+import { useEffect } from "react";
 import Header from "@/components/Header";
 import HeroSection from "@/components/HeroSection";
 import FeaturesSection from "@/components/FeaturesSection";
@@ -9,22 +7,22 @@ import WorkerSearchSection from "@/components/WorkerSearchSection";
 import SubscriptionSection from "@/components/SubscriptionSection";
 import Footer from "@/components/Footer";
 
-const Index: React.FC = () => {
-  const location = useLocation();
-
-  // Si on arrive avec ?scroll=subscription, on descend automatiquement
+const Index = () => {
+  // Quand on arrive sur /#subscription, on scrolle automatiquement
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (params.get("scroll") === "subscription") {
-      // On laisse le temps au DOM de se rendre
+    if (window.location.hash === "#subscription") {
+      // petit délai pour laisser le layout se rendre
       setTimeout(() => {
         const el = document.getElementById("subscription");
         if (el) {
-          el.scrollIntoView({ behavior: "smooth", block: "start" });
+          el.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
         }
-      }, 0);
+      }, 100);
     }
-  }, [location]);
+  }, []);
 
   return (
     <div className="min-h-screen w-full bg-white overflow-x-hidden flex flex-col">
