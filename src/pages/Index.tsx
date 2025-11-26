@@ -8,7 +8,7 @@ import SubscriptionSection from "@/components/SubscriptionSection";
 import Footer from "@/components/Footer";
 
 const Index = () => {
-  // Quand on arrive sur /#subscription, on scrolle automatiquement
+  // Quand on arrive sur /#subscription, on scrolle automatiquement vers la section forfaits
   useEffect(() => {
     if (window.location.hash === "#subscription") {
       setTimeout(() => {
@@ -16,8 +16,9 @@ const Index = () => {
         if (el) {
           const rect = el.getBoundingClientRect();
 
-          // 👉 décalage augmenté pour aller plus bas dans la section
-          const y = rect.top + window.scrollY + 220;
+          // 🔧 Offset plus important pour descendre sous la liste des ouvriers
+          const EXTRA_OFFSET = 360; // tu peux augmenter/diminuer cette valeur si besoin
+          const y = rect.top + window.scrollY + EXTRA_OFFSET;
 
           window.scrollTo({
             top: y,
@@ -32,13 +33,17 @@ const Index = () => {
     <div className="min-h-screen w-full bg-white overflow-x-hidden flex flex-col">
       <Header />
 
+      {/* Main full width */}
       <main className="w-full flex-1">
+        {/* HERO : contient la zone de recherche */}
         <HeroSection />
 
+        {/* FEATURES */}
         <section className="w-full bg-white py-10 sm:py-14 lg:py-16">
           <FeaturesSection />
         </section>
 
+        {/* RECHERCHE OUVRIERS */}
         <section
           id="search"
           className="w-full bg-white py-10 sm:py-14 lg:py-16 scroll-mt-20"
@@ -46,6 +51,7 @@ const Index = () => {
           <WorkerSearchSection />
         </section>
 
+        {/* ABONNEMENTS / FORFAITS */}
         <section
           id="subscription"
           className="w-full bg-gradient-to-br from-gray-50 to-gray-100 py-10 sm:py-14 lg:py-16 scroll-mt-20"
