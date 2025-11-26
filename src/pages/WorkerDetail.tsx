@@ -1,6 +1,6 @@
 // src/pages/WorkerDetail.tsx
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,10 @@ import {
   Phone,
   Mail,
   MessageCircle,
+  FileText,
   Send,
   Info,
+  Lock,
   Award,
   Briefcase,
   DollarSign,
@@ -69,9 +71,10 @@ const WorkerDetail: React.FC = () => {
   const navigate = useNavigate();
   const { language } = useLanguage();
 
-  // 🔐 Rôle utilisateur
+  // 🔐 Auth & rôle
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
 
   // 👷 Données ouvrier
   const [worker, setWorker] = useState<DbWorker | null>(null);
@@ -95,8 +98,7 @@ const WorkerDetail: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // -------------------------
-  // 🔐 Vérifier l'utilisateur + rôle
-  // - Si pas connecté : redirection vers /login avec message et URL de retour
+  // 🔐 Vérifier que l'utilisateur est connecté + récupérer son rôle
   // -------------------------
   useEffect(() => {
     const checkAuthAndRole = async () => {
@@ -104,22 +106,14 @@ const WorkerDetail: React.FC = () => {
         const { data } = await supabase.auth.getUser();
         const user = data?.user;
 
-        // Non connecté => on envoie vers /login
         if (!user) {
-          navigate("/login", {
-            replace: true,
-            state: {
-              from: `/ouvrier/${id}`,
-              authMessage:
-                language === "fr"
-                  ? "Connectez-vous ou créez un compte client pour contacter cet ouvrier et voir ses coordonnées complètes."
-                  : "Log in or create a customer account to contact this worker and see their full contact details.",
-            },
-          });
+          setIsAuthenticated(false);
+          setUserRole(null);
           return;
         }
 
-        // Connecté : récupérer le rôle dans op_users
+        setIsAuthenticated(true);
+
         const { data: profile, error } = await supabase
           .from("op_users")
           .select("role")
@@ -134,19 +128,20 @@ const WorkerDetail: React.FC = () => {
         setUserRole(role);
       } catch (e) {
         console.error("Auth check error:", e);
+        setIsAuthenticated(false);
         setUserRole(null);
       } finally {
-        setAuthLoading(false);
+        setAuthChecked(true);
       }
     };
 
     checkAuthAndRole();
-  }, [id, language, navigate]);
+  }, []);
 
   const isClient = userRole === "user";
 
   // -------------------------
-  // 👷 Charger l'ouvrier et ses avis (uniquement pour comptes client)
+  // 👷 Charger l'ouvrier et ses avis (uniquement pour les clients connectés)
   // -------------------------
   useEffect(() => {
     const fetchWorkerData = async () => {
@@ -155,10 +150,15 @@ const WorkerDetail: React.FC = () => {
         setLoading(false);
         return;
       }
+      if (!isAuthenticated || !isClient) {
+        setLoading(false);
+        return;
+      }
 
       setLoading(true);
       setError(null);
 
+      // Charger l'ouvrier
       const { data: workerData, error: workerError } = await supabase
         .from("op_ouvriers")
         .select(
@@ -195,6 +195,7 @@ const WorkerDetail: React.FC = () => {
 
       setWorker(workerData as DbWorker);
 
+      // Charger les avis
       const { data: reviewsData } = await supabase
         .from("op_ouvrier_reviews")
         .select("id, author_name, rating, comment, created_at")
@@ -209,10 +210,10 @@ const WorkerDetail: React.FC = () => {
       setLoading(false);
     };
 
-    if (!authLoading && isClient) {
+    if (authChecked && isAuthenticated && isClient) {
       fetchWorkerData();
     }
-  }, [id, authLoading, isClient]);
+  }, [id, authChecked, isAuthenticated, isClient]);
 
   const formatCurrency = (
     value: number | null | undefined,
@@ -258,10 +259,16 @@ const WorkerDetail: React.FC = () => {
     perHour: language === "fr" ? "/h" : "/h",
     contactInfos:
       language === "fr" ? "Coordonnées directes" : "Direct contact",
+    phoneLabel: language === "fr" ? "Téléphone" : "Phone",
+    emailLabel: language === "fr" ? "Email" : "Email",
     whatsappLabel: language === "fr" ? "WhatsApp" : "WhatsApp",
+    quickActions:
+      language === "fr" ? "Actions rapides" : "Quick actions",
     callBtn: language === "fr" ? "Appeler" : "Call",
     whatsappBtn: language === "fr" ? "WhatsApp" : "WhatsApp",
     emailBtn: language === "fr" ? "Email" : "Email",
+    devisBtn:
+      language === "fr" ? "Demander un devis" : "Request quote",
     requestTypeLabel:
       language === "fr" ? "Type de demande" : "Request type",
     requestTypeDevis:
@@ -286,14 +293,25 @@ const WorkerDetail: React.FC = () => {
       language === "fr"
         ? "Vos données sont uniquement transmises à ce professionnel."
         : "Your data is only shared with this professional.",
+    loginRequiredTitle:
+      language === "fr" ? "Connexion requise" : "Login required",
+    loginRequiredDesc:
+      language === "fr"
+        ? "Vous devez être connecté pour voir les détails et contacter les ouvriers."
+        : "You must be logged in to view details and contact workers.",
+    loginBtn: language === "fr" ? "Se connecter" : "Log in",
+    about: language === "fr" ? "À propos" : "About",
+    reviewsTitle: language === "fr" ? "Avis clients" : "Customer reviews",
+    noReviews:
+      language === "fr" ? "Aucun avis pour le moment" : "No reviews yet",
     roleDeniedTitle:
       language === "fr"
         ? "Accès réservé aux comptes client"
         : "Access restricted to client accounts",
     roleDeniedDesc:
       language === "fr"
-        ? "Cet espace est réservé aux comptes client. Pour consulter les coordonnées complètes des ouvriers, utilisez un compte client ou créez-en un nouveau."
-        : "This area is reserved for customer accounts. To view full worker contact details, use a customer account or create a new one.",
+        ? "Seuls les particuliers / clients connectés peuvent consulter les coordonnées complètes des ouvriers."
+        : "Only logged-in client accounts can view full worker contact details.",
   };
 
   const handleChange = (
@@ -319,7 +337,7 @@ const WorkerDetail: React.FC = () => {
     if (!form.consent) return;
 
     setSending(true);
-    setSuccessMsg(null);
+    setSuccessMsg(null    );
     setErrorMsg(null);
 
     const fullWorkerName = `${worker.first_name ?? ""} ${
@@ -373,12 +391,8 @@ const WorkerDetail: React.FC = () => {
     setSending(false);
   };
 
-  // -------------------------
-  // États d'affichage
-  // -------------------------
-
-  // Auth en cours
-  if (authLoading) {
+  // Auth pas encore vérifiée
+  if (!authChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-sm text-muted-foreground">
@@ -388,8 +402,50 @@ const WorkerDetail: React.FC = () => {
     );
   }
 
-  // Connecté mais pas un compte client
-  if (!authLoading && userRole && !isClient) {
+  // Pas authentifié
+  if (authChecked && !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <Card className="max-w-md w-full p-6 text-center">
+          <div className="flex items-center justify-center mb-4">
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <Lock className="w-6 h-6 text-primary" />
+            </div>
+          </div>
+          <h1 className="text-xl font-semibold mb-2">
+            {text.loginRequiredTitle}
+          </h1>
+          <p className="text-sm text-muted-foreground mb-6">
+            {text.loginRequiredDesc}
+          </p>
+          <div className="flex flex-col gap-2">
+            <Button
+              className="w-full"
+              onClick={() =>
+                navigate(
+                  `/login?redirect=${encodeURIComponent(
+                    window.location.pathname
+                  )}`
+                )
+              }
+            >
+              {text.loginBtn}
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => navigate(-1)}
+            >
+              {text.back}
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // Auth OK mais pas un compte "client"
+  if (authChecked && isAuthenticated && !isClient) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
         <Card className="max-w-md w-full p-6 text-center">
@@ -401,24 +457,25 @@ const WorkerDetail: React.FC = () => {
           <h1 className="text-xl font-semibold mb-2">
             {text.roleDeniedTitle}
           </h1>
-          <p className="text-sm text-muted-foreground mb-6">
+          <p className="text-sm text-muted-foreground mb-4">
             {text.roleDeniedDesc}
           </p>
           <div className="flex flex-col gap-2">
             <Button
+              variant="outline"
               className="w-full"
               onClick={() => navigate("/mon-compte")}
             >
-              {language === "fr" ? "Gérer mon compte" : "Manage my account"}
+              {language === "fr"
+                ? "Gérer mon compte"
+                : "Manage my account"}
             </Button>
             <Button
-              variant="ghost"
               className="w-full"
               onClick={() => navigate("/")}
+              variant="ghost"
             >
-              {language === "fr"
-                ? "Retour à l'accueil"
-                : "Back to home"}
+              {language === "fr" ? "Retour à l'accueil" : "Back to home"}
             </Button>
           </div>
         </Card>
@@ -426,7 +483,7 @@ const WorkerDetail: React.FC = () => {
     );
   }
 
-  // Chargement des données ouvrier
+  // Chargement
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -499,7 +556,7 @@ const WorkerDetail: React.FC = () => {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Colonne principale */}
           <div className="lg:col-span-2 space-y-6">
-            {/* En-tête avec avatar et infos principales */}
+            {/* En-tête */}
             <Card className="p-6">
               <div className="flex items-start gap-6 mb-6">
                 <div className="w-24 h-24 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-2xl font-bold flex-shrink-0">
@@ -665,6 +722,7 @@ const WorkerDetail: React.FC = () => {
                 )}
               </div>
 
+              {/* Actions rapides */}
               <div className="space-y-2">
                 {worker.phone && (
                   <Button
@@ -718,7 +776,7 @@ const WorkerDetail: React.FC = () => {
               </p>
 
               {successMsg && (
-                <div className="mb-4 p-3 text-sm bg-green-50 text-green-700 border border-green-200 rounded-md">
+                <div className="mb-4 p-3 text-sm bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 rounded-md">
                   {successMsg}
                 </div>
               )}
