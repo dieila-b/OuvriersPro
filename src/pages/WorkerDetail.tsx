@@ -17,7 +17,6 @@ import {
   MessageCircle,
   Send,
   Info,
-  Lock,
   Award,
   Briefcase,
   DollarSign,
@@ -124,7 +123,7 @@ const WorkerDetail: React.FC = () => {
           console.error("Role fetch error:", error);
         }
 
-        const role = (profile?.role as string) || "user";
+        const role = (profile?.role as string) || null;
         setUserRole(role);
       } catch (e) {
         console.error("Auth check error:", e);
@@ -138,7 +137,8 @@ const WorkerDetail: React.FC = () => {
     checkAuthAndRole();
   }, []);
 
-  const isClient = userRole === "user";
+  // On considère qu'un rôle vide / null = compte client standard
+  const isClient = !userRole || userRole === "user";
 
   // 🚦 Rediriger automatiquement vers la page de connexion
   // si l'utilisateur n'est pas authentifié
@@ -298,14 +298,6 @@ const WorkerDetail: React.FC = () => {
       language === "fr"
         ? "Vos données sont uniquement transmises à ce professionnel."
         : "Your data is only shared with this professional.",
-    loginRequiredTitle:
-      language === "fr" ? "Connexion requise" : "Login required",
-    loginRequiredDesc:
-      language === "fr"
-        ? "Vous devez être connecté pour voir les détails et contacter les ouvriers."
-        : "You must be logged in to view details and contact workers.",
-    loginBtn: language === "fr" ? "Se connecter" : "Log in",
-    about: language === "fr" ? "À propos" : "About",
     reviewsTitle: language === "fr" ? "Avis clients" : "Customer reviews",
     noReviews:
       language === "fr" ? "Aucun avis pour le moment" : "No reviews yet",
@@ -411,7 +403,7 @@ const WorkerDetail: React.FC = () => {
     );
   }
 
-  // Auth vérifiée mais pas connecté → redirection vers /login
+  // Auth vérifiée mais pas encore redirigé (non connecté)
   if (authChecked && !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
