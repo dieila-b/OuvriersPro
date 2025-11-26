@@ -21,10 +21,9 @@ import {
   Lock,
   Award,
   Briefcase,
-  Clock,
   DollarSign,
-  CheckCircle,
   StarIcon,
+  Shield,
 } from "lucide-react";
 
 type DbWorker = {
@@ -72,9 +71,10 @@ const WorkerDetail: React.FC = () => {
   const navigate = useNavigate();
   const { language } = useLanguage();
 
-  // 🔐 Auth
+  // 🔐 Auth & rôle
   const [authChecked, setAuthChecked] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   // 👷 Données ouvrier
   const [worker, setWorker] = useState<DbWorker | null>(null);
@@ -98,30 +98,50 @@ const WorkerDetail: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // -------------------------
-  // 🔐 Vérifier que l'utilisateur est connecté
+  // 🔐 Vérifier que l'utilisateur est connecté + récupérer son rôle
   // -------------------------
   useEffect(() => {
-    const checkAuth = async () => {
+    const checkAuthAndRole = async () => {
       try {
         const { data } = await supabase.auth.getUser();
-        if (data?.user) {
-          setIsAuthenticated(true);
-        } else {
+        const user = data?.user;
+
+        if (!user) {
           setIsAuthenticated(false);
+          setUserRole(null);
+          return;
         }
+
+        setIsAuthenticated(true);
+
+        const { data: profile, error } = await supabase
+          .from("op_users")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Role fetch error:", error);
+        }
+
+        const role = (profile?.role as string) || "user";
+        setUserRole(role);
       } catch (e) {
         console.error("Auth check error:", e);
         setIsAuthenticated(false);
+        setUserRole(null);
       } finally {
         setAuthChecked(true);
       }
     };
 
-    checkAuth();
+    checkAuthAndRole();
   }, []);
 
+  const isClient = userRole === "user";
+
   // -------------------------
-  // 👷 Charger l'ouvrier et ses avis
+  // 👷 Charger l'ouvrier et ses avis (uniquement pour les clients connectés)
   // -------------------------
   useEffect(() => {
     const fetchWorkerData = async () => {
@@ -130,7 +150,7 @@ const WorkerDetail: React.FC = () => {
         setLoading(false);
         return;
       }
-      if (!isAuthenticated) {
+      if (!isAuthenticated || !isClient) {
         setLoading(false);
         return;
       }
@@ -190,10 +210,10 @@ const WorkerDetail: React.FC = () => {
       setLoading(false);
     };
 
-    if (authChecked && isAuthenticated) {
+    if (authChecked && isAuthenticated && isClient) {
       fetchWorkerData();
     }
-  }, [id, authChecked, isAuthenticated]);
+  }, [id, authChecked, isAuthenticated, isClient]);
 
   const formatCurrency = (
     value: number | null | undefined,
@@ -280,18 +300,18 @@ const WorkerDetail: React.FC = () => {
         ? "Vous devez être connecté pour voir les détails et contacter les ouvriers."
         : "You must be logged in to view details and contact workers.",
     loginBtn: language === "fr" ? "Se connecter" : "Log in",
-    registerBtn:
-      language === "fr" ? "Créer un compte" : "Create an account",
-    noAccountYet:
-      language === "fr"
-        ? "Vous n'avez pas encore de compte ?"
-        : "Don't have an account yet?",
     about: language === "fr" ? "À propos" : "About",
     reviewsTitle: language === "fr" ? "Avis clients" : "Customer reviews",
-    noReviews: language === "fr" ? "Aucun avis pour le moment" : "No reviews yet",
-    location: language === "fr" ? "Localisation" : "Location",
-    experienceTitle: language === "fr" ? "Expérience" : "Experience",
-    hourlyRateTitle: language === "fr" ? "Tarif horaire" : "Hourly rate",
+    noReviews:
+      language === "fr" ? "Aucun avis pour le moment" : "No reviews yet",
+    roleDeniedTitle:
+      language === "fr"
+        ? "Accès réservé aux comptes client"
+        : "Access restricted to client accounts",
+    roleDeniedDesc:
+      language === "fr"
+        ? "Seuls les particuliers / clients connectés peuvent consulter les coordonnées complètes des ouvriers."
+        : "Only logged-in client accounts can view full worker contact details.",
   };
 
   const handleChange = (
@@ -317,7 +337,7 @@ const WorkerDetail: React.FC = () => {
     if (!form.consent) return;
 
     setSending(true);
-    setSuccessMsg(null);
+    setSuccessMsg(null    );
     setErrorMsg(null);
 
     const fullWorkerName = `${worker.first_name ?? ""} ${
@@ -384,8 +404,6 @@ const WorkerDetail: React.FC = () => {
 
   // Pas authentifié
   if (authChecked && !isAuthenticated) {
-    const redirect = encodeURIComponent(window.location.pathname);
-
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
         <Card className="max-w-md w-full p-6 text-center">
@@ -397,33 +415,67 @@ const WorkerDetail: React.FC = () => {
           <h1 className="text-xl font-semibold mb-2">
             {text.loginRequiredTitle}
           </h1>
-          <p className="text-sm text-muted-foreground mb-4">
+          <p className="text-sm text-muted-foreground mb-6">
             {text.loginRequiredDesc}
           </p>
-          <p className="text-xs text-muted-foreground mb-6">
-            {text.noAccountYet}
-          </p>
-
           <div className="flex flex-col gap-2">
             <Button
               className="w-full"
-              onClick={() => navigate(`/login?redirect=${redirect}`)}
+              onClick={() =>
+                navigate(
+                  `/login?redirect=${encodeURIComponent(
+                    window.location.pathname
+                  )}`
+                )
+              }
             >
               {text.loginBtn}
             </Button>
             <Button
               variant="outline"
               className="w-full"
-              onClick={() => navigate(`/register?redirect=${redirect}`)}
-            >
-              {text.registerBtn}
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full"
               onClick={() => navigate(-1)}
             >
               {text.back}
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // Auth OK mais pas un compte "client"
+  if (authChecked && isAuthenticated && !isClient) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <Card className="max-w-md w-full p-6 text-center">
+          <div className="flex items-center justify-center mb-4">
+            <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center">
+              <Shield className="w-6 h-6 text-amber-600" />
+            </div>
+          </div>
+          <h1 className="text-xl font-semibold mb-2">
+            {text.roleDeniedTitle}
+          </h1>
+          <p className="text-sm text-muted-foreground mb-4">
+            {text.roleDeniedDesc}
+          </p>
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => navigate("/mon-compte")}
+            >
+              {language === "fr"
+                ? "Gérer mon compte"
+                : "Manage my account"}
+            </Button>
+            <Button
+              className="w-full"
+              onClick={() => navigate("/")}
+              variant="ghost"
+            >
+              {language === "fr" ? "Retour à l'accueil" : "Back to home"}
             </Button>
           </div>
         </Card>
@@ -463,9 +515,9 @@ const WorkerDetail: React.FC = () => {
     );
   }
 
-  const fullName = `${worker.first_name ?? ""} ${
-    worker.last_name ?? ""
-  }`.trim() || "Professionnel";
+  const fullName =
+    `${worker.first_name ?? ""} ${worker.last_name ?? ""}`.trim() ||
+    "Professionnel";
 
   const locationParts = [
     worker.district,
@@ -480,9 +532,7 @@ const WorkerDetail: React.FC = () => {
   const whatsappUrl =
     phoneNumber && phoneNumber.length >= 8
       ? `https://wa.me/${
-          phoneNumber.startsWith("+")
-            ? phoneNumber.slice(1)
-            : phoneNumber
+          phoneNumber.startsWith("+") ? phoneNumber.slice(1) : phoneNumber
         }`
       : "";
   const mailtoUrl = worker.email
@@ -506,7 +556,7 @@ const WorkerDetail: React.FC = () => {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Colonne principale */}
           <div className="lg:col-span-2 space-y-6">
-            {/* En-tête avec avatar et infos principales */}
+            {/* En-tête */}
             <Card className="p-6">
               <div className="flex items-start gap-6 mb-6">
                 <div className="w-24 h-24 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-2xl font-bold flex-shrink-0">
@@ -654,10 +704,7 @@ const WorkerDetail: React.FC = () => {
                 {worker.phone && (
                   <div className="flex items-center gap-3 text-sm">
                     <Phone className="w-4 h-4 text-primary" />
-                    <a
-                      href={`tel:${worker.phone}`}
-                      className="hover:underline"
-                    >
+                    <a href={`tel:${worker.phone}`} className="hover:underline">
                       {worker.phone}
                     </a>
                   </div>
