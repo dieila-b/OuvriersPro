@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   HardHat,
   ArrowRight,
+  User,
 } from "lucide-react";
 
 const MonCompte: React.FC = () => {
@@ -27,8 +28,8 @@ const MonCompte: React.FC = () => {
         : "Already have an account?",
     loginHint:
       language === "fr"
-        ? "Que vous soyez Ouvrier ou Particulier, utilisez le même bouton pour vous connecter."
-        : "Whether you are a worker or a customer, use the same button to log in.",
+        ? "Que vous soyez ouvrier, particulier ou entreprise, utilisez le même bouton pour vous connecter."
+        : "Whether you are a worker, an individual or a company, use the same button to log in.",
     loginBtn: language === "fr" ? "Se connecter" : "Log in",
     orLabel:
       language === "fr"
@@ -40,30 +41,24 @@ const MonCompte: React.FC = () => {
     // Carte compte principal
     clientAccountTitle:
       language === "fr"
-        ? "Compte OuvriersPro"
-        : "OuvriersPro account",
+        ? "Compte client / ouvrier"
+        : "Client / worker account",
     clientAccountDesc:
       language === "fr"
-        ? "Un seul compte pour tous : particuliers, entreprises et ouvriers. Commencez ici pour envoyer des demandes de travaux ou, si vous êtes artisan, préparer votre futur profil Ouvrier Pro."
-        : "One account for everyone: customers, companies and workers. Start here to send job requests or, if you are a worker, prepare your future Pro profile.",
+        ? "Un seul compte pour tous : particuliers, entreprises et ouvriers. Créez votre compte OuvriersPro, puis choisissez comment vous utilisez la plateforme : pour chercher un ouvrier ou pour proposer vos services."
+        : "A single account for everyone: individuals, companies and workers. Create your OuvriersPro account, then choose how you use the platform: to find a worker or to offer your services.",
     createClientBtn:
       language === "fr"
-        ? "Créer mon compte"
-        : "Create my account",
-
-    alreadyAccount:
-      language === "fr"
-        ? "Vous avez déjà un compte ?"
-        : "Already have an account?",
-    login: language === "fr" ? "Se connecter" : "Log in",
+        ? "Créer mon compte (particulier ou ouvrier)"
+        : "Create my account (client or worker)",
 
     // Bloc info ouvrier
     workerInfoTitle:
-      language === "fr" ? "Vous êtes ouvrier ?" : "Are you a worker?",
+      language === "fr" ? "Vous êtes ouvrier / artisan ?" : "Are you a worker?",
     workerInfoText:
       language === "fr"
-        ? "Créez d’abord votre compte OuvriersPro. Depuis votre espace, vous pourrez ensuite activer votre profil Ouvrier Pro et choisir votre forfait."
-        : "First create your OuvriersPro account. From your dashboard, you’ll then be able to activate your Pro worker profile and choose a plan.",
+        ? "Commencez par créer le même compte que les clients. Depuis votre espace, vous pourrez ensuite activer votre profil Ouvrier Pro, choisir votre forfait et être mis en avant auprès des clients."
+        : "Start by creating the same account as clients. From your dashboard, you’ll then be able to activate your Pro worker profile, choose a plan and be highlighted to potential clients.",
   };
 
   return (
@@ -113,7 +108,7 @@ const MonCompte: React.FC = () => {
           </h2>
 
           <div className="grid gap-6 lg:grid-cols-[2fr,1.5fr] items-start">
-            {/* Carte compte OuvriersPro */}
+            {/* Carte compte Client / Ouvrier */}
             <div className="rounded-lg border border-slate-200 bg-white p-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-9 h-9 rounded-full bg-pro-blue/10 flex items-center justify-center">
@@ -128,23 +123,75 @@ const MonCompte: React.FC = () => {
                 {text.clientAccountDesc}
               </p>
 
-              <ul className="space-y-2 text-sm text-slate-700 mb-5">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <span>Recherche et contact direct des ouvriers</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <span>Suivi de vos demandes de travaux</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <span>
-                    Possibilité d’activer un profil Ouvrier Pro si vous êtes
-                    artisan
-                  </span>
-                </li>
-              </ul>
+              <div className="grid gap-3 sm:grid-cols-2 mb-5">
+                {/* Colonne "Je cherche un ouvrier" */}
+                <div className="rounded-md bg-slate-50 p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <User className="w-4 h-4 text-pro-blue" />
+                    <span className="text-xs font-semibold uppercase text-slate-600">
+                      {language === "fr"
+                        ? "Je cherche un ouvrier"
+                        : "I’m looking for a worker"}
+                    </span>
+                  </div>
+                  <ul className="space-y-1 text-xs text-slate-700">
+                    <li className="flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                      <span>
+                        {language === "fr"
+                          ? "Recherche et contact direct des ouvriers"
+                          : "Search and contact workers directly"}
+                      </span>
+                    </li>
+                    <li className="flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                      <span>
+                        {language === "fr"
+                          ? "Suivi de vos demandes de travaux"
+                          : "Track your work requests"}
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Colonne "Je suis ouvrier" */}
+                <div className="rounded-md bg-slate-50 p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <HardHat className="w-4 h-4 text-amber-600" />
+                    <span className="text-xs font-semibold uppercase text-slate-600">
+                      {language === "fr"
+                        ? "Je suis ouvrier / artisan"
+                        : "I’m a worker / craftsman"}
+                    </span>
+                  </div>
+                  <ul className="space-y-1 text-xs text-slate-700">
+                    <li className="flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                      <span>
+                        {language === "fr"
+                          ? "Un seul compte pour gérer vos demandes et votre profil"
+                          : "One account to manage your requests and profile"}
+                      </span>
+                    </li>
+                    <li className="flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                      <span>
+                        {language === "fr"
+                          ? "Activation ensuite de votre profil Ouvrier Pro et choix du forfait"
+                          : "Later activate your Pro worker profile and choose a plan"}
+                      </span>
+                    </li>
+                    <li className="flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                      <span>
+                        {language === "fr"
+                          ? "Visibilité auprès des clients de votre zone"
+                          : "Visibility with clients in your area"}
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
 
               <Button
                 asChild
@@ -171,9 +218,24 @@ const MonCompte: React.FC = () => {
                 {text.workerInfoText}
               </p>
               <ul className="space-y-1 text-xs text-slate-500">
-                <li>• Un seul compte pour tout gérer</li>
-                <li>• Vous pourrez choisir votre forfait (Gratuit, Mensuel, Annuel)</li>
-                <li>• Votre profil sera mis en avant auprès des clients</li>
+                <li>
+                  •{" "}
+                  {language === "fr"
+                    ? "Un seul compte pour tout gérer (demandes, profil, facturation...)"
+                    : "One account to manage everything (requests, profile, billing, etc.)"}
+                </li>
+                <li>
+                  •{" "}
+                  {language === "fr"
+                    ? "Choix du forfait (Gratuit, Mensuel, Annuel) une fois votre profil activé"
+                    : "Choose a plan (Free, Monthly, Yearly) once your profile is activated"}
+                </li>
+                <li>
+                  •{" "}
+                  {language === "fr"
+                    ? "Profil mis en avant auprès des clients de votre secteur"
+                    : "Profile highlighted to clients in your area"}
+                </li>
               </ul>
             </div>
           </div>
