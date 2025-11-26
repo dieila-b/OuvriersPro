@@ -45,7 +45,7 @@ const Register: React.FC = () => {
   const { language } = useLanguage();
   const [searchParams] = useSearchParams();
 
-  // Type de compte (client / worker) détecté via ?type=
+  // Type de compte (client / worker)
   const [accountType, setAccountType] = useState<AccountType>("client");
 
   const [form, setForm] = useState<FormState>({
@@ -113,22 +113,22 @@ const Register: React.FC = () => {
 
   // ----------------------------
   //  Détecter ?type=client / worker
+  //  Si type=worker, on redirige vers les forfaits
   // ----------------------------
   useEffect(() => {
     const typeParam = (searchParams.get("type") || "").toLowerCase();
     if (typeParam === "worker" || typeParam === "ouvrier") {
-      setAccountType("worker");
+      navigate("/#subscription");
+      setAccountType("client");
     } else if (typeParam === "client") {
       setAccountType("client");
     }
-  }, [searchParams]);
+  }, [searchParams, navigate]);
 
   // ----------------------------
   //  Gestion des champs
   // ----------------------------
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setForm((prev) => ({
       ...prev,
@@ -178,10 +178,8 @@ const Register: React.FC = () => {
 
       // Succès : on redirige selon le type
       if (accountType === "worker") {
-        // Ouvrier : directement vers le flux d’inscription / forfaits
         navigate("/inscription-ouvrier");
       } else {
-        // Client : retour à l’accueil (ou page précédente)
         navigate("/");
       }
     } catch (err) {
@@ -218,10 +216,18 @@ const Register: React.FC = () => {
             {isWorker ? text.subtitleWorker : text.subtitleClient}
           </p>
 
-          {/* Tabs client / worker, synchronisés avec ?type */}
+          {/* Onglets client / worker.
+              Si on clique sur "worker", on redirige vers /#subscription */}
           <Tabs
             value={accountType}
-            onValueChange={(v) => setAccountType(v as AccountType)}
+            onValueChange={(v) => {
+              if (v === "worker") {
+                navigate("/#subscription");
+                setAccountType("client");
+              } else {
+                setAccountType("client");
+              }
+            }}
             className="mb-4"
           >
             <TabsList className="grid grid-cols-2 w-full">
@@ -236,12 +242,11 @@ const Register: React.FC = () => {
             </TabsList>
 
             <TabsContent value="client" className="mt-4">
-              {/* Le formulaire est le même, seul le texte/CTA change,
-                  donc on ne duplique pas: c'est géré plus bas */}
+              {/* Le formulaire est géré plus bas */}
             </TabsContent>
 
             <TabsContent value="worker" className="mt-4">
-              {/* idem */}
+              {/* On ne reste pas sur ce contenu : redirection faite via onValueChange */}
             </TabsContent>
           </Tabs>
 
@@ -305,7 +310,7 @@ const Register: React.FC = () => {
               </div>
             </div>
 
-            {/* Champ métier surtout utile pour l’ouvrier */}
+            {/* Champ métier : toujours là si jamais on utilise encore worker via une autre entrée */}
             {isWorker && (
               <div>
                 <Label htmlFor="profession" className="mb-1 block">
