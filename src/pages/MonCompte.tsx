@@ -30,29 +30,40 @@ const MonCompte: React.FC = () => {
         ? "Que vous soyez Ouvrier ou Particulier, utilisez le même bouton pour vous connecter."
         : "Whether you are a worker or a customer, use the same button to log in.",
     loginBtn: language === "fr" ? "Se connecter" : "Log in",
-    orLabel: language === "fr" ? "— ou créer un nouveau compte —" : "— or create a new account —",
+    orLabel:
+      language === "fr"
+        ? "— ou créer un nouveau compte —"
+        : "— or create a new account —",
     newAccountTitle:
       language === "fr" ? "Créer un nouveau compte" : "Create a new account",
+
+    // Carte compte principal
     clientAccountTitle:
       language === "fr"
-        ? "Compte Particulier / Client"
-        : "Customer account",
+        ? "Compte OuvriersPro"
+        : "OuvriersPro account",
     clientAccountDesc:
       language === "fr"
-        ? "Pour les particuliers ou entreprises qui recherchent un ouvrier et souhaitent envoyer des demandes de travaux."
-        : "For individuals or companies looking for workers and wishing to send work requests.",
+        ? "Un seul compte pour tous : particuliers, entreprises et ouvriers. Commencez ici pour envoyer des demandes de travaux ou, si vous êtes artisan, préparer votre futur profil Ouvrier Pro."
+        : "One account for everyone: customers, companies and workers. Start here to send job requests or, if you are a worker, prepare your future Pro profile.",
     createClientBtn:
       language === "fr"
-        ? "Créer un compte Particulier"
-        : "Create customer account",
-    workerInfoTitle:
+        ? "Créer mon compte"
+        : "Create my account",
+
+    alreadyAccount:
       language === "fr"
-        ? "Vous êtes ouvrier ?"
-        : "Are you a worker?",
+        ? "Vous avez déjà un compte ?"
+        : "Already have an account?",
+    login: language === "fr" ? "Se connecter" : "Log in",
+
+    // Bloc info ouvrier
+    workerInfoTitle:
+      language === "fr" ? "Vous êtes ouvrier ?" : "Are you a worker?",
     workerInfoText:
       language === "fr"
-        ? "Créez d’abord votre compte client. Depuis votre espace, vous pourrez ensuite activer votre profil Ouvrier Pro et choisir votre forfait."
-        : "First create your customer account. From your dashboard, you’ll then be able to activate your Pro worker profile and choose a plan.",
+        ? "Créez d’abord votre compte OuvriersPro. Depuis votre espace, vous pourrez ensuite activer votre profil Ouvrier Pro et choisir votre forfait."
+        : "First create your OuvriersPro account. From your dashboard, you’ll then be able to activate your Pro worker profile and choose a plan.",
   };
 
   return (
@@ -102,7 +113,7 @@ const MonCompte: React.FC = () => {
           </h2>
 
           <div className="grid gap-6 lg:grid-cols-[2fr,1.5fr] items-start">
-            {/* Carte compte client */}
+            {/* Carte compte OuvriersPro */}
             <div className="rounded-lg border border-slate-200 bg-white p-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-9 h-9 rounded-full bg-pro-blue/10 flex items-center justify-center">
@@ -128,7 +139,10 @@ const MonCompte: React.FC = () => {
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <span>Accès futur au profil Ouvrier Pro si vous êtes artisan</span>
+                  <span>
+                    Possibilité d’activer un profil Ouvrier Pro si vous êtes
+                    artisan
+                  </span>
                 </li>
               </ul>
 
@@ -143,7 +157,7 @@ const MonCompte: React.FC = () => {
               </Button>
             </div>
 
-            {/* Info pour les ouvriers (sans deuxième carte) */}
+            {/* Info pour les ouvriers */}
             <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center">
