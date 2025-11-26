@@ -12,7 +12,10 @@ import NotFound from "./pages/NotFound";
 import InscriptionOuvrier from "./pages/InscriptionOuvrier";
 import WorkerDetail from "./pages/WorkerDetail";
 import Login from "./pages/Login";
-import Register from "./pages/Register"; // ✅ nouvelle page d'inscription
+import Register from "./pages/Register";
+
+// Nouvelle page : espace de connexion / inscription
+import MonCompte from "./pages/MonCompte";   // ✅ ajoutée
 
 // Back-office Admin
 import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
@@ -36,25 +39,25 @@ const App = () => (
 
         <BrowserRouter>
           <Routes>
-            {/* 🏠 Page d'accueil */}
+            {/* 🏠 Accueil */}
             <Route path="/" element={<Index />} />
 
-            {/* 🔐 Connexion (admin + ouvriers + particuliers) */}
+            {/* 🧑‍💼 Mon compte (connexion + inscription + choix ouvrier/particulier) */}
+            <Route path="/mon-compte" element={<MonCompte />} />
+
+            {/* 🔐 Connexion */}
             <Route path="/login" element={<Login />} />
 
-            {/* 🆕 Création de compte (particulier / ouvrier) */}
+            {/* 🆕 Inscription utilisateur (particulier ou ouvrier) */}
             <Route path="/register" element={<Register />} />
 
-            {/* 📝 Inscription ouvrier (formulaire spécifique) */}
-            <Route
-              path="/inscription-ouvrier"
-              element={<InscriptionOuvrier />}
-            />
+            {/* 📝 Formulaire d'inscription ouvrier + forfait */}
+            <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
 
-            {/* 👤 Fiche ouvrier (détails visibles uniquement si connecté – géré dans WorkerDetail) */}
+            {/* 👤 Fiche ouvrier (protégée dans WorkerDetail) */}
             <Route path="/ouvrier/:id" element={<WorkerDetail />} />
 
-            {/* 👷‍♂️ Espace ouvrier (protégé, rôle worker) */}
+            {/* 👷‍♂️ Espace ouvrier (protégé : worker) */}
             <Route
               path="/espace-ouvrier"
               element={
@@ -64,7 +67,7 @@ const App = () => (
               }
             />
 
-            {/* 🛠️ Admin : Dashboard (protégé) */}
+            {/* 🛠️ Admin : Dashboard */}
             <Route
               path="/admin/dashboard"
               element={
@@ -74,7 +77,7 @@ const App = () => (
               }
             />
 
-            {/* 🛠️ Admin : demandes de contact (protégé) */}
+            {/* 🛠️ Admin : demandes de contact */}
             <Route
               path="/admin/ouvrier-contacts"
               element={
@@ -84,7 +87,7 @@ const App = () => (
               }
             />
 
-            {/* 🛠️ Admin : inscriptions ouvriers (protégé) */}
+            {/* 🛠️ Admin : inscriptions ouvriers */}
             <Route
               path="/admin/ouvriers"
               element={
