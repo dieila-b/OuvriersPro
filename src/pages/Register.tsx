@@ -1,172 +1,393 @@
 // src/pages/Register.tsx
-import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import {
+  Link,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Input } from "@/components/ui/input";
+
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
+
+import {
+  ArrowLeft,
+  Loader2,
+  User,
+  HardHat,
+  Mail,
+  Phone,
+  Lock,
+} from "lucide-react";
+
+type AccountType = "client" | "worker";
+
+type FormState = {
+  fullName: string;
+  email: string;
+  phone: string;
+  password: string;
+  confirmPassword: string;
+  profession: string; // surtout pour les ouvriers
+};
 
 const Register: React.FC = () => {
-  const { language } = useLanguage();
   const navigate = useNavigate();
+  const { language } = useLanguage();
+  const [searchParams] = useSearchParams();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState<"particulier" | "ouvrier">("particulier");
-  const [loading, setLoading] = useState(false);
+  // Type de compte (client / worker) détecté via ?type=
+  const [accountType, setAccountType] = useState<AccountType>("client");
+
+  const [form, setForm] = useState<FormState>({
+    fullName: "",
+    email: "",
+    phone: "",
+    password: "",
+    confirmPassword: "",
+    profession: "",
+  });
+
+  const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // ----------------------------
+  //   Textes FR / EN
+  // ----------------------------
   const text = {
-    title:
+    title: language === "fr" ? "Créer un compte" : "Create an account",
+    back: language === "fr" ? "Retour" : "Back",
+    subtitleClient:
       language === "fr"
-        ? "Créer un compte"
-        : "Create an account",
-    subtitle:
+        ? "Compte pour les particuliers ou entreprises qui recherchent des ouvriers."
+        : "Account for individuals or companies looking for workers.",
+    subtitleWorker:
       language === "fr"
-        ? "Créez votre compte pour pouvoir contacter les ouvriers."
-        : "Create your account to contact workers.",
-    name: language === "fr" ? "Nom complet" : "Full name",
-    email: language === "fr" ? "Adresse e-mail" : "Email address",
+        ? "Compte pour les ouvriers qui souhaitent être visibles, choisir un forfait et recevoir des demandes."
+        : "Account for workers who want to be visible, choose a plan and receive requests.",
+    tabClient: language === "fr" ? "Particulier / Client" : "Customer",
+    tabWorker: language === "fr" ? "Ouvrier Pro" : "Pro worker",
+    fullName: language === "fr" ? "Nom complet" : "Full name",
+    email: language === "fr" ? "Email" : "Email",
+    phone: language === "fr" ? "Téléphone" : "Phone",
     password: language === "fr" ? "Mot de passe" : "Password",
-    roleLabel:
+    confirmPassword:
+      language === "fr" ? "Confirmer le mot de passe" : "Confirm password",
+    professionLabel:
       language === "fr"
-        ? "Vous êtes"
-        : "You are",
-    roleParticulier:
-      language === "fr" ? "Particulier / Client" : "Individual / Client",
-    roleOuvrier: language === "fr" ? "Ouvrier" : "Worker",
-    submit:
-      language === "fr" ? "Créer mon compte" : "Create my account",
-    submitting:
-      language === "fr" ? "Création en cours..." : "Creating...",
+        ? "Métier principal (facultatif)"
+        : "Main profession (optional)",
     alreadyAccount:
       language === "fr"
         ? "Vous avez déjà un compte ?"
         : "Already have an account?",
     login: language === "fr" ? "Se connecter" : "Log in",
+    submitClient:
+      language === "fr" ? "Créer mon compte client" : "Create customer account",
+    submitWorker:
+      language === "fr"
+        ? "Créer mon compte Ouvrier Pro"
+        : "Create my Pro worker account",
+    pwdTooShort:
+      language === "fr"
+        ? "Le mot de passe doit contenir au moins 6 caractères."
+        : "Password must be at least 6 characters long.",
+    pwdMismatch:
+      language === "fr"
+        ? "Les mots de passe ne correspondent pas."
+        : "Passwords do not match.",
+    genericError:
+      language === "fr"
+        ? "Une erreur est survenue lors de la création du compte."
+        : "An error occurred while creating your account.",
   };
 
+  // ----------------------------
+  //  Détecter ?type=client / worker
+  // ----------------------------
+  useEffect(() => {
+    const typeParam = (searchParams.get("type") || "").toLowerCase();
+    if (typeParam === "worker" || typeParam === "ouvrier") {
+      setAccountType("worker");
+    } else if (typeParam === "client") {
+      setAccountType("client");
+    }
+  }, [searchParams]);
+
+  // ----------------------------
+  //  Gestion des champs
+  // ----------------------------
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  // ----------------------------
+  //  Soumission formulaire
+  // ----------------------------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    setLoading(true);
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          role, // "particulier" ou "ouvrier"
-        },
-      },
-    });
-
-    if (error) {
-      console.error(error);
-      setErrorMsg(
-        language === "fr"
-          ? "Impossible de créer votre compte. Vérifiez vos informations."
-          : "Unable to create your account. Please check your information."
-      );
-      setLoading(false);
+    if (form.password.length < 6) {
+      setErrorMsg(text.pwdTooShort);
       return;
     }
 
-    // Redirection vers la page de connexion (ou directement sur /)
-    navigate("/login");
+    if (form.password !== form.confirmPassword) {
+      setErrorMsg(text.pwdMismatch);
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const { error } = await supabase.auth.signUp({
+        email: form.email.trim(),
+        password: form.password,
+        options: {
+          data: {
+            full_name: form.fullName,
+            phone: form.phone,
+            role: accountType === "worker" ? "worker" : "client",
+            profession: form.profession || null,
+          },
+        },
+      });
+
+      if (error) {
+        console.error("register error:", error);
+        setErrorMsg(error.message || text.genericError);
+        setSubmitting(false);
+        return;
+      }
+
+      // Succès : on redirige selon le type
+      if (accountType === "worker") {
+        // Ouvrier : directement vers le flux d’inscription / forfaits
+        navigate("/inscription-ouvrier");
+      } else {
+        // Client : retour à l’accueil (ou page précédente)
+        navigate("/");
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(text.genericError);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
+  // ----------------------------
+  //  Render
+  // ----------------------------
+  const isWorker = accountType === "worker";
+
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-        <h1 className="text-xl font-semibold text-slate-900 mb-1">
-          {text.title}
-        </h1>
-        <p className="text-xs text-slate-500 mb-4">
-          {text.subtitle}
-        </p>
-
-        {errorMsg && (
-          <div className="mb-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-            {errorMsg}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">
-              {text.name}
-            </label>
-            <Input
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              required
-              className="text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">
-              {text.email}
-            </label>
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">
-              {text.password}
-            </label>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">
-              {text.roleLabel}
-            </label>
-            <select
-              value={role}
-              onChange={(e) =>
-                setRole(e.target.value as "particulier" | "ouvrier")
-              }
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
-            >
-              <option value="particulier">{text.roleParticulier}</option>
-              <option value="ouvrier">{text.roleOuvrier}</option>
-            </select>
-          </div>
-
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-lg mx-auto px-4 py-10">
+        <div className="mb-6 flex items-center justify-between">
           <Button
-            type="submit"
-            className="w-full bg-pro-blue hover:bg-blue-700 mt-2"
-            disabled={loading}
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-1 text-slate-600"
           >
-            {loading ? text.submitting : text.submit}
+            <ArrowLeft className="w-4 h-4" />
+            <span>{text.back}</span>
           </Button>
-        </form>
+        </div>
 
-        <p className="mt-4 text-xs text-center text-slate-500">
-          {text.alreadyAccount}{" "}
-          <Link
-            to="/login"
-            className="text-pro-blue hover:underline font-medium"
+        <Card className="p-6 shadow-sm">
+          <h1 className="text-2xl font-bold mb-2">{text.title}</h1>
+          <p className="text-sm text-slate-600 mb-4">
+            {isWorker ? text.subtitleWorker : text.subtitleClient}
+          </p>
+
+          {/* Tabs client / worker, synchronisés avec ?type */}
+          <Tabs
+            value={accountType}
+            onValueChange={(v) => setAccountType(v as AccountType)}
+            className="mb-4"
           >
-            {text.login}
-          </Link>
-        </p>
+            <TabsList className="grid grid-cols-2 w-full">
+              <TabsTrigger value="client" className="flex items-center gap-1">
+                <User className="w-4 h-4" />
+                {text.tabClient}
+              </TabsTrigger>
+              <TabsTrigger value="worker" className="flex items-center gap-1">
+                <HardHat className="w-4 h-4" />
+                {text.tabWorker}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="client" className="mt-4">
+              {/* Le formulaire est le même, seul le texte/CTA change,
+                  donc on ne duplique pas: c'est géré plus bas */}
+            </TabsContent>
+
+            <TabsContent value="worker" className="mt-4">
+              {/* idem */}
+            </TabsContent>
+          </Tabs>
+
+          {errorMsg && (
+            <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {errorMsg}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+            <div>
+              <Label htmlFor="fullName" className="mb-1 block">
+                {text.fullName}
+              </Label>
+              <div className="relative">
+                <Input
+                  id="fullName"
+                  name="fullName"
+                  value={form.fullName}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="email" className="mb-1 block">
+                {text.email}
+              </Label>
+              <div className="relative">
+                <span className="absolute left-2 top-2.5 text-slate-400">
+                  <Mail className="w-4 h-4" />
+                </span>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  className="pl-8"
+                  value={form.email}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="phone" className="mb-1 block">
+                {text.phone}
+              </Label>
+              <div className="relative">
+                <span className="absolute left-2 top-2.5 text-slate-400">
+                  <Phone className="w-4 h-4" />
+                </span>
+                <Input
+                  id="phone"
+                  name="phone"
+                  className="pl-8"
+                  value={form.phone}
+                  onChange={handleChange}
+                />
+              </div>
+            </div>
+
+            {/* Champ métier surtout utile pour l’ouvrier */}
+            {isWorker && (
+              <div>
+                <Label htmlFor="profession" className="mb-1 block">
+                  {text.professionLabel}
+                </Label>
+                <Input
+                  id="profession"
+                  name="profession"
+                  value={form.profession}
+                  onChange={handleChange}
+                  placeholder={
+                    language === "fr"
+                      ? "Ex : Plombier, Électricien..."
+                      : "Ex: Plumber, Electrician..."
+                  }
+                />
+              </div>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="password" className="mb-1 block">
+                  {text.password}
+                </Label>
+                <div className="relative">
+                  <span className="absolute left-2 top-2.5 text-slate-400">
+                    <Lock className="w-4 h-4" />
+                  </span>
+                  <Input
+                    id="password"
+                    name="password"
+                    type="password"
+                    className="pl-8"
+                    value={form.password}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="confirmPassword" className="mb-1 block">
+                  {text.confirmPassword}
+                </Label>
+                <Input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  value={form.confirmPassword}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full mt-2 bg-pro-blue hover:bg-pro-blue/90"
+              disabled={submitting}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ...
+                </>
+              ) : isWorker ? (
+                text.submitWorker
+              ) : (
+                text.submitClient
+              )}
+            </Button>
+          </form>
+
+          <p className="mt-4 text-xs text-slate-500 text-center">
+            {text.alreadyAccount}{" "}
+            <Link
+              to="/login"
+              className="font-medium text-pro-blue hover:underline"
+            >
+              {text.login}
+            </Link>
+          </p>
+        </Card>
       </div>
     </div>
   );
