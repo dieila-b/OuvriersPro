@@ -87,10 +87,10 @@ const Login: React.FC = () => {
 
       const role = (profile?.role as string) || "user";
 
-      // 3) Redirection selon le rôle
-      const fromState = location.state?.from;
+      // 3) Calcul de la cible en fonction de l'URL et du rôle
       const searchParams = new URLSearchParams(location.search);
       const redirectParam = searchParams.get("redirect");
+      const fromState = location.state?.from;
 
       if (role === "admin") {
         navigate("/admin/dashboard", { replace: true });
@@ -98,7 +98,7 @@ const Login: React.FC = () => {
         // les vrais ouvriers validés
         navigate("/espace-ouvrier", { replace: true });
       } else {
-        // rôle "user" (client / particulier)
+        // role "user" ou autre ➜ espace client / particulier par défaut
         const target = redirectParam || fromState || "/espace-client";
         navigate(target, { replace: true });
       }
@@ -203,8 +203,8 @@ const Login: React.FC = () => {
 
             <p className="mt-2 text-xs text-slate-500">
               {language === "fr"
-                ? "Les ouvriers sont redirigés vers leur espace personnel. Les comptes client / particulier accèdent à leur espace dédié. Les autres utilisateurs restent sur le site public."
-                : "Workers are redirected to their own dashboard. Client / individual accounts access their dedicated space. Other users stay on the public site."}
+                ? "Les administrateurs seront redirigés vers le back-office, les ouvriers vers leur espace personnel. Les autres utilisateurs sont redirigés vers leur espace client."
+                : "Admins are redirected to the back-office, workers to their dashboard. Other users are redirected to their client area."}
             </p>
           </form>
         </CardContent>
