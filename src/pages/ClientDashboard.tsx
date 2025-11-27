@@ -32,9 +32,7 @@ const ClientDashboard: React.FC = () => {
     myRequestsDesc:
       language === "fr"
         ? "Suivez le statut de vos demandes (en attente, en cours, terminées...) et l’historique des échanges avec les ouvriers."
-        : "Track the status of your requests (pending, in progress, completed) and the history of your exchanges with workers.",
-    myRequestsCta:
-      language === "fr" ? "Voir mes demandes" : "View my requests",
+        : "Track the status of your requests (pending, in progress, completed...) and the history of exchanges with workers.",
     myMessages:
       language === "fr"
         ? "Mes échanges avec les ouvriers"
@@ -49,16 +47,19 @@ const ClientDashboard: React.FC = () => {
       language === "fr"
         ? "Retrouvez rapidement les professionnels que vous souhaitez recontacter."
         : "Quickly find the professionals you want to contact again.",
-    profileTitle:
-      language === "fr" ? "Mon profil" : "My profile",
+    profileTitle: language === "fr" ? "Mon profil" : "My profile",
     profileDesc:
       language === "fr"
         ? "Mettez à jour vos coordonnées pour être facilement recontacté."
         : "Keep your contact details up to date so workers can reach you easily.",
     goSearch:
-      language === "fr"
-        ? "Rechercher un ouvrier"
-        : "Search for a worker",
+      language === "fr" ? "Rechercher un ouvrier" : "Search for a worker",
+    seeMyRequests:
+      language === "fr" ? "Voir mes demandes" : "View my requests",
+    seeMyMessages:
+      language === "fr" ? "Voir mes échanges" : "View my conversations",
+    seeMyFavorites:
+      language === "fr" ? "Voir mes favoris" : "View my favourites",
   };
 
   return (
@@ -81,12 +82,11 @@ const ClientDashboard: React.FC = () => {
             </p>
           </div>
 
-          {/* CTA retour vers la recherche sur la page d'accueil */}
           <Button
             asChild
             className="bg-pro-blue hover:bg-pro-blue/90 rounded-full px-5 shadow-md shadow-pro-blue/20"
           >
-            <Link to="/" className="flex items-center gap-2">
+            <Link to="/search" className="flex items-center gap-2">
               <Search className="w-4 h-4" />
               {t.goSearch}
             </Link>
@@ -118,17 +118,17 @@ const ClientDashboard: React.FC = () => {
                     asChild
                     variant="outline"
                     size="sm"
-                    className="text-xs rounded-full flex items-center gap-1"
+                    className="text-xs rounded-full"
                   >
-                    <Link to="/mes-demandes">
-                      {t.myRequestsCta}
+                    <Link to="/mes-demandes" className="flex items-center gap-1">
+                      {t.seeMyRequests}
                       <ArrowRight className="w-3 h-3" />
                     </Link>
                   </Button>
                 </div>
 
                 {/* Mes échanges */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 hover:border-pro-blue/50 hover:bg-white transition">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 hover:border-pro-blue/60 hover:bg-white transition">
                   <div className="flex items-center gap-2 mb-2">
                     <MessageCircle className="w-4 h-4 text-emerald-600" />
                     <h3 className="text-sm font-semibold text-slate-900">
@@ -139,17 +139,20 @@ const ClientDashboard: React.FC = () => {
                     {t.myMessagesDesc}
                   </p>
                   <Button
+                    asChild
                     variant="outline"
                     size="sm"
                     className="text-xs rounded-full"
-                    type="button"
                   >
-                    {language === "fr" ? "Bientôt disponible" : "Coming soon"}
+                    <Link to="/mes-echanges" className="flex items-center gap-1">
+                      {t.seeMyMessages}
+                      <ArrowRight className="w-3 h-3" />
+                    </Link>
                   </Button>
                 </div>
 
                 {/* Mes favoris */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 hover:border-pro-blue/50 hover:bg-white transition">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 hover:border-pro-blue/60 hover:bg-white transition">
                   <div className="flex items-center gap-2 mb-2">
                     <Heart className="w-4 h-4 text-rose-500" />
                     <h3 className="text-sm font-semibold text-slate-900">
@@ -160,12 +163,15 @@ const ClientDashboard: React.FC = () => {
                     {t.myFavoritesDesc}
                   </p>
                   <Button
+                    asChild
                     variant="outline"
                     size="sm"
                     className="text-xs rounded-full"
-                    type="button"
                   >
-                    {language === "fr" ? "Bientôt disponible" : "Coming soon"}
+                    <Link to="/mes-favoris" className="flex items-center gap-1">
+                      {t.seeMyFavorites}
+                      <ArrowRight className="w-3 h-3" />
+                    </Link>
                   </Button>
                 </div>
               </div>
@@ -215,7 +221,7 @@ const ClientDashboard: React.FC = () => {
                   <p className="text-sm">
                     {language === "fr"
                       ? "Plus vos demandes sont précises, plus vous recevez des réponses rapides et adaptées."
-                      : "The more precise your requests are, the faster and more relevant answers you get."}
+                      : "The more precise your requests are, the faster and better answers you get."}
                   </p>
                 </div>
                 <ArrowRight className="w-5 h-5 text-slate-400" />
