@@ -28,6 +28,9 @@ import WorkerDashboard from "./pages/WorkerDashboard";
 // ✅ Nouvel espace Client / Particulier
 import ClientDashboard from "./pages/ClientDashboard";
 
+// ✅ Profil client
+import ClientProfile from "./pages/ClientProfile";
+
 // ✅ Liste des demandes client
 import ClientRequestsList from "./pages/ClientRequestsList";
 
@@ -78,6 +81,16 @@ const App = () => (
               element={
                 <PrivateRoute allowedRoles={["user"]}>
                   <ClientDashboard />
+                </PrivateRoute>
+              }
+            />
+
+            {/* 👤 Mon profil client (protégé : user) */}
+            <Route
+              path="/mon-profil"
+              element={
+                <PrivateRoute allowedRoles={["user"]}>
+                  <ClientProfile />
                 </PrivateRoute>
               }
             />
