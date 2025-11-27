@@ -31,6 +31,12 @@ import ClientDashboard from "./pages/ClientDashboard";
 // ✅ Liste des demandes client
 import ClientRequestsList from "./pages/ClientRequestsList";
 
+// ✅ Liste des échanges client ↔ ouvriers
+import ClientMessagesList from "./pages/ClientMessagesList";
+
+// ✅ Liste des ouvriers favoris
+import ClientFavoritesList from "./pages/ClientFavoritesList";
+
 // Protection routes
 import PrivateRoute from "./components/PrivateRoute";
 
@@ -58,7 +64,10 @@ const App = () => (
             <Route path="/register" element={<Register />} />
 
             {/* 📝 Formulaire d'inscription ouvrier + forfait */}
-            <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
+            <Route
+              path="/inscription-ouvrier"
+              element={<InscriptionOuvrier />}
+            />
 
             {/* 👤 Fiche ouvrier (auth gérée dans WorkerDetail : redirection si non connecté) */}
             <Route path="/ouvrier/:id" element={<WorkerDetail />} />
@@ -79,6 +88,26 @@ const App = () => (
               element={
                 <PrivateRoute allowedRoles={["user"]}>
                   <ClientRequestsList />
+                </PrivateRoute>
+              }
+            />
+
+            {/* 💬 Mes échanges (liste des messages client ↔ ouvriers, protégée : user) */}
+            <Route
+              path="/mes-echanges"
+              element={
+                <PrivateRoute allowedRoles={["user"]}>
+                  <ClientMessagesList />
+                </PrivateRoute>
+              }
+            />
+
+            {/* ❤️ Mes favoris (liste des ouvriers favoris, protégée : user) */}
+            <Route
+              path="/mes-favoris"
+              element={
+                <PrivateRoute allowedRoles={["user"]}>
+                  <ClientFavoritesList />
                 </PrivateRoute>
               }
             />
