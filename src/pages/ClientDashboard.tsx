@@ -50,7 +50,7 @@ const ClientDashboard: React.FC = () => {
     profileTitle: language === "fr" ? "Mon profil" : "My profile",
     profileDesc:
       language === "fr"
-        ? "Mettez à jour vos coordonnées pour être facilement recontacté."
+        ? "Mettez à jour vos coordonnées pour être facilement recontacté par les ouvriers."
         : "Keep your contact details up to date so workers can reach you easily.",
     goSearch:
       language === "fr" ? "Rechercher un ouvrier" : "Search for a worker",
@@ -193,20 +193,23 @@ const ClientDashboard: React.FC = () => {
                 {t.profileDesc}
               </p>
 
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-4 text-xs text-slate-500">
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-4 text-xs text-slate-500 mb-3">
                 {language === "fr"
-                  ? "La gestion détaillée du profil client arrivera bientôt (adresse, téléphone, préférences de contact, etc.)."
-                  : "Detailed client profile management will be available soon (address, phone, contact preferences, etc.)."}
+                  ? "Email, téléphone, ville, préférences de contact… Ces informations sont partagées avec les ouvriers lorsque vous envoyez une demande."
+                  : "Email, phone, city, contact preferences… These details are shared with workers when you send a request."}
               </div>
 
               <Button
+                asChild
                 variant="outline"
-                className="mt-4 w-full rounded-full text-sm"
+                className="mt-1 w-full rounded-full text-sm"
                 type="button"
               >
-                {language === "fr"
-                  ? "Modifier mon profil (bientôt)"
-                  : "Edit my profile (soon)"}
+                <Link to="/mon-profil">
+                  {language === "fr"
+                    ? "Modifier mon profil"
+                    : "Edit my profile"}
+                </Link>
               </Button>
             </Card>
 
