@@ -57,6 +57,9 @@ const App = () => (
             {/* 🏠 Accueil */}
             <Route path="/" element={<Index />} />
 
+            {/* 🔎 Recherche d’ouvrier (même page que l’accueil, mais URL dédiée) */}
+            <Route path="/search" element={<Index />} />
+
             {/* 🧑‍💼 Mon compte (connexion + inscription + choix ouvrier/particulier) */}
             <Route path="/mon-compte" element={<MonCompte />} />
 
