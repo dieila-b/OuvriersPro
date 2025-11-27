@@ -1,5 +1,6 @@
 // src/pages/Index.tsx
 import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import Header from "@/components/Header";
 import HeroSection from "@/components/HeroSection";
 import FeaturesSection from "@/components/FeaturesSection";
@@ -8,7 +9,9 @@ import SubscriptionSection from "@/components/SubscriptionSection";
 import Footer from "@/components/Footer";
 
 const Index = () => {
-  // Quand on arrive sur /#subscription, on scrolle automatiquement vers la section forfaits
+  const location = useLocation();
+
+  // 🎯 Scroll automatique vers la section forfaits quand on arrive sur /#subscription
   useEffect(() => {
     if (window.location.hash === "#subscription") {
       setTimeout(() => {
@@ -17,7 +20,7 @@ const Index = () => {
           const rect = el.getBoundingClientRect();
 
           // 🔧 Offset plus fort pour descendre sous la liste des ouvriers
-          const EXTRA_OFFSET = 520; // augmente / diminue si tu veux ajuster encore
+          const EXTRA_OFFSET = 520; // ajuste si besoin
           const y = rect.top + window.scrollY + EXTRA_OFFSET;
 
           window.scrollTo({
@@ -28,6 +31,16 @@ const Index = () => {
       }, 150);
     }
   }, []);
+
+  // 🔍 Quand on arrive sur /search, on scrolle directement sur "Trouvez votre professionnel"
+  useEffect(() => {
+    if (location.pathname === "/search") {
+      const el = document.getElementById("search");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+  }, [location.pathname]);
 
   return (
     <div className="min-h-screen w-full bg-white overflow-x-hidden flex flex-col">
@@ -43,7 +56,7 @@ const Index = () => {
           <FeaturesSection />
         </section>
 
-        {/* RECHERCHE OUVRIERS */}
+        {/* RECHERCHE OUVRIERS : "Trouvez votre professionnel" */}
         <section
           id="search"
           className="w-full bg-white py-10 sm:py-14 lg:py-16 scroll-mt-20"
