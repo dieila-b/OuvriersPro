@@ -14,9 +14,6 @@ import WorkerDetail from "./pages/WorkerDetail";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 
-// 🔎 Page recherche / liste des ouvriers ("Trouvez votre professionnel")
-import WorkersSearchPage from "./pages/WorkersSearchPage";
-
 // Espace de compte (connexion / inscription / explication)
 import MonCompte from "./pages/MonCompte";
 
@@ -60,8 +57,10 @@ const App = () => (
             {/* 🏠 Accueil */}
             <Route path="/" element={<Index />} />
 
-            {/* 🔎 Liste / recherche des ouvriers – accessible à tous, le client reste connecté */}
-            <Route path="/search" element={<WorkersSearchPage />} />
+            {/* 🔎 Rechercher un ouvrier
+                -> on réutilise la même page que l'accueil (Trouvez votre professionnel)
+                Le client reste connecté grâce à Supabase, on change juste d'URL */}
+            <Route path="/search" element={<Index />} />
 
             {/* 🧑‍💼 Mon compte (connexion + inscription + choix ouvrier/particulier) */}
             <Route path="/mon-compte" element={<MonCompte />} />
