@@ -28,6 +28,9 @@ import WorkerDashboard from "./pages/WorkerDashboard";
 // ✅ Nouvel espace Client / Particulier
 import ClientDashboard from "./pages/ClientDashboard";
 
+// ✅ Liste des demandes client
+import ClientRequestsList from "./pages/ClientRequestsList";
+
 // Protection routes
 import PrivateRoute from "./components/PrivateRoute";
 
@@ -66,6 +69,16 @@ const App = () => (
               element={
                 <PrivateRoute allowedRoles={["user"]}>
                   <ClientDashboard />
+                </PrivateRoute>
+              }
+            />
+
+            {/* 📄 Mes demandes (liste des demandes du client, protégée : user) */}
+            <Route
+              path="/mes-demandes"
+              element={
+                <PrivateRoute allowedRoles={["user"]}>
+                  <ClientRequestsList />
                 </PrivateRoute>
               }
             />
