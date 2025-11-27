@@ -2,133 +2,197 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { Loader2, ArrowLeft, FileText, User, Wrench } from "lucide-react";
 
 type ClientRequest = {
   id: string;
-  worker_id: string | null;
+  created_at: string | null;
   worker_name: string | null;
   status: string | null;
   message: string | null;
-  created_at: string;
+  origin: string | null;
 };
 
 const ClientRequestsList: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
-  const [items, setItems] = useState<ClientRequest[]>([]);
+
   const [loading, setLoading] = useState(true);
+  const [requests, setRequests] = useState<ClientRequest[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-
-      const { data, error } = await supabase
-        .from("op_ouvrier_contacts")
-        .select("id, worker_id, worker_name, status, message, created_at")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error(error);
-        setItems([]);
-      } else {
-        setItems((data || []) as ClientRequest[]);
-      }
-
-      setLoading(false);
-    };
-
-    load();
-  }, []);
-
-  const t = {
-    title: language === "fr" ? "Mes demandes" : "My requests",
+  const text = {
+    title:
+      language === "fr" ? "Mes demandes envoyées" : "My requests",
     subtitle:
       language === "fr"
-        ? "Retrouvez toutes vos demandes envoyées aux ouvriers."
-        : "See all requests you have sent to workers.",
-    statusNew: language === "fr" ? "Nouvelle" : "New",
-    statusInProgress: language === "fr" ? "En cours" : "In progress",
-    statusDone: language === "fr" ? "Clôturée" : "Closed",
-    seeWorker:
-      language === "fr" ? "Voir la fiche de l'ouvrier" : "View worker profile",
-    empty:
+        ? "Retrouvez ici toutes vos demandes envoyées aux ouvriers via la plateforme."
+        : "See all your requests sent to workers through the platform.",
+    noData:
       language === "fr"
         ? "Vous n'avez pas encore envoyé de demande."
         : "You have not sent any request yet.",
     back: language === "fr" ? "Retour à mon espace" : "Back to my space",
+    statusNew: language === "fr" ? "Nouvelle" : "New",
+    statusInProgress:
+      language === "fr" ? "En cours" : "In progress",
+    statusDone: language === "fr" ? "Terminée" : "Completed",
+    statusUnknown:
+      language === "fr" ? "Statut inconnu" : "Unknown status",
+    sentOn: language === "fr" ? "Envoyée le" : "Sent on",
+    worker: language === "fr" ? "Ouvrier" : "Worker",
   };
 
+  useEffect(() => {
+    const fetchRequests = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        // RLS fait le filtre client_id = auth.uid()
+        const { data, error } = await supabase
+          .from("op_ouvrier_contacts")
+          .select(
+            "id, created_at, worker_name, status, message, origin"
+          )
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+
+        setRequests((data as ClientRequest[]) || []);
+      } catch (err: any) {
+        console.error(err);
+        setError(
+          language === "fr"
+            ? "Impossible de charger vos demandes."
+            : "Unable to load your requests."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRequests();
+  }, [language]);
+
   const renderStatus = (status: string | null) => {
-    const s = (status || "new").toLowerCase();
-    if (s === "done" || s === "closed") {
-      return <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200">{t.statusDone}</Badge>;
+    const value = (status || "").toLowerCase();
+    if (value === "new" || value === "nouveau") {
+      return (
+        <Badge variant="outline" className="border-blue-500 text-blue-600">
+          {text.statusNew}
+        </Badge>
+      );
     }
-    if (s === "in_progress") {
-      return <Badge className="bg-amber-50 text-amber-700 border border-amber-200">{t.statusInProgress}</Badge>;
+    if (value === "in_progress" || value === "en_cours") {
+      return (
+        <Badge variant="outline" className="border-amber-500 text-amber-600">
+          {text.statusInProgress}
+        </Badge>
+      );
     }
-    return <Badge className="bg-blue-50 text-blue-700 border border-blue-200">{t.statusNew}</Badge>;
+    if (value === "done" || value === "terminee") {
+      return (
+        <Badge variant="outline" className="border-emerald-500 text-emerald-600">
+          {text.statusDone}
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="outline" className="border-slate-400 text-slate-600">
+        {text.statusUnknown}
+      </Badge>
+    );
   };
 
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-5xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <Button variant="ghost" onClick={() => navigate("/espace-client")}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            {t.back}
-          </Button>
+        <Button
+          variant="ghost"
+          onClick={() => navigate("/espace-client")}
+          className="mb-4"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          {text.back}
+        </Button>
+
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <FileText className="w-6 h-6 text-pro-blue" />
+            {text.title}
+          </h1>
+          <p className="text-sm text-slate-600 mt-1">{text.subtitle}</p>
         </div>
 
-        <h1 className="text-2xl font-bold text-slate-900 mb-1">
-          {t.title}
-        </h1>
-        <p className="text-sm text-slate-600 mb-6">{t.subtitle}</p>
-
         {loading ? (
-          <p className="text-sm text-slate-500">Chargement...</p>
-        ) : items.length === 0 ? (
-          <Card className="p-6 text-sm text-slate-500">
-            {t.empty}
+          <div className="flex items-center justify-center py-10 text-slate-500">
+            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+            <span>{language === "fr" ? "Chargement..." : "Loading..."}</span>
+          </div>
+        ) : error ? (
+          <div className="py-6 text-sm text-red-600">{error}</div>
+        ) : requests.length === 0 ? (
+          <Card className="p-6 text-center">
+            <p className="text-sm text-slate-500">{text.noData}</p>
           </Card>
         ) : (
-          <div className="space-y-3">
-            {items.map((item) => (
-              <Card key={item.id} className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium text-slate-900">
-                      {item.worker_name || "Ouvrier inconnu"}
-                    </span>
-                    {renderStatus(item.status)}
+          <div className="space-y-4">
+            {requests.map((req) => {
+              const created =
+                req.created_at &&
+                new Date(req.created_at).toLocaleString(
+                  language === "fr" ? "fr-FR" : "en-US",
+                  {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }
+                );
+
+              return (
+                <Card
+                  key={req.id}
+                  className="p-4 border border-slate-200 bg-white"
+                >
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Wrench className="w-4 h-4 text-pro-blue" />
+                        <span className="font-medium text-slate-900">
+                          {req.worker_name || "Ouvrier"}
+                        </span>
+                      </div>
+                      {created && (
+                        <p className="text-xs text-slate-500">
+                          {text.sentOn} {created}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {renderStatus(req.status)}
+                      {req.origin && (
+                        <span className="text-[11px] uppercase tracking-wide text-slate-400">
+                          {req.origin}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    {new Date(item.created_at).toLocaleString("fr-FR")}
-                  </p>
-                  {item.message && (
-                    <p className="mt-2 text-sm text-slate-700 line-clamp-2">
-                      {item.message}
+
+                  {req.message && (
+                    <p className="mt-3 text-sm text-slate-700 line-clamp-3">
+                      {req.message}
                     </p>
                   )}
-                </div>
-
-                {item.worker_id && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="self-start sm:self-center"
-                    onClick={() => navigate(`/ouvriers/${item.worker_id}`)}
-                  >
-                    {t.seeWorker}
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                )}
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
