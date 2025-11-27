@@ -23,16 +23,16 @@ const ClientDashboard: React.FC = () => {
         : "Client / individual space",
     subtitle:
       language === "fr"
-        ? "Retrouvez ici vos demandes, vos échanges avec les ouvriers et vos informations personnelles."
-        : "Here you can see your requests, conversations with workers and personal information.",
+        ? "Retrouvez vos demandes, vos échanges avec les ouvriers et vos informations personnelles."
+        : "Access your requests, conversations with workers and personal information.",
     quickActions:
       language === "fr" ? "Actions rapides" : "Quick actions",
     myRequests:
       language === "fr" ? "Mes demandes de travaux" : "My work requests",
     myRequestsDesc:
       language === "fr"
-        ? "Suivez le statut de vos demandes (en attente, en cours, terminées...) et l’historique des échanges avec les ouvriers."
-        : "Track the status of your requests (pending, in progress, completed...) and the history of exchanges with workers.",
+        ? "Suivez le statut de vos demandes et l’historique des échanges avec les ouvriers."
+        : "Track the status of your requests and history of conversations with workers.",
     myMessages:
       language === "fr"
         ? "Mes échanges avec les ouvriers"
@@ -40,7 +40,7 @@ const ClientDashboard: React.FC = () => {
     myMessagesDesc:
       language === "fr"
         ? "Consultez l’historique de vos messages et coordonnées échangées."
-        : "See the full history of your messages and shared details.",
+        : "Review the history of your messages and shared details.",
     myFavorites:
       language === "fr" ? "Mes ouvriers favoris" : "My favourite workers",
     myFavoritesDesc:
@@ -63,12 +63,12 @@ const ClientDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-slate-50 to-slate-100">
+    <div className="min-h-screen bg-gradient-to-b from-sky-50 via-slate-50 to-slate-100">
       <div className="max-w-6xl mx-auto px-4 py-8 md:py-10">
-        {/* En-tête */}
-        <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        {/* En-tête / Hero */}
+        <header className="mb-8 rounded-3xl bg-white/90 border border-slate-100 shadow-sm px-5 py-5 md:px-8 md:py-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-medium text-slate-500 shadow-sm border border-slate-100 mb-3">
+            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 border border-emerald-100 mb-3">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
               {language === "fr"
                 ? "Connecté en tant que client / particulier"
@@ -77,48 +77,65 @@ const ClientDashboard: React.FC = () => {
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-1">
               {t.title}
             </h1>
-            <p className="text-sm md:text-base text-slate-600">
+            <p className="text-sm md:text-base text-slate-600 max-w-xl">
               {t.subtitle}
             </p>
           </div>
 
-          <Button
-            asChild
-            className="bg-pro-blue hover:bg-pro-blue/90 rounded-full px-5 shadow-md shadow-pro-blue/20"
-          >
-            <Link to="/search" className="flex items-center gap-2">
-              <Search className="w-4 h-4" />
-              {t.goSearch}
-            </Link>
-          </Button>
+          <div className="flex flex-col items-stretch gap-3 md:items-end">
+            <Button
+              asChild
+              className="bg-pro-blue hover:bg-pro-blue/90 rounded-full px-5 shadow-md shadow-pro-blue/25"
+            >
+              <Link to="/search" className="flex items-center gap-2">
+                <Search className="w-4 h-4" />
+                {t.goSearch}
+              </Link>
+            </Button>
+
+            <div className="hidden md:flex items-center text-[11px] text-slate-500 gap-1">
+              <span className="h-1 w-1 rounded-full bg-slate-400" />
+              {language === "fr"
+                ? "Accédez rapidement à vos demandes et à votre profil."
+                : "Quickly access your requests and profile."}
+            </div>
+          </div>
         </header>
 
-        <div className="grid gap-6 md:grid-cols-[1.7fr,1.3fr] items-start">
-          {/* Colonne gauche : actions & sections principales */}
+        <div className="grid gap-6 md:grid-cols-[1.75fr,1.25fr] items-start">
+          {/* Colonne gauche : actions principales */}
           <div className="space-y-6">
-            <Card className="p-6 rounded-2xl bg-white/90 shadow-sm border-slate-200">
-              <h2 className="text-sm font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                <ClipboardList className="w-4 h-4 text-pro-blue" />
-                {t.quickActions}
-              </h2>
+            <Card className="p-6 md:p-7 rounded-3xl bg-white/90 shadow-sm border border-slate-100">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-pro-blue/10 flex items-center justify-center">
+                    <ClipboardList className="w-4 h-4 text-pro-blue" />
+                  </div>
+                  <h2 className="text-sm font-semibold text-slate-800">
+                    {t.quickActions}
+                  </h2>
+                </div>
+              </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 {/* Mes demandes */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 hover:border-pro-blue/60 hover:bg-white transition">
+                <div className="relative rounded-2xl border border-slate-100 bg-slate-50/70 p-4 hover:border-pro-blue/60 hover:bg-white transition-shadow transition-colors shadow-xs hover:shadow-md">
                   <div className="flex items-center gap-2 mb-2">
-                    <ClipboardList className="w-4 h-4 text-pro-blue" />
+                    <div className="w-7 h-7 rounded-full bg-pro-blue/10 flex items-center justify-center">
+                      <ClipboardList className="w-4 h-4 text-pro-blue" />
+                    </div>
                     <h3 className="text-sm font-semibold text-slate-900">
                       {t.myRequests}
                     </h3>
                   </div>
-                  <p className="text-xs text-slate-600 mb-3">
+                  <p className="text-xs text-slate-600 mb-4 leading-relaxed">
                     {t.myRequestsDesc}
                   </p>
                   <Button
                     asChild
                     variant="outline"
                     size="sm"
-                    className="text-xs rounded-full"
+                    className="text-xs rounded-full border-slate-200"
                   >
                     <Link to="/mes-demandes" className="flex items-center gap-1">
                       {t.seeMyRequests}
@@ -128,21 +145,23 @@ const ClientDashboard: React.FC = () => {
                 </div>
 
                 {/* Mes échanges */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 hover:border-pro-blue/60 hover:bg-white transition">
+                <div className="relative rounded-2xl border border-slate-100 bg-slate-50/70 p-4 hover:border-emerald-500/70 hover:bg-white transition-shadow transition-colors shadow-xs hover:shadow-md">
                   <div className="flex items-center gap-2 mb-2">
-                    <MessageCircle className="w-4 h-4 text-emerald-600" />
+                    <div className="w-7 h-7 rounded-full bg-emerald-50 flex items-center justify-center">
+                      <MessageCircle className="w-4 h-4 text-emerald-600" />
+                    </div>
                     <h3 className="text-sm font-semibold text-slate-900">
                       {t.myMessages}
                     </h3>
                   </div>
-                  <p className="text-xs text-slate-600 mb-3">
+                  <p className="text-xs text-slate-600 mb-4 leading-relaxed">
                     {t.myMessagesDesc}
                   </p>
                   <Button
                     asChild
                     variant="outline"
                     size="sm"
-                    className="text-xs rounded-full"
+                    className="text-xs rounded-full border-slate-200"
                   >
                     <Link to="/mes-echanges" className="flex items-center gap-1">
                       {t.seeMyMessages}
@@ -152,21 +171,23 @@ const ClientDashboard: React.FC = () => {
                 </div>
 
                 {/* Mes favoris */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 hover:border-pro-blue/60 hover:bg-white transition">
+                <div className="relative rounded-2xl border border-slate-100 bg-slate-50/70 p-4 hover:border-rose-500/70 hover:bg-white transition-shadow transition-colors shadow-xs hover:shadow-md md:col-span-2">
                   <div className="flex items-center gap-2 mb-2">
-                    <Heart className="w-4 h-4 text-rose-500" />
+                    <div className="w-7 h-7 rounded-full bg-rose-50 flex items-center justify-center">
+                      <Heart className="w-4 h-4 text-rose-500" />
+                    </div>
                     <h3 className="text-sm font-semibold text-slate-900">
                       {t.myFavorites}
                     </h3>
                   </div>
-                  <p className="text-xs text-slate-600 mb-3">
+                  <p className="text-xs text-slate-600 mb-4 leading-relaxed">
                     {t.myFavoritesDesc}
                   </p>
                   <Button
                     asChild
                     variant="outline"
                     size="sm"
-                    className="text-xs rounded-full"
+                    className="text-xs rounded-full border-slate-200"
                   >
                     <Link to="/mes-favoris" className="flex items-center gap-1">
                       {t.seeMyFavorites}
@@ -178,9 +199,10 @@ const ClientDashboard: React.FC = () => {
             </Card>
           </div>
 
-          {/* Colonne droite : profil */}
+          {/* Colonne droite : profil + astuce */}
           <div className="space-y-6">
-            <Card className="p-6 rounded-2xl bg-white/90 shadow-sm border-slate-200">
+            {/* Profil */}
+            <Card className="p-6 rounded-3xl bg-white/90 shadow-sm border border-slate-100">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-9 h-9 rounded-full bg-pro-blue/10 flex items-center justify-center">
                   <User className="w-4 h-4 text-pro-blue" />
@@ -193,7 +215,7 @@ const ClientDashboard: React.FC = () => {
                 {t.profileDesc}
               </p>
 
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-4 text-xs text-slate-500 mb-3">
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4 text-[11px] text-slate-500 mb-4">
                 {language === "fr"
                   ? "Email, téléphone, ville, préférences de contact… Ces informations sont partagées avec les ouvriers lorsque vous envoyez une demande."
                   : "Email, phone, city, contact preferences… These details are shared with workers when you send a request."}
@@ -202,8 +224,7 @@ const ClientDashboard: React.FC = () => {
               <Button
                 asChild
                 variant="outline"
-                className="mt-1 w-full rounded-full text-sm"
-                type="button"
+                className="w-full rounded-full text-sm border-slate-200 hover:border-pro-blue/70"
               >
                 <Link to="/mon-profil">
                   {language === "fr"
@@ -213,18 +234,19 @@ const ClientDashboard: React.FC = () => {
               </Button>
             </Card>
 
-            <Card className="p-4 rounded-2xl bg-slate-900 text-slate-100 shadow-sm">
+            {/* Astuce */}
+            <Card className="p-4 rounded-3xl bg-slate-900 text-slate-100 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">
                     {language === "fr"
                       ? "Astuce OuvriersPro"
                       : "OuvriersPro tip"}
                   </p>
-                  <p className="text-sm">
+                  <p className="text-sm leading-relaxed">
                     {language === "fr"
-                      ? "Plus vos demandes sont précises, plus vous recevez des réponses rapides et adaptées."
-                      : "The more precise your requests are, the faster and better answers you get."}
+                      ? "Plus vos demandes sont précises (photos, délais, budget estimé), plus vous recevez des réponses rapides et adaptées."
+                      : "The more precise your requests are (photos, timeline, estimated budget), the faster and more accurate responses you get."}
                   </p>
                 </div>
                 <ArrowRight className="w-5 h-5 text-slate-400" />
