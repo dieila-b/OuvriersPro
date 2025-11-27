@@ -1,7 +1,8 @@
 // src/pages/ClientDashboard.tsx
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { supabase } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,8 +14,67 @@ import {
   Search,
 } from "lucide-react";
 
+type ClientInfo = {
+  fullName: string | null;
+  email: string | null;
+  role: string | null;
+};
+
 const ClientDashboard: React.FC = () => {
   const { language } = useLanguage();
+  const navigate = useNavigate();
+
+  const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        const user = data?.user;
+
+        if (!user) {
+          setClientInfo(null);
+          return;
+        }
+
+        // On essaie de récupérer le profil côté op_users (nom + rôle)
+        const { data: profile } = await supabase
+          .from("op_users")
+          .select("full_name, role")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        const fullNameFromMeta =
+          (user.user_metadata?.full_name as string | undefined) ||
+          (user.user_metadata?.name as string | undefined) ||
+          null;
+
+        setClientInfo({
+          fullName: profile?.full_name ?? fullNameFromMeta,
+          email: user.email ?? null,
+          role: (profile?.role as string) || "user",
+        });
+      } catch (err) {
+        console.error("Erreur chargement utilisateur client:", err);
+        setClientInfo(null);
+      } finally {
+        setLoadingUser(false);
+      }
+    };
+
+    loadUser();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("Erreur de déconnexion:", err);
+    } finally {
+      navigate("/", { replace: true });
+    }
+  };
 
   const t = {
     title:
@@ -60,7 +120,23 @@ const ClientDashboard: React.FC = () => {
       language === "fr" ? "Voir mes échanges" : "View my conversations",
     seeMyFavorites:
       language === "fr" ? "Voir mes favoris" : "View my favourites",
+    connectedLabel:
+      language === "fr"
+        ? "Connecté en tant que"
+        : "Logged in as",
+    logout:
+      language === "fr" ? "Se déconnecter" : "Sign out",
   };
+
+  const displayName =
+    clientInfo?.fullName || clientInfo?.email || (language === "fr" ? "Client OuvriersPro" : "OuvriersPro client");
+
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((n) => n[0]?.toUpperCase() ?? "")
+    .join("");
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-50 via-slate-50 to-slate-100">
@@ -68,11 +144,25 @@ const ClientDashboard: React.FC = () => {
         {/* En-tête / Hero */}
         <header className="mb-8 rounded-3xl bg-white/90 border border-slate-100 shadow-sm px-5 py-5 md:px-8 md:py-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 border border-emerald-100 mb-3">
+            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700 border border-emerald-100 mb-3">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              {language === "fr"
-                ? "Connecté en tant que client / particulier"
-                : "Logged in as client / individual"}
+              {loadingUser ? (
+                language === "fr"
+                  ? "Connexion en cours..."
+                  : "Checking session..."
+              ) : (
+                <>
+                  {t.connectedLabel}{" "}
+                  <span className="font-semibold">
+                    {displayName}
+                  </span>
+                  <span className="opacity-70">
+                    {language === "fr"
+                      ? "(client / particulier)"
+                      : "(client / individual)"}
+                  </span>
+                </>
+              )}
             </div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-1">
               {t.title}
@@ -93,12 +183,16 @@ const ClientDashboard: React.FC = () => {
               </Link>
             </Button>
 
-            <div className="hidden md:flex items-center text-[11px] text-slate-500 gap-1">
-              <span className="h-1 w-1 rounded-full bg-slate-400" />
-              {language === "fr"
-                ? "Accédez rapidement à vos demandes et à votre profil."
-                : "Quickly access your requests and profile."}
-            </div>
+            {/* Bouton déconnexion compact */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full text-xs border-slate-200 text-slate-600 hover:border-red-400 hover:text-red-600"
+              type="button"
+              onClick={handleLogout}
+            >
+              {t.logout}
+            </Button>
           </div>
         </header>
 
@@ -203,14 +297,27 @@ const ClientDashboard: React.FC = () => {
           <div className="space-y-6">
             {/* Profil */}
             <Card className="p-6 rounded-3xl bg-white/90 shadow-sm border border-slate-100">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-9 h-9 rounded-full bg-pro-blue/10 flex items-center justify-center">
-                  <User className="w-4 h-4 text-pro-blue" />
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-pro-blue/10 flex items-center justify-center text-xs font-semibold text-pro-blue uppercase">
+                    {initials || <User className="w-4 h-4" />}
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-900">
+                      {t.profileTitle}
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      {displayName}
+                    </p>
+                    {clientInfo?.email && (
+                      <p className="text-[11px] text-slate-400">
+                        {clientInfo.email}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <h2 className="text-sm font-semibold text-slate-900">
-                  {t.profileTitle}
-                </h2>
               </div>
+
               <p className="text-sm text-slate-600 mb-4">
                 {t.profileDesc}
               </p>
@@ -221,17 +328,28 @@ const ClientDashboard: React.FC = () => {
                   : "Email, phone, city, contact preferences… These details are shared with workers when you send a request."}
               </div>
 
-              <Button
-                asChild
-                variant="outline"
-                className="w-full rounded-full text-sm border-slate-200 hover:border-pro-blue/70"
-              >
-                <Link to="/mon-profil">
-                  {language === "fr"
-                    ? "Modifier mon profil"
-                    : "Edit my profile"}
-                </Link>
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="flex-1 rounded-full text-sm border-slate-200 hover:border-pro-blue/70"
+                >
+                  <Link to="/mon-profil">
+                    {language === "fr"
+                      ? "Modifier mon profil"
+                      : "Edit my profile"}
+                  </Link>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="rounded-full text-xs text-slate-500 hover:text-red-600 hover:bg-red-50"
+                  type="button"
+                  onClick={handleLogout}
+                >
+                  {t.logout}
+                </Button>
+              </div>
             </Card>
 
             {/* Astuce */}
