@@ -31,10 +31,14 @@ const ClientDashboard: React.FC = () => {
       language === "fr" ? "Mes demandes de travaux" : "My work requests",
     myRequestsDesc:
       language === "fr"
-        ? "Suivez le statut de vos demandes (en attente, en cours, terminées...)."
-        : "Track the status of your requests (pending, in progress, completed...).",
+        ? "Suivez le statut de vos demandes (en attente, en cours, terminées...) et l’historique des échanges avec les ouvriers."
+        : "Track the status of your requests (pending, in progress, completed) and the history of your exchanges with workers.",
+    myRequestsCta:
+      language === "fr" ? "Voir mes demandes" : "View my requests",
     myMessages:
-      language === "fr" ? "Mes échanges avec les ouvriers" : "My conversations with workers",
+      language === "fr"
+        ? "Mes échanges avec les ouvriers"
+        : "My conversations with workers",
     myMessagesDesc:
       language === "fr"
         ? "Consultez l’historique de vos messages et coordonnées échangées."
@@ -77,11 +81,12 @@ const ClientDashboard: React.FC = () => {
             </p>
           </div>
 
+          {/* CTA retour vers la recherche sur la page d'accueil */}
           <Button
             asChild
             className="bg-pro-blue hover:bg-pro-blue/90 rounded-full px-5 shadow-md shadow-pro-blue/20"
           >
-            <Link to="/search" className="flex items-center gap-2">
+            <Link to="/" className="flex items-center gap-2">
               <Search className="w-4 h-4" />
               {t.goSearch}
             </Link>
@@ -99,7 +104,7 @@ const ClientDashboard: React.FC = () => {
 
               <div className="grid gap-4 md:grid-cols-2">
                 {/* Mes demandes */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 hover:border-pro-blue/50 hover:bg-white transition">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 hover:border-pro-blue/60 hover:bg-white transition">
                   <div className="flex items-center gap-2 mb-2">
                     <ClipboardList className="w-4 h-4 text-pro-blue" />
                     <h3 className="text-sm font-semibold text-slate-900">
@@ -110,12 +115,15 @@ const ClientDashboard: React.FC = () => {
                     {t.myRequestsDesc}
                   </p>
                   <Button
+                    asChild
                     variant="outline"
                     size="sm"
-                    className="text-xs rounded-full"
-                    type="button"
+                    className="text-xs rounded-full flex items-center gap-1"
                   >
-                    {language === "fr" ? "Bientôt disponible" : "Coming soon"}
+                    <Link to="/mes-demandes">
+                      {t.myRequestsCta}
+                      <ArrowRight className="w-3 h-3" />
+                    </Link>
                   </Button>
                 </div>
 
@@ -207,7 +215,7 @@ const ClientDashboard: React.FC = () => {
                   <p className="text-sm">
                     {language === "fr"
                       ? "Plus vos demandes sont précises, plus vous recevez des réponses rapides et adaptées."
-                      : "The more precise your requests are, the faster and better answers you get."}
+                      : "The more precise your requests are, the faster and more relevant answers you get."}
                   </p>
                 </div>
                 <ArrowRight className="w-5 h-5 text-slate-400" />
