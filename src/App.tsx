@@ -14,8 +14,8 @@ import WorkerDetail from "./pages/WorkerDetail";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 
-// Nouvelle page : espace de connexion / inscription
-import MonCompte from "./pages/MonCompte";   // ✅ ajoutée
+// Espace de compte (connexion / inscription / explication)
+import MonCompte from "./pages/MonCompte";
 
 // Back-office Admin
 import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
@@ -24,6 +24,9 @@ import AdminDashboard from "./pages/AdminDashboard";
 
 // Espace ouvrier connecté
 import WorkerDashboard from "./pages/WorkerDashboard";
+
+// ✅ Nouvel espace Client / Particulier
+import ClientDashboard from "./pages/ClientDashboard";
 
 // Protection routes
 import PrivateRoute from "./components/PrivateRoute";
@@ -54,8 +57,18 @@ const App = () => (
             {/* 📝 Formulaire d'inscription ouvrier + forfait */}
             <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
 
-            {/* 👤 Fiche ouvrier (protégée dans WorkerDetail) */}
+            {/* 👤 Fiche ouvrier (auth gérée dans WorkerDetail : redirection si non connecté) */}
             <Route path="/ouvrier/:id" element={<WorkerDetail />} />
+
+            {/* 👥 Espace Client / Particulier (protégé : user) */}
+            <Route
+              path="/espace-client"
+              element={
+                <PrivateRoute allowedRoles={["user"]}>
+                  <ClientDashboard />
+                </PrivateRoute>
+              }
+            />
 
             {/* 👷‍♂️ Espace ouvrier (protégé : worker) */}
             <Route
