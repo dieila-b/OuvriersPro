@@ -11,25 +11,35 @@ import Footer from "@/components/Footer";
 const Index = () => {
   const location = useLocation();
 
-  // 🎯 Scroll automatique vers la section forfaits quand on arrive sur /#subscription
+  // 🎯 Gestion générale des ancres (#search, #subscription, etc.)
   useEffect(() => {
-    if (location.hash === "#subscription") {
-      setTimeout(() => {
-        const el = document.getElementById("subscription");
-        if (el) {
-          const rect = el.getBoundingClientRect();
+    const hash = location.hash || window.location.hash;
+    if (!hash) return;
 
-          // Petit offset si besoin pour ne pas coller le haut de l'écran
-          const EXTRA_OFFSET = 320;
-          const y = rect.top + window.scrollY + EXTRA_OFFSET;
+    const targetId = hash.replace("#", "");
 
-          window.scrollTo({
-            top: y,
-            behavior: "smooth",
-          });
-        }
-      }, 150);
-    }
+    setTimeout(() => {
+      const el = document.getElementById(targetId);
+      if (!el) return;
+
+      const rect = el.getBoundingClientRect();
+      let y: number;
+
+      if (targetId === "subscription") {
+        // Cas spécifique : tu souhaitais descendre sous la liste des ouvriers
+        const EXTRA_OFFSET = 520;
+        y = rect.top + window.scrollY + EXTRA_OFFSET;
+      } else {
+        // Pour #search (et autres sections), on tient compte de l'en-tête sticky
+        const HEADER_OFFSET = 96; // ~ hauteur du header
+        y = rect.top + window.scrollY - HEADER_OFFSET;
+      }
+
+      window.scrollTo({
+        top: y,
+        behavior: "smooth",
+      });
+    }, 100);
   }, [location.hash]);
 
   return (
