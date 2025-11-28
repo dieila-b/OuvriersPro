@@ -52,7 +52,7 @@ const WorkerSearchSection: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Filtres (identiques à SearchSection)
+  // Filtres
   const [keyword, setKeyword] = useState("");
   const [selectedJob, setSelectedJob] = useState<string>("all");
   const [maxPrice, setMaxPrice] = useState<number>(300000);
@@ -69,45 +69,46 @@ const WorkerSearchSection: React.FC = () => {
   // 1) Chargement Supabase
   useEffect(() => {
     const fetchWorkers = async () => {
+      console.log("🔄 [WorkerSearchSection] Chargement ouvriers…");
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
-        .from("op_ouvriers")
-        .select(
+      try {
+        const { data, error } = await supabase
+          .from("op_ouvriers")
+          .select(
+            `
+            id,
+            first_name,
+            last_name,
+            profession,
+            country,
+            region,
+            city,
+            commune,
+            district,
+            hourly_rate,
+            currency,
+            years_experience,
+            average_rating,
+            rating_count,
+            status
           `
-          id,
-          first_name,
-          last_name,
-          profession,
-          country,
-          region,
-          city,
-          commune,
-          district,
-          hourly_rate,
-          currency,
-          years_experience,
-          average_rating,
-          rating_count,
-          status
-        `
-        )
-        .eq("status", "approved");
+          )
+          // si tu n'utilises pas encore le statut, tu peux commenter la ligne suivante
+          .eq("status", "approved");
 
-      if (error) {
-        console.error(error);
-        setError(
-          language === "fr"
-            ? "Impossible de charger les professionnels pour le moment."
-            : "Unable to load professionals at the moment."
+        if (error) {
+          throw error;
+        }
+
+        const rows = (data ?? []) as DbWorker[];
+        console.log(
+          "✅ [WorkerSearchSection] Ouvriers bruts chargés:",
+          rows.length
         );
-        setLoading(false);
-        return;
-      }
 
-      const mapped: WorkerCard[] =
-        (data ?? []).map((w) => ({
+        const mapped: WorkerCard[] = rows.map((w) => ({
           id: w.id,
           name:
             ((w.first_name || "") +
@@ -123,10 +124,20 @@ const WorkerSearchSection: React.FC = () => {
           currency: w.currency ?? "GNF",
           rating: w.average_rating ?? 0,
           ratingCount: w.rating_count ?? 0,
-        })) ?? [];
+        }));
 
-      setWorkers(mapped);
-      setLoading(false);
+        setWorkers(mapped);
+      } catch (err: any) {
+        console.error("❌ [WorkerSearchSection] Erreur chargement:", err);
+        setWorkers([]);
+        setError(
+          language === "fr"
+            ? "Impossible de charger les professionnels pour le moment."
+            : "Unable to load professionals at the moment."
+        );
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchWorkers();
@@ -144,13 +155,13 @@ const WorkerSearchSection: React.FC = () => {
     const spMinRating = Number(searchParams.get("minRating") ?? "0");
     const spView = (searchParams.get("view") as "list" | "grid") ?? "list";
 
-    console.log("📥 [WorkerSearchSection] Sync depuis URL:", { 
-      spKeyword, 
-      spJob, 
+    console.log("📥 [WorkerSearchSection] Sync depuis URL:", {
+      spKeyword,
+      spJob,
       spDistrict,
       spRegion,
       spCity,
-      spCommune
+      spCommune,
     });
 
     setKeyword(spKeyword);
@@ -168,20 +179,18 @@ const WorkerSearchSection: React.FC = () => {
     }
   }, [searchParams, initializedFromUrl]);
 
-  // 3) Synchronisation URL depuis filtres locaux (pas keyword/district qui viennent de HeroSection)
+  // 3) Synchronisation URL depuis filtres locaux
   useEffect(() => {
     if (!initializedFromUrl) return;
 
-    // Ne mettre à jour l'URL que pour les filtres gérés localement
     const next: Record<string, string> = {};
-    
-    // Conserver keyword et district de HeroSection
+
+    // Conserver keyword et district d'origine
     const currentKeyword = searchParams.get("keyword") || "";
     const currentDistrict = searchParams.get("district") || "";
     if (currentKeyword) next.keyword = currentKeyword;
     if (currentDistrict) next.district = currentDistrict;
-    
-    // Ajouter filtres locaux
+
     if (selectedJob !== "all") next.job = selectedJob;
     if (selectedRegion) next.region = selectedRegion;
     if (selectedCity) next.city = selectedCity;
@@ -200,8 +209,8 @@ const WorkerSearchSection: React.FC = () => {
     maxPrice,
     minRating,
     viewMode,
-    // Ne PAS inclure keyword et selectedDistrict dans les dépendances
-    // car ils sont gérés par HeroSection
+    setSearchParams,
+    searchParams,
   ]);
 
   // Listes de filtres dynamiques
@@ -278,62 +287,71 @@ const WorkerSearchSection: React.FC = () => {
   );
 
   // Application des filtres
-  const filteredWorkers = useMemo(
-    () => {
-      const filtered = workers.filter((w) => {
-        const matchKeyword =
-          !keyword ||
-          w.name.toLowerCase().includes(keyword.toLowerCase()) ||
-          w.job.toLowerCase().includes(keyword.toLowerCase());
+  const filteredWorkers = useMemo(() => {
+    const filtered = workers.filter((w) => {
+      const matchKeyword =
+        !keyword ||
+        w.name.toLowerCase().includes(keyword.toLowerCase()) ||
+        w.job.toLowerCase().includes(keyword.toLowerCase());
 
-        const matchJob = selectedJob === "all" || w.job === selectedJob;
-        const matchPrice = w.hourlyRate <= maxPrice;
-        const matchRating = w.rating >= minRating;
+      const matchJob = selectedJob === "all" || w.job === selectedJob;
+      const matchPrice = w.hourlyRate <= maxPrice;
+      const matchRating = w.rating >= minRating;
 
-        // Comparaisons case-insensitive avec trim
-        const matchRegion = !selectedRegion || 
-          w.region.trim().toLowerCase() === selectedRegion.trim().toLowerCase();
-        const matchCity = !selectedCity || 
-          w.city.trim().toLowerCase() === selectedCity.trim().toLowerCase();
-        const matchCommune = !selectedCommune || 
-          w.commune.trim().toLowerCase() === selectedCommune.trim().toLowerCase();
-        const matchDistrict = !selectedDistrict || 
-          w.district.trim().toLowerCase() === selectedDistrict.trim().toLowerCase();
+      const regionNorm = w.region?.trim().toLowerCase() || "";
+      const cityNorm = w.city?.trim().toLowerCase() || "";
+      const communeNorm = w.commune?.trim().toLowerCase() || "";
+      const districtNorm = w.district?.trim().toLowerCase() || "";
 
-        const result = (
-          matchKeyword &&
-          matchJob &&
-          matchPrice &&
-          matchRating &&
-          matchRegion &&
-          matchCity &&
-          matchCommune &&
-          matchDistrict
-        );
+      const matchRegion =
+        !selectedRegion ||
+        regionNorm === selectedRegion.trim().toLowerCase();
+      const matchCity =
+        !selectedCity || cityNorm === selectedCity.trim().toLowerCase();
+      const matchCommune =
+        !selectedCommune ||
+        communeNorm === selectedCommune.trim().toLowerCase();
+      const matchDistrict =
+        !selectedDistrict ||
+        districtNorm === selectedDistrict.trim().toLowerCase();
 
-        return result;
-      });
+      return (
+        matchKeyword &&
+        matchJob &&
+        matchPrice &&
+        matchRating &&
+        matchRegion &&
+        matchCity &&
+        matchCommune &&
+        matchDistrict
+      );
+    });
 
-      console.log("🔍 [WorkerSearchSection] Filtrage:", {
-        total: workers.length,
-        filtered: filtered.length,
-        filters: { keyword, selectedJob, selectedDistrict, selectedRegion, selectedCity, selectedCommune }
-      });
+    console.log("🔍 [WorkerSearchSection] Filtrage:", {
+      total: workers.length,
+      filtered: filtered.length,
+      filters: {
+        keyword,
+        selectedJob,
+        selectedDistrict,
+        selectedRegion,
+        selectedCity,
+        selectedCommune,
+      },
+    });
 
-      return filtered;
-    },
-    [
-      workers,
-      keyword,
-      selectedJob,
-      maxPrice,
-      minRating,
-      selectedRegion,
-      selectedCity,
-      selectedCommune,
-      selectedDistrict,
-    ]
-  );
+    return filtered;
+  }, [
+    workers,
+    keyword,
+    selectedJob,
+    maxPrice,
+    minRating,
+    selectedRegion,
+    selectedCity,
+    selectedCommune,
+    selectedDistrict,
+  ]);
 
   const resetFilters = () => {
     setKeyword("");
@@ -391,6 +409,10 @@ const WorkerSearchSection: React.FC = () => {
       language === "fr"
         ? "Aucun professionnel ne correspond à ces critères pour le moment."
         : "No professional matches your criteria yet.",
+    noData:
+      language === "fr"
+        ? "Aucun professionnel n’est encore disponible."
+        : "No professionals are available yet.",
     contact: language === "fr" ? "Contacter" : "Contact",
     perHour: language === "fr" ? "/h" : "/h",
     years:
@@ -402,7 +424,9 @@ const WorkerSearchSection: React.FC = () => {
     viewGrid: language === "fr" ? "Mosaïque" : "Grid",
     resultCount: (count: number) =>
       language === "fr"
-        ? `${count} résultat${count > 1 ? "s" : ""} trouvé${count > 1 ? "s" : ""}`
+        ? `${count} résultat${count > 1 ? "s" : ""} trouvé${
+            count > 1 ? "s" : ""
+          }`
         : `${count} result${count > 1 ? "s" : ""} found`,
   };
 
@@ -484,7 +508,11 @@ const WorkerSearchSection: React.FC = () => {
                 readOnly
                 placeholder={text.searchPlaceholder}
                 className="text-sm bg-gray-100 cursor-not-allowed"
-                title={language === "fr" ? "Utilisez la recherche en haut de page" : "Use the search at the top of the page"}
+                title={
+                  language === "fr"
+                    ? "Utilisez la recherche en haut de page"
+                    : "Use the search at the top of the page"
+                }
               />
             </div>
 
@@ -585,7 +613,11 @@ const WorkerSearchSection: React.FC = () => {
                 value={selectedDistrict}
                 disabled
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100 cursor-not-allowed"
-                title={language === "fr" ? "Utilisez la recherche en haut de page" : "Use the search at the top of the page"}
+                title={
+                  language === "fr"
+                    ? "Utilisez la recherche en haut de page"
+                    : "Use the search at the top of the page"
+                }
               >
                 <option value="">{text.allDistricts}</option>
                 {districts.map((d) => (
@@ -652,11 +684,20 @@ const WorkerSearchSection: React.FC = () => {
               </div>
             )}
 
-            {!error && !loading && filteredWorkers.length === 0 && (
+            {!error && !loading && workers.length === 0 && (
               <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
-                {text.noResults}
+                {text.noData}
               </div>
             )}
+
+            {!error &&
+              !loading &&
+              workers.length > 0 &&
+              filteredWorkers.length === 0 && (
+                <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
+                  {text.noResults}
+                </div>
+              )}
 
             {loading && filteredWorkers.length === 0 && (
               <div className="border border-gray-100 rounded-xl p-6 text-sm text-gray-500">
@@ -667,7 +708,7 @@ const WorkerSearchSection: React.FC = () => {
             )}
 
             {/* VUE LISTE */}
-            {viewMode === "list" && (
+            {viewMode === "list" && filteredWorkers.length > 0 && (
               <div className="space-y-3 sm:space-y-4">
                 {filteredWorkers.map((w) => (
                   <div
@@ -712,7 +753,7 @@ const WorkerSearchSection: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Prix + CTA responsive */}
+                    {/* Prix + CTA */}
                     <div className="w-full sm:w-auto flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 text-right">
                       <div className="text-pro-blue font-bold text-base sm:text-lg">
                         {formatCurrency(w.hourlyRate, w.currency)}
@@ -735,7 +776,7 @@ const WorkerSearchSection: React.FC = () => {
             )}
 
             {/* VUE MOSAÏQUE */}
-            {viewMode === "grid" && (
+            {viewMode === "grid" && filteredWorkers.length > 0 && (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {filteredWorkers.map((w) => (
                   <div
