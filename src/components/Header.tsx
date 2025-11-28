@@ -1,5 +1,5 @@
 // src/components/Header.tsx
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Languages, Search, User, Menu, X } from "lucide-react";
@@ -9,17 +9,80 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
+import { supabase } from "@/lib/supabase";
 
 const Header = () => {
   const { language, setLanguage, t } = useLanguage();
-  const { isAdmin } = useAuthProfile();
+  const { isAdmin } = useAuthProfile(); // on garde ton hook pour l'admin
+  const navigate = useNavigate();
+
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
 
   const closeMobile = () => setMobileOpen(false);
 
-  const accountLabel = language === "fr" ? "Mon compte" : "My account";
+  // Chargement user + rôle depuis Supabase
+  useEffect(() => {
+    const loadUserAndRole = async () => {
+      const { data } = await supabase.auth.getUser();
+      const user = data?.user ?? null;
+
+      setIsLoggedIn(!!user);
+
+      if (user) {
+        const { data: profile } = await supabase
+          .from("op_users")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        setRole((profile?.role as string) || "user");
+      } else {
+        setRole(null);
+      }
+    };
+
+    // initial
+    loadUserAndRole();
+
+    // écoute des changements d'auth
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      () => loadUserAndRole()
+    );
+
+    return () => {
+      listener?.subscription.unsubscribe();
+    };
+  }, []);
+
+  const accountLabel = !isLoggedIn
+    ? language === "fr"
+      ? "Se connecter"
+      : "Log in"
+    : language === "fr"
+    ? "Mon compte"
+    : "My account";
+
+  const handleAccountClick = () => {
+    if (!isLoggedIn) {
+      // non connecté → page Mon compte (connexion / création)
+      navigate("/mon-compte");
+      return;
+    }
+
+    // connecté → on route selon le rôle
+    if (isAdmin) {
+      navigate("/admin/dashboard");
+    } else if (role === "worker") {
+      navigate("/espace-ouvrier");
+    } else {
+      // user, ou tout autre rôle par défaut
+      navigate("/espace-client");
+    }
+  };
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -62,24 +125,26 @@ const Header = () => {
           <div className="hidden md:flex items-center space-x-3">
             {/* Bouton Admin : visible uniquement si role = admin */}
             {isAdmin && (
-              <Link
-                to="/admin/ouvrier-contacts"
+              <Button
+                type="button"
+                onClick={() => navigate("/admin/dashboard")}
                 className="inline-flex items-center rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                variant="outline"
               >
                 Admin
-              </Link>
+              </Button>
             )}
 
-            {/* CTA Mon compte (remplace Devenir Ouvrier Pro) */}
-            <Link to="/mon-compte">
-              <Button
-                size="sm"
-                className="bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center gap-2"
-              >
-                <User className="w-4 h-4" />
-                {accountLabel}
-              </Button>
-            </Link>
+            {/* CTA Mon compte / Se connecter */}
+            <Button
+              size="sm"
+              type="button"
+              onClick={handleAccountClick}
+              className="bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center gap-2"
+            >
+              <User className="w-4 h-4" />
+              {accountLabel}
+            </Button>
 
             {/* Language Switcher */}
             <DropdownMenu>
@@ -188,23 +253,34 @@ const Header = () => {
 
             {/* Admin mobile */}
             {isAdmin && (
-              <Link
-                to="/admin/ouvrier-contacts"
-                onClick={closeMobile}
+              <Button
+                type="button"
+                onClick={() => {
+                  closeMobile();
+                  navigate("/admin/dashboard");
+                }}
                 className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
+                variant="ghost"
               >
                 <User className="w-4 h-4" />
                 Admin
-              </Link>
+              </Button>
             )}
 
-            {/* CTA mobile Mon compte */}
-            <Link to="/mon-compte" onClick={closeMobile} className="pt-2">
-              <Button className="w-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center justify-center gap-2">
+            {/* CTA mobile Mon compte / Se connecter */}
+            <div className="pt-2">
+              <Button
+                className="w-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center justify-center gap-2"
+                type="button"
+                onClick={() => {
+                  closeMobile();
+                  handleAccountClick();
+                }}
+              >
                 <User className="w-4 h-4" />
                 {accountLabel}
               </Button>
-            </Link>
+            </div>
           </div>
         </div>
       )}
