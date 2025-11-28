@@ -2,20 +2,25 @@
 import React, { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
-import { Languages, Search, User, Menu, X } from "lucide-react";
+import { Languages, Search as SearchIcon, User, Menu, X } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
+
+const HEADER_OFFSET = 96; // hauteur approximative du header sticky
 
 const Header = () => {
   const { language, setLanguage, t } = useLanguage();
-  const { user, isAdmin, isWorker, isClient } = useAuthProfile();
+  const { user, isAdmin, isWorker } = useAuthProfile();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const closeMobile = () => setMobileOpen(false);
 
@@ -37,6 +42,31 @@ const Header = () => {
       : "/espace-client" // client / particulier par défaut
     : "/mon-compte";
 
+  // Scroll lissé vers une section de la home
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const y = rect.top + window.scrollY - HEADER_OFFSET;
+
+    window.scrollTo({
+      top: y,
+      behavior: "smooth",
+    });
+  };
+
+  // Gestion clics sur Rechercher / FAQ / Contact
+  const handleNavClick = (sectionId: string) => {
+    if (location.pathname === "/") {
+      // On est déjà sur la home → scroll direct
+      scrollToSection(sectionId);
+    } else {
+      // On change de route vers la home avec un hash
+      navigate(`/#${sectionId}`);
+    }
+  };
+
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
       {/* wrapper full-width + max-w */}
@@ -54,24 +84,27 @@ const Header = () => {
 
           {/* Navigation Desktop */}
           <nav className="hidden md:flex items-center space-x-6">
-            <Link
-              to="/#search"
+            <button
+              type="button"
+              onClick={() => handleNavClick("search")}
               className="text-pro-gray hover:text-pro-blue transition-colors"
             >
               {t("nav.search")}
-            </Link>
-            <Link
-              to="/#faq"
+            </button>
+            <button
+              type="button"
+              onClick={() => handleNavClick("faq")}
               className="text-pro-gray hover:text-pro-blue transition-colors"
             >
               {t("nav.faq")}
-            </Link>
-            <Link
-              to="/#contact"
+            </button>
+            <button
+              type="button"
+              onClick={() => handleNavClick("contact")}
               className="text-pro-gray hover:text-pro-blue transition-colors"
             >
               {t("nav.contact")}
-            </Link>
+            </button>
           </nav>
 
           {/* Actions Desktop */}
@@ -177,30 +210,39 @@ const Header = () => {
       {mobileOpen && (
         <div className="md:hidden border-t bg-white">
           <div className="w-full max-w-6xl mx-auto px-4 py-3 flex flex-col gap-2">
-            <Link
-              to="/#search"
-              onClick={closeMobile}
+            <button
+              type="button"
+              onClick={() => {
+                handleNavClick("search");
+                closeMobile();
+              }}
               className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
             >
-              <Search className="w-4 h-4" />
+              <SearchIcon className="w-4 h-4" />
               {t("nav.search")}
-            </Link>
+            </button>
 
-            <Link
-              to="/#faq"
-              onClick={closeMobile}
+            <button
+              type="button"
+              onClick={() => {
+                handleNavClick("faq");
+                closeMobile();
+              }}
               className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
             >
               {t("nav.faq")}
-            </Link>
+            </button>
 
-            <Link
-              to="/#contact"
-              onClick={closeMobile}
+            <button
+              type="button"
+              onClick={() => {
+                handleNavClick("contact");
+                closeMobile();
+              }}
               className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
             >
               {t("nav.contact")}
-            </Link>
+            </button>
 
             {/* Lien Admin mobile */}
             {isAdmin && (
