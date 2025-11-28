@@ -8,39 +8,38 @@ import WorkerSearchSection from "@/components/WorkerSearchSection";
 import SubscriptionSection from "@/components/SubscriptionSection";
 import Footer from "@/components/Footer";
 
+const HEADER_OFFSET = 96; // hauteur approximative du header sticky
+const EXTRA_SUBSCRIPTION_OFFSET = 520; // pour descendre sous la liste des ouvriers
+
 const Index = () => {
   const location = useLocation();
 
-  // 🎯 Gestion générale des ancres (#search, #subscription, etc.)
+  // Gestion centralisée de tous les hash (#search, #subscription, etc.)
   useEffect(() => {
     const hash = location.hash || window.location.hash;
     if (!hash) return;
 
-    const targetId = hash.replace("#", "");
+    const id = hash.replace("#", "");
+    const el = document.getElementById(id);
+    if (!el) return;
 
-    setTimeout(() => {
-      const el = document.getElementById(targetId);
-      if (!el) return;
+    const rect = el.getBoundingClientRect();
 
-      const rect = el.getBoundingClientRect();
-      let y: number;
+    // Offset de base pour éviter que le titre soit caché par le header
+    let offset = HEADER_OFFSET;
 
-      if (targetId === "subscription") {
-        // Cas spécifique : tu souhaitais descendre sous la liste des ouvriers
-        const EXTRA_OFFSET = 520;
-        y = rect.top + window.scrollY + EXTRA_OFFSET;
-      } else {
-        // Pour #search (et autres sections), on tient compte de l'en-tête sticky
-        const HEADER_OFFSET = 96; // ~ hauteur du header
-        y = rect.top + window.scrollY - HEADER_OFFSET;
-      }
+    // Cas particulier pour la section forfaits : on descend plus bas
+    if (id === "subscription") {
+      offset = -EXTRA_SUBSCRIPTION_OFFSET;
+    }
 
-      window.scrollTo({
-        top: y,
-        behavior: "smooth",
-      });
-    }, 100);
-  }, [location.hash]);
+    const y = rect.top + window.scrollY - offset;
+
+    window.scrollTo({
+      top: y,
+      behavior: "smooth",
+    });
+  }, [location]);
 
   return (
     <div className="min-h-screen w-full bg-white overflow-x-hidden flex flex-col">
