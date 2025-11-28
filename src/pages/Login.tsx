@@ -90,17 +90,29 @@ const Login: React.FC = () => {
       // 3) Calcul de la cible en fonction de l'URL et du rôle
       const searchParams = new URLSearchParams(location.search);
       const redirectParam = searchParams.get("redirect");
-      const fromState = location.state?.from;
 
+      // Si un redirect explicite est présent (ex: /login?redirect=/mes-demandes)
+      if (redirectParam) {
+        navigate(redirectParam, { replace: true });
+        return;
+      }
+
+      // Sinon, on redirige selon le rôle
       if (role === "admin") {
         navigate("/admin/dashboard", { replace: true });
-      } else if (role === "worker") {
+      } else if (role === "worker" || role === "ouvrier") {
         // les vrais ouvriers validés
         navigate("/espace-ouvrier", { replace: true });
+      } else if (
+        role === "user" ||
+        role === "client" ||
+        role === "particulier"
+      ) {
+        // client / particulier connecté
+        navigate("/espace-client", { replace: true });
       } else {
-        // role "user" ou autre ➜ espace client / particulier par défaut
-        const target = redirectParam || fromState || "/espace-client";
-        navigate(target, { replace: true });
+        // fallback : espace client par défaut
+        navigate("/espace-client", { replace: true });
       }
     } catch (err: any) {
       console.error(err);
@@ -203,8 +215,8 @@ const Login: React.FC = () => {
 
             <p className="mt-2 text-xs text-slate-500">
               {language === "fr"
-                ? "Les administrateurs seront redirigés vers le back-office, les ouvriers vers leur espace personnel. Les autres utilisateurs sont redirigés vers leur espace client."
-                : "Admins are redirected to the back-office, workers to their dashboard. Other users are redirected to their client area."}
+                ? "Les administrateurs sont redirigés vers le back-office, les ouvriers vers leur espace personnel, et les autres utilisateurs vers leur espace client."
+                : "Admins are redirected to the back-office, workers to their dashboard, and other users to their client space."}
             </p>
           </form>
         </CardContent>
