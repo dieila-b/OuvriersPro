@@ -19,7 +19,7 @@ const Index = () => {
         if (el) {
           const rect = el.getBoundingClientRect();
 
-          // Offset plus léger pour éviter de trop descendre sous la liste des ouvriers
+          // Petit offset si besoin pour ne pas coller le haut de l'écran
           const EXTRA_OFFSET = 320;
           const y = rect.top + window.scrollY + EXTRA_OFFSET;
 
@@ -31,30 +31,6 @@ const Index = () => {
       }, 150);
     }
   }, [location.hash]);
-
-  // 🔍 Quand on arrive avec ?section=search, on scrolle directement sur "Trouvez votre professionnel"
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const section = params.get("section");
-
-    if (section === "search") {
-      setTimeout(() => {
-        const el = document.getElementById("search");
-        if (el) {
-          const rect = el.getBoundingClientRect();
-
-          // Hauteur approximative du header sticky
-          const HEADER_OFFSET = 90;
-          const y = rect.top + window.scrollY - HEADER_OFFSET;
-
-          window.scrollTo({
-            top: y < 0 ? 0 : y,
-            behavior: "smooth",
-          });
-        }
-      }, 150);
-    }
-  }, [location.search]);
 
   return (
     <div className="min-h-screen w-full bg-white overflow-x-hidden flex flex-col">
