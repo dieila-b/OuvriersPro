@@ -54,24 +54,24 @@ const Header = () => {
 
           {/* Navigation Desktop */}
           <nav className="hidden md:flex items-center space-x-6">
-            <a
-              href="#search"
+            <Link
+              to="/#search"
               className="text-pro-gray hover:text-pro-blue transition-colors"
             >
               {t("nav.search")}
-            </a>
-            <a
-              href="#faq"
+            </Link>
+            <Link
+              to="/#faq"
               className="text-pro-gray hover:text-pro-blue transition-colors"
             >
               {t("nav.faq")}
-            </a>
-            <a
-              href="#contact"
+            </Link>
+            <Link
+              to="/#contact"
               className="text-pro-gray hover:text-pro-blue transition-colors"
             >
               {t("nav.contact")}
-            </a>
+            </Link>
           </nav>
 
           {/* Actions Desktop */}
@@ -177,30 +177,30 @@ const Header = () => {
       {mobileOpen && (
         <div className="md:hidden border-t bg-white">
           <div className="w-full max-w-6xl mx-auto px-4 py-3 flex flex-col gap-2">
-            <a
-              href="#search"
+            <Link
+              to="/#search"
               onClick={closeMobile}
               className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
             >
               <Search className="w-4 h-4" />
               {t("nav.search")}
-            </a>
+            </Link>
 
-            <a
-              href="#faq"
+            <Link
+              to="/#faq"
               onClick={closeMobile}
               className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
             >
               {t("nav.faq")}
-            </a>
+            </Link>
 
-            <a
-              href="#contact"
+            <Link
+              to="/#contact"
               onClick={closeMobile}
               className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
             >
               {t("nav.contact")}
-            </a>
+            </Link>
 
             {/* Lien Admin mobile */}
             {isAdmin && (
