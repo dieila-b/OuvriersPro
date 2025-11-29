@@ -4,35 +4,17 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, MapPin, ChevronDown, LocateFixed } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 
 const HeroSection = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
 
   // ---- valeurs saisies
   const [searchTerm, setSearchTerm] = useState(""); // Métier
-  const [district, setDistrict] = useState("");     // Quartier (texte)
+  const [district, setDistrict] = useState(""); // Quartier (texte)
   const [geo, setGeo] = useState<{ lat: number; lng: number } | null>(null);
-
-  // ---- Synchroniser les champs avec les URL params
-  useEffect(() => {
-    const keywordParam = searchParams.get("keyword") || "";
-    const districtParam = searchParams.get("district") || "";
-    
-    setSearchTerm(keywordParam);
-    setDistrict(districtParam);
-    
-    const lat = searchParams.get("lat");
-    const lng = searchParams.get("lng");
-    if (lat && lng) {
-      setGeo({ lat: Number(lat), lng: Number(lng) });
-    } else {
-      setGeo(null);
-    }
-  }, [searchParams]);
 
   // ---- listes globales (provenant des workers approuvés)
   const [jobOptions, setJobOptions] = useState<string[]>([]);
@@ -167,39 +149,31 @@ const HeroSection = () => {
   };
 
   // -------------------------
-  // Lancer la recherche -> synchroniser avec WorkerSearchSection via URL
+  // Lancer la recherche -> rediriger vers /rechercher
   // -------------------------
   const handleSearch = () => {
     const job = searchTerm.trim();
     const qDistrict = district.trim();
 
-    // Créer de nouveaux paramètres (efface les anciens)
     const params = new URLSearchParams();
 
-    // Champ "Métier / service" -> keyword (recherche partielle)
     if (job) {
       params.set("keyword", job);
     }
-
-    // Champ "Quartier" -> district
     if (qDistrict) {
       params.set("district", qDistrict);
     }
-
-    // Géoloc (optionnel)
     if (geo) {
       params.set("lat", String(geo.lat));
       params.set("lng", String(geo.lng));
     }
 
-    // Met à jour les paramètres URL pour déclencher la recherche
-    // replace: true pour éviter d'ajouter des entrées dans l'historique
-    setSearchParams(params, { replace: true });
+    const search = params.toString();
 
-    // Scroll vers les résultats
-    setTimeout(() => {
-      document.getElementById("search")?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
+    navigate({
+      pathname: "/rechercher",
+      search: search ? `?${search}` : "",
+    });
   };
 
   return (
@@ -217,7 +191,6 @@ const HeroSection = () => {
           {/* Search Form (Métier + Quartier avec suggestions + géoloc) */}
           <div className="bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl max-w-3xl mx-auto">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 md:gap-4">
-
               {/* ---- Métier combobox */}
               <div ref={jobsBoxRef} className="relative text-left">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -279,35 +252,42 @@ const HeroSection = () => {
                   onClick={handleGeoLocate}
                   className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-gray-200 px-2 py-1 text-gray-600 hover:bg-gray-50"
                   aria-label="Utiliser ma position"
-                  title={language === "fr" ? "Utiliser ma position" : "Use my location"}
+                  title={
+                    language === "fr" ? "Utiliser ma position" : "Use my location"
+                  }
                 >
-                  <LocateFixed className={`w-4 h-4 ${geoLoading ? "animate-pulse" : ""}`} />
+                  <LocateFixed
+                    className={`w-4 h-4 ${
+                      geoLoading ? "animate-pulse" : ""
+                    }`}
+                  />
                 </button>
 
-                {openDistricts && (filteredDistricts.length > 0 || loadingOptions) && (
-                  <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-                    {loadingOptions && (
-                      <div className="px-3 py-2 text-xs text-gray-500">
-                        Chargement...
-                      </div>
-                    )}
-                    {!loadingOptions &&
-                      filteredDistricts.map((d) => (
-                        <button
-                          key={d}
-                          type="button"
-                          onClick={() => {
-                            setDistrict(d);
-                            setGeo(null);
-                            setOpenDistricts(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          {d}
-                        </button>
-                      ))}
-                  </div>
-                )}
+                {openDistricts &&
+                  (filteredDistricts.length > 0 || loadingOptions) && (
+                    <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                      {loadingOptions && (
+                        <div className="px-3 py-2 text-xs text-gray-500">
+                          Chargement...
+                        </div>
+                      )}
+                      {!loadingOptions &&
+                        filteredDistricts.map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => {
+                              setDistrict(d);
+                              setGeo(null);
+                              setOpenDistricts(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          >
+                            {d}
+                          </button>
+                        ))}
+                    </div>
+                  )}
               </div>
 
               {/* message erreur géoloc si besoin */}
