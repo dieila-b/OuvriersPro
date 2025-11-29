@@ -25,19 +25,19 @@ import AdminDashboard from "./pages/AdminDashboard";
 // Espace ouvrier connecté
 import WorkerDashboard from "./pages/WorkerDashboard";
 
-// ✅ Nouvel espace Client / Particulier
+// Espace Client / Particulier
 import ClientDashboard from "./pages/ClientDashboard";
 
-// ✅ Profil client
+// Profil client
 import ClientProfile from "./pages/ClientProfile";
 
-// ✅ Liste des demandes client
+// Liste des demandes client
 import ClientRequestsList from "./pages/ClientRequestsList";
 
-// ✅ Liste des échanges client ↔ ouvriers
+// Liste des échanges client ↔ ouvriers
 import ClientMessagesList from "./pages/ClientMessagesList";
 
-// ✅ Liste des ouvriers favoris
+// Liste des ouvriers favoris
 import ClientFavoritesList from "./pages/ClientFavoritesList";
 
 // Protection routes
@@ -58,8 +58,8 @@ const App = () => (
             <Route path="/" element={<Index />} />
 
             {/* 🔎 Rechercher un ouvrier
-                -> on réutilise la même page que l'accueil (Trouvez votre professionnel)
-                Le client reste connecté grâce à Supabase, on change juste d'URL */}
+                -> même layout que l'accueil mais Index.tsx scrolle
+                   automatiquement vers la section "Trouvez votre professionnel" */}
             <Route path="/search" element={<Index />} />
 
             {/* 🧑‍💼 Mon compte (connexion + inscription + choix ouvrier/particulier) */}
