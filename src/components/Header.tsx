@@ -56,8 +56,19 @@ const Header = () => {
     });
   };
 
-  // Gestion clics sur Rechercher / FAQ / Contact
-  const handleNavClick = (sectionId: string) => {
+  // Clic sur "Rechercher"
+  const handleSearchClick = () => {
+    if (location.pathname === "/search") {
+      // déjà sur /search → on rescrolle vers la section
+      scrollToSection("search");
+    } else {
+      // changement d'URL vers /search
+      navigate("/search");
+    }
+  };
+
+  // Gestion clics sur FAQ / Contact (sections de la home)
+  const handleNavClickSection = (sectionId: string) => {
     if (location.pathname === "/") {
       // On est déjà sur la home → scroll direct
       scrollToSection(sectionId);
@@ -84,23 +95,25 @@ const Header = () => {
 
           {/* Navigation Desktop */}
           <nav className="hidden md:flex items-center space-x-6">
+            {/* 🔎 Rechercher → route /search */}
             <button
               type="button"
-              onClick={() => handleNavClick("search")}
+              onClick={handleSearchClick}
               className="text-pro-gray hover:text-pro-blue transition-colors"
             >
               {t("nav.search")}
             </button>
+
             <button
               type="button"
-              onClick={() => handleNavClick("faq")}
+              onClick={() => handleNavClickSection("faq")}
               className="text-pro-gray hover:text-pro-blue transition-colors"
             >
               {t("nav.faq")}
             </button>
             <button
               type="button"
-              onClick={() => handleNavClick("contact")}
+              onClick={() => handleNavClickSection("contact")}
               className="text-pro-gray hover:text-pro-blue transition-colors"
             >
               {t("nav.contact")}
@@ -210,10 +223,11 @@ const Header = () => {
       {mobileOpen && (
         <div className="md:hidden border-t bg-white">
           <div className="w-full max-w-6xl mx-auto px-4 py-3 flex flex-col gap-2">
+            {/* 🔎 Rechercher (mobile) */}
             <button
               type="button"
               onClick={() => {
-                handleNavClick("search");
+                handleSearchClick();
                 closeMobile();
               }}
               className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
@@ -225,7 +239,7 @@ const Header = () => {
             <button
               type="button"
               onClick={() => {
-                handleNavClick("faq");
+                handleNavClickSection("faq");
                 closeMobile();
               }}
               className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
@@ -236,7 +250,7 @@ const Header = () => {
             <button
               type="button"
               onClick={() => {
-                handleNavClick("contact");
+                handleNavClickSection("contact");
                 closeMobile();
               }}
               className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
