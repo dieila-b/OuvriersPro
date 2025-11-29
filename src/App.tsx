@@ -58,8 +58,8 @@ const App = () => (
             <Route path="/" element={<Index />} />
 
             {/* 🔎 Rechercher un ouvrier
-                -> même layout que l'accueil mais Index.tsx scrolle
-                   automatiquement vers la section "Trouvez votre professionnel" */}
+                Les deux URLs /search et /rechercher pointent vers la même page */}
+            <Route path="/search" element={<Index />} />
             <Route path="/rechercher" element={<Index />} />
 
             {/* 🧑‍💼 Mon compte (connexion + inscription + choix ouvrier/particulier) */}
