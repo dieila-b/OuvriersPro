@@ -8,37 +8,58 @@ import WorkerSearchSection from "@/components/WorkerSearchSection";
 import SubscriptionSection from "@/components/SubscriptionSection";
 import Footer from "@/components/Footer";
 
-const HEADER_OFFSET = 96; // hauteur approximative du header sticky
-const EXTRA_SUBSCRIPTION_OFFSET = 520; // pour descendre sous la liste des ouvriers
-
 const Index = () => {
   const location = useLocation();
 
-  // Gestion centralisée de tous les hash (#search, #subscription, etc.)
+  // 🎯 Scroll automatique vers la section forfaits quand on arrive sur /#subscription
   useEffect(() => {
-    const hash = location.hash || window.location.hash;
-    if (!hash) return;
+    if (window.location.hash === "#subscription") {
+      const timeout = setTimeout(() => {
+        const el = document.getElementById("subscription");
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          const EXTRA_OFFSET = 520; // ajuste si besoin
+          const y = rect.top + window.scrollY + EXTRA_OFFSET;
 
-    const id = hash.replace("#", "");
-    const el = document.getElementById(id);
-    if (!el) return;
+          window.scrollTo({
+            top: y,
+            behavior: "smooth",
+          });
+        }
+      }, 150);
 
-    const rect = el.getBoundingClientRect();
+      return () => clearTimeout(timeout);
+    }
+  }, []);
 
-    // Offset de base pour éviter que le titre soit caché par le header
-    let offset = HEADER_OFFSET;
+  // 🔍 Quand on arrive sur /search ou /rechercher,
+  // on scrolle directement sur "Trouvez votre professionnel"
+  useEffect(() => {
+    const { pathname } = location;
 
-    // Cas particulier pour la section forfaits : on descend plus bas
-    if (id === "subscription") {
-      offset = -EXTRA_SUBSCRIPTION_OFFSET;
+    if (pathname === "/search" || pathname === "/rechercher") {
+      const timeout = setTimeout(() => {
+        const el = document.getElementById("search");
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          // petit offset pour ne pas coller le titre au bord du header
+          const OFFSET = 80;
+          const y = rect.top + window.scrollY - OFFSET;
+
+          window.scrollTo({
+            top: y,
+            behavior: "smooth",
+          });
+        }
+      }, 100);
+
+      return () => clearTimeout(timeout);
     }
 
-    const y = rect.top + window.scrollY - offset;
-
-    window.scrollTo({
-      top: y,
-      behavior: "smooth",
-    });
+    // Si on revient sur la home "/", on remonte en haut de la page
+    if (pathname === "/") {
+      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+    }
   }, [location]);
 
   return (
@@ -58,7 +79,7 @@ const Index = () => {
         {/* RECHERCHE OUVRIERS : "Trouvez votre professionnel" */}
         <section
           id="search"
-          className="w-full bg-white py-10 sm:py-14 lg:py-16 scroll-mt-20"
+          className="w-full bg-white py-10 sm:py-14 lg:py-16 scroll-mt-24"
         >
           <WorkerSearchSection />
         </section>
