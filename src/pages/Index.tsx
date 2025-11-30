@@ -44,9 +44,9 @@ const Index = () => {
     // Position Y de la section par rapport au haut de la page
     const sectionTop = section.offsetTop;
 
-    // On aligne le haut de la section juste sous le header
-    // (sans marge supplémentaire pour limiter le blanc)
-    const y = sectionTop - headerHeight;
+    // 🔼 On remonte un peu plus que la hauteur du header pour supprimer le blanc
+    const EXTRA = 40; // augmente si tu veux encore moins de marge
+    const y = sectionTop - headerHeight - EXTRA;
 
     window.scrollTo({
       top: y,
@@ -90,7 +90,6 @@ const Index = () => {
         {/* RECHERCHE OUVRIERS : "Trouvez votre professionnel" */}
         <section
           id="search"
-          // 🔽 Padding haut réduit pour masquer le grand blanc
           className="w-full bg-white pt-4 pb-10 sm:pt-6 sm:pb-14 lg:pt-8 lg:pb-16 scroll-mt-24"
         >
           <WorkerSearchSection />
