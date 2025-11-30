@@ -1,211 +1,335 @@
-import React, { useState } from "react";
-import { Star } from "lucide-react";
+// src/components/WorkerReviews.tsx
+import React, { useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { useWorkerReviews } from "@/hooks/useWorkerReviews";
+import { Star as StarIcon } from "lucide-react";
 
-type Props = {
+type WorkerReviewsProps = {
   workerId: string;
 };
 
-const WorkerReviews: React.FC<Props> = ({ workerId }) => {
-  const { language } = useLanguage();
-  const {
-    reviews,
-    loading,
-    error,
-    upsertReview,
-    isClient,
-    currentUserId,
-  } = useWorkerReviews(workerId);
+type ReviewRow = {
+  id: string;
+  worker_id: string;
+  client_id: string | null;
+  author_name: string | null;
+  rating: number | null;
+  comment: string | null;
+  created_at: string | null;
+};
 
-  const [rating, setRating] = useState<number>(5);
+const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
+  const { language } = useLanguage();
+
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  const [reviews, setReviews] = useState<ReviewRow[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [reviewsError, setReviewsError] = useState<string | null>(null);
+
+  const [rating, setRating] = useState<number>(0);
+  const [hoverRating, setHoverRating] = useState<number | null>(null);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
   const text = {
-    title: language === "fr" ? "Avis des clients" : "Customer reviews",
-    addTitle:
-      language === "fr"
-        ? "Laisser une note et un avis"
-        : "Leave a rating and review",
-    placeholder:
-      language === "fr"
-        ? "Décrivez votre expérience avec cet ouvrier (ponctualité, qualité du travail, communication...)"
-        : "Describe your experience with this worker (quality, communication, etc.)",
-    submit:
-      language === "fr" ? "Envoyer mon avis" : "Submit my review",
-    update:
-      language === "fr" ? "Mettre à jour mon avis" : "Update my review",
-    mustBeClient:
-      language === "fr"
-        ? "Vous devez être connecté en tant que client pour laisser un avis."
-        : "You must be logged in as a client to leave a review.",
+    title: language === "fr" ? "Avis clients" : "Customer reviews",
     noReviews:
       language === "fr"
-        ? "Aucun avis pour le moment. Soyez le premier à partager votre expérience."
-        : "No review yet. Be the first to share your experience.",
+        ? "Aucun avis pour le moment."
+        : "No reviews yet.",
+    leaveTitle:
+      language === "fr"
+        ? "Laisser une note et un avis"
+        : "Leave a rating and a review",
+    mustLogin:
+      language === "fr"
+        ? "Vous devez être connecté pour laisser un avis."
+        : "You must be logged in to leave a review.",
+    yourRating: language === "fr" ? "Votre note" : "Your rating",
+    yourComment: language === "fr" ? "Votre avis" : "Your review",
+    send: language === "fr" ? "Envoyer l'avis" : "Submit review",
+    sending: language === "fr" ? "Envoi en cours..." : "Submitting...",
+    errorLoad:
+      language === "fr"
+        ? "Impossible de charger les avis pour le moment."
+        : "Unable to load reviews at the moment.",
+    errorSubmit:
+      language === "fr"
+        ? "Impossible d'enregistrer votre avis pour le moment."
+        : "Unable to save your review at the moment.",
+    successSubmit:
+      language === "fr"
+        ? "Merci, votre avis a bien été enregistré."
+        : "Thank you, your review has been saved.",
+    requiredRating:
+      language === "fr"
+        ? "Merci de sélectionner une note."
+        : "Please select a rating.",
   };
 
-  const existingUserReview = reviews.find(
-    (r) => r.client_id === currentUserId
-  );
+  // 🔐 Vérifier la session (peu importe le rôle)
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (error) {
+          console.error("auth error", error);
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+        } else if (data?.user) {
+          setIsAuthenticated(true);
+          setCurrentUser(data.user);
+        } else {
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+        }
+      } catch (e) {
+        console.error("auth check exception", e);
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+      } finally {
+        setAuthChecked(true);
+      }
+    };
 
-  React.useEffect(() => {
-    if (existingUserReview) {
-      setRating(existingUserReview.rating);
-      setComment(existingUserReview.comment ?? "");
+    checkAuth();
+  }, []);
+
+  // 🔄 Charger les avis existants
+  const loadReviews = async () => {
+    setLoadingReviews(true);
+    setReviewsError(null);
+
+    try {
+      const { data, error } = await supabase
+        .from("op_ouvrier_reviews")
+        .select("id, worker_id, client_id, author_name, rating, comment, created_at")
+        .eq("worker_id", workerId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("load reviews error", error);
+        setReviewsError(text.errorLoad);
+        setReviews([]);
+        return;
+      }
+
+      setReviews((data ?? []) as ReviewRow[]);
+    } catch (e) {
+      console.error("load reviews exception", e);
+      setReviewsError(text.errorLoad);
+      setReviews([]);
+    } finally {
+      setLoadingReviews(false);
     }
-  }, [existingUserReview]);
+  };
+
+  useEffect(() => {
+    if (!workerId) return;
+    loadReviews();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workerId]);
+
+  // ⭐ clic sur les étoiles
+  const displayRating = hoverRating ?? rating;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isClient) return;
+    setSubmitError(null);
+    setSubmitSuccess(null);
+
+    if (!currentUser) {
+      setSubmitError(text.mustLogin);
+      return;
+    }
+
+    if (!rating) {
+      setSubmitError(text.requiredRating);
+      return;
+    }
+
+    setSubmitting(true);
 
     try {
-      setSubmitting(true);
-      await upsertReview(rating, comment.trim());
-      // Optionnel : message toast
-    } catch (err) {
-      console.error("[WorkerReviews] submit error", err);
-      // TODO: toast d'erreur
+      const displayName =
+        (currentUser.user_metadata?.full_name as string | undefined) ||
+        (currentUser.user_metadata?.name as string | undefined) ||
+        currentUser.email ||
+        (language === "fr" ? "Client OuvriersPro" : "OuvriersPro client");
+
+      const { error } = await supabase.from("op_ouvrier_reviews").insert({
+        worker_id: workerId,
+        client_id: currentUser.id,
+        author_name: displayName,
+        rating,
+        comment: comment.trim() || null,
+      });
+
+      if (error) {
+        console.error("insert review error", error);
+        setSubmitError(text.errorSubmit);
+      } else {
+        setSubmitSuccess(text.successSubmit);
+        setRating(0);
+        setHoverRating(null);
+        setComment("");
+        await loadReviews();
+      }
+    } catch (e) {
+      console.error("insert review exception", e);
+      setSubmitError(text.errorSubmit);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const renderStars = (value: number, onChange?: (v: number) => void) => (
-    <div className="flex items-center gap-1">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <button
-          key={i}
-          type={onChange ? "button" : "button"}
-          disabled={!onChange}
-          onClick={onChange ? () => onChange(i) : undefined}
-          className="text-yellow-400 disabled:opacity-100"
-        >
-          <Star
-            className={`w-4 h-4 ${
-              i <= value ? "fill-yellow-400" : "fill-none"
-            }`}
-          />
-        </button>
-      ))}
-    </div>
-  );
-
   return (
-    <section className="mt-8 space-y-6">
+    <Card className="p-6">
       {/* Liste des avis */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-        <h3 className="text-lg font-semibold text-slate-900 mb-3">
-          {text.title}
-        </h3>
+      <h2 className="text-xl font-semibold mb-4">{text.title}</h2>
 
-        {loading && (
-          <p className="text-sm text-slate-500">
-            {language === "fr"
-              ? "Chargement des avis..."
-              : "Loading reviews..."}
-          </p>
-        )}
+      {loadingReviews && (
+        <p className="text-sm text-muted-foreground">
+          {language === "fr" ? "Chargement des avis..." : "Loading reviews..."}
+        </p>
+      )}
 
-        {error && (
-          <p className="text-sm text-red-600">
-            {error}
-          </p>
-        )}
+      {reviewsError && (
+        <p className="text-sm text-destructive mb-4">{reviewsError}</p>
+      )}
 
-        {!loading && !error && reviews.length === 0 && (
-          <p className="text-sm text-slate-500">
-            {text.noReviews}
-          </p>
-        )}
+      {!loadingReviews && !reviewsError && reviews.length === 0 && (
+        <p className="text-sm text-muted-foreground mb-4">
+          {text.noReviews}
+        </p>
+      )}
 
-        {!loading && !error && reviews.length > 0 && (
-          <div className="space-y-4">
-            {reviews.map((r) => (
-              <div
-                key={r.id}
-                className="border border-slate-100 rounded-xl px-3 py-2.5 bg-slate-50/60"
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <div className="h-7 w-7 rounded-full bg-pro-blue/10 flex items-center justify-center text-xs font-semibold text-pro-blue uppercase">
-                      {(r.client_name || "Client")
-                        .split(" ")
-                        .filter(Boolean)
-                        .slice(0, 2)
-                        .map((n) => n[0])
-                        .join("")}
-                    </div>
-                    <span className="text-xs font-medium text-slate-800">
-                      {r.client_name || "Client OuvriersPro"}
-                    </span>
-                  </div>
-                  {renderStars(r.rating)}
+      {!loadingReviews && !reviewsError && reviews.length > 0 && (
+        <div className="space-y-4 mb-6">
+          {reviews.map((review) => (
+            <div
+              key={review.id}
+              className="p-4 bg-muted/30 rounded-lg border border-border"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-medium">
+                  {review.author_name || (language === "fr"
+                    ? "Client anonyme"
+                    : "Anonymous client")}
+                </span>
+                <div className="flex items-center gap-0.5">
+                  {[...Array(5)].map((_, i) => (
+                    <StarIcon
+                      key={i}
+                      className={`w-4 h-4 ${
+                        i < (review.rating || 0)
+                          ? "text-yellow-500 fill-yellow-500"
+                          : "text-muted-foreground/30"
+                      }`}
+                    />
+                  ))}
                 </div>
-                {r.comment && (
-                  <p className="text-sm text-slate-700 whitespace-pre-line">
-                    {r.comment}
-                  </p>
-                )}
-                <p className="mt-1 text-[11px] text-slate-400">
-                  {new Date(r.created_at).toLocaleDateString("fr-FR")}
-                </p>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+              {review.comment && (
+                <p className="text-sm text-muted-foreground">
+                  {review.comment}
+                </p>
+              )}
+              {review.created_at && (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  {new Date(review.created_at).toLocaleDateString(
+                    language === "fr" ? "fr-FR" : "en-US",
+                    {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    }
+                  )}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
-      {/* Formulaire d'ajout / édition */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-        <h3 className="text-base font-semibold text-slate-900 mb-3">
-          {text.addTitle}
+      {/* Formulaire de dépôt d'avis */}
+      <div className="mt-4 pt-4 border-t border-border">
+        <h3 className="text-base font-semibold mb-3">
+          {text.leaveTitle}
         </h3>
 
-        {!isClient && (
-          <p className="text-sm text-slate-500">
-            {text.mustBeClient}
+        {!authChecked ? (
+          <p className="text-sm text-muted-foreground">
+            {language === "fr" ? "Vérification de la session..." : "Checking session..."}
           </p>
-        )}
-
-        {isClient && (
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-700">
-                {language === "fr" ? "Votre note :" : "Your rating:"}
-              </span>
-              {renderStars(rating, setRating)}
-              <span className="text-xs text-slate-500">
-                {rating}/5
-              </span>
+        ) : !isAuthenticated ? (
+          <p className="text-sm text-muted-foreground">
+            {text.mustLogin}
+          </p>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Note */}
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                {text.yourRating}
+              </label>
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setRating(value)}
+                    onMouseEnter={() => setHoverRating(value)}
+                    onMouseLeave={() => setHoverRating(null)}
+                    className="p-0.5"
+                  >
+                    <StarIcon
+                      className={`w-6 h-6 ${
+                        value <= displayRating
+                          ? "text-yellow-500 fill-yellow-500"
+                          : "text-muted-foreground/30"
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <Textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder={text.placeholder}
-              rows={4}
-              className="text-sm"
-            />
-
-            <div className="flex justify-end">
-              <Button
-                type="submit"
-                size="sm"
-                disabled={submitting}
-                className="bg-pro-blue text-white hover:bg-pro-blue/90"
-              >
-                {existingUserReview ? text.update : text.submit}
-              </Button>
+            {/* Commentaire */}
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                {text.yourComment}
+              </label>
+              <Textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                rows={3}
+              />
             </div>
+
+            {submitError && (
+              <p className="text-sm text-destructive">{submitError}</p>
+            )}
+            {submitSuccess && (
+              <p className="text-sm text-emerald-600">{submitSuccess}</p>
+            )}
+
+            <Button type="submit" disabled={submitting}>
+              {submitting ? text.sending : text.send}
+            </Button>
           </form>
         )}
       </div>
-    </section>
+    </Card>
   );
 };
 
