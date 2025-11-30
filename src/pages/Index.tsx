@@ -18,7 +18,7 @@ const Index = () => {
         const el = document.getElementById("subscription");
         if (el) {
           const rect = el.getBoundingClientRect();
-          const EXTRA_OFFSET = 520; // ajuste si besoin
+          const EXTRA_OFFSET = 520; // ajuste si besoin pour les forfaits
           const y = rect.top + window.scrollY + EXTRA_OFFSET;
 
           window.scrollTo({
@@ -32,6 +32,28 @@ const Index = () => {
     }
   }, []);
 
+  // Fonction utilitaire : scroll précis vers la section "search"
+  const scrollToSearchSection = () => {
+    const section = document.getElementById("search");
+    if (!section) return;
+
+    // On récupère la hauteur réelle du header sticky
+    const headerEl = document.querySelector("header") as HTMLElement | null;
+    const headerHeight = headerEl?.offsetHeight ?? 72;
+
+    // position Y de la section par rapport au haut de la page
+    const sectionTop = section.offsetTop;
+
+    // On aligne le haut de la section juste sous le header,
+    // en laissant une petite marge (8 px)
+    const y = sectionTop - headerHeight - 8;
+
+    window.scrollTo({
+      top: y,
+      behavior: "smooth",
+    });
+  };
+
   // 🔍 Quand on arrive sur /search ou /rechercher,
   // on scrolle directement sur "Trouvez votre professionnel"
   useEffect(() => {
@@ -39,19 +61,8 @@ const Index = () => {
 
     if (pathname === "/search" || pathname === "/rechercher") {
       const timeout = setTimeout(() => {
-        const el = document.getElementById("search");
-        if (el) {
-          const rect = el.getBoundingClientRect();
-          // Offset plus important pour coller davantage le bloc au header
-          const OFFSET = 240;
-          const y = rect.top + window.scrollY - OFFSET;
-
-          window.scrollTo({
-            top: y,
-            behavior: "smooth",
-          });
-        }
-      }, 100);
+        scrollToSearchSection();
+      }, 50);
 
       return () => clearTimeout(timeout);
     }
