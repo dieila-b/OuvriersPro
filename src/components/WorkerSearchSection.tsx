@@ -95,7 +95,6 @@ const WorkerSearchSection: React.FC = () => {
             status
           `
           )
-          // si tu n'utilises pas encore le statut, tu peux commenter la ligne suivante
           .eq("status", "approved");
 
         if (error) {
@@ -185,7 +184,6 @@ const WorkerSearchSection: React.FC = () => {
 
     const next: Record<string, string> = {};
 
-    // Conserver keyword et district d'origine
     const currentKeyword = searchParams.get("keyword") || "";
     const currentDistrict = searchParams.get("district") || "";
     if (currentKeyword) next.keyword = currentKeyword;
@@ -431,12 +429,15 @@ const WorkerSearchSection: React.FC = () => {
   };
 
   return (
-    <section className="w-full py-12 sm:py-16 lg:py-20 bg-white">
+    <section className="w-full pt-4 pb-12 sm:pt-6 sm:pb-16 lg:pt-8 lg:pb-20 bg-white">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* EN-TÊTE GLOBAL */}
         <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-6 sm:mb-8 border-b border-gray-200 pb-4">
           <div>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
+            <h2
+              id="worker-search-title"
+              className="mt-0 text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight"
+            >
               {text.title}
             </h2>
             <p className="text-gray-600 mt-1.5 sm:mt-2 text-sm sm:text-base">
