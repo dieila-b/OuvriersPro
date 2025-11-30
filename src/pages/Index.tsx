@@ -46,15 +46,14 @@ const Index = () => {
       section.getBoundingClientRect().top + window.scrollY;
 
     /**
-     * On veut que le titre "Trouvez votre professionnel" vienne se coller
-     * juste sous le header. On décale donc légèrement VERS LE BAS
-     * (on AJOUTE un extra au lieu de le soustraire).
+     * Ici on veut vraiment coller le titre "Trouvez votre professionnel"
+     * sous le header. On remonte donc un tout petit peu AU-DESSUS de la
+     * section en soustrayant un EXTRA.
      *
-     * Si tu veux encore moins de marge au-dessus du titre,
-     * diminue EXTRA (par ex. 4 ou 0).
+     * Si tu vois encore un mini liseré, tu peux augmenter EXTRA (ex: 12).
      */
-    const EXTRA = 16; // petite marge visuelle sous le header
-    const y = Math.max(sectionTop - headerHeight + EXTRA, 0);
+    const EXTRA = 8; // "un cran" de plus vers le haut
+    const y = Math.max(sectionTop - headerHeight - EXTRA, 0);
 
     window.scrollTo({
       top: y,
