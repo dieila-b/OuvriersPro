@@ -45,7 +45,7 @@ const Index = () => {
     const sectionTop = section.offsetTop;
 
     // 🔼 On remonte un peu plus que la hauteur du header pour supprimer le blanc
-    const EXTRA = 20; // augmente si tu veux encore moins de marge
+    const EXTRA = 60; // augmente si tu veux encore moins de marge
     const y = sectionTop - headerHeight - EXTRA;
 
     window.scrollTo({
