@@ -42,8 +42,8 @@ const Index = () => {
         const el = document.getElementById("search");
         if (el) {
           const rect = el.getBoundingClientRect();
-          // petit offset pour ne pas coller le titre au bord du header
-          const OFFSET = 80;
+          // Offset un peu plus grand pour remonter davantage la section
+          const OFFSET = 140;
           const y = rect.top + window.scrollY - OFFSET;
 
           window.scrollTo({
