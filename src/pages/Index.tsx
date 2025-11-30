@@ -18,7 +18,7 @@ const Index = () => {
         const el = document.getElementById("subscription");
         if (el) {
           const rect = el.getBoundingClientRect();
-          const EXTRA_OFFSET = 520; // ajuste si besoin pour les forfaits
+          const EXTRA_OFFSET = 520; // uniquement pour les forfaits
           const y = rect.top + window.scrollY + EXTRA_OFFSET;
 
           window.scrollTo({
@@ -32,7 +32,7 @@ const Index = () => {
     }
   }, []);
 
-  // Fonction utilitaire : scroll précis vers la section "search"
+  // 👉 Scroll précis vers la section "search"
   const scrollToSearchSection = () => {
     const section = document.getElementById("search");
     if (!section) return;
@@ -41,12 +41,12 @@ const Index = () => {
     const headerEl = document.querySelector("header") as HTMLElement | null;
     const headerHeight = headerEl?.offsetHeight ?? 72;
 
-    // Position Y de la section par rapport au haut de la page
-    const sectionTop = section.offsetTop;
+    // Position absolue de la section sur la page
+    const rect = section.getBoundingClientRect();
+    const sectionTop = rect.top + window.scrollY;
 
-    // 🔼 EXTRA > 0 => on monte encore le bloc pour enlever le blanc
-    const EXTRA = 40; // tu peux tester 50 ou 60 si tu veux le coller plus
-    const y = sectionTop - headerHeight - EXTRA;
+    // On aligne le haut de la section juste sous le header, sans marge supplémentaire
+    const y = sectionTop - headerHeight;
 
     window.scrollTo({
       top: y,
@@ -90,7 +90,8 @@ const Index = () => {
         {/* RECHERCHE OUVRIERS : "Trouvez votre professionnel" */}
         <section
           id="search"
-          className="w-full bg-white pt-0 pb-10 sm:pt-0 sm:pb-14 lg:pt-0 lg:pb-16 scroll-mt-0"
+          // padding top très faible pour limiter le blanc
+          className="w-full bg-white pt-1 pb-10 sm:pt-1 sm:pb-14 lg:pt-1 lg:pb-16"
         >
           <WorkerSearchSection />
         </section>
