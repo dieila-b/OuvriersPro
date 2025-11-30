@@ -18,7 +18,7 @@ const Index = () => {
         const el = document.getElementById("subscription");
         if (el) {
           const rect = el.getBoundingClientRect();
-          const EXTRA_OFFSET = 520; // uniquement pour les forfaits
+          const EXTRA_OFFSET = 520; // ajuste si besoin pour les forfaits
           const y = rect.top + window.scrollY + EXTRA_OFFSET;
 
           window.scrollTo({
@@ -32,7 +32,7 @@ const Index = () => {
     }
   }, []);
 
-  // 👉 Scroll précis vers la section "search"
+  // ✅ Fonction utilitaire : scroll précis vers la section "search"
   const scrollToSearchSection = () => {
     const section = document.getElementById("search");
     if (!section) return;
@@ -41,12 +41,20 @@ const Index = () => {
     const headerEl = document.querySelector("header") as HTMLElement | null;
     const headerHeight = headerEl?.offsetHeight ?? 72;
 
-    // Position absolue de la section sur la page
-    const rect = section.getBoundingClientRect();
-    const sectionTop = rect.top + window.scrollY;
+    // Position Y de la section par rapport au haut de la page
+    const sectionTop =
+      section.getBoundingClientRect().top + window.scrollY;
 
-    // On aligne le haut de la section juste sous le header, sans marge supplémentaire
-    const y = sectionTop - headerHeight;
+    /**
+     * On veut que le titre "Trouvez votre professionnel" vienne se coller
+     * juste sous le header. On décale donc légèrement VERS LE BAS
+     * (on AJOUTE un extra au lieu de le soustraire).
+     *
+     * Si tu veux encore moins de marge au-dessus du titre,
+     * diminue EXTRA (par ex. 4 ou 0).
+     */
+    const EXTRA = 16; // petite marge visuelle sous le header
+    const y = Math.max(sectionTop - headerHeight + EXTRA, 0);
 
     window.scrollTo({
       top: y,
@@ -90,8 +98,7 @@ const Index = () => {
         {/* RECHERCHE OUVRIERS : "Trouvez votre professionnel" */}
         <section
           id="search"
-          // padding top très faible pour limiter le blanc
-          className="w-full bg-white pt-1 pb-10 sm:pt-1 sm:pb-14 lg:pt-1 lg:pb-16"
+          className="w-full bg-white pt-0 pb-10 sm:pt-0 sm:pb-14 lg:pt-0 lg:pb-16 scroll-mt-24"
         >
           <WorkerSearchSection />
         </section>
