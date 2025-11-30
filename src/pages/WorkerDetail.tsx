@@ -1,6 +1,6 @@
 // src/pages/WorkerDetail.tsx
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
@@ -15,17 +15,12 @@ import {
   Phone,
   Mail,
   MessageCircle,
-  FileText,
   Send,
   Info,
   Lock,
-  Award,
-  Briefcase,
-  Clock,
   DollarSign,
-  CheckCircle,
-  StarIcon,
 } from "lucide-react";
+import WorkerReviews from "@/components/WorkerReviews";
 
 type DbWorker = {
   id: string;
@@ -46,14 +41,6 @@ type DbWorker = {
   phone: string | null;
   email: string | null;
   avatar_url: string | null;
-};
-
-type Review = {
-  id: string;
-  author_name: string | null;
-  rating: number | null;
-  comment: string | null;
-  created_at: string | null;
 };
 
 type ContactForm = {
@@ -78,7 +65,6 @@ const WorkerDetail: React.FC = () => {
 
   // 👷 Données ouvrier
   const [worker, setWorker] = useState<DbWorker | null>(null);
-  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -121,7 +107,7 @@ const WorkerDetail: React.FC = () => {
   }, []);
 
   // -------------------------
-  // 👷 Charger l'ouvrier et ses avis
+  // 👷 Charger l'ouvrier
   // -------------------------
   useEffect(() => {
     const fetchWorkerData = async () => {
@@ -138,7 +124,6 @@ const WorkerDetail: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Charger l'ouvrier
       const { data: workerData, error: workerError } = await supabase
         .from("op_ouvriers")
         .select(
@@ -174,19 +159,6 @@ const WorkerDetail: React.FC = () => {
       }
 
       setWorker(workerData as DbWorker);
-
-      // Charger les avis
-      const { data: reviewsData } = await supabase
-        .from("op_ouvrier_reviews")
-        .select("id, author_name, rating, comment, created_at")
-        .eq("worker_id", id)
-        .order("created_at", { ascending: false })
-        .limit(10);
-
-      if (reviewsData) {
-        setReviews(reviewsData as Review[]);
-      }
-
       setLoading(false);
     };
 
@@ -287,9 +259,6 @@ const WorkerDetail: React.FC = () => {
         ? "Vous n'avez pas encore de compte ?"
         : "Don't have an account yet?",
     about: language === "fr" ? "À propos" : "About",
-    reviewsTitle: language === "fr" ? "Avis clients" : "Customer reviews",
-    noReviews:
-      language === "fr" ? "Aucun avis pour le moment" : "No reviews yet",
     location: language === "fr" ? "Localisation" : "Location",
     experienceTitle: language === "fr" ? "Expérience" : "Experience",
     hourlyRateTitle: language === "fr" ? "Tarif horaire" : "Hourly rate",
@@ -575,7 +544,6 @@ const WorkerDetail: React.FC = () => {
 
                 <div className="text-center border-x border-border">
                   <div className="flex items-center justify-center gap-1 mb-1">
-                    <Briefcase className="w-5 h-5 text-primary" />
                     <span className="text-2xl font-bold">
                       {worker.years_experience || 0}
                     </span>
@@ -612,63 +580,8 @@ const WorkerDetail: React.FC = () => {
               </Card>
             )}
 
-            {/* Avis clients */}
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                <Award className="w-5 h-5 text-primary" />
-                {text.reviewsTitle}
-              </h2>
-
-              {reviews.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  {text.noReviews}
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {reviews.map((review) => (
-                    <div
-                      key={review.id}
-                      className="p-4 bg-muted/30 rounded-lg border border-border"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium">
-                          {review.author_name || "Client anonyme"}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          {[...Array(5)].map((_, i) => (
-                            <StarIcon
-                              key={i}
-                              className={`w-4 h-4 ${
-                                i < (review.rating || 0)
-                                  ? "text-yellow-500 fill-yellow-500"
-                                  : "text-muted-foreground/30"
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                      {review.comment && (
-                        <p className="text-sm text-muted-foreground">
-                          {review.comment}
-                        </p>
-                      )}
-                      {review.created_at && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {new Date(review.created_at).toLocaleDateString(
-                            language === "fr" ? "fr-FR" : "en-US",
-                            {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            }
-                          )}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
+            {/* Avis & notation clients (nouveau système) */}
+            <WorkerReviews workerId={worker.id} />
           </div>
 
           {/* Sidebar contact */}
