@@ -37,16 +37,16 @@ const Index = () => {
     const section = document.getElementById("search");
     if (!section) return;
 
-    // On récupère la hauteur réelle du header sticky
+    // Hauteur réelle du header sticky
     const headerEl = document.querySelector("header") as HTMLElement | null;
     const headerHeight = headerEl?.offsetHeight ?? 72;
 
-    // position Y de la section par rapport au haut de la page
+    // Position Y de la section par rapport au haut de la page
     const sectionTop = section.offsetTop;
 
-    // On aligne le haut de la section juste sous le header,
-    // en laissant une petite marge (8 px)
-    const y = sectionTop - headerHeight - 8;
+    // On aligne le haut de la section juste sous le header
+    // (sans marge supplémentaire pour limiter le blanc)
+    const y = sectionTop - headerHeight;
 
     window.scrollTo({
       top: y,
@@ -90,7 +90,8 @@ const Index = () => {
         {/* RECHERCHE OUVRIERS : "Trouvez votre professionnel" */}
         <section
           id="search"
-          className="w-full bg-white py-10 sm:py-14 lg:py-16 scroll-mt-24"
+          // 🔽 Padding haut réduit pour masquer le grand blanc
+          className="w-full bg-white pt-4 pb-10 sm:pt-6 sm:pb-14 lg:pt-8 lg:pb-16 scroll-mt-24"
         >
           <WorkerSearchSection />
         </section>
