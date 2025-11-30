@@ -44,8 +44,8 @@ const Index = () => {
     // Position Y de la section par rapport au haut de la page
     const sectionTop = section.offsetTop;
 
-    // ✅ On compense juste le header, pas d'extra
-    const EXTRA = 0;
+    // 🔼 EXTRA > 0 => on monte encore le bloc pour enlever le blanc
+    const EXTRA = 40; // tu peux tester 50 ou 60 si tu veux le coller plus
     const y = sectionTop - headerHeight - EXTRA;
 
     window.scrollTo({
