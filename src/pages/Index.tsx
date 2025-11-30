@@ -52,7 +52,7 @@ const Index = () => {
      *
      * Si tu vois encore un mini liseré, tu peux augmenter EXTRA (ex: 12).
      */
-    const EXTRA = 8; // "un cran" de plus vers le haut
+    const EXTRA = 1; // "un cran" de plus vers le haut
     const y = Math.max(sectionTop - headerHeight - EXTRA, 0);
 
     window.scrollTo({
