@@ -45,9 +45,8 @@ const Index = () => {
     const rect = section.getBoundingClientRect();
     const sectionTop = rect.top + window.scrollY;
 
-    // Offset NEGATIF pour supprimer le liseré blanc
-    const EXTRA = 40; // ajuste à 30 / 50 si besoin
-    const y = sectionTop - headerHeight - EXTRA;
+    // On aligne le haut de la section juste sous le header, sans marge supplémentaire
+    const y = sectionTop - headerHeight;
 
     window.scrollTo({
       top: y,
@@ -91,8 +90,8 @@ const Index = () => {
         {/* RECHERCHE OUVRIERS : "Trouvez votre professionnel" */}
         <section
           id="search"
-          // plus aucun padding top pour éviter le blanc
-          className="w-full bg-white pt-0 pb-10 sm:pt-0 sm:pb-14 lg:pt-0 lg:pb-16"
+          // padding top très faible pour limiter le blanc
+          className="w-full bg-white pt-1 pb-10 sm:pt-1 sm:pb-14 lg:pt-1 lg:pb-16"
         >
           <WorkerSearchSection />
         </section>
