@@ -129,7 +129,9 @@ const ClientDashboard: React.FC = () => {
   };
 
   const displayName =
-    clientInfo?.fullName || clientInfo?.email || (language === "fr" ? "Client OuvriersPro" : "OuvriersPro client");
+    clientInfo?.fullName ||
+    clientInfo?.email ||
+    (language === "fr" ? "Client OuvriersPro" : "OuvriersPro client");
 
   const initials = displayName
     .split(" ")
@@ -173,14 +175,14 @@ const ClientDashboard: React.FC = () => {
           </div>
 
           <div className="flex flex-col items-stretch gap-3 md:items-end">
+            {/* ✅ Bouton qui envoie vers /search */}
             <Button
-              asChild
-              className="bg-pro-blue hover:bg-pro-blue/90 rounded-full px-5 shadow-md shadow-pro-blue/25"
+              type="button"
+              onClick={() => navigate("/search")}
+              className="bg-pro-blue hover:bg-pro-blue/90 rounded-full px-5 shadow-md shadow-pro-blue/25 flex items-center gap-2"
             >
-              <Link to="/search" className="flex items-center gap-2">
-                <Search className="w-4 h-4" />
-                {t.goSearch}
-              </Link>
+              <Search className="w-4 h-4" />
+              {t.goSearch}
             </Button>
 
             {/* Bouton déconnexion compact */}
