@@ -107,16 +107,12 @@ const WorkerDetail: React.FC = () => {
   }, []);
 
   // -------------------------
-  // 👷 Charger l'ouvrier
+  // 👷 Charger l'ouvrier (à partir de op_ouvriers.id)
   // -------------------------
   useEffect(() => {
     const fetchWorkerData = async () => {
       if (!id) {
         setError("missing-id");
-        setLoading(false);
-        return;
-      }
-      if (!isAuthenticated) {
         setLoading(false);
         return;
       }
@@ -152,7 +148,7 @@ const WorkerDetail: React.FC = () => {
         .maybeSingle();
 
       if (workerError || !workerData) {
-        console.error(workerError);
+        console.error("fetchWorkerData error:", workerError);
         setError("load-failed");
         setLoading(false);
         return;
@@ -162,10 +158,10 @@ const WorkerDetail: React.FC = () => {
       setLoading(false);
     };
 
-    if (authChecked && isAuthenticated) {
+    if (id) {
       fetchWorkerData();
     }
-  }, [id, authChecked, isAuthenticated]);
+  }, [id]);
 
   const formatCurrency = (
     value: number | null | undefined,
@@ -295,7 +291,6 @@ const WorkerDetail: React.FC = () => {
     setErrorMsg(null);
 
     try {
-      // ✅ Récupérer l'utilisateur connecté pour remplir client_id
       const { data: authData, error: authErr } =
         await supabase.auth.getUser();
 
@@ -333,7 +328,7 @@ const WorkerDetail: React.FC = () => {
 
       const { error } = await supabase.from("op_ouvrier_contacts").insert({
         worker_id: worker.id,
-        client_id: currentUser.id, // ✅ lien avec le client connecté (RLS)
+        client_id: currentUser.id,
         worker_name: fullWorkerName || null,
         full_name: form.name,
         email: form.email,
@@ -367,68 +362,8 @@ const WorkerDetail: React.FC = () => {
     }
   };
 
-  // Auth pas encore vérifiée
-  if (!authChecked) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-sm text-muted-foreground">
-          {language === "fr" ? "Vérification..." : "Checking..."}
-        </div>
-      </div>
-    );
-  }
-
-  // Pas authentifié
-  if (authChecked && !isAuthenticated) {
-    const redirect = encodeURIComponent(window.location.pathname);
-
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-4">
-        <Card className="max-w-md w-full p-6 text-center">
-          <div className="flex items-center justify-center mb-4">
-            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <Lock className="w-6 h-6 text-primary" />
-            </div>
-          </div>
-          <h1 className="text-xl font-semibold mb-2">
-            {text.loginRequiredTitle}
-          </h1>
-          <p className="text-sm text-muted-foreground mb-4">
-            {text.loginRequiredDesc}
-          </p>
-          <p className="text-xs text-muted-foreground mb-6">
-            {text.noAccountYet}
-          </p>
-
-          <div className="flex flex-col gap-2">
-            <Button
-              className="w-full"
-              onClick={() => navigate(`/login?redirect=${redirect}`)}
-            >
-              {text.loginBtn}
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => navigate(`/register?redirect=${redirect}`)}
-            >
-              {text.registerBtn}
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full"
-              onClick={() => navigate(-1)}
-            >
-              {text.back}
-            </Button>
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
-  // Chargement
-  if (loading) {
+  // Auth pas encore vérifiée : on affiche juste un loader simple
+  if (!authChecked && loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-sm text-muted-foreground">
@@ -534,7 +469,10 @@ const WorkerDetail: React.FC = () => {
                   <div className="flex items-center justify-center gap-1 mb-1">
                     <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
                     <span className="text-2xl font-bold">
-                      {worker.average_rating?.toFixed(1) || "—"}
+                      {worker.average_rating !== null &&
+                      worker.average_rating !== undefined
+                        ? worker.average_rating.toFixed(1)
+                        : "—"}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -580,8 +518,8 @@ const WorkerDetail: React.FC = () => {
               </Card>
             )}
 
-            {/* Avis & notation clients (nouveau système) */}
-            <WorkerReviews workerId={worker.id} />
+            {/* Avis & notation clients */}
+            <WorkerReviews key={worker.id} workerId={worker.id} />
           </div>
 
           {/* Sidebar contact */}
