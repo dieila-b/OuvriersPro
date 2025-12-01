@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
+import WorkerPhotosManager from "@/components/WorkerPhotosManager";
 
 type WorkerProfile = {
   id: string;
@@ -339,101 +340,107 @@ const WorkerDashboard: React.FC = () => {
         <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
           {/* PROFIL */}
           {activeTab === "profile" && (
-            <div className="space-y-4">
-              <h2 className="text-sm font-semibold text-slate-800 mb-2">
-                {language === "fr" ? "Mon profil" : "My profile"}
-              </h2>
-              <div className="grid md:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <div className="text-xs text-slate-500">
-                    {language === "fr" ? "Nom complet" : "Full name"}
+            <div className="space-y-6">
+              {/* Bloc infos profil */}
+              <div className="space-y-4">
+                <h2 className="text-sm font-semibold text-slate-800 mb-2">
+                  {language === "fr" ? "Mon profil" : "My profile"}
+                </h2>
+                <div className="grid md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Nom complet" : "Full name"}
+                    </div>
+                    <div className="font-medium text-slate-900">
+                      {fullName || "—"}
+                    </div>
                   </div>
-                  <div className="font-medium text-slate-900">
-                    {fullName || "—"}
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Métier principal" : "Main trade"}
+                    </div>
+                    <div className="font-medium text-slate-900">
+                      {profile.profession || "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">Email</div>
+                    <div className="font-medium text-slate-900">
+                      {profile.email || "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Téléphone" : "Phone"}
+                    </div>
+                    <div className="font-medium text-slate-900">
+                      {profile.phone || "—"}
+                    </div>
+                  </div>
+                  <div className="md:col-span-2">
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Localisation" : "Location"}
+                    </div>
+                    <div className="font-medium text-slate-900">
+                      {[
+                        profile.country,
+                        profile.region,
+                        profile.city,
+                        profile.commune,
+                        profile.district,
+                      ]
+                        .filter(Boolean)
+                        .join(" • ") || "—"}
+                    </div>
+                  </div>
+                  <div className="md:col-span-2">
+                    <div className="text-xs text-slate-500">
+                      {language === "fr"
+                        ? "Description de vos services"
+                        : "Services description"}
+                    </div>
+                    <div className="text-slate-800 whitespace-pre-line">
+                      {profile.description || "—"}
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <div className="text-xs text-slate-500">
-                    {language === "fr" ? "Métier principal" : "Main trade"}
-                  </div>
-                  <div className="font-medium text-slate-900">
-                    {profile.profession || "—"}
-                  </div>
+
+                <div className="mt-4 flex flex-wrap gap-2 items-center">
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusClass(
+                      profile.status
+                    )}`}
+                  >
+                    {statusLabel(profile.status)}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {language === "fr" ? "Créé le" : "Created at"}{" "}
+                    {formatDate(profile.created_at)}
+                  </span>
                 </div>
-                <div>
-                  <div className="text-xs text-slate-500">Email</div>
-                  <div className="font-medium text-slate-900">
-                    {profile.email || "—"}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-500">
-                    {language === "fr" ? "Téléphone" : "Phone"}
-                  </div>
-                  <div className="font-medium text-slate-900">
-                    {profile.phone || "—"}
-                  </div>
-                </div>
-                <div className="md:col-span-2">
-                  <div className="text-xs text-slate-500">
-                    {language === "fr" ? "Localisation" : "Location"}
-                  </div>
-                  <div className="font-medium text-slate-900">
-                    {[
-                      profile.country,
-                      profile.region,
-                      profile.city,
-                      profile.commune,
-                      profile.district,
-                    ]
-                      .filter(Boolean)
-                      .join(" • ") || "—"}
-                  </div>
-                </div>
-                <div className="md:col-span-2">
-                  <div className="text-xs text-slate-500">
+
+                <div className="pt-3 border-t border-slate-100 mt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      alert(
+                        language === "fr"
+                          ? "L’édition de profil sera ajoutée dans une prochaine étape."
+                          : "Profile editing will be added in a next step."
+                      )
+                    }
+                  >
                     {language === "fr"
-                      ? "Description de vos services"
-                      : "Services description"}
-                  </div>
-                  <div className="text-slate-800 whitespace-pre-line">
-                    {profile.description || "—"}
-                  </div>
+                      ? "Modifier mon profil (bientôt)"
+                      : "Edit my profile (soon)"}
+                  </Button>
                 </div>
               </div>
 
-              <div className="mt-4 flex flex-wrap gap-2 items-center">
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusClass(
-                    profile.status
-                  )}`}
-                >
-                  {statusLabel(profile.status)}
-                </span>
-                <span className="text-xs text-slate-400">
-                  {language === "fr" ? "Créé le" : "Created at"}{" "}
-                  {formatDate(profile.created_at)}
-                </span>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 mt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    alert(
-                      language === "fr"
-                        ? "L’édition de profil sera ajoutée dans une prochaine étape."
-                        : "Profile editing will be added in a next step."
-                    )
-                  }
-                >
-                  {language === "fr"
-                    ? "Modifier mon profil (bientôt)"
-                    : "Edit my profile (soon)"}
-                </Button>
-              </div>
+              {/* Gestion des photos de réalisations (réservée à l’ouvrier) */}
+              <WorkerPhotosManager workerId={profile.id} />
             </div>
           )}
 
