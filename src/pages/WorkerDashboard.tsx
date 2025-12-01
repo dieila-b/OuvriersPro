@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import WorkerPhotosManager from "@/components/WorkerPhotosManager";
+import WorkerPortfolioManager from "@/components/WorkerPortfolioManager";
 
 type WorkerProfile = {
   id: string;
@@ -48,7 +49,7 @@ const WorkerDashboard: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
 
-  // 🔔 Messages / demandes de contact de cet ouvrier
+  // Messages / demandes de contact
   const [contacts, setContacts] = useState<WorkerContact[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
@@ -62,7 +63,7 @@ const WorkerDashboard: React.FC = () => {
       setContacts([]);
       setContactsError(null);
 
-      // 1) Qui est connecté ?
+      // 1) Utilisateur connecté ?
       const { data, error: userError } = await supabase.auth.getUser();
       const user = data?.user;
 
@@ -132,7 +133,7 @@ const WorkerDashboard: React.FC = () => {
       setProfile(worker as WorkerProfile);
       setLoading(false);
 
-      // 3) Récupérer les demandes de contact liées à cet ouvrier
+      // 3) Récupérer les demandes de contact
       setContactsLoading(true);
       setContactsError(null);
 
@@ -341,7 +342,7 @@ const WorkerDashboard: React.FC = () => {
           {/* PROFIL */}
           {activeTab === "profile" && (
             <div className="space-y-6">
-              {/* Bloc infos profil */}
+              {/* Bloc profil texte */}
               <div className="space-y-4">
                 <h2 className="text-sm font-semibold text-slate-800 mb-2">
                   {language === "fr" ? "Mon profil" : "My profile"}
@@ -439,8 +440,11 @@ const WorkerDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Gestion des photos de réalisations (réservée à l’ouvrier) */}
+              {/* Gestion des photos */}
               <WorkerPhotosManager workerId={profile.id} />
+
+              {/* Gestion du portfolio / réalisations */}
+              <WorkerPortfolioManager workerId={profile.id} />
             </div>
           )}
 
@@ -483,8 +487,7 @@ const WorkerDashboard: React.FC = () => {
                     </div>
                     <div className="font-medium text-slate-900">
                       {profile.hourly_rate.toLocaleString()}{" "}
-                      {profile.currency || ""}
-                      /h
+                      {profile.currency || ""}/h
                     </div>
                   </div>
                 )}
@@ -571,7 +574,6 @@ const WorkerDashboard: React.FC = () => {
                 {language === "fr" ? "Messages reçus" : "Received messages"}
               </h2>
 
-              {/* Etat chargement / erreur */}
               {contactsLoading && (
                 <div className="text-sm text-slate-500">
                   {language === "fr"
@@ -622,7 +624,6 @@ const WorkerDashboard: React.FC = () => {
                         <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-50 text-slate-700 border-slate-200">
                           {contactStatusLabel(c.status)}
                         </span>
-                        {/* futur bouton pour marquer comme traité, répondre, etc. */}
                       </div>
                     </li>
                   ))}
