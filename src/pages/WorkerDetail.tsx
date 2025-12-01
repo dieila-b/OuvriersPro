@@ -59,7 +59,7 @@ const WorkerDetail: React.FC = () => {
   const navigate = useNavigate();
   const { language } = useLanguage();
 
-  // 🔐 Auth
+  // 🔐 Auth (uniquement pour formulaire de contact)
   const [authChecked, setAuthChecked] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
@@ -67,6 +67,11 @@ const WorkerDetail: React.FC = () => {
   const [worker, setWorker] = useState<DbWorker | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // ⭐ Stats calculées à partir des avis
+  const [ratingAverage, setRatingAverage] = useState<number | null>(null);
+  const [ratingCount, setRatingCount] = useState<number>(0);
+  const [ratingLoading, setRatingLoading] = useState(false);
 
   // 📨 Formulaire
   const [form, setForm] = useState<ContactForm>({
@@ -90,11 +95,7 @@ const WorkerDetail: React.FC = () => {
     const checkAuth = async () => {
       try {
         const { data } = await supabase.auth.getUser();
-        if (data?.user) {
-          setIsAuthenticated(true);
-        } else {
-          setIsAuthenticated(false);
-        }
+        setIsAuthenticated(!!data?.user);
       } catch (e) {
         console.error("Auth check error:", e);
         setIsAuthenticated(false);
@@ -107,7 +108,7 @@ const WorkerDetail: React.FC = () => {
   }, []);
 
   // -------------------------
-  // 👷 Charger l'ouvrier (à partir de op_ouvriers.id)
+  // 👷 Charger l'ouvrier (op_ouvriers.id)
   // -------------------------
   useEffect(() => {
     const fetchWorkerData = async () => {
@@ -163,6 +164,57 @@ const WorkerDetail: React.FC = () => {
     }
   }, [id]);
 
+  // -------------------------
+  // ⭐ Charger les stats d'avis depuis op_ouvrier_reviews
+  // -------------------------
+  useEffect(() => {
+    const loadRatingStats = async () => {
+      if (!worker?.id) return;
+
+      setRatingLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("op_ouvrier_reviews")
+          .select("rating")
+          .eq("worker_id", worker.id);
+
+        if (error) {
+          console.error("loadRatingStats error:", error);
+          setRatingAverage(
+            worker.average_rating !== null ? worker.average_rating : null
+          );
+          setRatingCount(worker.rating_count || 0);
+          return;
+        }
+
+        const rows = (data ?? []) as { rating: number | null }[];
+        const count = rows.length;
+        if (count === 0) {
+          setRatingAverage(null);
+          setRatingCount(0);
+        } else {
+          const sum = rows.reduce(
+            (acc, r) => acc + (r.rating ?? 0),
+            0
+          );
+          const avg = Number((sum / count).toFixed(1));
+          setRatingAverage(avg);
+          setRatingCount(count);
+        }
+      } catch (e) {
+        console.error("loadRatingStats exception:", e);
+        setRatingAverage(
+          worker.average_rating !== null ? worker.average_rating : null
+        );
+        setRatingCount(worker.rating_count || 0);
+      } finally {
+        setRatingLoading(false);
+      }
+    };
+
+    loadRatingStats();
+  }, [worker?.id, worker?.average_rating, worker?.rating_count]);
+
   const formatCurrency = (
     value: number | null | undefined,
     currency?: string | null
@@ -203,7 +255,6 @@ const WorkerDetail: React.FC = () => {
         : "An error occurred while sending your request.",
     experience:
       language === "fr" ? "ans d'expérience" : "years of experience",
-    rating: language === "fr" ? "Note moyenne" : "Average rating",
     perHour: language === "fr" ? "/h" : "/h",
     contactInfos:
       language === "fr" ? "Coordonnées directes" : "Direct contact",
@@ -255,7 +306,6 @@ const WorkerDetail: React.FC = () => {
         ? "Vous n'avez pas encore de compte ?"
         : "Don't have an account yet?",
     about: language === "fr" ? "À propos" : "About",
-    location: language === "fr" ? "Localisation" : "Location",
     experienceTitle: language === "fr" ? "Expérience" : "Experience",
     hourlyRateTitle: language === "fr" ? "Tarif horaire" : "Hourly rate",
     noUserError:
@@ -362,8 +412,8 @@ const WorkerDetail: React.FC = () => {
     }
   };
 
-  // Auth pas encore vérifiée : on affiche juste un loader simple
-  if (!authChecked && loading) {
+  // Loader global
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-sm text-muted-foreground">
@@ -422,6 +472,16 @@ const WorkerDetail: React.FC = () => {
       )}`
     : "";
 
+  const displayedAverage =
+    ratingAverage !== null && ratingAverage !== undefined
+      ? ratingAverage
+      : worker.average_rating;
+
+  const displayedCount =
+    ratingCount !== undefined && ratingCount !== null
+      ? ratingCount
+      : worker.rating_count || 0;
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 py-8">
@@ -469,14 +529,18 @@ const WorkerDetail: React.FC = () => {
                   <div className="flex items-center justify-center gap-1 mb-1">
                     <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
                     <span className="text-2xl font-bold">
-                      {worker.average_rating !== null &&
-                      worker.average_rating !== undefined
-                        ? worker.average_rating.toFixed(1)
+                      {displayedAverage !== null &&
+                      displayedAverage !== undefined
+                        ? displayedAverage.toFixed(1)
                         : "—"}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {worker.rating_count || 0} avis
+                    {ratingLoading
+                      ? language === "fr"
+                        ? "Calcul en cours..."
+                        : "Computing..."
+                      : `${displayedCount} avis`}
                   </p>
                 </div>
 
@@ -510,7 +574,7 @@ const WorkerDetail: React.FC = () => {
               <Card className="p-6">
                 <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
                   <Info className="w-5 h-5 text-primary" />
-                  {text.about}
+                  {language === "fr" ? "À propos" : "About"}
                 </h2>
                 <p className="text-muted-foreground whitespace-pre-line leading-relaxed">
                   {worker.description}
