@@ -24,41 +24,56 @@ const WorkerPhotosManager: React.FC<WorkerPhotosManagerProps> = ({
   workerId,
 }) => {
   const { language } = useLanguage();
+
   const [photos, setPhotos] = useState<PhotoRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const text = {
-    title: language === "fr" ? "Mes photos de réalisations" : "My work photos",
+    title:
+      language === "fr" ? "Mes photos de réalisations" : "My work photos",
     info:
       language === "fr"
         ? "Ajoutez des photos de vos réalisations pour rassurer les clients."
         : "Add photos of your work to reassure clients.",
-    uploadLabel:
+    uploadLabel: language === "fr" ? "Ajouter des photos" : "Add photos",
+    delete: language === "fr" ? "Supprimer" : "Delete",
+    deleteConfirm:
       language === "fr"
-        ? "Ajouter des photos"
-        : "Add photos",
-    delete:
-      language === "fr"
-        ? "Supprimer"
-        : "Delete",
+        ? "Voulez-vous vraiment supprimer cette photo ?"
+        : "Are you sure you want to delete this photo?",
     errorLoad:
       language === "fr"
         ? "Impossible de charger vos photos."
         : "Unable to load your photos.",
     errorUpload:
-      language === "fr"
-        ? "Le téléversement a échoué."
-        : "Upload failed.",
+      language === "fr" ? "Le téléversement a échoué." : "Upload failed.",
     errorDelete:
+      language === "fr" ? "La suppression a échoué." : "Deletion failed.",
+    sessionExpired:
       language === "fr"
-        ? "La suppression a échoué."
-        : "Deletion failed.",
+        ? "Votre session a expiré. Merci de vous reconnecter."
+        : "Your session has expired. Please log in again.",
+    loadingPhotos:
+      language === "fr"
+        ? "Chargement de vos photos..."
+        : "Loading your photos...",
+    noPhotos:
+      language === "fr"
+        ? "Vous n'avez pas encore ajouté de photos."
+        : "You have not added any photos yet.",
+    previewUnavailable:
+      language === "fr"
+        ? "Prévisualisation indisponible"
+        : "Preview unavailable",
+    uploading:
+      language === "fr" ? "Téléversement..." : "Uploading...",
   };
 
   const loadPhotos = async () => {
     if (!workerId) return;
+
     setLoading(true);
     setError(null);
 
@@ -105,9 +120,7 @@ const WorkerPhotosManager: React.FC<WorkerPhotosManagerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workerId]);
 
-  const handleUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || !workerId) return;
 
@@ -117,13 +130,10 @@ const WorkerPhotosManager: React.FC<WorkerPhotosManagerProps> = ({
     try {
       const { data: authData, error: authError } =
         await supabase.auth.getUser();
+
       if (authError || !authData?.user) {
         console.error("Auth error", authError);
-        setError(
-          language === "fr"
-            ? "Votre session a expiré. Merci de vous reconnecter."
-            : "Your session has expired. Please log in again."
-        );
+        setError(text.sessionExpired);
         setUploading(false);
         return;
       }
@@ -176,6 +186,8 @@ const WorkerPhotosManager: React.FC<WorkerPhotosManagerProps> = ({
   };
 
   const handleDelete = async (photo: PhotoRow) => {
+    if (!window.confirm(text.deleteConfirm)) return;
+
     setError(null);
 
     try {
@@ -213,22 +225,12 @@ const WorkerPhotosManager: React.FC<WorkerPhotosManagerProps> = ({
     <Card className="p-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
-          <h2 className="text-lg font-semibold">
-            {text.title}
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            {text.info}
-          </p>
+          <h2 className="text-lg font-semibold">{text.title}</h2>
+          <p className="text-xs text-muted-foreground">{text.info}</p>
         </div>
         <div>
           <label className="inline-flex items-center gap-2 px-3 py-2 border border-input rounded-md text-sm cursor-pointer hover:bg-muted/60">
-            <span>
-              {uploading
-                ? language === "fr"
-                  ? "Téléversement..."
-                  : "Uploading..."
-                : text.uploadLabel}
-            </span>
+            <span>{uploading ? text.uploading : text.uploadLabel}</span>
             <input
               type="file"
               accept="image/*"
@@ -242,25 +244,17 @@ const WorkerPhotosManager: React.FC<WorkerPhotosManagerProps> = ({
       </div>
 
       {error && (
-        <div className="mb-3 text-sm text-destructive">
-          {error}
-        </div>
+        <div className="mb-3 text-sm text-destructive">{error}</div>
       )}
 
       {loading && (
         <p className="text-sm text-muted-foreground mb-2">
-          {language === "fr"
-            ? "Chargement de vos photos..."
-            : "Loading your photos..."}
+          {text.loadingPhotos}
         </p>
       )}
 
       {!loading && photos.length === 0 && (
-        <p className="text-sm text-muted-foreground">
-          {language === "fr"
-            ? "Vous n'avez pas encore ajouté de photos."
-            : "You have not added any photos yet."}
-        </p>
+        <p className="text-sm text-muted-foreground">{text.noPhotos}</p>
       )}
 
       {!loading && photos.length > 0 && (
@@ -278,9 +272,7 @@ const WorkerPhotosManager: React.FC<WorkerPhotosManagerProps> = ({
                 />
               ) : (
                 <div className="w-full h-32 sm:h-36 md:h-40 flex items-center justify-center text-xs text-muted-foreground">
-                  {language === "fr"
-                    ? "Prévisualisation indisponible"
-                    : "Preview unavailable"}
+                  {text.previewUnavailable}
                 </div>
               )}
 
