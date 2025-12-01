@@ -17,10 +17,10 @@ import {
   MessageCircle,
   Send,
   Info,
-  Lock,
   DollarSign,
 } from "lucide-react";
 import WorkerReviews from "@/components/WorkerReviews";
+import WorkerGallery from "@/components/WorkerGallery";
 
 type DbWorker = {
   id: string;
@@ -193,10 +193,7 @@ const WorkerDetail: React.FC = () => {
           setRatingAverage(null);
           setRatingCount(0);
         } else {
-          const sum = rows.reduce(
-            (acc, r) => acc + (r.rating ?? 0),
-            0
-          );
+          const sum = rows.reduce((acc, r) => acc + (r.rating ?? 0), 0);
           const avg = Number((sum / count).toFixed(1));
           setRatingAverage(avg);
           setRatingCount(count);
@@ -574,13 +571,16 @@ const WorkerDetail: React.FC = () => {
               <Card className="p-6">
                 <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
                   <Info className="w-5 h-5 text-primary" />
-                  {language === "fr" ? "À propos" : "About"}
+                  {text.about}
                 </h2>
                 <p className="text-muted-foreground whitespace-pre-line leading-relaxed">
                   {worker.description}
                 </p>
               </Card>
             )}
+
+            {/* Galerie photos */}
+            <WorkerGallery workerId={worker.id} />
 
             {/* Avis & notation clients */}
             <WorkerReviews key={worker.id} workerId={worker.id} />
