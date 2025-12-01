@@ -112,9 +112,12 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
     checkAuth();
   }, []);
 
-  // 🔄 Charger les avis existants (toujours, même sans login)
+  // 🔄 Charger les avis existants (public)
   const loadReviews = async () => {
-    if (!workerId) return;
+    if (!workerId) {
+      console.warn("WorkerReviews: workerId is empty");
+      return;
+    }
 
     setLoadingReviews(true);
     setReviewsError(null);
@@ -127,6 +130,8 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
         )
         .eq("worker_id", workerId)
         .order("created_at", { ascending: false });
+
+      console.log("WorkerReviews -> fetched reviews for", workerId, data, error);
 
       if (error) {
         console.error("load reviews error", error);
