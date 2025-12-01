@@ -23,6 +23,8 @@ type DbWorker = {
   years_experience: number | null;
   average_rating: number | null;
   rating_count: number | null;
+  computed_average_rating: number | null;
+  computed_rating_count: number | null;
   status: string | null;
 };
 
@@ -74,8 +76,9 @@ const WorkerSearchSection: React.FC = () => {
       setError(null);
 
       try {
+        // ⚠️ Utilisation de la vue op_ouvriers_with_ratings
         const { data, error } = await supabase
-          .from("op_ouvriers")
+          .from("op_ouvriers_with_ratings")
           .select(
             `
             id,
@@ -92,6 +95,8 @@ const WorkerSearchSection: React.FC = () => {
             years_experience,
             average_rating,
             rating_count,
+            computed_average_rating,
+            computed_rating_count,
             status
           `
           )
@@ -107,23 +112,30 @@ const WorkerSearchSection: React.FC = () => {
           rows.length
         );
 
-        const mapped: WorkerCard[] = rows.map((w) => ({
-          id: w.id,
-          name:
-            ((w.first_name || "") +
-              (w.last_name ? ` ${w.last_name}` : "")) || "Ouvrier",
-          job: w.profession ?? "",
-          country: w.country ?? "",
-          region: w.region ?? "",
-          city: w.city ?? "",
-          commune: w.commune ?? "",
-          district: w.district ?? "",
-          experienceYears: w.years_experience ?? 0,
-          hourlyRate: w.hourly_rate ?? 0,
-          currency: w.currency ?? "GNF",
-          rating: w.average_rating ?? 0,
-          ratingCount: w.rating_count ?? 0,
-        }));
+        const mapped: WorkerCard[] = rows.map((w) => {
+          const effectiveRating =
+            w.computed_average_rating ?? w.average_rating ?? 0;
+          const effectiveCount =
+            w.computed_rating_count ?? w.rating_count ?? 0;
+
+          return {
+            id: w.id,
+            name:
+              ((w.first_name || "") +
+                (w.last_name ? ` ${w.last_name}` : "")) || "Ouvrier",
+            job: w.profession ?? "",
+            country: w.country ?? "",
+            region: w.region ?? "",
+            city: w.city ?? "",
+            commune: w.commune ?? "",
+            district: w.district ?? "",
+            experienceYears: w.years_experience ?? 0,
+            hourlyRate: w.hourly_rate ?? 0,
+            currency: w.currency ?? "GNF",
+            rating: effectiveRating,
+            ratingCount: effectiveCount,
+          };
+        });
 
         setWorkers(mapped);
       } catch (err: any) {
