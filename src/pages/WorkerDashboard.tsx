@@ -3,6 +3,8 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import WorkerPhotosManager from "@/components/WorkerPhotosManager";
 import WorkerPortfolioManager from "@/components/WorkerPortfolioManager";
 
@@ -54,6 +56,17 @@ const WorkerDashboard: React.FC = () => {
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
 
+  // Édition du profil
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [editProfile, setEditProfile] = useState<WorkerProfile | null>(null);
+  const [profileUpdateError, setProfileUpdateError] = useState<string | null>(
+    null
+  );
+  const [profileUpdateSuccess, setProfileUpdateSuccess] = useState<
+    string | null
+  >(null);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -63,7 +76,7 @@ const WorkerDashboard: React.FC = () => {
       setContacts([]);
       setContactsError(null);
 
-      // 1) Utilisateur connecté ?
+      // 1) Qui est connecté ?
       const { data, error: userError } = await supabase.auth.getUser();
       const user = data?.user;
 
@@ -130,10 +143,11 @@ const WorkerDashboard: React.FC = () => {
         return;
       }
 
-      setProfile(worker as WorkerProfile);
+      const wp = worker as WorkerProfile;
+      setProfile(wp);
       setLoading(false);
 
-      // 3) Récupérer les demandes de contact
+      // 3) Demandes de contact
       setContactsLoading(true);
       setContactsError(null);
 
@@ -152,7 +166,7 @@ const WorkerDashboard: React.FC = () => {
           created_at
         `
         )
-        .eq("worker_id", worker.id)
+        .eq("worker_id", wp.id)
         .order("created_at", { ascending: false });
 
       if (!isMounted) return;
@@ -178,6 +192,7 @@ const WorkerDashboard: React.FC = () => {
     };
   }, [language]);
 
+  // Helpers d'affichage
   const planLabel = (plan: WorkerProfile["plan_code"]) => {
     if (!plan) return language === "fr" ? "Non défini" : "Not set";
     if (plan === "FREE") return language === "fr" ? "Gratuit" : "Free";
@@ -201,8 +216,7 @@ const WorkerDashboard: React.FC = () => {
   const statusClass = (s: string | null | undefined) => {
     if (s === "approved")
       return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    if (s === "rejected")
-      return "bg-red-50 text-red-700 border-red-200";
+    if (s === "rejected") return "bg-red-50 text-red-700 border-red-200";
     return "bg-amber-50 text-amber-700 border-amber-200";
   };
 
@@ -234,6 +248,112 @@ const WorkerDashboard: React.FC = () => {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  // Gestion édition profil
+  const handleEditField = <K extends keyof WorkerProfile>(
+    field: K,
+    value: WorkerProfile[K]
+  ) => {
+    setEditProfile((prev) =>
+      prev ? { ...prev, [field]: value } : prev
+    );
+  };
+
+  const startEditProfile = () => {
+    if (!profile) return;
+    setEditProfile(profile);
+    setProfileUpdateError(null);
+    setProfileUpdateSuccess(null);
+    setIsEditingProfile(true);
+  };
+
+  const cancelEditProfile = () => {
+    setEditProfile(null);
+    setIsEditingProfile(false);
+    setProfileUpdateError(null);
+    setProfileUpdateSuccess(null);
+  };
+
+  const saveProfile = async () => {
+    if (!profile || !editProfile) return;
+
+    setSavingProfile(true);
+    setProfileUpdateError(null);
+    setProfileUpdateSuccess(null);
+
+    try {
+      const payload = {
+        first_name: editProfile.first_name,
+        last_name: editProfile.last_name,
+        phone: editProfile.phone,
+        profession: editProfile.profession,
+        description: editProfile.description,
+        country: editProfile.country,
+        region: editProfile.region,
+        city: editProfile.city,
+        commune: editProfile.commune,
+        district: editProfile.district,
+        hourly_rate: editProfile.hourly_rate,
+        currency: editProfile.currency,
+      };
+
+      const { data: updated, error: updateError } = await supabase
+        .from("op_ouvriers")
+        .update(payload)
+        .eq("id", profile.id)
+        .select(
+          `
+          id,
+          user_id,
+          first_name,
+          last_name,
+          email,
+          phone,
+          country,
+          region,
+          city,
+          commune,
+          district,
+          profession,
+          description,
+          plan_code,
+          status,
+          hourly_rate,
+          currency,
+          created_at
+        `
+        )
+        .maybeSingle();
+
+      if (updateError || !updated) {
+        console.error(updateError);
+        setProfileUpdateError(
+          language === "fr"
+            ? "Impossible d'enregistrer les modifications."
+            : "Unable to save your changes."
+        );
+      } else {
+        const newProfile = updated as WorkerProfile;
+        setProfile(newProfile);
+        setEditProfile(newProfile);
+        setProfileUpdateSuccess(
+          language === "fr"
+            ? "Profil mis à jour avec succès."
+            : "Profile updated successfully."
+        );
+        setIsEditingProfile(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setProfileUpdateError(
+        language === "fr"
+          ? "Une erreur est survenue lors de la mise à jour."
+          : "An error occurred while updating your profile."
+      );
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   if (loading) {
@@ -268,6 +388,8 @@ const WorkerDashboard: React.FC = () => {
     (profile.first_name || "") +
     (profile.last_name ? ` ${profile.last_name}` : "");
 
+  const displayProfile = isEditingProfile && editProfile ? editProfile : profile;
+
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="max-w-5xl mx-auto px-4">
@@ -275,9 +397,7 @@ const WorkerDashboard: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
-              {language === "fr"
-                ? "Espace Ouvrier"
-                : "Worker Dashboard"}
+              {language === "fr" ? "Espace Ouvrier" : "Worker Dashboard"}
             </h1>
             <p className="text-sm text-slate-600 mt-1">
               {language === "fr"
@@ -311,7 +431,11 @@ const WorkerDashboard: React.FC = () => {
                 labelFr: "Abonnement",
                 labelEn: "Subscription",
               },
-              { key: "stats" as TabKey, labelFr: "Statistiques", labelEn: "Stats" },
+              {
+                key: "stats" as TabKey,
+                labelFr: "Statistiques",
+                labelEn: "Stats",
+              },
               {
                 key: "messages" as TabKey,
                 labelFr: "Messages",
@@ -342,11 +466,65 @@ const WorkerDashboard: React.FC = () => {
           {/* PROFIL */}
           {activeTab === "profile" && (
             <div className="space-y-6">
-              {/* Bloc profil texte */}
-              <div className="space-y-4">
-                <h2 className="text-sm font-semibold text-slate-800 mb-2">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-800">
                   {language === "fr" ? "Mon profil" : "My profile"}
                 </h2>
+                {!isEditingProfile ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={startEditProfile}
+                  >
+                    {language === "fr"
+                      ? "Modifier mon profil"
+                      : "Edit my profile"}
+                  </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={cancelEditProfile}
+                      disabled={savingProfile}
+                    >
+                      {language === "fr" ? "Annuler" : "Cancel"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={saveProfile}
+                      disabled={savingProfile}
+                      className="bg-pro-blue hover:bg-blue-700"
+                    >
+                      {savingProfile
+                        ? language === "fr"
+                          ? "Enregistrement..."
+                          : "Saving..."
+                        : language === "fr"
+                        ? "Enregistrer"
+                        : "Save"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Messages de mise à jour */}
+              {profileUpdateError && (
+                <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                  {profileUpdateError}
+                </div>
+              )}
+              {profileUpdateSuccess && (
+                <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">
+                  {profileUpdateSuccess}
+                </div>
+              )}
+
+              {/* Détails du profil : lecture OU édition */}
+              {!isEditingProfile && (
                 <div className="grid md:grid-cols-2 gap-4 text-sm">
                   <div>
                     <div className="text-xs text-slate-500">
@@ -404,47 +582,194 @@ const WorkerDashboard: React.FC = () => {
                       {profile.description || "—"}
                     </div>
                   </div>
+                  {profile.hourly_rate != null && (
+                    <div>
+                      <div className="text-xs text-slate-500">
+                        {language === "fr"
+                          ? "Tarif horaire déclaré"
+                          : "Declared hourly rate"}
+                      </div>
+                      <div className="font-medium text-slate-900">
+                        {profile.hourly_rate.toLocaleString()}{" "}
+                        {profile.currency || ""}/h
+                      </div>
+                    </div>
+                  )}
                 </div>
+              )}
 
-                <div className="mt-4 flex flex-wrap gap-2 items-center">
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusClass(
-                      profile.status
-                    )}`}
-                  >
-                    {statusLabel(profile.status)}
-                  </span>
-                  <span className="text-xs text-slate-400">
-                    {language === "fr" ? "Créé le" : "Created at"}{" "}
-                    {formatDate(profile.created_at)}
-                  </span>
+              {isEditingProfile && editProfile && (
+                <div className="grid md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Prénom" : "First name"}
+                    </div>
+                    <Input
+                      value={editProfile.first_name ?? ""}
+                      onChange={(e) =>
+                        handleEditField("first_name", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Nom" : "Last name"}
+                    </div>
+                    <Input
+                      value={editProfile.last_name ?? ""}
+                      onChange={(e) =>
+                        handleEditField("last_name", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Métier principal" : "Main trade"}
+                    </div>
+                    <Input
+                      value={editProfile.profession ?? ""}
+                      onChange={(e) =>
+                        handleEditField("profession", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Téléphone" : "Phone"}
+                    </div>
+                    <Input
+                      value={editProfile.phone ?? ""}
+                      onChange={(e) =>
+                        handleEditField("phone", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Pays" : "Country"}
+                    </div>
+                    <Input
+                      value={editProfile.country ?? ""}
+                      onChange={(e) =>
+                        handleEditField("country", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Région" : "Region"}
+                    </div>
+                    <Input
+                      value={editProfile.region ?? ""}
+                      onChange={(e) =>
+                        handleEditField("region", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Ville" : "City"}
+                    </div>
+                    <Input
+                      value={editProfile.city ?? ""}
+                      onChange={(e) =>
+                        handleEditField("city", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Commune" : "Commune"}
+                    </div>
+                    <Input
+                      value={editProfile.commune ?? ""}
+                      onChange={(e) =>
+                        handleEditField("commune", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Quartier" : "District"}
+                    </div>
+                    <Input
+                      value={editProfile.district ?? ""}
+                      onChange={(e) =>
+                        handleEditField("district", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr"
+                        ? "Tarif horaire (GNF)"
+                        : "Hourly rate (GNF)"}
+                    </div>
+                    <Input
+                      type="number"
+                      value={
+                        editProfile.hourly_rate != null
+                          ? String(editProfile.hourly_rate)
+                          : ""
+                      }
+                      onChange={(e) =>
+                        handleEditField(
+                          "hourly_rate",
+                          e.target.value
+                            ? Number(e.target.value)
+                            : (null as any)
+                        )
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Devise" : "Currency"}
+                    </div>
+                    <Input
+                      value={editProfile.currency ?? ""}
+                      onChange={(e) =>
+                        handleEditField("currency", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <div className="text-xs text-slate-500">
+                      {language === "fr"
+                        ? "Description de vos services"
+                        : "Services description"}
+                    </div>
+                    <Textarea
+                      rows={4}
+                      value={editProfile.description ?? ""}
+                      onChange={(e) =>
+                        handleEditField("description", e.target.value)
+                      }
+                    />
+                  </div>
                 </div>
+              )}
 
-                <div className="pt-3 border-t border-slate-100 mt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      alert(
-                        language === "fr"
-                          ? "L’édition de profil sera ajoutée dans une prochaine étape."
-                          : "Profile editing will be added in a next step."
-                      )
-                    }
-                  >
-                    {language === "fr"
-                      ? "Modifier mon profil (bientôt)"
-                      : "Edit my profile (soon)"}
-                  </Button>
-                </div>
+              {/* Statut + date création */}
+              <div className="mt-2 flex flex-wrap gap-2 items-center">
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusClass(
+                    profile.status
+                  )}`}
+                >
+                  {statusLabel(profile.status)}
+                </span>
+                <span className="text-xs text-slate-400">
+                  {language === "fr" ? "Créé le" : "Created at"}{" "}
+                  {formatDate(profile.created_at)}
+                </span>
               </div>
 
-              {/* Gestion des photos */}
-              <WorkerPhotosManager workerId={profile.id} />
-
-              {/* Gestion du portfolio / réalisations */}
-              <WorkerPortfolioManager workerId={profile.id} />
+              {/* Photos + portfolio */}
+              <div className="pt-4 border-t border-slate-100 space-y-4">
+                <WorkerPhotosManager workerId={profile.id} />
+                <WorkerPortfolioManager workerId={profile.id} />
+              </div>
             </div>
           )}
 
@@ -456,7 +781,6 @@ const WorkerDashboard: React.FC = () => {
                   ? "Mon abonnement"
                   : "My subscription"}
               </h2>
-
               <div className="text-sm">
                 <div className="mb-2">
                   <span className="text-xs text-slate-500">
