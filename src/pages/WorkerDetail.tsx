@@ -21,7 +21,8 @@ import {
   DollarSign,
 } from "lucide-react";
 import WorkerReviews from "@/components/WorkerReviews";
-import WorkerPhotosGallery from "@/components/WorkerPhotosGallery"; // ✅ NEW
+import WorkerPhotosGallery from "@/components/WorkerPhotosGallery";
+import WorkerPortfolio from "@/components/WorkerPortfolio";
 
 type DbWorker = {
   id: string;
@@ -81,15 +82,12 @@ const WorkerDetail: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Vérif auth
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const { data } = await supabase.auth.getUser();
-        if (data?.user) {
-          setIsAuthenticated(true);
-        } else {
-          setIsAuthenticated(false);
-        }
+        setIsAuthenticated(!!data?.user);
       } catch (e) {
         console.error("Auth check error:", e);
         setIsAuthenticated(false);
@@ -101,6 +99,7 @@ const WorkerDetail: React.FC = () => {
     checkAuth();
   }, []);
 
+  // Chargement ouvrier
   useEffect(() => {
     const fetchWorkerData = async () => {
       if (!id) {
@@ -287,8 +286,7 @@ const WorkerDetail: React.FC = () => {
     setErrorMsg(null);
 
     try {
-      const { data: authData, error: authErr } =
-        await supabase.auth.getUser();
+      const { data: authData, error: authErr } = await supabase.auth.getUser();
 
       if (authErr) {
         console.error(authErr);
@@ -565,7 +563,10 @@ const WorkerDetail: React.FC = () => {
               </Card>
             )}
 
-            {/* ✅ Galerie PUBLIC seulement (pas d'upload) */}
+            {/* Portfolio / réalisations (lecture seule) */}
+            <WorkerPortfolio workerId={worker.id} />
+
+            {/* Galerie PUBLIC seulement (pas d'upload) */}
             <WorkerPhotosGallery workerId={worker.id} />
 
             {/* Avis & notation clients */}
@@ -665,8 +666,151 @@ const WorkerDetail: React.FC = () => {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                {/* ... (formulaire identique à ta version précédente) ... */}
-                {/* Je ne change rien ici pour ne pas toucher à la logique existante */}
+                {/* Nom */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {text.yourName}
+                  </label>
+                  <Input
+                    name="name"
+                    value={form.name}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                {/* Téléphone */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {text.yourPhone}
+                  </label>
+                  <Input
+                    name="phone"
+                    value={form.phone}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                {/* Email (facultatif) */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {text.yourEmail}{" "}
+                    <span className="text-[10px] text-muted-foreground">
+                      ({language === "fr" ? "facultatif" : "optional"})
+                    </span>
+                  </label>
+                  <Input
+                    type="email"
+                    name="email"
+                    value={form.email}
+                    onChange={handleChange}
+                  />
+                </div>
+
+                {/* Type de demande */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {text.requestTypeLabel}
+                  </label>
+                  <select
+                    name="requestType"
+                    value={form.requestType}
+                    onChange={handleChange}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="devis">{text.requestTypeDevis}</option>
+                    <option value="info">{text.requestTypeInfo}</option>
+                    <option value="urgence">{text.requestTypeUrgence}</option>
+                  </select>
+                </div>
+
+                {/* Budget approx. */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {text.budgetLabel}
+                  </label>
+                  <Input
+                    name="budget"
+                    value={form.budget}
+                    onChange={handleChange}
+                    placeholder={
+                      language === "fr" ? "Ex : 1,000,000 GNF" : "e.g. 1,000,000 GNF"
+                    }
+                  />
+                </div>
+
+                {/* Date souhaitée */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {text.dateLabel}
+                  </label>
+                  <Input
+                    type="date"
+                    name="preferredDate"
+                    value={form.preferredDate}
+                    onChange={handleChange}
+                  />
+                </div>
+
+                {/* Message */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {text.yourMessage}
+                  </label>
+                  <Textarea
+                    name="message"
+                    value={form.message}
+                    onChange={handleChange}
+                    rows={4}
+                    required
+                    placeholder={
+                      language === "fr"
+                        ? "Décrivez votre besoin..."
+                        : "Describe your need..."
+                    }
+                  />
+                </div>
+
+                {/* Consentement */}
+                <div className="flex items-start gap-2">
+                  <input
+                    id="consent"
+                    type="checkbox"
+                    name="consent"
+                    checked={form.consent}
+                    onChange={handleChange}
+                    className="mt-1"
+                  />
+                  <label
+                    htmlFor="consent"
+                    className="text-xs text-muted-foreground"
+                  >
+                    {text.consentLabel}
+                  </label>
+                </div>
+
+                <p className="text-[11px] text-muted-foreground">
+                  {text.privacyNote}
+                </p>
+
+                <Button
+                  type="submit"
+                  className="w-full mt-2"
+                  disabled={sending || !form.consent}
+                >
+                  {sending ? (
+                    <>
+                      <Send className="w-4 h-4 mr-2 animate-pulse" />
+                      {text.sending}
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4 mr-2" />
+                      {text.send}
+                    </>
+                  )}
+                </Button>
               </form>
             </Card>
           </div>
