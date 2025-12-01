@@ -43,17 +43,15 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
   const text = {
     title: language === "fr" ? "Avis clients" : "Customer reviews",
     noReviews:
-      language === "fr"
-        ? "Aucun avis pour le moment."
-        : "No reviews yet.",
+      language === "fr" ? "Aucun avis pour le moment." : "No reviews yet.",
     leaveTitle:
       language === "fr"
         ? "Laisser une note et un avis"
         : "Leave a rating and a review",
     mustLogin:
       language === "fr"
-        ? "Vous devez être connecté pour laisser un avis."
-        : "You must be logged in to leave a review.",
+        ? "Vous devez être connecté pour consulter ou laisser un avis."
+        : "You must be logged in to view or leave a review.",
     yourRating: language === "fr" ? "Votre note" : "Your rating",
     yourComment: language === "fr" ? "Votre avis" : "Your review",
     send: language === "fr" ? "Envoyer l'avis" : "Submit review",
@@ -74,6 +72,16 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
       language === "fr"
         ? "Merci de sélectionner une note."
         : "Please select a rating.",
+    checkingSession:
+      language === "fr"
+        ? "Vérification de la session..."
+        : "Checking session...",
+    loadingReviews:
+      language === "fr" ? "Chargement des avis..." : "Loading reviews...",
+    averageLabel:
+      language === "fr" ? "Note moyenne" : "Average rating",
+    reviewsCountLabel:
+      language === "fr" ? "avis" : "reviews",
   };
 
   // 🔐 Vérifier la session (peu importe le rôle)
@@ -104,15 +112,20 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
     checkAuth();
   }, []);
 
-  // 🔄 Charger les avis existants
+  // 🔄 Charger les avis existants (seulement si utilisateur connecté,
+  // car la RLS limite la lecture aux authenticated)
   const loadReviews = async () => {
+    if (!workerId) return;
+
     setLoadingReviews(true);
     setReviewsError(null);
 
     try {
       const { data, error } = await supabase
         .from("op_ouvrier_reviews")
-        .select("id, worker_id, client_id, author_name, rating, comment, created_at")
+        .select(
+          "id, worker_id, client_id, author_name, rating, comment, created_at"
+        )
         .eq("worker_id", workerId)
         .order("created_at", { ascending: false });
 
@@ -134,12 +147,12 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
   };
 
   useEffect(() => {
-    if (!workerId) return;
-    loadReviews();
+    if (!workerId || !authChecked || !isAuthenticated) return;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workerId]);
+    loadReviews();
+  }, [workerId, authChecked, isAuthenticated]);
 
-  // ⭐ clic sur les étoiles
+  // ⭐ clic sur les étoiles (formulaire)
   const displayRating = hoverRating ?? rating;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -168,7 +181,7 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
 
       const { error } = await supabase.from("op_ouvrier_reviews").insert({
         worker_id: workerId,
-        client_id: currentUser.id,
+        client_id: currentUser.id, // doit respecter la policy client_id = auth.uid()
         author_name: displayName,
         rating,
         comment: comment.trim() || null,
@@ -182,7 +195,7 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
         setRating(0);
         setHoverRating(null);
         setComment("");
-        await loadReviews();
+        await loadReviews(); // recharge pour rafraîchir la liste et les stats
       }
     } catch (e) {
       console.error("insert review exception", e);
@@ -192,143 +205,169 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
     }
   };
 
+  // 📊 Calcul local de la note moyenne & nombre d'avis
+  const reviewsCount = reviews.length;
+  const averageRating =
+    reviewsCount > 0
+      ? Number(
+          (
+            reviews.reduce(
+              (sum, r) => sum + (r.rating ?? 0),
+              0
+            ) / reviewsCount
+          ).toFixed(1)
+        )
+      : null;
+
   return (
     <Card className="p-6">
-      {/* Liste des avis */}
       <h2 className="text-xl font-semibold mb-4">{text.title}</h2>
 
-      {loadingReviews && (
+      {!authChecked ? (
         <p className="text-sm text-muted-foreground">
-          {language === "fr" ? "Chargement des avis..." : "Loading reviews..."}
+          {text.checkingSession}
         </p>
-      )}
-
-      {reviewsError && (
-        <p className="text-sm text-destructive mb-4">{reviewsError}</p>
-      )}
-
-      {!loadingReviews && !reviewsError && reviews.length === 0 && (
-        <p className="text-sm text-muted-foreground mb-4">
-          {text.noReviews}
+      ) : !isAuthenticated ? (
+        <p className="text-sm text-muted-foreground">
+          {text.mustLogin}
         </p>
-      )}
+      ) : (
+        <>
+          {/* Résumé note moyenne + nombre d'avis */}
+          <div className="flex items-center gap-4 mb-4">
+            <div className="flex items-center gap-1">
+              <StarIcon className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+              <span className="text-lg font-semibold">
+                {averageRating !== null ? averageRating.toFixed(1) : "—"}
+              </span>
+            </div>
+            <span className="text-sm text-muted-foreground">
+              {reviewsCount > 0
+                ? `${reviewsCount} ${text.reviewsCountLabel}`
+                : text.noReviews}
+            </span>
+          </div>
 
-      {!loadingReviews && !reviewsError && reviews.length > 0 && (
-        <div className="space-y-4 mb-6">
-          {reviews.map((review) => (
-            <div
-              key={review.id}
-              className="p-4 bg-muted/30 rounded-lg border border-border"
-            >
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="font-medium">
-                  {review.author_name || (language === "fr"
-                    ? "Client anonyme"
-                    : "Anonymous client")}
-                </span>
-                <div className="flex items-center gap-0.5">
-                  {[...Array(5)].map((_, i) => (
-                    <StarIcon
-                      key={i}
-                      className={`w-4 h-4 ${
-                        i < (review.rating || 0)
-                          ? "text-yellow-500 fill-yellow-500"
-                          : "text-muted-foreground/30"
-                      }`}
-                    />
+          {/* Liste des avis */}
+          {loadingReviews && (
+            <p className="text-sm text-muted-foreground">
+              {text.loadingReviews}
+            </p>
+          )}
+
+          {reviewsError && (
+            <p className="text-sm text-destructive mb-4">{reviewsError}</p>
+          )}
+
+          {!loadingReviews && !reviewsError && reviewsCount > 0 && (
+            <div className="space-y-4 mb-6">
+              {reviews.map((review) => (
+                <div
+                  key={review.id}
+                  className="p-4 bg-muted/30 rounded-lg border border-border"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-medium">
+                      {review.author_name ||
+                        (language === "fr"
+                          ? "Client anonyme"
+                          : "Anonymous client")}
+                    </span>
+                    <div className="flex items-center gap-0.5">
+                      {[...Array(5)].map((_, i) => (
+                        <StarIcon
+                          key={i}
+                          className={`w-4 h-4 ${
+                            i < (review.rating || 0)
+                              ? "text-yellow-500 fill-yellow-500"
+                              : "text-muted-foreground/30"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  {review.comment && (
+                    <p className="text-sm text-muted-foreground">
+                      {review.comment}
+                    </p>
+                  )}
+                  {review.created_at && (
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      {new Date(review.created_at).toLocaleDateString(
+                        language === "fr" ? "fr-FR" : "en-US",
+                        {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        }
+                      )}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Formulaire de dépôt d'avis */}
+          <div className="mt-4 pt-4 border-t border-border">
+            <h3 className="text-base font-semibold mb-3">
+              {text.leaveTitle}
+            </h3>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Note */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  {text.yourRating}
+                </label>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setRating(value)}
+                      onMouseEnter={() => setHoverRating(value)}
+                      onMouseLeave={() => setHoverRating(null)}
+                      className="p-0.5"
+                    >
+                      <StarIcon
+                        className={`w-6 h-6 ${
+                          value <= displayRating
+                            ? "text-yellow-500 fill-yellow-500"
+                            : "text-muted-foreground/30"
+                        }`}
+                      />
+                    </button>
                   ))}
                 </div>
               </div>
-              {review.comment && (
-                <p className="text-sm text-muted-foreground">
-                  {review.comment}
-                </p>
-              )}
-              {review.created_at && (
-                <p className="text-xs text-muted-foreground mt-1.5">
-                  {new Date(review.created_at).toLocaleDateString(
-                    language === "fr" ? "fr-FR" : "en-US",
-                    {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    }
-                  )}
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
 
-      {/* Formulaire de dépôt d'avis */}
-      <div className="mt-4 pt-4 border-t border-border">
-        <h3 className="text-base font-semibold mb-3">
-          {text.leaveTitle}
-        </h3>
-
-        {!authChecked ? (
-          <p className="text-sm text-muted-foreground">
-            {language === "fr" ? "Vérification de la session..." : "Checking session..."}
-          </p>
-        ) : !isAuthenticated ? (
-          <p className="text-sm text-muted-foreground">
-            {text.mustLogin}
-          </p>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Note */}
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                {text.yourRating}
-              </label>
-              <div className="flex items-center gap-1">
-                {[1, 2, 3, 4, 5].map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setRating(value)}
-                    onMouseEnter={() => setHoverRating(value)}
-                    onMouseLeave={() => setHoverRating(null)}
-                    className="p-0.5"
-                  >
-                    <StarIcon
-                      className={`w-6 h-6 ${
-                        value <= displayRating
-                          ? "text-yellow-500 fill-yellow-500"
-                          : "text-muted-foreground/30"
-                      }`}
-                    />
-                  </button>
-                ))}
+              {/* Commentaire */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  {text.yourComment}
+                </label>
+                <Textarea
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  rows={3}
+                />
               </div>
-            </div>
 
-            {/* Commentaire */}
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                {text.yourComment}
-              </label>
-              <Textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                rows={3}
-              />
-            </div>
+              {submitError && (
+                <p className="text-sm text-destructive">{submitError}</p>
+              )}
+              {submitSuccess && (
+                <p className="text-sm text-emerald-600">{submitSuccess}</p>
+              )}
 
-            {submitError && (
-              <p className="text-sm text-destructive">{submitError}</p>
-            )}
-            {submitSuccess && (
-              <p className="text-sm text-emerald-600">{submitSuccess}</p>
-            )}
-
-            <Button type="submit" disabled={submitting}>
-              {submitting ? text.sending : text.send}
-            </Button>
-          </form>
-        )}
-      </div>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? text.sending : text.send}
+              </Button>
+            </form>
+          </div>
+        </>
+      )}
     </Card>
   );
 };
