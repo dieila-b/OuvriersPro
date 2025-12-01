@@ -50,8 +50,8 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
         : "Leave a rating and a review",
     mustLogin:
       language === "fr"
-        ? "Vous devez être connecté pour consulter ou laisser un avis."
-        : "You must be logged in to view or leave a review.",
+        ? "Vous devez être connecté pour laisser un avis."
+        : "You must be logged in to leave a review.",
     yourRating: language === "fr" ? "Votre note" : "Your rating",
     yourComment: language === "fr" ? "Votre avis" : "Your review",
     send: language === "fr" ? "Envoyer l'avis" : "Submit review",
@@ -84,7 +84,7 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
       language === "fr" ? "avis" : "reviews",
   };
 
-  // 🔐 Vérifier la session (peu importe le rôle)
+  // 🔐 Vérifier la session (pour le formulaire uniquement)
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -112,8 +112,7 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
     checkAuth();
   }, []);
 
-  // 🔄 Charger les avis existants (seulement si utilisateur connecté,
-  // car la RLS limite la lecture aux authenticated)
+  // 🔄 Charger les avis existants (toujours, même sans login)
   const loadReviews = async () => {
     if (!workerId) return;
 
@@ -147,10 +146,9 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
   };
 
   useEffect(() => {
-    if (!workerId || !authChecked || !isAuthenticated) return;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     loadReviews();
-  }, [workerId, authChecked, isAuthenticated]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workerId]);
 
   // ⭐ clic sur les étoiles (formulaire)
   const displayRating = hoverRating ?? rating;
@@ -181,7 +179,7 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
 
       const { error } = await supabase.from("op_ouvrier_reviews").insert({
         worker_id: workerId,
-        client_id: currentUser.id, // doit respecter la policy client_id = auth.uid()
+        client_id: currentUser.id, // RLS : client_id = auth.uid()
         author_name: displayName,
         rating,
         comment: comment.trim() || null,
@@ -195,7 +193,7 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
         setRating(0);
         setHoverRating(null);
         setComment("");
-        await loadReviews(); // recharge pour rafraîchir la liste et les stats
+        await loadReviews(); // rafraîchir liste + stats
       }
     } catch (e) {
       console.error("insert review exception", e);
@@ -223,151 +221,149 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
     <Card className="p-6">
       <h2 className="text-xl font-semibold mb-4">{text.title}</h2>
 
-      {!authChecked ? (
+      {/* Résumé note moyenne + nombre d'avis */}
+      <div className="flex items-center gap-4 mb-4">
+        <div className="flex items-center gap-1">
+          <StarIcon className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+          <span className="text-lg font-semibold">
+            {averageRating !== null ? averageRating.toFixed(1) : "—"}
+          </span>
+        </div>
+        <span className="text-sm text-muted-foreground">
+          {reviewsCount > 0
+            ? `${reviewsCount} ${text.reviewsCountLabel}`
+            : text.noReviews}
+        </span>
+      </div>
+
+      {/* Liste des avis */}
+      {loadingReviews && (
         <p className="text-sm text-muted-foreground">
-          {text.checkingSession}
+          {text.loadingReviews}
         </p>
-      ) : !isAuthenticated ? (
-        <p className="text-sm text-muted-foreground">
-          {text.mustLogin}
-        </p>
-      ) : (
-        <>
-          {/* Résumé note moyenne + nombre d'avis */}
-          <div className="flex items-center gap-4 mb-4">
-            <div className="flex items-center gap-1">
-              <StarIcon className="w-5 h-5 text-yellow-500 fill-yellow-500" />
-              <span className="text-lg font-semibold">
-                {averageRating !== null ? averageRating.toFixed(1) : "—"}
-              </span>
-            </div>
-            <span className="text-sm text-muted-foreground">
-              {reviewsCount > 0
-                ? `${reviewsCount} ${text.reviewsCountLabel}`
-                : text.noReviews}
-            </span>
-          </div>
+      )}
 
-          {/* Liste des avis */}
-          {loadingReviews && (
-            <p className="text-sm text-muted-foreground">
-              {text.loadingReviews}
-            </p>
-          )}
+      {reviewsError && (
+        <p className="text-sm text-destructive mb-4">{reviewsError}</p>
+      )}
 
-          {reviewsError && (
-            <p className="text-sm text-destructive mb-4">{reviewsError}</p>
-          )}
-
-          {!loadingReviews && !reviewsError && reviewsCount > 0 && (
-            <div className="space-y-4 mb-6">
-              {reviews.map((review) => (
-                <div
-                  key={review.id}
-                  className="p-4 bg-muted/30 rounded-lg border border-border"
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-medium">
-                      {review.author_name ||
-                        (language === "fr"
-                          ? "Client anonyme"
-                          : "Anonymous client")}
-                    </span>
-                    <div className="flex items-center gap-0.5">
-                      {[...Array(5)].map((_, i) => (
-                        <StarIcon
-                          key={i}
-                          className={`w-4 h-4 ${
-                            i < (review.rating || 0)
-                              ? "text-yellow-500 fill-yellow-500"
-                              : "text-muted-foreground/30"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  {review.comment && (
-                    <p className="text-sm text-muted-foreground">
-                      {review.comment}
-                    </p>
-                  )}
-                  {review.created_at && (
-                    <p className="text-xs text-muted-foreground mt-1.5">
-                      {new Date(review.created_at).toLocaleDateString(
-                        language === "fr" ? "fr-FR" : "en-US",
-                        {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        }
-                      )}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Formulaire de dépôt d'avis */}
-          <div className="mt-4 pt-4 border-t border-border">
-            <h3 className="text-base font-semibold mb-3">
-              {text.leaveTitle}
-            </h3>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Note */}
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  {text.yourRating}
-                </label>
-                <div className="flex items-center gap-1">
-                  {[1, 2, 3, 4, 5].map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setRating(value)}
-                      onMouseEnter={() => setHoverRating(value)}
-                      onMouseLeave={() => setHoverRating(null)}
-                      className="p-0.5"
-                    >
-                      <StarIcon
-                        className={`w-6 h-6 ${
-                          value <= displayRating
-                            ? "text-yellow-500 fill-yellow-500"
-                            : "text-muted-foreground/30"
-                        }`}
-                      />
-                    </button>
+      {!loadingReviews && !reviewsError && reviewsCount > 0 && (
+        <div className="space-y-4 mb-6">
+          {reviews.map((review) => (
+            <div
+              key={review.id}
+              className="p-4 bg-muted/30 rounded-lg border border-border"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-medium">
+                  {review.author_name ||
+                    (language === "fr"
+                      ? "Client anonyme"
+                      : "Anonymous client")}
+                </span>
+                <div className="flex items-center gap-0.5">
+                  {[...Array(5)].map((_, i) => (
+                    <StarIcon
+                      key={i}
+                      className={`w-4 h-4 ${
+                        i < (review.rating || 0)
+                          ? "text-yellow-500 fill-yellow-500"
+                          : "text-muted-foreground/30"
+                      }`}
+                    />
                   ))}
                 </div>
               </div>
-
-              {/* Commentaire */}
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  {text.yourComment}
-                </label>
-                <Textarea
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  rows={3}
-                />
-              </div>
-
-              {submitError && (
-                <p className="text-sm text-destructive">{submitError}</p>
+              {review.comment && (
+                <p className="text-sm text-muted-foreground">
+                  {review.comment}
+                </p>
               )}
-              {submitSuccess && (
-                <p className="text-sm text-emerald-600">{submitSuccess}</p>
+              {review.created_at && (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  {new Date(review.created_at).toLocaleDateString(
+                    language === "fr" ? "fr-FR" : "en-US",
+                    {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    }
+                  )}
+                </p>
               )}
-
-              <Button type="submit" disabled={submitting}>
-                {submitting ? text.sending : text.send}
-              </Button>
-            </form>
-          </div>
-        </>
+            </div>
+          ))}
+        </div>
       )}
+
+      {/* Formulaire de dépôt d'avis */}
+      <div className="mt-4 pt-4 border-t border-border">
+        <h3 className="text-base font-semibold mb-3">
+          {text.leaveTitle}
+        </h3>
+
+        {!authChecked ? (
+          <p className="text-sm text-muted-foreground">
+            {text.checkingSession}
+          </p>
+        ) : !isAuthenticated ? (
+          <p className="text-sm text-muted-foreground">
+            {text.mustLogin}
+          </p>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Note */}
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                {text.yourRating}
+              </label>
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setRating(value)}
+                    onMouseEnter={() => setHoverRating(value)}
+                    onMouseLeave={() => setHoverRating(null)}
+                    className="p-0.5"
+                  >
+                    <StarIcon
+                      className={`w-6 h-6 ${
+                        value <= displayRating
+                          ? "text-yellow-500 fill-yellow-500"
+                          : "text-muted-foreground/30"
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Commentaire */}
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                {text.yourComment}
+              </label>
+              <Textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                rows={3}
+              />
+            </div>
+
+            {submitError && (
+              <p className="text-sm text-destructive">{submitError}</p>
+            )}
+            {submitSuccess && (
+              <p className="text-sm text-emerald-600">{submitSuccess}</p>
+            )}
+
+            <Button type="submit" disabled={submitting}>
+              {submitting ? text.sending : text.send}
+            </Button>
+          </form>
+        )}
+      </div>
     </Card>
   );
 };
