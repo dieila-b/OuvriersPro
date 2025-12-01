@@ -1,4 +1,3 @@
-// src/components/WorkerPhotosGallery.tsx
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -27,15 +26,21 @@ const WorkerPhotosGallery: React.FC<WorkerPhotosGalleryProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   const text = {
-    title: language === "fr" ? "Galerie de réalisations" : "Work gallery",
+    title: language === "fr" ? "Galerie photos" : "Photo gallery",
+    subtitle:
+      language === "fr"
+        ? "Découvrez quelques réalisations de cet ouvrier."
+        : "Discover some of this worker’s projects.",
     empty:
       language === "fr"
-        ? "Aucune photo n'a encore été ajoutée."
-        : "No photos have been added yet.",
+        ? "Aucune photo ajoutée pour le moment."
+        : "No photos added yet.",
     error:
       language === "fr"
-        ? "Impossible de charger la galerie pour le moment."
-        : "Unable to load the gallery at the moment.",
+        ? "Impossible de charger les photos pour le moment."
+        : "Unable to load photos at the moment.",
+    loading:
+      language === "fr" ? "Chargement des photos..." : "Loading photos...",
   };
 
   useEffect(() => {
@@ -62,7 +67,6 @@ const WorkerPhotosGallery: React.FC<WorkerPhotosGalleryProps> = ({
 
         const rows = (data ?? []) as PhotoRow[];
 
-        // Compléter les URLs publiques si non stockées
         const withUrls = rows.map((p) => {
           if (p.public_url) return p;
 
@@ -91,12 +95,15 @@ const WorkerPhotosGallery: React.FC<WorkerPhotosGalleryProps> = ({
 
   return (
     <Card className="p-6">
-      <h2 className="text-xl font-semibold mb-4">{text.title}</h2>
+      <div className="flex flex-col gap-1 mb-4">
+        <h2 className="text-xl font-semibold flex items-center gap-2">
+          {text.title}
+        </h2>
+        <p className="text-xs text-muted-foreground">{text.subtitle}</p>
+      </div>
 
       {loading && (
-        <p className="text-sm text-muted-foreground">
-          {language === "fr" ? "Chargement des photos..." : "Loading photos..."}
-        </p>
+        <p className="text-sm text-muted-foreground">{text.loading}</p>
       )}
 
       {error && (
@@ -106,7 +113,9 @@ const WorkerPhotosGallery: React.FC<WorkerPhotosGalleryProps> = ({
       )}
 
       {!loading && !error && photos.length === 0 && (
-        <p className="text-sm text-muted-foreground">{text.empty}</p>
+        <p className="text-sm text-muted-foreground">
+          {text.empty}
+        </p>
       )}
 
       {!loading && !error && photos.length > 0 && (
@@ -123,12 +132,13 @@ const WorkerPhotosGallery: React.FC<WorkerPhotosGalleryProps> = ({
                   className="w-full h-32 sm:h-36 md:h-40 object-cover"
                 />
               ) : (
-                <div className="w-full h-32 sm:h-36 md:h-40 flex items-center justify-center text-xs text-muted-foreground">
+                <div className="w-full h-32 sm:h-36 md:h-40 flex items-center justify-center text-[11px] text-muted-foreground">
                   {language === "fr"
                     ? "Prévisualisation indisponible"
                     : "Preview unavailable"}
                 </div>
               )}
+
               {photo.is_cover && (
                 <span className="absolute top-1 left-1 bg-black/60 text-[10px] text-white px-1.5 py-0.5 rounded">
                   {language === "fr" ? "Couverture" : "Cover"}
