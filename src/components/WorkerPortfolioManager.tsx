@@ -22,6 +22,8 @@ type PortfolioItem = {
   created_at: string;
 };
 
+const COVER_BUCKET = "op-ouvrier-photos";
+
 const WorkerPortfolioManager: React.FC<WorkerPortfolioManagerProps> = ({
   workerId,
 }) => {
@@ -32,11 +34,15 @@ const WorkerPortfolioManager: React.FC<WorkerPortfolioManagerProps> = ({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Champs formulaire
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
   const [dateCompleted, setDateCompleted] = useState("");
   const [coverPhotoUrl, setCoverPhotoUrl] = useState("");
+
+  // Fichier de couverture (upload)
+  const [coverFile, setCoverFile] = useState<File | null>(null);
 
   const text = {
     title:
@@ -48,26 +54,26 @@ const WorkerPortfolioManager: React.FC<WorkerPortfolioManagerProps> = ({
         ? "Ajoutez quelques projets terminés pour mieux présenter votre expérience."
         : "Add some completed projects to better showcase your experience.",
     formTitle:
-      language === "fr"
-        ? "Ajouter une réalisation"
-        : "Add a project",
+      language === "fr" ? "Ajouter une réalisation" : "Add a project",
     labelProjectTitle:
       language === "fr" ? "Titre du projet" : "Project title",
-    labelDescription:
-      language === "fr" ? "Description" : "Description",
+    labelDescription: language === "fr" ? "Description" : "Description",
     labelLocation:
       language === "fr" ? "Lieu (quartier, ville…)" : "Location (district, city…)",
     labelDate:
       language === "fr"
         ? "Date de fin (facultatif)"
         : "Completion date (optional)",
+    labelCoverFile:
+      language === "fr"
+        ? "Photo de couverture (upload)"
+        : "Cover photo (upload)",
     labelCoverUrl:
       language === "fr"
-        ? "URL photo de couverture (facultatif)"
-        : "Cover photo URL (optional)",
+        ? "OU URL de photo (facultatif)"
+        : "OR photo URL (optional)",
     addBtn: language === "fr" ? "Ajouter au portfolio" : "Add to portfolio",
-    addingBtn:
-      language === "fr" ? "Enregistrement..." : "Saving...",
+    addingBtn: language === "fr" ? "Enregistrement..." : "Saving...",
     noItems:
       language === "fr"
         ? "Vous n'avez pas encore ajouté de réalisations."
@@ -87,6 +93,7 @@ const WorkerPortfolioManager: React.FC<WorkerPortfolioManagerProps> = ({
         : "Unable to delete this project.",
   };
 
+  // Chargement des réalisations
   const loadItems = async () => {
     if (!workerId) return;
     setLoading(true);
@@ -139,6 +146,7 @@ const WorkerPortfolioManager: React.FC<WorkerPortfolioManagerProps> = ({
     setLocation("");
     setDateCompleted("");
     setCoverPhotoUrl("");
+    setCoverFile(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -150,13 +158,44 @@ const WorkerPortfolioManager: React.FC<WorkerPortfolioManagerProps> = ({
     setError(null);
 
     try {
+      let finalCoverUrl: string | null = coverPhotoUrl.trim() || null;
+
+      // 1) Si un fichier est sélectionné, on l'upload dans le bucket
+      if (coverFile) {
+        const ext = coverFile.name.split(".").pop() || "jpg";
+        const fileName = `portfolio/${workerId}/${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2)}.${ext}`;
+        const storagePath = fileName;
+
+        const { error: uploadError } = await supabase.storage
+          .from(COVER_BUCKET)
+          .upload(storagePath, coverFile);
+
+        if (uploadError) {
+          console.error("upload cover error", uploadError);
+          setError(text.errorSave);
+          setSaving(false);
+          return;
+        }
+
+        const { data: urlData } = supabase.storage
+          .from(COVER_BUCKET)
+          .getPublicUrl(storagePath);
+
+        if (urlData?.publicUrl) {
+          finalCoverUrl = urlData.publicUrl;
+        }
+      }
+
+      // 2) Insertion dans la table portfolio
       const { error } = await supabase.from("op_ouvrier_portfolio").insert({
         worker_id: workerId,
         title: title.trim() || null,
         description: description.trim() || null,
         location: location.trim() || null,
         date_completed: dateCompleted || null,
-        cover_photo_url: coverPhotoUrl.trim() || null,
+        cover_photo_url: finalCoverUrl,
       });
 
       if (error) {
@@ -248,16 +287,42 @@ const WorkerPortfolioManager: React.FC<WorkerPortfolioManagerProps> = ({
               onChange={(e) => setDateCompleted(e.target.value)}
             />
           </div>
+
+          {/* Upload fichier de couverture */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
-              {text.labelCoverUrl}
+              {text.labelCoverFile}
             </label>
             <Input
-              value={coverPhotoUrl}
-              onChange={(e) => setCoverPhotoUrl(e.target.value)}
-              placeholder="https://..."
+              type="file"
+              accept="image/*"
+              onChange={(e) =>
+                setCoverFile(e.target.files?.[0] ? e.target.files[0] : null)
+              }
             />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {language === "fr"
+                ? "Vous pouvez choisir une image sur votre appareil."
+                : "You can pick an image from your device."}
+            </p>
           </div>
+        </div>
+
+        {/* URL alternative */}
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            {text.labelCoverUrl}
+          </label>
+          <Input
+            value={coverPhotoUrl}
+            onChange={(e) => setCoverPhotoUrl(e.target.value)}
+            placeholder="https://..."
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {language === "fr"
+              ? "Si vous remplissez l’URL ET choisissez un fichier, le fichier uploadé sera utilisé en priorité."
+              : "If you set both URL and file, the uploaded file will be used first."}
+          </p>
         </div>
 
         <div>
@@ -299,9 +364,7 @@ const WorkerPortfolioManager: React.FC<WorkerPortfolioManagerProps> = ({
       )}
 
       {!loading && items.length === 0 && (
-        <p className="text-sm text-muted-foreground">
-          {text.noItems}
-        </p>
+        <p className="text-sm text-muted-foreground">{text.noItems}</p>
       )}
 
       {!loading && items.length > 0 && (
@@ -324,7 +387,8 @@ const WorkerPortfolioManager: React.FC<WorkerPortfolioManagerProps> = ({
               <div className="flex-1">
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <h3 className="font-semibold text-sm">
-                    {item.title || (language === "fr" ? "Sans titre" : "Untitled")}
+                    {item.title ||
+                      (language === "fr" ? "Sans titre" : "Untitled")}
                   </h3>
                   <button
                     type="button"
