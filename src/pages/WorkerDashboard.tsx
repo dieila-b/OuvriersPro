@@ -33,6 +33,7 @@ type WorkerProfile = {
 type WorkerContact = {
   id: string;
   worker_id: string | null;
+  client_id: string | null; // IMPORTANT : référence vers le profil client
   client_name: string | null;
   client_email: string | null;
   client_phone: string | null;
@@ -110,7 +111,7 @@ const WorkerDashboard: React.FC = () => {
         return;
       }
 
-      // 2) Profil ouvrier lié à ce user_id
+      // 2) Profil ouvrier
       const { data: worker, error: workerError } = await supabase
         .from("op_ouvriers")
         .select(
@@ -175,6 +176,7 @@ const WorkerDashboard: React.FC = () => {
           `
           id,
           worker_id,
+          client_id,
           client_name,
           client_email,
           client_phone,
@@ -210,7 +212,7 @@ const WorkerDashboard: React.FC = () => {
     };
   }, [language]);
 
-  // Chargement des statistiques lorsque l'onglet Stats est actif
+  // Statistiques
   useEffect(() => {
     const loadStats = async () => {
       if (!profile || activeTab !== "stats") return;
@@ -219,22 +221,15 @@ const WorkerDashboard: React.FC = () => {
       setStatsError(null);
 
       try {
-        // Nombre de vues de profil
         const { count, error } = await supabase
           .from("op_ouvrier_views")
           .select("*", { count: "exact", head: true })
           .eq("worker_id", profile.id);
 
-        if (error) {
-          throw error;
-        }
+        if (error) throw error;
 
         const views = count ?? 0;
-
-        // Demandes reçues
         const totalRequests = contacts.length;
-
-        // Réponses = demandes marquées en cours ou traitées
         const responded = contacts.filter(
           (c) => c.status === "in_progress" || c.status === "done"
         ).length;
@@ -344,10 +339,12 @@ const WorkerDashboard: React.FC = () => {
   // Copier la réponse dans le presse-papiers
   const handleCopyReply = (contactId: string) => {
     const text = (replyDrafts[contactId] || "").trim();
-    const fallbackFr = "Aucune réponse à copier.";
-    const fallbackEn = "No reply text to copy.";
     if (!text) {
-      window.alert(language === "fr" ? fallbackFr : fallbackEn);
+      window.alert(
+        language === "fr"
+          ? "Aucune réponse à copier."
+          : "No reply text to copy."
+      );
       return;
     }
 
@@ -713,7 +710,7 @@ const WorkerDashboard: React.FC = () => {
                 </div>
               )}
 
-              {/* Détails profil (lecture ou édition) */}
+              {/* Détails profil */}
               {!isEditingProfile && (
                 <div className="grid md:grid-cols-2 gap-4 text-sm">
                   <div>
@@ -1172,8 +1169,8 @@ const WorkerDashboard: React.FC = () => {
                   </h2>
                   <p className="text-xs text-slate-500 mt-1">
                     {language === "fr"
-                      ? "Répondez directement depuis cet espace : tapez votre message, puis envoyez-le par téléphone, WhatsApp, e-mail ou copiez-le."
-                      : "Reply directly from here: type your message, then send it via phone, WhatsApp, e-mail or copy it."}
+                      ? "Répondez directement depuis cet espace : tapez votre message, puis envoyez-le par téléphone, WhatsApp, e-mail, formulaire interne ou copiez-le."
+                      : "Reply directly from here: type your message, then send it via phone, WhatsApp, e-mail, internal form or copy it."}
                   </p>
                 </div>
                 <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
@@ -1234,6 +1231,15 @@ const WorkerDashboard: React.FC = () => {
                       replyDraft || undefined
                     );
 
+                    // URL du profil client et du formulaire interne
+                    // À adapter à tes vraies routes (ex: /clients/:id, /clients/:id/contact)
+                    const clientProfileUrl = c.client_id
+                      ? `/clients/${c.client_id}`
+                      : null;
+                    const clientFormUrl = c.client_id
+                      ? `/clients/${c.client_id}/contact`
+                      : null;
+
                     const initials =
                       (c.client_name || "—")
                         .split(" ")
@@ -1282,6 +1288,42 @@ const WorkerDashboard: React.FC = () => {
                                       </span>
                                     )}
                                   </div>
+
+                                  {/* Actions liées au profil client (si client_id présent) */}
+                                  {c.client_id && (
+                                    <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                                      <Button
+                                        variant="ghost"
+                                        size="xs"
+                                        asChild
+                                      >
+                                        <a
+                                          href={clientProfileUrl!}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          {language === "fr"
+                                            ? "Voir le profil client"
+                                            : "View client profile"}
+                                        </a>
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="xs"
+                                        asChild
+                                      >
+                                        <a
+                                          href={clientFormUrl!}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          {language === "fr"
+                                            ? "Contacter via le formulaire"
+                                            : "Contact via form"}
+                                        </a>
+                                      </Button>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -1325,13 +1367,13 @@ const WorkerDashboard: React.FC = () => {
 
                                 <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                                   <div className="text-[11px] text-slate-400">
-                                    {!c.client_email && !c.client_phone
+                                    {!c.client_email && !c.client_phone && !c.client_id
                                       ? language === "fr"
                                         ? "Ce client n’a pas laissé d’e-mail ni de téléphone. Copiez le texte pour l’envoyer par le canal de votre choix."
                                         : "This client did not leave any e-mail or phone. Copy the text and send it via any channel you prefer."
                                       : language === "fr"
-                                      ? "Envoyez votre réponse par le canal de votre choix."
-                                      : "Send your reply using the channel you prefer."}
+                                      ? "Envoyez votre réponse par le canal de votre choix (WhatsApp, e-mail, téléphone ou formulaire)."
+                                      : "Send your reply using your preferred channel (WhatsApp, e-mail, phone or form)."}
                                   </div>
                                   <div className="flex flex-wrap justify-end gap-2 mt-1 sm:mt-0">
                                     {/* Copier toujours disponible */}
