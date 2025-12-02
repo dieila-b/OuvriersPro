@@ -74,7 +74,7 @@ const WorkerDashboard: React.FC = () => {
     null
   );
 
-  // ✅ Stats
+  // Stats
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [profileViews, setProfileViews] = useState<number>(0);
@@ -206,7 +206,7 @@ const WorkerDashboard: React.FC = () => {
     };
   }, [language]);
 
-  // ✅ Chargement des statistiques lorsque l'onglet Stats est actif
+  // Chargement des statistiques lorsque l'onglet Stats est actif
   useEffect(() => {
     const loadStats = async () => {
       if (!profile || activeTab !== "stats") return;
@@ -314,6 +314,15 @@ const WorkerDashboard: React.FC = () => {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  // petit helper pour WhatsApp
+  const phoneToWhatsappUrl = (phone?: string | null) => {
+    if (!phone) return "";
+    const clean = phone.replace(/\s+/g, "");
+    if (clean.length < 8) return "";
+    const normalized = clean.startsWith("+") ? clean.slice(1) : clean;
+    return `https://wa.me/${normalized}`;
   };
 
   // Gestion édition profil
@@ -1129,36 +1138,112 @@ const WorkerDashboard: React.FC = () => {
               )}
 
               {!contactsLoading && !contactsError && contacts.length > 0 && (
-                <ul className="divide-y divide-slate-100">
-                  {contacts.map((c) => (
-                    <li
-                      key={c.id}
-                      className="py-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2"
-                    >
-                      <div>
-                        <div className="text-sm font-semibold text-slate-800">
-                          {c.client_name || "—"}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {c.client_email || ""}{" "}
-                          {c.client_phone ? `• ${c.client_phone}` : ""}
-                        </div>
-                        <div className="text-xs text-slate-400 mt-0.5">
-                          {formatDate(c.created_at)} • {originLabel(c.origin)}
-                        </div>
-                        {c.message && (
-                          <div className="mt-2 text-sm text-slate-700 whitespace-pre-line">
-                            {c.message}
+                <ul className="space-y-3">
+                  {contacts.map((c) => {
+                    const whatsappUrl = phoneToWhatsappUrl(c.client_phone);
+                    const emailSubject =
+                      language === "fr"
+                        ? "Réponse à votre demande via OuvriersPro"
+                        : "Reply to your request via OuvriersPro";
+
+                    const emailHref = c.client_email
+                      ? `mailto:${c.client_email}?subject=${encodeURIComponent(
+                          emailSubject
+                        )}${
+                          c.message
+                            ? `&body=${encodeURIComponent(c.message)}`
+                            : ""
+                        }`
+                      : "";
+
+                    const initials =
+                      (c.client_name || "—")
+                        .split(" ")
+                        .filter(Boolean)
+                        .map((n) => n[0])
+                        .join("")
+                        .toUpperCase() || "—";
+
+                    return (
+                      <li key={c.id}>
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 hover:bg-slate-50 transition">
+                          <div className="flex gap-3">
+                            {/* Avatar simple */}
+                            <div className="hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-pro-blue/10 text-pro-blue text-xs font-semibold">
+                              {initials}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <div className="text-sm font-semibold text-slate-800">
+                                  {c.client_name || "—"}
+                                </div>
+                                <span className="text-[11px] text-slate-400">
+                                  {formatDate(c.created_at)} •{" "}
+                                  {originLabel(c.origin)}
+                                </span>
+                              </div>
+                              <div className="text-xs text-slate-500 mt-0.5">
+                                {c.client_email || ""}{" "}
+                                {c.client_phone ? `• ${c.client_phone}` : ""}
+                              </div>
+                              {c.message && (
+                                <div className="mt-2 text-sm text-slate-700 whitespace-pre-line">
+                                  {c.message}
+                                </div>
+                              )}
+
+                              {/* Boutons de réponse */}
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {c.client_phone && (
+                                  <Button
+                                    variant="outline"
+                                    size="xs"
+                                    asChild
+                                  >
+                                    <a href={`tel:${c.client_phone}`}>
+                                      {language === "fr"
+                                        ? "Appeler"
+                                        : "Call"}
+                                    </a>
+                                  </Button>
+                                )}
+                                {whatsappUrl && (
+                                  <Button
+                                    variant="outline"
+                                    size="xs"
+                                    asChild
+                                  >
+                                    <a
+                                      href={whatsappUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      WhatsApp
+                                    </a>
+                                  </Button>
+                                )}
+                                {emailHref && (
+                                  <Button size="xs" asChild>
+                                    <a href={emailHref}>
+                                      {language === "fr"
+                                        ? "Répondre par email"
+                                        : "Reply by email"}
+                                    </a>
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        )}
-                      </div>
-                      <div className="flex items-start justify-end gap-2">
-                        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-50 text-slate-700 border-slate-200">
-                          {contactStatusLabel(c.status)}
-                        </span>
-                      </div>
-                    </li>
-                  ))}
+
+                          <div className="flex items-start justify-end gap-2">
+                            <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-50 text-slate-700 border-slate-200">
+                              {contactStatusLabel(c.status)}
+                            </span>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
 
