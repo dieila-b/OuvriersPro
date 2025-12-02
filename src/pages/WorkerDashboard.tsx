@@ -316,7 +316,7 @@ const WorkerDashboard: React.FC = () => {
     });
   };
 
-  // Helper WhatsApp
+  // petit helper pour WhatsApp
   const phoneToWhatsappUrl = (phone?: string | null) => {
     if (!phone) return "";
     const clean = phone.replace(/\s+/g, "");
@@ -1197,7 +1197,7 @@ const WorkerDashboard: React.FC = () => {
                                 {c.client_phone && (
                                   <Button
                                     variant="outline"
-                                    size="sm"
+                                    size="xs"
                                     asChild
                                   >
                                     <a href={`tel:${c.client_phone}`}>
@@ -1210,7 +1210,7 @@ const WorkerDashboard: React.FC = () => {
                                 {whatsappUrl && (
                                   <Button
                                     variant="outline"
-                                    size="sm"
+                                    size="xs"
                                     asChild
                                   >
                                     <a
@@ -1223,7 +1223,7 @@ const WorkerDashboard: React.FC = () => {
                                   </Button>
                                 )}
                                 {emailHref && (
-                                  <Button size="sm" asChild>
+                                  <Button size="xs" asChild>
                                     <a href={emailHref}>
                                       {language === "fr"
                                         ? "Répondre par email"
