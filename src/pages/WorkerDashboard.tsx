@@ -57,7 +57,7 @@ const WorkerDashboard: React.FC = () => {
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
 
-  // Réponse rapide par message
+  // Réponses rapides par message
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
 
   // Édition du profil
@@ -94,7 +94,7 @@ const WorkerDashboard: React.FC = () => {
       setContacts([]);
       setContactsError(null);
 
-      // 1) Qui est connecté ?
+      // 1) Utilisateur connecté
       const { data, error: userError } = await supabase.auth.getUser();
       const user = data?.user;
 
@@ -110,7 +110,7 @@ const WorkerDashboard: React.FC = () => {
         return;
       }
 
-      // 2) Récupérer l'ouvrier lié à ce user_id
+      // 2) Profil ouvrier lié à ce user_id
       const { data: worker, error: workerError } = await supabase
         .from("op_ouvriers")
         .select(
@@ -231,7 +231,7 @@ const WorkerDashboard: React.FC = () => {
 
         const views = count ?? 0;
 
-        // Demandes reçues (on réutilise contacts déjà chargés)
+        // Demandes reçues
         const totalRequests = contacts.length;
 
         // Réponses = demandes marquées en cours ou traitées
@@ -328,7 +328,7 @@ const WorkerDashboard: React.FC = () => {
     });
   };
 
-  // petit helper pour WhatsApp (avec texte optionnel)
+  // helper WhatsApp avec texte optionnel
   const phoneToWhatsappUrl = (phone?: string | null, text?: string) => {
     if (!phone) return "";
     const clean = phone.replace(/\s+/g, "");
@@ -1128,9 +1128,18 @@ const WorkerDashboard: React.FC = () => {
           {activeTab === "messages" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-slate-800">
-                  {language === "fr" ? "Messages reçus" : "Received messages"}
-                </h2>
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-800">
+                    {language === "fr"
+                      ? "Messages reçus"
+                      : "Received messages"}
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {language === "fr"
+                      ? "Répondez directement depuis cet espace : tapez votre message, puis envoyez par téléphone, WhatsApp ou e-mail."
+                      : "Reply directly from here: type your message, then send it via phone, WhatsApp or e-mail."}
+                  </p>
+                </div>
                 <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
                   {language === "fr" ? "Total" : "Total"} :{" "}
                   <span className="ml-1 font-semibold">
@@ -1199,52 +1208,67 @@ const WorkerDashboard: React.FC = () => {
 
                     return (
                       <li key={c.id}>
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-3 shadow-sm hover:bg-slate-50 transition">
-                          <div className="flex gap-3">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-4 shadow-sm hover:bg-slate-50 transition">
+                          <div className="flex gap-3 flex-1">
                             {/* Avatar */}
-                            <div className="hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-pro-blue/10 text-pro-blue text-xs font-semibold">
+                            <div className="hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-pro-blue/10 text-pro-blue text-xs font-semibold shrink-0">
                               {initials !== "—" ? (
                                 initials
                               ) : (
                                 <User className="w-4 h-4" />
                               )}
                             </div>
-                            <div className="flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <div className="text-sm font-semibold text-slate-800">
-                                  {c.client_name || "—"}
+
+                            <div className="flex-1 space-y-2">
+                              {/* En-tête message */}
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <div className="text-sm font-semibold text-slate-800">
+                                      {c.client_name || "—"}
+                                    </div>
+                                    <span className="text-[11px] text-slate-400">
+                                      {formatDate(c.created_at)} •{" "}
+                                      {originLabel(c.origin)}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-0.5">
+                                    {c.client_email && (
+                                      <span className="inline-flex items-center gap-1">
+                                        <Mail className="w-3 h-3" />
+                                        {c.client_email}
+                                      </span>
+                                    )}
+                                    {c.client_phone && (
+                                      <span className="inline-flex items-center gap-1">
+                                        <Phone className="w-3 h-3" />
+                                        {c.client_phone}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                                <span className="text-[11px] text-slate-400">
-                                  {formatDate(c.created_at)} •{" "}
-                                  {originLabel(c.origin)}
-                                </span>
                               </div>
-                              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-0.5">
-                                {c.client_email && (
-                                  <span className="inline-flex items-center gap-1">
-                                    <Mail className="w-3 h-3" />
-                                    {c.client_email}
-                                  </span>
-                                )}
-                                {c.client_phone && (
-                                  <span className="inline-flex items-center gap-1">
-                                    <Phone className="w-3 h-3" />
-                                    {c.client_phone}
-                                  </span>
-                                )}
-                              </div>
+
+                              {/* Message client */}
                               {c.message && (
-                                <div className="mt-2 text-sm text-slate-700 whitespace-pre-line">
+                                <div className="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 whitespace-pre-line">
                                   {c.message}
                                 </div>
                               )}
 
-                              {/* Zone de réponse rapide */}
-                              <div className="mt-3">
-                                <div className="text-xs text-slate-500 mb-1">
-                                  {language === "fr"
-                                    ? "Votre réponse rapide"
-                                    : "Quick reply"}
+                              {/* Bloc réponse rapide + boutons */}
+                              <div className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                  <span className="text-xs font-medium text-slate-600">
+                                    {language === "fr"
+                                      ? "Votre réponse rapide"
+                                      : "Quick reply"}
+                                  </span>
+                                  <span className="text-[11px] text-slate-400">
+                                    {language === "fr"
+                                      ? "Non envoyée automatiquement"
+                                      : "Not sent automatically"}
+                                  </span>
                                 </div>
                                 <Textarea
                                   rows={2}
@@ -1255,61 +1279,62 @@ const WorkerDashboard: React.FC = () => {
                                       [c.id]: e.target.value,
                                     }))
                                   }
+                                  className="text-sm"
                                   placeholder={
                                     language === "fr"
-                                      ? "Tapez ici votre réponse, elle sera envoyée par e-mail ou WhatsApp…"
-                                      : "Type your answer here, it will be sent via email or WhatsApp…"
+                                      ? "Tapez ici votre réponse, puis cliquez sur WhatsApp ou e-mail pour l’envoyer…"
+                                      : "Type your answer here, then click WhatsApp or e-mail to send it…"
                                   }
                                 />
-                              </div>
 
-                              {/* Boutons de réponse */}
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                {c.client_phone && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    asChild
-                                  >
-                                    <a href={`tel:${c.client_phone}`}>
-                                      <Phone className="w-3 h-3 mr-1" />
-                                      {language === "fr"
-                                        ? "Appeler"
-                                        : "Call"}
-                                    </a>
-                                  </Button>
-                                )}
-                                {whatsappUrl && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    asChild
-                                  >
-                                    <a
-                                      href={whatsappUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
+                                <div className="mt-2 flex flex-wrap justify-end gap-2">
+                                  {c.client_phone && (
+                                    <Button
+                                      variant="outline"
+                                      size="xs"
+                                      asChild
                                     >
-                                      <MessageCircle className="w-3 h-3 mr-1" />
-                                      WhatsApp
-                                    </a>
-                                  </Button>
-                                )}
-                                {emailHref && (
-                                  <Button size="sm" asChild>
-                                    <a href={emailHref}>
-                                      <Mail className="w-3 h-3 mr-1" />
-                                      {language === "fr"
-                                        ? "Répondre par email"
-                                        : "Reply by email"}
-                                    </a>
-                                  </Button>
-                                )}
+                                      <a href={`tel:${c.client_phone}`}>
+                                        <Phone className="w-3 h-3 mr-1" />
+                                        {language === "fr"
+                                          ? "Appeler"
+                                          : "Call"}
+                                      </a>
+                                    </Button>
+                                  )}
+                                  {whatsappUrl && (
+                                    <Button
+                                      variant="outline"
+                                      size="xs"
+                                      asChild
+                                    >
+                                      <a
+                                        href={whatsappUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        <MessageCircle className="w-3 h-3 mr-1" />
+                                        WhatsApp
+                                      </a>
+                                    </Button>
+                                  )}
+                                  {emailHref && (
+                                    <Button size="xs" asChild>
+                                      <a href={emailHref}>
+                                        <Mail className="w-3 h-3 mr-1" />
+                                        {language === "fr"
+                                          ? "Envoyer par e-mail"
+                                          : "Send by e-mail"}
+                                      </a>
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>
 
-                          <div className="flex items-start justify-end gap-2">
+                          {/* Statut à droite */}
+                          <div className="flex items-start justify-end">
                             <span
                               className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${contactStatusClass(
                                 c.status
