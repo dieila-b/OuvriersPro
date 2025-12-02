@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import WorkerPhotosManager from "@/components/WorkerPhotosManager";
 import WorkerPortfolioManager from "@/components/WorkerPortfolioManager";
-import { Mail, Phone, MessageCircle, User } from "lucide-react";
+import { Mail, Phone, MessageCircle, User, Copy } from "lucide-react";
 
 type WorkerProfile = {
   id: string;
@@ -57,7 +57,7 @@ const WorkerDashboard: React.FC = () => {
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
 
-  // Réponses rapides par message
+  // Réponses rapides par message (id -> texte)
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
 
   // Édition du profil
@@ -339,6 +339,42 @@ const WorkerDashboard: React.FC = () => {
       url += `?text=${encodeURIComponent(text)}`;
     }
     return url;
+  };
+
+  // Copier la réponse dans le presse-papiers
+  const handleCopyReply = (contactId: string) => {
+    const text = (replyDrafts[contactId] || "").trim();
+    const fallbackFr = "Aucune réponse à copier.";
+    const fallbackEn = "No reply text to copy.";
+    if (!text) {
+      window.alert(language === "fr" ? fallbackFr : fallbackEn);
+      return;
+    }
+
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard
+        .writeText(text)
+        .then(() => {
+          window.alert(
+            language === "fr"
+              ? "Réponse copiée dans le presse-papiers."
+              : "Reply copied to clipboard."
+          );
+        })
+        .catch(() => {
+          window.alert(
+            language === "fr"
+              ? "Impossible de copier automatiquement. Sélectionnez le texte et copiez-le manuellement."
+              : "Could not copy automatically. Please select the text and copy it manually."
+          );
+        });
+    } else {
+      window.alert(
+        language === "fr"
+          ? "Copie automatique non disponible. Sélectionnez le texte et copiez-le manuellement."
+          : "Automatic copy not available. Please select the text and copy it manually."
+      );
+    }
   };
 
   // Gestion édition profil
@@ -1136,8 +1172,8 @@ const WorkerDashboard: React.FC = () => {
                   </h2>
                   <p className="text-xs text-slate-500 mt-1">
                     {language === "fr"
-                      ? "Répondez directement depuis cet espace : tapez votre message, puis envoyez par téléphone, WhatsApp ou e-mail."
-                      : "Reply directly from here: type your message, then send it via phone, WhatsApp or e-mail."}
+                      ? "Répondez directement depuis cet espace : tapez votre message, puis envoyez-le par téléphone, WhatsApp, e-mail ou copiez-le."
+                      : "Reply directly from here: type your message, then send it via phone, WhatsApp, e-mail or copy it."}
                   </p>
                 </div>
                 <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
@@ -1282,52 +1318,76 @@ const WorkerDashboard: React.FC = () => {
                                   className="text-sm"
                                   placeholder={
                                     language === "fr"
-                                      ? "Tapez ici votre réponse, puis cliquez sur WhatsApp ou e-mail pour l’envoyer…"
-                                      : "Type your answer here, then click WhatsApp or e-mail to send it…"
+                                      ? "Tapez ici votre réponse…"
+                                      : "Type your answer here…"
                                   }
                                 />
 
-                                <div className="mt-2 flex flex-wrap justify-end gap-2">
-                                  {c.client_phone && (
+                                <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                  <div className="text-[11px] text-slate-400">
+                                    {!c.client_email && !c.client_phone
+                                      ? language === "fr"
+                                        ? "Ce client n’a pas laissé d’e-mail ni de téléphone. Copiez le texte pour l’envoyer par le canal de votre choix."
+                                        : "This client did not leave any e-mail or phone. Copy the text and send it via any channel you prefer."
+                                      : language === "fr"
+                                      ? "Envoyez votre réponse par le canal de votre choix."
+                                      : "Send your reply using the channel you prefer."}
+                                  </div>
+                                  <div className="flex flex-wrap justify-end gap-2 mt-1 sm:mt-0">
+                                    {/* Copier toujours disponible */}
                                     <Button
+                                      type="button"
                                       variant="outline"
                                       size="xs"
-                                      asChild
+                                      onClick={() => handleCopyReply(c.id)}
                                     >
-                                      <a href={`tel:${c.client_phone}`}>
-                                        <Phone className="w-3 h-3 mr-1" />
-                                        {language === "fr"
-                                          ? "Appeler"
-                                          : "Call"}
-                                      </a>
+                                      <Copy className="w-3 h-3 mr-1" />
+                                      {language === "fr"
+                                        ? "Copier la réponse"
+                                        : "Copy reply"}
                                     </Button>
-                                  )}
-                                  {whatsappUrl && (
-                                    <Button
-                                      variant="outline"
-                                      size="xs"
-                                      asChild
-                                    >
-                                      <a
-                                        href={whatsappUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+
+                                    {c.client_phone && (
+                                      <Button
+                                        variant="outline"
+                                        size="xs"
+                                        asChild
                                       >
-                                        <MessageCircle className="w-3 h-3 mr-1" />
-                                        WhatsApp
-                                      </a>
-                                    </Button>
-                                  )}
-                                  {emailHref && (
-                                    <Button size="xs" asChild>
-                                      <a href={emailHref}>
-                                        <Mail className="w-3 h-3 mr-1" />
-                                        {language === "fr"
-                                          ? "Envoyer par e-mail"
-                                          : "Send by e-mail"}
-                                      </a>
-                                    </Button>
-                                  )}
+                                        <a href={`tel:${c.client_phone}`}>
+                                          <Phone className="w-3 h-3 mr-1" />
+                                          {language === "fr"
+                                            ? "Appeler"
+                                            : "Call"}
+                                        </a>
+                                      </Button>
+                                    )}
+                                    {whatsappUrl && (
+                                      <Button
+                                        variant="outline"
+                                        size="xs"
+                                        asChild
+                                      >
+                                        <a
+                                          href={whatsappUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          <MessageCircle className="w-3 h-3 mr-1" />
+                                          WhatsApp
+                                        </a>
+                                      </Button>
+                                    )}
+                                    {emailHref && (
+                                      <Button size="xs" asChild>
+                                        <a href={emailHref}>
+                                          <Mail className="w-3 h-3 mr-1" />
+                                          {language === "fr"
+                                            ? "Envoyer par e-mail"
+                                            : "Send by e-mail"}
+                                        </a>
+                                      </Button>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </div>
