@@ -67,6 +67,13 @@ const WorkerDashboard: React.FC = () => {
     string | null
   >(null);
 
+  // Gestion abonnement
+  const [updatingPlan, setUpdatingPlan] = useState(false);
+  const [planUpdateError, setPlanUpdateError] = useState<string | null>(null);
+  const [planUpdateSuccess, setPlanUpdateSuccess] = useState<string | null>(
+    null
+  );
+
   useEffect(() => {
     let isMounted = true;
 
@@ -255,9 +262,7 @@ const WorkerDashboard: React.FC = () => {
     field: K,
     value: WorkerProfile[K]
   ) => {
-    setEditProfile((prev) =>
-      prev ? { ...prev, [field]: value } : prev
-    );
+    setEditProfile((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
 
   const startEditProfile = () => {
@@ -353,6 +358,71 @@ const WorkerDashboard: React.FC = () => {
       );
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+  // Gestion changement de plan
+  const updatePlan = async (newPlan: WorkerProfile["plan_code"]) => {
+    if (!profile) return;
+
+    setUpdatingPlan(true);
+    setPlanUpdateError(null);
+    setPlanUpdateSuccess(null);
+
+    try {
+      const { data: updated, error: updateError } = await supabase
+        .from("op_ouvriers")
+        .update({ plan_code: newPlan })
+        .eq("id", profile.id)
+        .select(
+          `
+          id,
+          user_id,
+          first_name,
+          last_name,
+          email,
+          phone,
+          country,
+          region,
+          city,
+          commune,
+          district,
+          profession,
+          description,
+          plan_code,
+          status,
+          hourly_rate,
+          currency,
+          created_at
+        `
+        )
+        .maybeSingle();
+
+      if (updateError || !updated) {
+        console.error(updateError);
+        setPlanUpdateError(
+          language === "fr"
+            ? "Impossible de mettre à jour votre abonnement."
+            : "Unable to update your subscription."
+        );
+      } else {
+        const newProfile = updated as WorkerProfile;
+        setProfile(newProfile);
+        setPlanUpdateSuccess(
+          language === "fr"
+            ? "Abonnement mis à jour avec succès."
+            : "Subscription updated successfully."
+        );
+      }
+    } catch (e) {
+      console.error(e);
+      setPlanUpdateError(
+        language === "fr"
+          ? "Une erreur est survenue lors de la mise à jour de l'abonnement."
+          : "An error occurred while updating the subscription."
+      );
+    } finally {
+      setUpdatingPlan(false);
     }
   };
 
@@ -523,7 +593,7 @@ const WorkerDashboard: React.FC = () => {
                 </div>
               )}
 
-              {/* Détails du profil : lecture OU édition */}
+              {/* Détails profil (lecture ou édition) */}
               {!isEditingProfile && (
                 <div className="grid md:grid-cols-2 gap-4 text-sm">
                   <div>
@@ -598,14 +668,14 @@ const WorkerDashboard: React.FC = () => {
                 </div>
               )}
 
-              {isEditingProfile && editProfile && (
+              {isEditingProfile && displayProfile && (
                 <div className="grid md:grid-cols-2 gap-4 text-sm">
                   <div>
                     <div className="text-xs text-slate-500">
                       {language === "fr" ? "Prénom" : "First name"}
                     </div>
                     <Input
-                      value={editProfile.first_name ?? ""}
+                      value={displayProfile.first_name ?? ""}
                       onChange={(e) =>
                         handleEditField("first_name", e.target.value)
                       }
@@ -616,7 +686,7 @@ const WorkerDashboard: React.FC = () => {
                       {language === "fr" ? "Nom" : "Last name"}
                     </div>
                     <Input
-                      value={editProfile.last_name ?? ""}
+                      value={displayProfile.last_name ?? ""}
                       onChange={(e) =>
                         handleEditField("last_name", e.target.value)
                       }
@@ -627,7 +697,7 @@ const WorkerDashboard: React.FC = () => {
                       {language === "fr" ? "Métier principal" : "Main trade"}
                     </div>
                     <Input
-                      value={editProfile.profession ?? ""}
+                      value={displayProfile.profession ?? ""}
                       onChange={(e) =>
                         handleEditField("profession", e.target.value)
                       }
@@ -638,7 +708,7 @@ const WorkerDashboard: React.FC = () => {
                       {language === "fr" ? "Téléphone" : "Phone"}
                     </div>
                     <Input
-                      value={editProfile.phone ?? ""}
+                      value={displayProfile.phone ?? ""}
                       onChange={(e) =>
                         handleEditField("phone", e.target.value)
                       }
@@ -649,7 +719,7 @@ const WorkerDashboard: React.FC = () => {
                       {language === "fr" ? "Pays" : "Country"}
                     </div>
                     <Input
-                      value={editProfile.country ?? ""}
+                      value={displayProfile.country ?? ""}
                       onChange={(e) =>
                         handleEditField("country", e.target.value)
                       }
@@ -660,7 +730,7 @@ const WorkerDashboard: React.FC = () => {
                       {language === "fr" ? "Région" : "Region"}
                     </div>
                     <Input
-                      value={editProfile.region ?? ""}
+                      value={displayProfile.region ?? ""}
                       onChange={(e) =>
                         handleEditField("region", e.target.value)
                       }
@@ -671,7 +741,7 @@ const WorkerDashboard: React.FC = () => {
                       {language === "fr" ? "Ville" : "City"}
                     </div>
                     <Input
-                      value={editProfile.city ?? ""}
+                      value={displayProfile.city ?? ""}
                       onChange={(e) =>
                         handleEditField("city", e.target.value)
                       }
@@ -682,7 +752,7 @@ const WorkerDashboard: React.FC = () => {
                       {language === "fr" ? "Commune" : "Commune"}
                     </div>
                     <Input
-                      value={editProfile.commune ?? ""}
+                      value={displayProfile.commune ?? ""}
                       onChange={(e) =>
                         handleEditField("commune", e.target.value)
                       }
@@ -693,7 +763,7 @@ const WorkerDashboard: React.FC = () => {
                       {language === "fr" ? "Quartier" : "District"}
                     </div>
                     <Input
-                      value={editProfile.district ?? ""}
+                      value={displayProfile.district ?? ""}
                       onChange={(e) =>
                         handleEditField("district", e.target.value)
                       }
@@ -708,8 +778,8 @@ const WorkerDashboard: React.FC = () => {
                     <Input
                       type="number"
                       value={
-                        editProfile.hourly_rate != null
-                          ? String(editProfile.hourly_rate)
+                        displayProfile.hourly_rate != null
+                          ? String(displayProfile.hourly_rate)
                           : ""
                       }
                       onChange={(e) =>
@@ -727,7 +797,7 @@ const WorkerDashboard: React.FC = () => {
                       {language === "fr" ? "Devise" : "Currency"}
                     </div>
                     <Input
-                      value={editProfile.currency ?? ""}
+                      value={displayProfile.currency ?? ""}
                       onChange={(e) =>
                         handleEditField("currency", e.target.value)
                       }
@@ -741,7 +811,7 @@ const WorkerDashboard: React.FC = () => {
                     </div>
                     <Textarea
                       rows={4}
-                      value={editProfile.description ?? ""}
+                      value={displayProfile.description ?? ""}
                       onChange={(e) =>
                         handleEditField("description", e.target.value)
                       }
@@ -781,6 +851,18 @@ const WorkerDashboard: React.FC = () => {
                   ? "Mon abonnement"
                   : "My subscription"}
               </h2>
+
+              {planUpdateError && (
+                <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                  {planUpdateError}
+                </div>
+              )}
+              {planUpdateSuccess && (
+                <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">
+                  {planUpdateSuccess}
+                </div>
+              )}
+
               <div className="text-sm">
                 <div className="mb-2">
                   <span className="text-xs text-slate-500">
@@ -816,29 +898,67 @@ const WorkerDashboard: React.FC = () => {
                   </div>
                 )}
 
-                <div className="mt-4 text-xs text-slate-500">
-                  {language === "fr"
-                    ? "Le changement de plan (Gratuit → Mensuel / Annuel) pourra être géré ici avec un module de paiement dans une prochaine étape."
-                    : "Changing plan (Free → Monthly / Yearly) will be handled here with a payment module in a next step."}
+                {/* Actions changement de plan */}
+                <div className="pt-3 border-t border-slate-100 mt-3 flex flex-wrap gap-2">
+                  {profile.plan_code !== "FREE" && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={updatingPlan}
+                      onClick={() => updatePlan("FREE")}
+                    >
+                      {updatingPlan && profile.plan_code === "FREE"
+                        ? language === "fr"
+                          ? "Mise à jour..."
+                          : "Updating..."
+                        : language === "fr"
+                        ? "Revenir au plan Gratuit"
+                        : "Switch to Free"}
+                    </Button>
+                  )}
+
+                  {profile.plan_code !== "MONTHLY" && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={updatingPlan}
+                      className="bg-pro-blue hover:bg-blue-700"
+                      onClick={() => updatePlan("MONTHLY")}
+                    >
+                      {updatingPlan && profile.plan_code === "MONTHLY"
+                        ? language === "fr"
+                          ? "Mise à jour..."
+                          : "Updating..."
+                        : language === "fr"
+                        ? "Passer au plan Mensuel"
+                        : "Switch to Monthly"}
+                    </Button>
+                  )}
+
+                  {profile.plan_code !== "YEARLY" && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={updatingPlan}
+                      className="bg-amber-500 hover:bg-amber-600"
+                      onClick={() => updatePlan("YEARLY")}
+                    >
+                      {updatingPlan && profile.plan_code === "YEARLY"
+                        ? language === "fr"
+                          ? "Mise à jour..."
+                          : "Updating..."
+                        : language === "fr"
+                        ? "Passer au plan Annuel"
+                        : "Switch to Yearly"}
+                    </Button>
+                  )}
                 </div>
 
-                <div className="pt-3 border-t border-slate-100 mt-3 flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      alert(
-                        language === "fr"
-                          ? "La gestion des paiements et upgrades sera ajoutée plus tard."
-                          : "Payment and upgrades management will be added later."
-                      )
-                    }
-                  >
-                    {language === "fr"
-                      ? "Mettre à niveau (bientôt)"
-                      : "Upgrade (soon)"}
-                  </Button>
+                <div className="mt-4 text-xs text-slate-500">
+                  {language === "fr"
+                    ? "Pour l’instant, le changement de plan ne déclenche pas encore de paiement automatique. Vous pourrez connecter Stripe ou un autre moyen de paiement plus tard côté back-office."
+                    : "For now, changing plan does not trigger automatic payment yet. You can connect Stripe or another payment gateway later on the back office."}
                 </div>
               </div>
             </div>
