@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import WorkerPhotosManager from "@/components/WorkerPhotosManager";
 import WorkerPortfolioManager from "@/components/WorkerPortfolioManager";
+import { Mail, Phone, MessageCircle, User } from "lucide-react";
 
 type WorkerProfile = {
   id: string;
@@ -296,6 +297,14 @@ const WorkerDashboard: React.FC = () => {
       if (s === "done") return "Done";
       return "New";
     }
+  };
+
+  const contactStatusClass = (s: string | null | undefined) => {
+    if (s === "done")
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (s === "in_progress")
+      return "bg-amber-50 text-amber-700 border-amber-200";
+    return "bg-sky-50 text-sky-700 border-sky-200";
   };
 
   const originLabel = (o: string | null | undefined) => {
@@ -1111,9 +1120,17 @@ const WorkerDashboard: React.FC = () => {
           {/* MESSAGES */}
           {activeTab === "messages" && (
             <div className="space-y-4">
-              <h2 className="text-sm font-semibold text-slate-800 mb-2">
-                {language === "fr" ? "Messages reçus" : "Received messages"}
-              </h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-800">
+                  {language === "fr" ? "Messages reçus" : "Received messages"}
+                </h2>
+                <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
+                  {language === "fr" ? "Total" : "Total"} :{" "}
+                  <span className="ml-1 font-semibold">
+                    {contacts.length}
+                  </span>
+                </span>
+              </div>
 
               {contactsLoading && (
                 <div className="text-sm text-slate-500">
@@ -1138,7 +1155,7 @@ const WorkerDashboard: React.FC = () => {
               )}
 
               {!contactsLoading && !contactsError && contacts.length > 0 && (
-                <ul className="space-y-3">
+                <ul className="space-y-4">
                   {contacts.map((c) => {
                     const whatsappUrl = phoneToWhatsappUrl(c.client_phone);
                     const emailSubject =
@@ -1166,14 +1183,18 @@ const WorkerDashboard: React.FC = () => {
 
                     return (
                       <li key={c.id}>
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 hover:bg-slate-50 transition">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-3 shadow-sm hover:bg-slate-50 transition">
                           <div className="flex gap-3">
-                            {/* Avatar simple */}
+                            {/* Avatar */}
                             <div className="hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-pro-blue/10 text-pro-blue text-xs font-semibold">
-                              {initials}
+                              {initials !== "—" ? (
+                                initials
+                              ) : (
+                                <User className="w-4 h-4" />
+                              )}
                             </div>
                             <div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <div className="text-sm font-semibold text-slate-800">
                                   {c.client_name || "—"}
                                 </div>
@@ -1182,9 +1203,19 @@ const WorkerDashboard: React.FC = () => {
                                   {originLabel(c.origin)}
                                 </span>
                               </div>
-                              <div className="text-xs text-slate-500 mt-0.5">
-                                {c.client_email || ""}{" "}
-                                {c.client_phone ? `• ${c.client_phone}` : ""}
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-0.5">
+                                {c.client_email && (
+                                  <span className="inline-flex items-center gap-1">
+                                    <Mail className="w-3 h-3" />
+                                    {c.client_email}
+                                  </span>
+                                )}
+                                {c.client_phone && (
+                                  <span className="inline-flex items-center gap-1">
+                                    <Phone className="w-3 h-3" />
+                                    {c.client_phone}
+                                  </span>
+                                )}
                               </div>
                               {c.message && (
                                 <div className="mt-2 text-sm text-slate-700 whitespace-pre-line">
@@ -1197,10 +1228,11 @@ const WorkerDashboard: React.FC = () => {
                                 {c.client_phone && (
                                   <Button
                                     variant="outline"
-                                    size="xs"
+                                    size="sm"
                                     asChild
                                   >
                                     <a href={`tel:${c.client_phone}`}>
+                                      <Phone className="w-3 h-3 mr-1" />
                                       {language === "fr"
                                         ? "Appeler"
                                         : "Call"}
@@ -1210,7 +1242,7 @@ const WorkerDashboard: React.FC = () => {
                                 {whatsappUrl && (
                                   <Button
                                     variant="outline"
-                                    size="xs"
+                                    size="sm"
                                     asChild
                                   >
                                     <a
@@ -1218,13 +1250,15 @@ const WorkerDashboard: React.FC = () => {
                                       target="_blank"
                                       rel="noopener noreferrer"
                                     >
+                                      <MessageCircle className="w-3 h-3 mr-1" />
                                       WhatsApp
                                     </a>
                                   </Button>
                                 )}
                                 {emailHref && (
-                                  <Button size="xs" asChild>
+                                  <Button size="sm" asChild>
                                     <a href={emailHref}>
+                                      <Mail className="w-3 h-3 mr-1" />
                                       {language === "fr"
                                         ? "Répondre par email"
                                         : "Reply by email"}
@@ -1236,7 +1270,11 @@ const WorkerDashboard: React.FC = () => {
                           </div>
 
                           <div className="flex items-start justify-end gap-2">
-                            <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-50 text-slate-700 border-slate-200">
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${contactStatusClass(
+                                c.status
+                              )}`}
+                            >
                               {contactStatusLabel(c.status)}
                             </span>
                           </div>
