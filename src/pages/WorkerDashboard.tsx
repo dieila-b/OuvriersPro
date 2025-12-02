@@ -74,6 +74,13 @@ const WorkerDashboard: React.FC = () => {
     null
   );
 
+  // ✅ Stats
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [profileViews, setProfileViews] = useState<number>(0);
+  const [requestsCount, setRequestsCount] = useState<number>(0);
+  const [responseRate, setResponseRate] = useState<number>(0);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -198,6 +205,58 @@ const WorkerDashboard: React.FC = () => {
       isMounted = false;
     };
   }, [language]);
+
+  // ✅ Chargement des statistiques lorsque l'onglet Stats est actif
+  useEffect(() => {
+    const loadStats = async () => {
+      if (!profile || activeTab !== "stats") return;
+
+      setStatsLoading(true);
+      setStatsError(null);
+
+      try {
+        // Nombre de vues de profil
+        const { count, error } = await supabase
+          .from("op_ouvrier_views")
+          .select("*", { count: "exact", head: true })
+          .eq("worker_id", profile.id);
+
+        if (error) {
+          throw error;
+        }
+
+        const views = count ?? 0;
+
+        // Demandes reçues (on réutilise contacts déjà chargés)
+        const totalRequests = contacts.length;
+
+        // Réponses = demandes marquées en cours ou traitées
+        const responded = contacts.filter(
+          (c) => c.status === "in_progress" || c.status === "done"
+        ).length;
+
+        const rate =
+          totalRequests > 0
+            ? Math.round((responded / totalRequests) * 100)
+            : 0;
+
+        setProfileViews(views);
+        setRequestsCount(totalRequests);
+        setResponseRate(rate);
+      } catch (e) {
+        console.error("loadStats error", e);
+        setStatsError(
+          language === "fr"
+            ? "Impossible de charger les statistiques."
+            : "Unable to load statistics."
+        );
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    loadStats();
+  }, [activeTab, profile, contacts, language]);
 
   // Helpers d'affichage
   const planLabel = (plan: WorkerProfile["plan_code"]) => {
@@ -972,41 +1031,70 @@ const WorkerDashboard: React.FC = () => {
                   ? "Statistiques personnelles"
                   : "Personal stats"}
               </h2>
+
+              {statsError && (
+                <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                  {statsError}
+                </div>
+              )}
+
               <p className="text-xs text-slate-500 mb-2">
                 {language === "fr"
-                  ? "Ce bloc pourra afficher le nombre de vues de votre profil, le nombre de demandes reçues, le taux de réponse, etc."
-                  : "This block will display number of profile views, requests received, response rate, etc."}
+                  ? "Suivez les vues de votre profil, le nombre de demandes reçues et votre taux de réponse."
+                  : "Track your profile views, number of requests received and response rate."}
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                {/* Vues du profil */}
                 <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                   <div className="text-xs text-slate-500">
                     {language === "fr" ? "Vues du profil" : "Profile views"}
                   </div>
-                  <div className="text-2xl font-bold text-slate-900">—</div>
+                  <div className="text-2xl font-bold text-slate-900 mt-1">
+                    {statsLoading ? "…" : profileViews}
+                  </div>
                 </div>
+
+                {/* Demandes reçues */}
                 <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                   <div className="text-xs text-slate-500">
                     {language === "fr"
                       ? "Demandes reçues"
                       : "Requests received"}
                   </div>
-                  <div className="text-2xl font-bold text-slate-900">—</div>
+                  <div className="text-2xl font-bold text-slate-900 mt-1">
+                    {statsLoading ? "…" : requestsCount}
+                  </div>
                 </div>
+
+                {/* Taux de réponse */}
                 <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                   <div className="text-xs text-slate-500">
                     {language === "fr"
                       ? "Taux de réponse"
                       : "Response rate"}
                   </div>
-                  <div className="text-2xl font-bold text-slate-900">—</div>
+                  <div className="text-2xl font-bold text-slate-900 mt-1">
+                    {statsLoading
+                      ? "…"
+                      : requestsCount > 0
+                      ? `${responseRate}%`
+                      : "—"}
+                  </div>
+                  {requestsCount > 0 && !statsLoading && (
+                    <div className="text-[11px] text-slate-500 mt-1">
+                      {language === "fr"
+                        ? `${responseRate}% des demandes marquées comme "En cours" ou "Traité".`
+                        : `${responseRate}% of requests marked as "In progress" or "Done".`}
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="text-xs text-slate-500">
                 {language === "fr"
-                  ? "Nous pourrons brancher ces chiffres sur les tables de contacts / vues dès que le tracking sera en place."
-                  : "We can plug these numbers to contacts / views tables once tracking is implemented."}
+                  ? "Ces chiffres sont calculés à partir des vues (table op_ouvrier_views) et des demandes reçues (op_ouvrier_contacts)."
+                  : "These figures are based on views (table op_ouvrier_views) and received requests (op_ouvrier_contacts)."}
               </div>
             </div>
           )}
