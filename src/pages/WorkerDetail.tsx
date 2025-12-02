@@ -26,6 +26,7 @@ import WorkerPortfolio from "@/components/WorkerPortfolio";
 
 type DbWorker = {
   id: string;
+  user_id: string | null; // ✅ pour ne pas compter les vues de lui-même
   first_name: string | null;
   last_name: string | null;
   profession: string | null;
@@ -63,6 +64,7 @@ const WorkerDetail: React.FC = () => {
 
   const [authChecked, setAuthChecked] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null); // ✅
 
   const [worker, setWorker] = useState<DbWorker | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,10 +89,17 @@ const WorkerDetail: React.FC = () => {
     const checkAuth = async () => {
       try {
         const { data } = await supabase.auth.getUser();
-        setIsAuthenticated(!!data?.user);
+        if (data?.user) {
+          setIsAuthenticated(true);
+          setCurrentUserId(data.user.id); // ✅ on garde l'id du viewer
+        } else {
+          setIsAuthenticated(false);
+          setCurrentUserId(null);
+        }
       } catch (e) {
         console.error("Auth check error:", e);
         setIsAuthenticated(false);
+        setCurrentUserId(null);
       } finally {
         setAuthChecked(true);
       }
@@ -120,6 +129,7 @@ const WorkerDetail: React.FC = () => {
         .select(
           `
           id,
+          user_id,
           first_name,
           last_name,
           profession,
@@ -157,6 +167,33 @@ const WorkerDetail: React.FC = () => {
       fetchWorkerData();
     }
   }, [id, authChecked, isAuthenticated]);
+
+  // ✅ Tracking : loguer une vue de profil
+  useEffect(() => {
+    const logView = async () => {
+      if (!worker || !currentUserId) return;
+
+      // ne pas compter si l’ouvrier regarde sa propre fiche
+      if (worker.user_id && worker.user_id === currentUserId) {
+        return;
+      }
+
+      try {
+        const { error } = await supabase.from("op_ouvrier_views").insert({
+          worker_id: worker.id,
+          viewer_id: currentUserId,
+        });
+
+        if (error) {
+          console.error("Error logging worker view:", error);
+        }
+      } catch (e) {
+        console.error("Exception logging worker view:", e);
+      }
+    };
+
+    logView();
+  }, [worker, currentUserId]);
 
   const formatCurrency = (
     value: number | null | undefined,
@@ -735,7 +772,9 @@ const WorkerDetail: React.FC = () => {
                     value={form.budget}
                     onChange={handleChange}
                     placeholder={
-                      language === "fr" ? "Ex : 1,000,000 GNF" : "e.g. 1,000,000 GNF"
+                      language === "fr"
+                        ? "Ex : 1,000,000 GNF"
+                        : "e.g. 1,000,000 GNF"
                     }
                   />
                 </div>
