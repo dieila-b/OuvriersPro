@@ -1231,8 +1231,6 @@ const WorkerDashboard: React.FC = () => {
                       replyDraft || undefined
                     );
 
-                    // URL du profil client et du formulaire interne
-                    // À adapter à tes vraies routes (ex: /clients/:id, /clients/:id/contact)
                     const clientProfileUrl = c.client_id
                       ? `/clients/${c.client_id}`
                       : null;
@@ -1248,8 +1246,10 @@ const WorkerDashboard: React.FC = () => {
                         .join("")
                         .toUpperCase() || "—";
 
-                    const hasAnyChannel =
-                      !!c.client_email || !!c.client_phone || !!c.client_id;
+                    const hasEmail = !!c.client_email;
+                    const hasPhone = !!c.client_phone;
+                    const hasClientProfile = !!c.client_id;
+                    const hasAnyChannel = hasEmail || hasPhone || hasClientProfile;
 
                     return (
                       <li key={c.id}>
@@ -1278,13 +1278,13 @@ const WorkerDashboard: React.FC = () => {
                                     </span>
                                   </div>
                                   <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-0.5">
-                                    {c.client_email && (
+                                    {hasEmail && (
                                       <span className="inline-flex items-center gap-1">
                                         <Mail className="w-3 h-3" />
                                         {c.client_email}
                                       </span>
                                     )}
-                                    {c.client_phone && (
+                                    {hasPhone && (
                                       <span className="inline-flex items-center gap-1">
                                         <Phone className="w-3 h-3" />
                                         {c.client_phone}
@@ -1293,7 +1293,7 @@ const WorkerDashboard: React.FC = () => {
                                   </div>
 
                                   {/* Actions liées au profil client (si client_id présent) */}
-                                  {c.client_id && (
+                                  {hasClientProfile && (
                                     <div className="mt-1 flex flex-wrap gap-2 text-xs">
                                       <Button
                                         variant="ghost"
@@ -1369,15 +1369,24 @@ const WorkerDashboard: React.FC = () => {
                                 />
 
                                 <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                                  <div className="text-[11px] text-slate-400">
-                                    {!hasAnyChannel
-                                      ? language === "fr"
-                                        ? "Ce client n’a pas laissé d’e-mail, de téléphone ni de profil associé. Copiez le texte pour l’envoyer par le canal de votre choix."
-                                        : "This client did not leave any e-mail, phone or linked profile. Copy the text and send it via any channel you prefer."
-                                      : language === "fr"
-                                      ? "Envoyez votre réponse par le canal de votre choix (WhatsApp, e-mail, téléphone ou formulaire)."
-                                      : "Send your reply using your preferred channel (WhatsApp, e-mail, phone or form)."}
+                                  {/* Message explicatif selon les canaux disponibles */}
+                                  <div className="text-[11px]">
+                                    {!hasAnyChannel ? (
+                                      <div className="text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1">
+                                        {language === "fr"
+                                          ? "Ce client n’a laissé aucun moyen de contact (ni e-mail, ni téléphone, ni compte client). Vous ne pouvez pas lui répondre directement depuis la plateforme. Vous pouvez néanmoins copier votre message si vous disposez d’un autre canal."
+                                          : "This client did not leave any contact details (no e-mail, no phone, no client account). You cannot reply to them directly from the platform. You can still copy your reply if you have another channel."}
+                                      </div>
+                                    ) : (
+                                      <div className="text-slate-400">
+                                        {language === "fr"
+                                          ? "Envoyez votre réponse par le canal de votre choix (WhatsApp, e-mail, téléphone ou formulaire)."
+                                          : "Send your reply using your preferred channel (WhatsApp, e-mail, phone or form)."}
+                                      </div>
+                                    )}
                                   </div>
+
+                                  {/* Actions */}
                                   <div className="flex flex-wrap justify-end gap-2 mt-1 sm:mt-0">
                                     {/* Copier toujours disponible */}
                                     <Button
@@ -1392,7 +1401,8 @@ const WorkerDashboard: React.FC = () => {
                                         : "Copy reply"}
                                     </Button>
 
-                                    {c.client_phone && (
+                                    {/* Les autres boutons seulement si canal existant */}
+                                    {hasPhone && (
                                       <Button
                                         variant="outline"
                                         size="xs"
@@ -1406,7 +1416,7 @@ const WorkerDashboard: React.FC = () => {
                                         </a>
                                       </Button>
                                     )}
-                                    {whatsappUrl && (
+                                    {hasPhone && whatsappUrl && (
                                       <Button
                                         variant="outline"
                                         size="xs"
@@ -1422,13 +1432,26 @@ const WorkerDashboard: React.FC = () => {
                                         </a>
                                       </Button>
                                     )}
-                                    {emailHref && (
+                                    {hasEmail && emailHref && (
                                       <Button size="xs" asChild>
                                         <a href={emailHref}>
                                           <Mail className="w-3 h-3 mr-1" />
                                           {language === "fr"
                                             ? "Envoyer par e-mail"
                                             : "Send by e-mail"}
+                                        </a>
+                                      </Button>
+                                    )}
+                                    {hasClientProfile && clientFormUrl && (
+                                      <Button size="xs" variant="outline" asChild>
+                                        <a
+                                          href={clientFormUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          {language === "fr"
+                                            ? "Formulaire interne"
+                                            : "Internal form"}
                                         </a>
                                       </Button>
                                     )}
