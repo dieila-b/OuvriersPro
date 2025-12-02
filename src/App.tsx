@@ -57,8 +57,7 @@ const App = () => (
             {/* 🏠 Accueil */}
             <Route path="/" element={<Index />} />
 
-            {/* 🔎 Rechercher un ouvrier
-                Les deux URLs /search et /rechercher pointent vers la même page */}
+            {/* 🔎 Recherche d’ouvrier (alias FR/EN) */}
             <Route path="/search" element={<Index />} />
             <Route path="/rechercher" element={<Index />} />
 
@@ -74,7 +73,7 @@ const App = () => (
             {/* 📝 Formulaire d'inscription ouvrier + forfait */}
             <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
 
-            {/* 👤 Fiche ouvrier (auth + rôle client gérés dans WorkerDetail) */}
+            {/* 👤 Fiche ouvrier */}
             <Route path="/ouvrier/:id" element={<WorkerDetail />} />
 
             {/* 👥 Espace Client / Particulier (protégé : user) */}
@@ -97,7 +96,7 @@ const App = () => (
               }
             />
 
-            {/* 📄 Mes demandes (liste des demandes du client, protégée : user) */}
+            {/* 📄 Mes demandes (protégé : user) */}
             <Route
               path="/mes-demandes"
               element={
@@ -107,7 +106,7 @@ const App = () => (
               }
             />
 
-            {/* 💬 Mes échanges (liste des messages client ↔ ouvriers, protégée : user) */}
+            {/* 💬 Mes échanges (protégé : user) */}
             <Route
               path="/mes-echanges"
               element={
@@ -117,7 +116,7 @@ const App = () => (
               }
             />
 
-            {/* ❤️ Mes favoris (liste des ouvriers favoris, protégée : user) */}
+            {/* ❤️ Mes favoris (protégé : user) */}
             <Route
               path="/mes-favoris"
               element={
