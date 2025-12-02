@@ -57,6 +57,9 @@ const WorkerDashboard: React.FC = () => {
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
 
+  // Réponse rapide par message
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+
   // Édition du profil
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -325,13 +328,17 @@ const WorkerDashboard: React.FC = () => {
     });
   };
 
-  // petit helper pour WhatsApp
-  const phoneToWhatsappUrl = (phone?: string | null) => {
+  // petit helper pour WhatsApp (avec texte optionnel)
+  const phoneToWhatsappUrl = (phone?: string | null, text?: string) => {
     if (!phone) return "";
     const clean = phone.replace(/\s+/g, "");
     if (clean.length < 8) return "";
     const normalized = clean.startsWith("+") ? clean.slice(1) : clean;
-    return `https://wa.me/${normalized}`;
+    let url = `https://wa.me/${normalized}`;
+    if (text && text.trim().length > 0) {
+      url += `?text=${encodeURIComponent(text)}`;
+    }
+    return url;
   };
 
   // Gestion édition profil
@@ -1157,21 +1164,30 @@ const WorkerDashboard: React.FC = () => {
               {!contactsLoading && !contactsError && contacts.length > 0 && (
                 <ul className="space-y-4">
                   {contacts.map((c) => {
-                    const whatsappUrl = phoneToWhatsappUrl(c.client_phone);
+                    const replyDraft = replyDrafts[c.id] || "";
+
                     const emailSubject =
                       language === "fr"
                         ? "Réponse à votre demande via OuvriersPro"
                         : "Reply to your request via OuvriersPro";
 
+                    const emailBody =
+                      replyDraft.trim().length > 0
+                        ? replyDraft
+                        : language === "fr"
+                        ? "Bonjour,\n\nJe fais suite à votre demande."
+                        : "Hello,\n\nI am following up on your request.";
+
                     const emailHref = c.client_email
                       ? `mailto:${c.client_email}?subject=${encodeURIComponent(
                           emailSubject
-                        )}${
-                          c.message
-                            ? `&body=${encodeURIComponent(c.message)}`
-                            : ""
-                        }`
+                        )}&body=${encodeURIComponent(emailBody)}`
                       : "";
+
+                    const whatsappUrl = phoneToWhatsappUrl(
+                      c.client_phone,
+                      replyDraft || undefined
+                    );
 
                     const initials =
                       (c.client_name || "—")
@@ -1193,7 +1209,7 @@ const WorkerDashboard: React.FC = () => {
                                 <User className="w-4 h-4" />
                               )}
                             </div>
-                            <div>
+                            <div className="flex-1">
                               <div className="flex flex-wrap items-center gap-2">
                                 <div className="text-sm font-semibold text-slate-800">
                                   {c.client_name || "—"}
@@ -1222,6 +1238,30 @@ const WorkerDashboard: React.FC = () => {
                                   {c.message}
                                 </div>
                               )}
+
+                              {/* Zone de réponse rapide */}
+                              <div className="mt-3">
+                                <div className="text-xs text-slate-500 mb-1">
+                                  {language === "fr"
+                                    ? "Votre réponse rapide"
+                                    : "Quick reply"}
+                                </div>
+                                <Textarea
+                                  rows={2}
+                                  value={replyDraft}
+                                  onChange={(e) =>
+                                    setReplyDrafts((prev) => ({
+                                      ...prev,
+                                      [c.id]: e.target.value,
+                                    }))
+                                  }
+                                  placeholder={
+                                    language === "fr"
+                                      ? "Tapez ici votre réponse, elle sera envoyée par e-mail ou WhatsApp…"
+                                      : "Type your answer here, it will be sent via email or WhatsApp…"
+                                  }
+                                />
+                              </div>
 
                               {/* Boutons de réponse */}
                               <div className="mt-3 flex flex-wrap gap-2">
