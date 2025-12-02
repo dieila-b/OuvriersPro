@@ -33,7 +33,7 @@ type WorkerProfile = {
 type WorkerContact = {
   id: string;
   worker_id: string | null;
-  client_id: string | null; // IMPORTANT : référence vers le profil client
+  client_id: string | null;
   client_name: string | null;
   client_email: string | null;
   client_phone: string | null;
@@ -331,7 +331,7 @@ const WorkerDashboard: React.FC = () => {
     const normalized = clean.startsWith("+") ? clean.slice(1) : clean;
     let url = `https://wa.me/${normalized}`;
     if (text && text.trim().length > 0) {
-      url += `?text=${encodeURIComponent(text)}`;
+      url += `?text=${encodeURIComponent(text.trim())}`;
     }
     return url;
   };
@@ -1206,7 +1206,7 @@ const WorkerDashboard: React.FC = () => {
               {!contactsLoading && !contactsError && contacts.length > 0 && (
                 <ul className="space-y-4">
                   {contacts.map((c) => {
-                    const replyDraft = replyDrafts[c.id] || "";
+                    const replyDraft = (replyDrafts[c.id] || "").trim();
 
                     const emailSubject =
                       language === "fr"
@@ -1214,7 +1214,7 @@ const WorkerDashboard: React.FC = () => {
                         : "Reply to your request via OuvriersPro";
 
                     const emailBody =
-                      replyDraft.trim().length > 0
+                      replyDraft.length > 0
                         ? replyDraft
                         : language === "fr"
                         ? "Bonjour,\n\nJe fais suite à votre demande."
@@ -1247,6 +1247,9 @@ const WorkerDashboard: React.FC = () => {
                         .map((n) => n[0])
                         .join("")
                         .toUpperCase() || "—";
+
+                    const hasAnyChannel =
+                      !!c.client_email || !!c.client_phone || !!c.client_id;
 
                     return (
                       <li key={c.id}>
@@ -1350,7 +1353,7 @@ const WorkerDashboard: React.FC = () => {
                                 </div>
                                 <Textarea
                                   rows={2}
-                                  value={replyDraft}
+                                  value={replyDrafts[c.id] || ""}
                                   onChange={(e) =>
                                     setReplyDrafts((prev) => ({
                                       ...prev,
@@ -1367,10 +1370,10 @@ const WorkerDashboard: React.FC = () => {
 
                                 <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                                   <div className="text-[11px] text-slate-400">
-                                    {!c.client_email && !c.client_phone && !c.client_id
+                                    {!hasAnyChannel
                                       ? language === "fr"
-                                        ? "Ce client n’a pas laissé d’e-mail ni de téléphone. Copiez le texte pour l’envoyer par le canal de votre choix."
-                                        : "This client did not leave any e-mail or phone. Copy the text and send it via any channel you prefer."
+                                        ? "Ce client n’a pas laissé d’e-mail, de téléphone ni de profil associé. Copiez le texte pour l’envoyer par le canal de votre choix."
+                                        : "This client did not leave any e-mail, phone or linked profile. Copy the text and send it via any channel you prefer."
                                       : language === "fr"
                                       ? "Envoyez votre réponse par le canal de votre choix (WhatsApp, e-mail, téléphone ou formulaire)."
                                       : "Send your reply using your preferred channel (WhatsApp, e-mail, phone or form)."}
