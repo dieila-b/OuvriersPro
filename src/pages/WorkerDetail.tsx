@@ -1,130 +1,127 @@
-// src/pages/WorkerDetail.tsx
+// src/pages/WorkerDashboard.tsx
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  MapPin,
-  Star,
-  ArrowLeft,
-  Phone,
-  Mail,
-  MessageCircle,
-  Send,
-  Info,
-  Lock,
-  DollarSign,
-} from "lucide-react";
-import WorkerReviews from "@/components/WorkerReviews";
-import WorkerPhotosGallery from "@/components/WorkerPhotosGallery";
-import WorkerPortfolio from "@/components/WorkerPortfolio";
+import WorkerPhotosManager from "@/components/WorkerPhotosManager";
+import WorkerPortfolioManager from "@/components/WorkerPortfolioManager";
+import { Mail, Phone, MessageCircle, User, Copy } from "lucide-react";
 
-type DbWorker = {
+type WorkerProfile = {
   id: string;
-  user_id: string | null; // ✅ pour ne pas compter les vues de lui-même
+  user_id: string | null;
   first_name: string | null;
   last_name: string | null;
-  profession: string | null;
-  description: string | null;
+  email: string | null;
+  phone: string | null;
   country: string | null;
   region: string | null;
   city: string | null;
   commune: string | null;
   district: string | null;
+  profession: string | null;
+  description: string | null;
+  plan_code: "FREE" | "MONTHLY" | "YEARLY" | null;
+  status: string | null;
   hourly_rate: number | null;
   currency: string | null;
-  years_experience: number | null;
-  average_rating: number | null;
-  rating_count: number | null;
-  phone: string | null;
+  created_at: string;
+};
+
+type ClientProfile = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
   email: string | null;
-  avatar_url: string | null;
+  phone: string | null;
 };
 
-type ContactForm = {
-  name: string;
-  email: string;
-  phone: string;
-  message: string;
-  requestType: "devis" | "info" | "urgence";
-  budget: string;
-  preferredDate: string;
-  consent: boolean;
+type WorkerContact = {
+  id: string;
+  worker_id: string | null;
+  client_id: string | null;
+  client_name: string | null;
+  client_email: string | null;
+  client_phone: string | null;
+  message: string | null;
+  status: string | null;
+  origin: string | null;
+  created_at: string;
+  client_profile?: ClientProfile | null;
 };
 
-const WorkerDetail: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+type TabKey = "profile" | "subscription" | "stats" | "messages";
+
+const WorkerDashboard: React.FC = () => {
   const { language } = useLanguage();
-
-  const [authChecked, setAuthChecked] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null); // ✅
-
-  const [worker, setWorker] = useState<DbWorker | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<WorkerProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [form, setForm] = useState<ContactForm>({
-    name: "",
-    email: "",
-    phone: "",
-    message: "",
-    requestType: "devis",
-    budget: "",
-    preferredDate: "",
-    consent: false,
-  });
-  const [sending, setSending] = useState(false);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabKey>("profile");
 
-  // Vérif auth
+  // Messages / demandes de contact
+  const [contacts, setContacts] = useState<WorkerContact[]>([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [contactsError, setContactsError] = useState<string | null>(null);
+
+  // Réponses rapides par message (id -> texte)
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+
+  // Édition du profil
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [editProfile, setEditProfile] = useState<WorkerProfile | null>(null);
+  const [profileUpdateError, setProfileUpdateError] = useState<string | null>(
+    null
+  );
+  const [profileUpdateSuccess, setProfileUpdateSuccess] = useState<
+    string | null
+  >(null);
+
+  // Gestion abonnement
+  const [updatingPlan, setUpdatingPlan] = useState(false);
+  const [planUpdateError, setPlanUpdateError] = useState<string | null>(null);
+  const [planUpdateSuccess, setPlanUpdateSuccess] = useState<string | null>(
+    null
+  );
+
+  // Stats
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [profileViews, setProfileViews] = useState<number>(0);
+  const [requestsCount, setRequestsCount] = useState<number>(0);
+  const [responseRate, setResponseRate] = useState<number>(0);
+
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data } = await supabase.auth.getUser();
-        if (data?.user) {
-          setIsAuthenticated(true);
-          setCurrentUserId(data.user.id); // ✅ on garde l'id du viewer
-        } else {
-          setIsAuthenticated(false);
-          setCurrentUserId(null);
-        }
-      } catch (e) {
-        console.error("Auth check error:", e);
-        setIsAuthenticated(false);
-        setCurrentUserId(null);
-      } finally {
-        setAuthChecked(true);
-      }
-    };
+    let isMounted = true;
 
-    checkAuth();
-  }, []);
-
-  // Chargement ouvrier
-  useEffect(() => {
-    const fetchWorkerData = async () => {
-      if (!id) {
-        setError("missing-id");
-        setLoading(false);
-        return;
-      }
-      if (!isAuthenticated) {
-        setLoading(false);
-        return;
-      }
-
+    const fetchData = async () => {
       setLoading(true);
       setError(null);
+      setContacts([]);
+      setContactsError(null);
 
-      const { data: workerData, error: workerError } = await supabase
+      // 1) Utilisateur connecté
+      const { data, error: userError } = await supabase.auth.getUser();
+      const user = data?.user;
+
+      if (!isMounted) return;
+
+      if (userError || !user) {
+        setError(
+          language === "fr"
+            ? "Vous devez être connecté pour accéder à cet espace."
+            : "You must be logged in to access this area."
+        );
+        setLoading(false);
+        return;
+      }
+
+      // 2) Profil ouvrier
+      const { data: worker, error: workerError } = await supabase
         .from("op_ouvriers")
         .select(
           `
@@ -132,731 +129,1412 @@ const WorkerDetail: React.FC = () => {
           user_id,
           first_name,
           last_name,
-          profession,
-          description,
+          email,
+          phone,
           country,
           region,
           city,
           commune,
           district,
+          profession,
+          description,
+          plan_code,
+          status,
           hourly_rate,
           currency,
-          years_experience,
-          average_rating,
-          rating_count,
-          phone,
-          email,
-          avatar_url
+          created_at
         `
         )
-        .eq("id", id)
+        .eq("user_id", user.id)
         .maybeSingle();
 
-      if (workerError || !workerData) {
+      if (!isMounted) return;
+
+      if (workerError) {
         console.error(workerError);
-        setError("load-failed");
+        setError(
+          language === "fr"
+            ? `Erreur lors du chargement de votre profil : ${workerError.message}`
+            : `Error while loading your profile: ${workerError.message}`
+        );
         setLoading(false);
         return;
       }
 
-      setWorker(workerData as DbWorker);
-      setLoading(false);
-    };
-
-    if (authChecked && isAuthenticated) {
-      fetchWorkerData();
-    }
-  }, [id, authChecked, isAuthenticated]);
-
-  // ✅ Tracking : loguer une vue de profil
-  useEffect(() => {
-    const logView = async () => {
-      if (!worker || !currentUserId) return;
-
-      // ne pas compter si l’ouvrier regarde sa propre fiche
-      if (worker.user_id && worker.user_id === currentUserId) {
+      if (!worker) {
+        setError(
+          language === "fr"
+            ? "Aucun profil ouvrier associé à ce compte. Merci de compléter votre inscription."
+            : "No worker profile associated with this account. Please complete your registration."
+        );
+        setLoading(false);
         return;
       }
+
+      const wp = worker as WorkerProfile;
+      setProfile(wp);
+      setLoading(false);
+
+      // 3) Demandes de contact
+      setContactsLoading(true);
+      setContactsError(null);
+
+      // IMPORTANT :
+      // - Ici, on suppose une table des clients nommée "op_clients"
+      // - et une relation Supabase op_ouvrier_contacts.client_id -> op_clients.id
+      // Si le nom de la table est différent, remplace "op_clients" par le bon nom.
+      const { data: contactsData, error: contactsErr } = await supabase
+        .from("op_ouvrier_contacts")
+        .select(
+          `
+          id,
+          worker_id,
+          client_id,
+          client_name,
+          client_email,
+          client_phone,
+          message,
+          status,
+          origin,
+          created_at,
+          client:op_clients (
+            id,
+            first_name,
+            last_name,
+            email,
+            phone
+          )
+        `
+        )
+        .eq("worker_id", wp.id)
+        .order("created_at", { ascending: false });
+
+      if (!isMounted) return;
+
+      if (contactsErr) {
+        console.error(contactsErr);
+        setContactsError(
+          language === "fr"
+            ? `Erreur lors du chargement de vos demandes : ${contactsErr.message}`
+            : `Error while loading your requests: ${contactsErr.message}`
+        );
+      } else {
+        const mapped: WorkerContact[] =
+          (contactsData || []).map((row: any) => {
+            const client: ClientProfile | null = row.client ?? null;
+
+            // On reconstruit les infos client à partir du profil lié si besoin
+            const clientId: string | null =
+              row.client_id ?? client?.id ?? null;
+
+            const clientNameFromProfile =
+              client &&
+              `${client.first_name || ""} ${client.last_name || ""}`.trim();
+
+            return {
+              id: row.id,
+              worker_id: row.worker_id,
+              client_id: clientId,
+              client_name: row.client_name || clientNameFromProfile || null,
+              client_email: row.client_email || client?.email || null,
+              client_phone: row.client_phone || client?.phone || null,
+              message: row.message,
+              status: row.status,
+              origin: row.origin,
+              created_at: row.created_at,
+              client_profile: client,
+            };
+          }) ?? [];
+
+        setContacts(mapped);
+      }
+
+      setContactsLoading(false);
+    };
+
+    fetchData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [language]);
+
+  // Statistiques
+  useEffect(() => {
+    const loadStats = async () => {
+      if (!profile || activeTab !== "stats") return;
+
+      setStatsLoading(true);
+      setStatsError(null);
 
       try {
-        const { error } = await supabase.from("op_ouvrier_views").insert({
-          worker_id: worker.id,
-          viewer_id: currentUserId,
-        });
+        const { count, error } = await supabase
+          .from("op_ouvrier_views")
+          .select("*", { count: "exact", head: true })
+          .eq("worker_id", profile.id);
 
-        if (error) {
-          console.error("Error logging worker view:", error);
-        }
+        if (error) throw error;
+
+        const views = count ?? 0;
+        const totalRequests = contacts.length;
+        const responded = contacts.filter(
+          (c) => c.status === "in_progress" || c.status === "done"
+        ).length;
+
+        const rate =
+          totalRequests > 0
+            ? Math.round((responded / totalRequests) * 100)
+            : 0;
+
+        setProfileViews(views);
+        setRequestsCount(totalRequests);
+        setResponseRate(rate);
       } catch (e) {
-        console.error("Exception logging worker view:", e);
+        console.error("loadStats error", e);
+        setStatsError(
+          language === "fr"
+            ? "Impossible de charger les statistiques."
+            : "Unable to load statistics."
+        );
+      } finally {
+        setStatsLoading(false);
       }
     };
 
-    logView();
-  }, [worker, currentUserId]);
+    loadStats();
+  }, [activeTab, profile, contacts, language]);
 
-  const formatCurrency = (
-    value: number | null | undefined,
-    currency?: string | null
-  ) => {
-    if (!value) return "—";
-    const cur = currency || "GNF";
-    if (cur === "GNF") {
-      return `${value.toLocaleString("fr-FR")} GNF`;
-    }
-    return `${value} ${cur}`;
+  // Helpers d'affichage
+  const planLabel = (plan: WorkerProfile["plan_code"]) => {
+    if (!plan) return language === "fr" ? "Non défini" : "Not set";
+    if (plan === "FREE") return language === "fr" ? "Gratuit" : "Free";
+    if (plan === "MONTHLY") return language === "fr" ? "Mensuel" : "Monthly";
+    if (plan === "YEARLY") return language === "fr" ? "Annuel" : "Yearly";
+    return plan;
   };
 
-  const text = {
-    back: language === "fr" ? "Retour aux résultats" : "Back to results",
-    notFound:
-      language === "fr"
-        ? "Impossible de charger ce professionnel."
-        : "Unable to load this professional.",
-    contactTitle:
-      language === "fr" ? "Contacter cet ouvrier" : "Contact this worker",
-    contactSubtitle:
-      language === "fr"
-        ? "Remplissez le formulaire ci-dessous pour être recontacté"
-        : "Fill the form below to be contacted back",
-    yourName: language === "fr" ? "Votre nom" : "Your name",
-    yourEmail: language === "fr" ? "Votre email" : "Your email",
-    yourPhone: language === "fr" ? "Votre téléphone" : "Your phone",
-    yourMessage: language === "fr" ? "Votre message" : "Your message",
-    send: language === "fr" ? "Envoyer la demande" : "Send request",
-    sending: language === "fr" ? "Envoi en cours..." : "Sending...",
-    success:
-      language === "fr"
-        ? "Votre demande a bien été envoyée. L'ouvrier vous contactera directement."
-        : "Your request has been sent. The worker will contact you directly.",
-    error:
-      language === "fr"
-        ? "Une erreur est survenue lors de l'envoi de votre demande."
-        : "An error occurred while sending your request.",
-    experience:
-      language === "fr" ? "ans d'expérience" : "years of experience",
-    rating: language === "fr" ? "Note moyenne" : "Average rating",
-    perHour: language === "fr" ? "/h" : "/h",
-    contactInfos:
-      language === "fr" ? "Coordonnées directes" : "Direct contact",
-    phoneLabel: language === "fr" ? "Téléphone" : "Phone",
-    emailLabel: language === "fr" ? "Email" : "Email",
-    whatsappLabel: language === "fr" ? "WhatsApp" : "WhatsApp",
-    quickActions:
-      language === "fr" ? "Actions rapides" : "Quick actions",
-    callBtn: language === "fr" ? "Appeler" : "Call",
-    whatsappBtn: language === "fr" ? "WhatsApp" : "WhatsApp",
-    emailBtn: language === "fr" ? "Email" : "Email",
-    devisBtn:
-      language === "fr" ? "Demander un devis" : "Request quote",
-    requestTypeLabel:
-      language === "fr" ? "Type de demande" : "Request type",
-    requestTypeDevis:
-      language === "fr" ? "Demande de devis" : "Quote request",
-    requestTypeInfo:
-      language === "fr" ? "Demande d'informations" : "Information request",
-    requestTypeUrgence:
-      language === "fr" ? "Intervention urgente" : "Emergency",
-    budgetLabel:
-      language === "fr"
-        ? "Budget approximatif (facultatif)"
-        : "Approximate budget (optional)",
-    dateLabel:
-      language === "fr"
-        ? "Date souhaitée (facultatif)"
-        : "Desired date (optional)",
-    consentLabel:
-      language === "fr"
-        ? "J'accepte que mes coordonnées soient transmises à cet ouvrier."
-        : "I agree to share my contact details with this worker.",
-    privacyNote:
-      language === "fr"
-        ? "Vos données sont uniquement transmises à ce professionnel."
-        : "Your data is only shared with this professional.",
-    loginRequiredTitle:
-      language === "fr" ? "Connexion requise" : "Login required",
-    loginRequiredDesc:
-      language === "fr"
-        ? "Vous devez être connecté pour voir les détails et contacter les ouvriers."
-        : "You must be logged in to view details and contact workers.",
-    loginBtn: language === "fr" ? "Se connecter" : "Log in",
-    registerBtn:
-      language === "fr" ? "Créer un compte" : "Create an account",
-    noAccountYet:
-      language === "fr"
-        ? "Vous n'avez pas encore de compte ?"
-        : "Don't have an account yet?",
-    about: language === "fr" ? "À propos" : "About",
-    location: language === "fr" ? "Localisation" : "Location",
-    experienceTitle: language === "fr" ? "Expérience" : "Experience",
-    hourlyRateTitle: language === "fr" ? "Tarif horaire" : "Hourly rate",
-    noUserError:
-      language === "fr"
-        ? "Votre session a expiré. Merci de vous reconnecter."
-        : "Your session has expired. Please log in again.",
-  };
-
-  const handleChange = (
-    e:
-      | React.ChangeEvent<HTMLInputElement>
-      | React.ChangeEvent<HTMLTextAreaElement>
-      | React.ChangeEvent<HTMLSelectElement>
-  ) => {
-    const target = e.target as HTMLInputElement;
-    const { name, value, type } = target;
-
-    if (type === "checkbox") {
-      const checked = (target as HTMLInputElement).checked;
-      setForm((prev) => ({ ...prev, [name]: checked }));
+  const statusLabel = (s: string | null | undefined) => {
+    if (language === "fr") {
+      if (s === "approved") return "Validé";
+      if (s === "rejected") return "Refusé";
+      return "En attente";
     } else {
-      setForm((prev) => ({ ...prev, [name]: value }));
+      if (s === "approved") return "Approved";
+      if (s === "rejected") return "Rejected";
+      return "Pending";
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!worker) return;
-    if (!form.consent) return;
+  const statusClass = (s: string | null | undefined) => {
+    if (s === "approved")
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (s === "rejected") return "bg-red-50 text-red-700 border-red-200";
+    return "bg-amber-50 text-amber-700 border-amber-200";
+  };
 
-    setSending(true);
-    setSuccessMsg(null);
-    setErrorMsg(null);
+  const contactStatusLabel = (s: string | null | undefined) => {
+    if (language === "fr") {
+      if (s === "in_progress") return "En cours";
+      if (s === "done") return "Traité";
+      return "Nouveau";
+    } else {
+      if (s === "in_progress") return "In progress";
+      if (s === "done") return "Done";
+      return "New";
+    }
+  };
+
+  const contactStatusClass = (s: string | null | undefined) => {
+    if (s === "done")
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (s === "in_progress")
+      return "bg-amber-50 text-amber-700 border-amber-200";
+    return "bg-sky-50 text-sky-700 border-sky-200";
+  };
+
+  const originLabel = (o: string | null | undefined) => {
+    if (!o || o === "web") return "web";
+    if (o === "mobile") return "mobile";
+    if (o === "other") return language === "fr" ? "autre" : "other";
+    return o;
+  };
+
+  const formatDate = (value: string) => {
+    const d = new Date(value);
+    return d.toLocaleString(language === "fr" ? "fr-FR" : "en-GB", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  // helper WhatsApp avec texte optionnel
+  const phoneToWhatsappUrl = (phone?: string | null, text?: string) => {
+    if (!phone) return "";
+    const clean = phone.replace(/\s+/g, "");
+    if (clean.length < 8) return "";
+    const normalized = clean.startsWith("+") ? clean.slice(1) : clean;
+    let url = `https://wa.me/${normalized}`;
+    if (text && text.trim().length > 0) {
+      url += `?text=${encodeURIComponent(text.trim())}`;
+    }
+    return url;
+  };
+
+  // Copier la réponse dans le presse-papiers
+  const handleCopyReply = (contactId: string) => {
+    const text = (replyDrafts[contactId] || "").trim();
+    if (!text) {
+      window.alert(
+        language === "fr"
+          ? "Aucune réponse à copier."
+          : "No reply text to copy."
+      );
+      return;
+    }
+
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard
+        .writeText(text)
+        .then(() => {
+          window.alert(
+            language === "fr"
+              ? "Réponse copiée dans le presse-papiers."
+              : "Reply copied to clipboard."
+          );
+        })
+        .catch(() => {
+          window.alert(
+            language === "fr"
+              ? "Impossible de copier automatiquement. Sélectionnez le texte et copiez-le manuellement."
+              : "Could not copy automatically. Please select the text and copy it manually."
+          );
+        });
+    } else {
+      window.alert(
+        language === "fr"
+          ? "Copie automatique non disponible. Sélectionnez le texte et copiez-le manuellement."
+          : "Automatic copy not available. Please select the text and copy it manually."
+      );
+    }
+  };
+
+  // Gestion édition profil
+  const handleEditField = <K extends keyof WorkerProfile>(
+    field: K,
+    value: WorkerProfile[K]
+  ) => {
+    setEditProfile((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+
+  const startEditProfile = () => {
+    if (!profile) return;
+    setEditProfile(profile);
+    setProfileUpdateError(null);
+    setProfileUpdateSuccess(null);
+    setIsEditingProfile(true);
+  };
+
+  const cancelEditProfile = () => {
+    setEditProfile(null);
+    setIsEditingProfile(false);
+    setProfileUpdateError(null);
+    setProfileUpdateSuccess(null);
+  };
+
+  const saveProfile = async () => {
+    if (!profile || !editProfile) return;
+
+    setSavingProfile(true);
+    setProfileUpdateError(null);
+    setProfileUpdateSuccess(null);
 
     try {
-      const { data: authData, error: authErr } = await supabase.auth.getUser();
+      const payload = {
+        first_name: editProfile.first_name,
+        last_name: editProfile.last_name,
+        phone: editProfile.phone,
+        profession: editProfile.profession,
+        description: editProfile.description,
+        country: editProfile.country,
+        region: editProfile.region,
+        city: editProfile.city,
+        commune: editProfile.commune,
+        district: editProfile.district,
+        hourly_rate: editProfile.hourly_rate,
+        currency: editProfile.currency,
+      };
 
-      if (authErr) {
-        console.error(authErr);
-      }
+      const { data: updated, error: updateError } = await supabase
+        .from("op_ouvriers")
+        .update(payload)
+        .eq("id", profile.id)
+        .select(
+          `
+          id,
+          user_id,
+          first_name,
+          last_name,
+          email,
+          phone,
+          country,
+          region,
+          city,
+          commune,
+          district,
+          profession,
+          description,
+          plan_code,
+          status,
+          hourly_rate,
+          currency,
+          created_at
+        `
+        )
+        .maybeSingle();
 
-      const currentUser = authData?.user;
-
-      if (!currentUser) {
-        setErrorMsg(text.noUserError);
-        setSending(false);
-        return;
-      }
-
-      const fullWorkerName = `${worker.first_name ?? ""} ${
-        worker.last_name ?? ""
-      }`.trim();
-
-      const composedMessage = [
-        `${text.requestTypeLabel} : ${
-          form.requestType === "devis"
-            ? text.requestTypeDevis
-            : form.requestType === "info"
-            ? text.requestTypeInfo
-            : text.requestTypeUrgence
-        }`,
-        form.budget ? `${text.budgetLabel} : ${form.budget}` : "",
-        form.preferredDate ? `${text.dateLabel} : ${form.preferredDate}` : "",
-        "",
-        form.message,
-      ]
-        .filter(Boolean)
-        .join("\n");
-
-      const { error } = await supabase.from("op_ouvrier_contacts").insert({
-        worker_id: worker.id,
-        client_id: currentUser.id,
-        worker_name: fullWorkerName || null,
-        full_name: form.name,
-        email: form.email,
-        phone: form.phone,
-        message: composedMessage,
-        status: "new",
-        origin: "web",
-      });
-
-      if (error) {
-        console.error(error);
-        setErrorMsg(text.error);
+      if (updateError || !updated) {
+        console.error(updateError);
+        setProfileUpdateError(
+          language === "fr"
+            ? "Impossible d'enregistrer les modifications."
+            : "Unable to save your changes."
+        );
       } else {
-        setSuccessMsg(text.success);
-        setForm({
-          name: "",
-          email: "",
-          phone: "",
-          message: "",
-          requestType: "devis",
-          budget: "",
-          preferredDate: "",
-          consent: false,
-        });
+        const newProfile = updated as WorkerProfile;
+        setProfile(newProfile);
+        setEditProfile(newProfile);
+        setProfileUpdateSuccess(
+          language === "fr"
+            ? "Profil mis à jour avec succès."
+            : "Profile updated successfully."
+        );
+        setIsEditingProfile(false);
       }
-    } catch (err) {
-      console.error(err);
-      setErrorMsg(text.error);
+    } catch (e) {
+      console.error(e);
+      setProfileUpdateError(
+        language === "fr"
+          ? "Une erreur est survenue lors de la mise à jour."
+          : "An error occurred while updating your profile."
+      );
     } finally {
-      setSending(false);
+      setSavingProfile(false);
     }
   };
 
-  if (!authChecked) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-sm text-muted-foreground">
-          {language === "fr" ? "Vérification..." : "Checking..."}
-        </div>
-      </div>
-    );
-  }
+  // Gestion changement de plan
+  const updatePlan = async (newPlan: WorkerProfile["plan_code"]) => {
+    if (!profile) return;
 
-  if (authChecked && !isAuthenticated) {
-    const redirect = encodeURIComponent(window.location.pathname);
+    setUpdatingPlan(true);
+    setPlanUpdateError(null);
+    setPlanUpdateSuccess(null);
 
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-4">
-        <Card className="max-w-md w-full p-6 text-center">
-          <div className="flex items-center justify-center mb-4">
-            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <Lock className="w-6 h-6 text-primary" />
-            </div>
-          </div>
-          <h1 className="text-xl font-semibold mb-2">
-            {text.loginRequiredTitle}
-          </h1>
-          <p className="text-sm text-muted-foreground mb-4">
-            {text.loginRequiredDesc}
-          </p>
-          <p className="text-xs text-muted-foreground mb-6">
-            {text.noAccountYet}
-          </p>
+    try {
+      const { data: updated, error: updateError } = await supabase
+        .from("op_ouvriers")
+        .update({ plan_code: newPlan })
+        .eq("id", profile.id)
+        .select(
+          `
+          id,
+          user_id,
+          first_name,
+          last_name,
+          email,
+          phone,
+          country,
+          region,
+          city,
+          commune,
+          district,
+          profession,
+          description,
+          plan_code,
+          status,
+          hourly_rate,
+          currency,
+          created_at
+        `
+        )
+        .maybeSingle();
 
-          <div className="flex flex-col gap-2">
-            <Button
-              className="w-full"
-              onClick={() => navigate(`/login?redirect=${redirect}`)}
-            >
-              {text.loginBtn}
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => navigate(`/register?redirect=${redirect}`)}
-            >
-              {text.registerBtn}
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full"
-              onClick={() => navigate(-1)}
-            >
-              {text.back}
-            </Button>
-          </div>
-        </Card>
-      </div>
-    );
-  }
+      if (updateError || !updated) {
+        console.error(updateError);
+        setPlanUpdateError(
+          language === "fr"
+            ? "Impossible de mettre à jour votre abonnement."
+            : "Unable to update your subscription."
+        );
+      } else {
+        const newProfile = updated as WorkerProfile;
+        setProfile(newProfile);
+        setPlanUpdateSuccess(
+          language === "fr"
+            ? "Abonnement mis à jour avec succès."
+            : "Subscription updated successfully."
+        );
+      }
+    } catch (e) {
+      console.error(e);
+      setPlanUpdateError(
+        language === "fr"
+          ? "Une erreur est survenue lors de la mise à jour de l'abonnement."
+          : "An error occurred while updating the subscription."
+      );
+    } finally {
+      setUpdatingPlan(false);
+    }
+  };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-sm text-muted-foreground">
-          {language === "fr" ? "Chargement..." : "Loading..."}
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-sm text-slate-500">
+          {language === "fr"
+            ? "Chargement de votre espace ouvrier..."
+            : "Loading your worker space..."}
         </div>
       </div>
     );
   }
 
-  if (!worker || error) {
+  if (error || !profile) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="max-w-6xl mx-auto px-4 py-10">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+        <div className="max-w-md bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+          <div className="text-sm text-red-600 mb-3">{error}</div>
           <Button
-            variant="ghost"
-            onClick={() => navigate(-1)}
-            className="mb-6"
+            onClick={() => (window.location.href = "/")}
+            className="bg-pro-blue hover:bg-blue-700"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            {text.back}
+            {language === "fr" ? "Retour à l'accueil" : "Return to home"}
           </Button>
-          <Card className="p-6 border-destructive/50">
-            <p className="text-destructive">{text.notFound}</p>
-          </Card>
         </div>
       </div>
     );
   }
 
   const fullName =
-    `${worker.first_name ?? ""} ${worker.last_name ?? ""}`.trim() ||
-    "Professionnel";
+    (profile.first_name || "") +
+    (profile.last_name ? ` ${profile.last_name}` : "");
 
-  const locationParts = [
-    worker.district,
-    worker.commune,
-    worker.city,
-    worker.region,
-  ]
-    .filter(Boolean)
-    .join(", ");
-
-  const phoneNumber = (worker.phone || "").replace(/\s+/g, "");
-  const whatsappUrl =
-    phoneNumber && phoneNumber.length >= 8
-      ? `https://wa.me/${
-          phoneNumber.startsWith("+") ? phoneNumber.slice(1) : phoneNumber
-        }`
-      : "";
-  const mailtoUrl = worker.email
-    ? `mailto:${worker.email}?subject=${encodeURIComponent(
-        `Demande via OuvriersPro`
-      )}`
-    : "";
+  const displayProfile = isEditingProfile && editProfile ? editProfile : profile;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <Button
-          variant="ghost"
-          onClick={() => navigate(-1)}
-          className="mb-6"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          {text.back}
-        </Button>
+    <div className="min-h-screen bg-slate-50 py-8">
+      <div className="max-w-5xl mx-auto px-4">
+        {/* En-tête */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
+              {language === "fr" ? "Espace Ouvrier" : "Worker Dashboard"}
+            </h1>
+            <p className="text-sm text-slate-600 mt-1">
+              {language === "fr"
+                ? "Gérez votre profil, votre abonnement et suivez vos statistiques."
+                : "Manage your profile, subscription and follow your stats."}
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="text-sm font-semibold text-slate-800">
+              {fullName || (language === "fr" ? "Profil sans nom" : "No name")}
+            </div>
+            <div className="text-xs text-slate-500">
+              {profile.email || ""}
+            </div>
+            <div className="mt-1 inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-50 text-slate-700 border-slate-200">
+              {language === "fr" ? "Plan" : "Plan"} :{" "}
+              <span className="font-semibold ml-1">
+                {planLabel(profile.plan_code)}
+              </span>
+            </div>
+          </div>
+        </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Colonne principale */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* En-tête */}
-            <Card className="p-6">
-              <div className="flex items-start gap-6 mb-6">
-                <div className="w-24 h-24 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-2xl font-bold flex-shrink-0">
-                  {fullName
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .toUpperCase()}
+        {/* Tabs */}
+        <div className="border-b border-slate-200 mb-4">
+          <nav className="-mb-px flex flex-wrap gap-2">
+            {[
+              { key: "profile" as TabKey, labelFr: "Profil", labelEn: "Profile" },
+              {
+                key: "subscription" as TabKey,
+                labelFr: "Abonnement",
+                labelEn: "Subscription",
+              },
+              {
+                key: "stats" as TabKey,
+                labelFr: "Statistiques",
+                labelEn: "Stats",
+              },
+              {
+                key: "messages" as TabKey,
+                labelFr: "Messages",
+                labelEn: "Messages",
+              },
+            ].map((tab) => {
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`whitespace-nowrap px-3 py-2 text-sm border-b-2 -mb-px ${
+                    isActive
+                      ? "border-pro-blue text-pro-blue font-semibold"
+                      : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-200"
+                  }`}
+                >
+                  {language === "fr" ? tab.labelFr : tab.labelEn}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Contenu selon l’onglet */}
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+          {/* PROFIL */}
+          {activeTab === "profile" && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-800">
+                  {language === "fr" ? "Mon profil" : "My profile"}
+                </h2>
+                {!isEditingProfile ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={startEditProfile}
+                  >
+                    {language === "fr"
+                      ? "Modifier mon profil"
+                      : "Edit my profile"}
+                  </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={cancelEditProfile}
+                      disabled={savingProfile}
+                    >
+                      {language === "fr" ? "Annuler" : "Cancel"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={saveProfile}
+                      disabled={savingProfile}
+                      className="bg-pro-blue hover:bg-blue-700"
+                    >
+                      {savingProfile
+                        ? language === "fr"
+                          ? "Enregistrement..."
+                          : "Saving..."
+                        : language === "fr"
+                        ? "Enregistrer"
+                        : "Save"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Messages de mise à jour */}
+              {profileUpdateError && (
+                <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                  {profileUpdateError}
                 </div>
-                <div className="flex-1">
-                  <h1 className="text-3xl font-bold mb-2">{fullName}</h1>
-                  {worker.profession && (
-                    <Badge variant="secondary" className="mb-3 text-base">
-                      {worker.profession}
-                    </Badge>
+              )}
+              {profileUpdateSuccess && (
+                <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">
+                  {profileUpdateSuccess}
+                </div>
+              )}
+
+              {/* Détails profil */}
+              {!isEditingProfile && (
+                <div className="grid md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Nom complet" : "Full name"}
+                    </div>
+                    <div className="font-medium text-slate-900">
+                      {fullName || "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Métier principal" : "Main trade"}
+                    </div>
+                    <div className="font-medium text-slate-900">
+                      {profile.profession || "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">Email</div>
+                    <div className="font-medium text-slate-900">
+                      {profile.email || "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Téléphone" : "Phone"}
+                    </div>
+                    <div className="font-medium text-slate-900">
+                      {profile.phone || "—"}
+                    </div>
+                  </div>
+                  <div className="md:col-span-2">
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Localisation" : "Location"}
+                    </div>
+                    <div className="font-medium text-slate-900">
+                      {[
+                        profile.country,
+                        profile.region,
+                        profile.city,
+                        profile.commune,
+                        profile.district,
+                      ]
+                        .filter(Boolean)
+                        .join(" • ") || "—"}
+                    </div>
+                  </div>
+                  <div className="md:col-span-2">
+                    <div className="text-xs text-slate-500">
+                      {language === "fr"
+                        ? "Description de vos services"
+                        : "Services description"}
+                    </div>
+                    <div className="text-slate-800 whitespace-pre-line">
+                      {profile.description || "—"}
+                    </div>
+                  </div>
+                  {profile.hourly_rate != null && (
+                    <div>
+                      <div className="text-xs text-slate-500">
+                        {language === "fr"
+                          ? "Tarif horaire déclaré"
+                          : "Declared hourly rate"}
+                      </div>
+                      <div className="font-medium text-slate-900">
+                        {profile.hourly_rate.toLocaleString()}{" "}
+                        {profile.currency || ""}/h
+                      </div>
+                    </div>
                   )}
-                  {locationParts && (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <MapPin className="w-4 h-4" />
-                      <span className="text-sm">{locationParts}</span>
+                </div>
+              )}
+
+              {isEditingProfile && displayProfile && (
+                <div className="grid md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Prénom" : "First name"}
+                    </div>
+                    <Input
+                      value={displayProfile.first_name ?? ""}
+                      onChange={(e) =>
+                        handleEditField("first_name", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Nom" : "Last name"}
+                    </div>
+                    <Input
+                      value={displayProfile.last_name ?? ""}
+                      onChange={(e) =>
+                        handleEditField("last_name", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Métier principal" : "Main trade"}
+                    </div>
+                    <Input
+                      value={displayProfile.profession ?? ""}
+                      onChange={(e) =>
+                        handleEditField("profession", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Téléphone" : "Phone"}
+                    </div>
+                    <Input
+                      value={displayProfile.phone ?? ""}
+                      onChange={(e) =>
+                        handleEditField("phone", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Pays" : "Country"}
+                    </div>
+                    <Input
+                      value={displayProfile.country ?? ""}
+                      onChange={(e) =>
+                        handleEditField("country", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Région" : "Region"}
+                    </div>
+                    <Input
+                      value={displayProfile.region ?? ""}
+                      onChange={(e) =>
+                        handleEditField("region", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Ville" : "City"}
+                    </div>
+                    <Input
+                      value={displayProfile.city ?? ""}
+                      onChange={(e) =>
+                        handleEditField("city", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Commune" : "Commune"}
+                    </div>
+                    <Input
+                      value={displayProfile.commune ?? ""}
+                      onChange={(e) =>
+                        handleEditField("commune", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Quartier" : "District"}
+                    </div>
+                    <Input
+                      value={displayProfile.district ?? ""}
+                      onChange={(e) =>
+                        handleEditField("district", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr"
+                        ? "Tarif horaire (GNF)"
+                        : "Hourly rate (GNF)"}
+                    </div>
+                    <Input
+                      type="number"
+                      value={
+                        displayProfile.hourly_rate != null
+                          ? String(displayProfile.hourly_rate)
+                          : ""
+                      }
+                      onChange={(e) =>
+                        handleEditField(
+                          "hourly_rate",
+                          e.target.value
+                            ? Number(e.target.value)
+                            : (null as any)
+                        )
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Devise" : "Currency"}
+                    </div>
+                    <Input
+                      value={displayProfile.currency ?? ""}
+                      onChange={(e) =>
+                        handleEditField("currency", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <div className="text-xs text-slate-500">
+                      {language === "fr"
+                        ? "Description de vos services"
+                        : "Services description"}
+                    </div>
+                    <Textarea
+                      rows={4}
+                      value={displayProfile.description ?? ""}
+                      onChange={(e) =>
+                        handleEditField("description", e.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Statut + date création */}
+              <div className="mt-2 flex flex-wrap gap-2 items-center">
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusClass(
+                    profile.status
+                  )}`}
+                >
+                  {statusLabel(profile.status)}
+                </span>
+                <span className="text-xs text-slate-400">
+                  {language === "fr" ? "Créé le" : "Created at"}{" "}
+                  {formatDate(profile.created_at)}
+                </span>
+              </div>
+
+              {/* Photos + portfolio */}
+              <div className="pt-4 border-t border-slate-100 space-y-4">
+                <WorkerPhotosManager workerId={profile.id} />
+                <WorkerPortfolioManager workerId={profile.id} />
+              </div>
+            </div>
+          )}
+
+          {/* ABONNEMENT */}
+          {activeTab === "subscription" && (
+            <div className="space-y-4">
+              <h2 className="text-sm font-semibold text-slate-800 mb-2">
+                {language === "fr" ? "Mon abonnement" : "My subscription"}
+              </h2>
+
+              {planUpdateError && (
+                <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                  {planUpdateError}
+                </div>
+              )}
+              {planUpdateSuccess && (
+                <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">
+                  {planUpdateSuccess}
+                </div>
+              )}
+
+              <div className="text-sm">
+                <div className="mb-2">
+                  <span className="text-xs text-slate-500">
+                    {language === "fr" ? "Plan actuel" : "Current plan"}
+                  </span>
+                  <div className="mt-1 inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-200 text-sm">
+                    <span className="font-semibold mr-2">
+                      {planLabel(profile.plan_code)}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {profile.plan_code === "FREE"
+                        ? language === "fr"
+                          ? "Visibilité limitée"
+                          : "Limited visibility"
+                        : language === "fr"
+                        ? "Visibilité avancée + contacts illimités"
+                        : "Boosted visibility + unlimited contacts"}
+                    </span>
+                  </div>
+                </div>
+
+                {profile.hourly_rate != null && (
+                  <div className="mt-3">
+                    <div className="text-xs text-slate-500">
+                      {language === "fr"
+                        ? "Tarif horaire déclaré"
+                        : "Declared hourly rate"}
+                    </div>
+                    <div className="font-medium text-slate-900">
+                      {profile.hourly_rate.toLocaleString()}{" "}
+                      {profile.currency || ""}/h
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions changement de plan */}
+                <div className="pt-3 border-t border-slate-100 mt-3 flex flex-wrap gap-2">
+                  {profile.plan_code !== "FREE" && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={updatingPlan}
+                      onClick={() => updatePlan("FREE")}
+                    >
+                      {updatingPlan && profile.plan_code === "FREE"
+                        ? language === "fr"
+                          ? "Mise à jour..."
+                          : "Updating..."
+                        : language === "fr"
+                        ? "Revenir au plan Gratuit"
+                        : "Switch to Free"}
+                    </Button>
+                  )}
+
+                  {profile.plan_code !== "MONTHLY" && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={updatingPlan}
+                      className="bg-pro-blue hover:bg-blue-700"
+                      onClick={() => updatePlan("MONTHLY")}
+                    >
+                      {updatingPlan && profile.plan_code === "MONTHLY"
+                        ? language === "fr"
+                          ? "Mise à jour..."
+                          : "Updating..."
+                        : language === "fr"
+                        ? "Passer au plan Mensuel"
+                        : "Switch to Monthly"}
+                    </Button>
+                  )}
+
+                  {profile.plan_code !== "YEARLY" && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={updatingPlan}
+                      className="bg-amber-500 hover:bg-amber-600"
+                      onClick={() => updatePlan("YEARLY")}
+                    >
+                      {updatingPlan && profile.plan_code === "YEARLY"
+                        ? language === "fr"
+                          ? "Mise à jour..."
+                          : "Updating..."
+                        : language === "fr"
+                        ? "Passer au plan Annuel"
+                        : "Switch to Yearly"}
+                    </Button>
+                  )}
+                </div>
+
+                <div className="mt-4 text-xs text-slate-500">
+                  {language === "fr"
+                    ? "Pour l’instant, le changement de plan ne déclenche pas encore de paiement automatique. Vous pourrez connecter Stripe ou un autre moyen de paiement plus tard côté back-office."
+                    : "For now, changing plan does not trigger automatic payment yet. You can connect Stripe or another payment gateway later on the back office."}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STATS */}
+          {activeTab === "stats" && (
+            <div className="space-y-4">
+              <h2 className="text-sm font-semibold text-slate-800 mb-2">
+                {language === "fr"
+                  ? "Statistiques personnelles"
+                  : "Personal stats"}
+              </h2>
+
+              {statsError && (
+                <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                  {statsError}
+                </div>
+              )}
+
+              <p className="text-xs text-slate-500 mb-2">
+                {language === "fr"
+                  ? "Suivez les vues de votre profil, le nombre de demandes reçues et votre taux de réponse."
+                  : "Track your profile views, number of requests received and response rate."}
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                {/* Vues du profil */}
+                <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                  <div className="text-xs text-slate-500">
+                    {language === "fr" ? "Vues du profil" : "Profile views"}
+                  </div>
+                  <div className="text-2xl font-bold text-slate-900 mt-1">
+                    {statsLoading ? "…" : profileViews}
+                  </div>
+                </div>
+
+                {/* Demandes reçues */}
+                <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                  <div className="text-xs text-slate-500">
+                    {language === "fr"
+                      ? "Demandes reçues"
+                      : "Requests received"}
+                  </div>
+                  <div className="text-2xl font-bold text-slate-900 mt-1">
+                    {statsLoading ? "…" : requestsCount}
+                  </div>
+                </div>
+
+                {/* Taux de réponse */}
+                <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                  <div className="text-xs text-slate-500">
+                    {language === "fr"
+                      ? "Taux de réponse"
+                      : "Response rate"}
+                  </div>
+                  <div className="text-2xl font-bold text-slate-900 mt-1">
+                    {statsLoading
+                      ? "…"
+                      : requestsCount > 0
+                      ? `${responseRate}%`
+                      : "—"}
+                  </div>
+                  {requestsCount > 0 && !statsLoading && (
+                    <div className="text-[11px] text-slate-500 mt-1">
+                      {language === "fr"
+                        ? `${responseRate}% des demandes marquées comme "En cours" ou "Traité".`
+                        : `${responseRate}% of requests marked as "In progress" or "Done".`}
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Stats rapides */}
-              <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
-                <div className="text-center">
-                  <div className="flex items-center justify-center gap-1 mb-1">
-                    <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
-                    <span className="text-2xl font-bold">
-                      {worker.average_rating?.toFixed(1) || "—"}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {worker.rating_count || 0} avis
+              <div className="text-xs text-slate-500">
+                {language === "fr"
+                  ? "Ces chiffres sont calculés à partir des vues (table op_ouvrier_views) et des demandes reçues (op_ouvrier_contacts)."
+                  : "These figures are based on views (table op_ouvrier_views) and received requests (op_ouvrier_contacts)."}
+              </div>
+            </div>
+          )}
+
+          {/* MESSAGES */}
+          {activeTab === "messages" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-800">
+                    {language === "fr"
+                      ? "Messages reçus"
+                      : "Received messages"}
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {language === "fr"
+                      ? "Répondez directement depuis cet espace : tapez votre message, puis envoyez-le par téléphone, WhatsApp, e-mail, formulaire interne ou copiez-le."
+                      : "Reply directly from here: type your message, then send it via phone, WhatsApp, e-mail, internal form or copy it."}
                   </p>
                 </div>
-
-                <div className="text-center border-x border-border">
-                  <div className="flex items-center justify-center gap-1 mb-1">
-                    <span className="text-2xl font-bold">
-                      {worker.years_experience || 0}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {text.experience}
-                  </p>
-                </div>
-
-                <div className="text-center">
-                  <div className="flex items-center justify-center gap-1 mb-1">
-                    <DollarSign className="w-5 h-5 text-primary" />
-                    <span className="text-lg font-bold">
-                      {formatCurrency(worker.hourly_rate, worker.currency)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {text.perHour}
-                  </p>
-                </div>
-              </div>
-            </Card>
-
-            {/* À propos */}
-            {worker.description && (
-              <Card className="p-6">
-                <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                  <Info className="w-5 h-5 text-primary" />
-                  {text.about}
-                </h2>
-                <p className="text-muted-foreground whitespace-pre-line leading-relaxed">
-                  {worker.description}
-                </p>
-              </Card>
-            )}
-
-            {/* Portfolio / réalisations (lecture seule) */}
-            <WorkerPortfolio workerId={worker.id} />
-
-            {/* Galerie PUBLIC seulement (pas d'upload) */}
-            <WorkerPhotosGallery workerId={worker.id} />
-
-            {/* Avis & notation clients */}
-            <WorkerReviews key={worker.id} workerId={worker.id} />
-          </div>
-
-          {/* Sidebar contact */}
-          <div className="space-y-6">
-            {/* Coordonnées directes */}
-            <Card className="p-6">
-              <h3 className="font-semibold mb-4">{text.contactInfos}</h3>
-
-              <div className="space-y-3 mb-4">
-                {worker.phone && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Phone className="w-4 h-4 text-primary" />
-                    <a href={`tel:${worker.phone}`} className="hover:underline">
-                      {worker.phone}
-                    </a>
-                  </div>
-                )}
-                {worker.email && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Mail className="w-4 h-4 text-primary" />
-                    <a
-                      href={mailtoUrl}
-                      className="hover:underline break-all"
-                    >
-                      {worker.email}
-                    </a>
-                  </div>
-                )}
+                <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
+                  {language === "fr" ? "Total" : "Total"} :{" "}
+                  <span className="ml-1 font-semibold">
+                    {contacts.length}
+                  </span>
+                </span>
               </div>
 
-              <div className="space-y-2">
-                {worker.phone && (
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start"
-                    asChild
-                  >
-                    <a href={`tel:${worker.phone}`}>
-                      <Phone className="w-4 h-4 mr-2" />
-                      {text.callBtn}
-                    </a>
-                  </Button>
-                )}
-
-                {whatsappUrl && (
-                  <Button
-                    className="w-full justify-start bg-green-600 hover:bg-green-700"
-                    asChild
-                  >
-                    <a
-                      href={whatsappUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <MessageCircle className="w-4 h-4 mr-2" />
-                      {text.whatsappBtn}
-                    </a>
-                  </Button>
-                )}
-
-                {mailtoUrl && (
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start"
-                    asChild
-                  >
-                    <a href={mailtoUrl}>
-                      <Mail className="w-4 h-4 mr-2" />
-                      {text.emailBtn}
-                    </a>
-                  </Button>
-                )}
-              </div>
-            </Card>
-
-            {/* Formulaire de contact */}
-            <Card className="p-6">
-              <h3 className="font-semibold mb-2">{text.contactTitle}</h3>
-              <p className="text-xs text-muted-foreground mb-4">
-                {text.contactSubtitle}
-              </p>
-
-              {successMsg && (
-                <div className="mb-4 p-3 text-sm bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 rounded-md">
-                  {successMsg}
+              {contactsLoading && (
+                <div className="text-sm text-slate-500">
+                  {language === "fr"
+                    ? "Chargement de vos demandes..."
+                    : "Loading your requests..."}
                 </div>
               )}
 
-              {errorMsg && (
-                <div className="mb-4 p-3 text-sm bg-destructive/10 text-destructive border border-destructive/20 rounded-md">
-                  {errorMsg}
+              {contactsError && (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+                  {contactsError}
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Nom */}
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    {text.yourName}
-                  </label>
-                  <Input
-                    name="name"
-                    value={form.name}
-                    onChange={handleChange}
-                    required
-                  />
+              {!contactsLoading && !contactsError && contacts.length === 0 && (
+                <div className="text-sm text-slate-500">
+                  {language === "fr"
+                    ? "Vous n’avez pas encore reçu de demandes de contact."
+                    : "You haven't received any contact requests yet."}
                 </div>
+              )}
 
-                {/* Téléphone */}
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    {text.yourPhone}
-                  </label>
-                  <Input
-                    name="phone"
-                    value={form.phone}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
+              {!contactsLoading && !contactsError && contacts.length > 0 && (
+                <ul className="space-y-4">
+                  {contacts.map((c) => {
+                    const replyDraft = (replyDrafts[c.id] || "").trim();
 
-                {/* Email (facultatif) */}
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    {text.yourEmail}{" "}
-                    <span className="text-[10px] text-muted-foreground">
-                      ({language === "fr" ? "facultatif" : "optional"})
-                    </span>
-                  </label>
-                  <Input
-                    type="email"
-                    name="email"
-                    value={form.email}
-                    onChange={handleChange}
-                  />
-                </div>
-
-                {/* Type de demande */}
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    {text.requestTypeLabel}
-                  </label>
-                  <select
-                    name="requestType"
-                    value={form.requestType}
-                    onChange={handleChange}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="devis">{text.requestTypeDevis}</option>
-                    <option value="info">{text.requestTypeInfo}</option>
-                    <option value="urgence">{text.requestTypeUrgence}</option>
-                  </select>
-                </div>
-
-                {/* Budget approx. */}
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    {text.budgetLabel}
-                  </label>
-                  <Input
-                    name="budget"
-                    value={form.budget}
-                    onChange={handleChange}
-                    placeholder={
+                    const emailSubject =
                       language === "fr"
-                        ? "Ex : 1,000,000 GNF"
-                        : "e.g. 1,000,000 GNF"
-                    }
-                  />
-                </div>
+                        ? "Réponse à votre demande via OuvriersPro"
+                        : "Reply to your request via OuvriersPro";
 
-                {/* Date souhaitée */}
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    {text.dateLabel}
-                  </label>
-                  <Input
-                    type="date"
-                    name="preferredDate"
-                    value={form.preferredDate}
-                    onChange={handleChange}
-                  />
-                </div>
+                    const emailBody =
+                      replyDraft.length > 0
+                        ? replyDraft
+                        : language === "fr"
+                        ? "Bonjour,\n\nJe fais suite à votre demande."
+                        : "Hello,\n\nI am following up on your request.";
 
-                {/* Message */}
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    {text.yourMessage}
-                  </label>
-                  <Textarea
-                    name="message"
-                    value={form.message}
-                    onChange={handleChange}
-                    rows={4}
-                    required
-                    placeholder={
-                      language === "fr"
-                        ? "Décrivez votre besoin..."
-                        : "Describe your need..."
-                    }
-                  />
-                </div>
+                    const emailHref = c.client_email
+                      ? `mailto:${c.client_email}?subject=${encodeURIComponent(
+                          emailSubject
+                        )}&body=${encodeURIComponent(emailBody)}`
+                      : "";
 
-                {/* Consentement */}
-                <div className="flex items-start gap-2">
-                  <input
-                    id="consent"
-                    type="checkbox"
-                    name="consent"
-                    checked={form.consent}
-                    onChange={handleChange}
-                    className="mt-1"
-                  />
-                  <label
-                    htmlFor="consent"
-                    className="text-xs text-muted-foreground"
-                  >
-                    {text.consentLabel}
-                  </label>
-                </div>
+                    const whatsappUrl = phoneToWhatsappUrl(
+                      c.client_phone,
+                      replyDraft || undefined
+                    );
 
-                <p className="text-[11px] text-muted-foreground">
-                  {text.privacyNote}
-                </p>
+                    const clientProfileUrl = c.client_id
+                      ? `/clients/${c.client_id}`
+                      : null;
+                    const clientFormUrl = c.client_id
+                      ? `/clients/${c.client_id}/contact`
+                      : null;
 
-                <Button
-                  type="submit"
-                  className="w-full mt-2"
-                  disabled={sending || !form.consent}
-                >
-                  {sending ? (
-                    <>
-                      <Send className="w-4 h-4 mr-2 animate-pulse" />
-                      {text.sending}
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4 mr-2" />
-                      {text.send}
-                    </>
-                  )}
-                </Button>
-              </form>
-            </Card>
-          </div>
+                    const initials =
+                      (c.client_name || "—")
+                        .split(" ")
+                        .filter(Boolean)
+                        .map((n) => n[0])
+                        .join("")
+                        .toUpperCase() || "—";
+
+                    const hasEmail = !!c.client_email;
+                    const hasPhone = !!c.client_phone;
+                    const hasClientProfile = !!c.client_id;
+                    const hasAnyChannel =
+                      hasEmail || hasPhone || hasClientProfile;
+
+                    return (
+                      <li key={c.id}>
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-4 shadow-sm hover:bg-slate-50 transition">
+                          <div className="flex gap-3 flex-1">
+                            {/* Avatar */}
+                            <div className="hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-pro-blue/10 text-pro-blue text-xs font-semibold shrink-0">
+                              {initials !== "—" ? (
+                                initials
+                              ) : (
+                                <User className="w-4 h-4" />
+                              )}
+                            </div>
+
+                            <div className="flex-1 space-y-2">
+                              {/* En-tête message */}
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <div className="text-sm font-semibold text-slate-800">
+                                      {c.client_name || "—"}
+                                    </div>
+                                    <span className="text-[11px] text-slate-400">
+                                      {formatDate(c.created_at)} •{" "}
+                                      {originLabel(c.origin)}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-0.5">
+                                    {hasEmail && (
+                                      <span className="inline-flex items-center gap-1">
+                                        <Mail className="w-3 h-3" />
+                                        {c.client_email}
+                                      </span>
+                                    )}
+                                    {hasPhone && (
+                                      <span className="inline-flex items-center gap-1">
+                                        <Phone className="w-3 h-3" />
+                                        {c.client_phone}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Actions liées au profil client (si client_id présent) */}
+                                  {hasClientProfile && (
+                                    <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                                      <Button
+                                        variant="ghost"
+                                        size="xs"
+                                        asChild
+                                      >
+                                        <a
+                                          href={clientProfileUrl!}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          {language === "fr"
+                                            ? "Voir le profil client"
+                                            : "View client profile"}
+                                        </a>
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="xs"
+                                        asChild
+                                      >
+                                        <a
+                                          href={clientFormUrl!}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          {language === "fr"
+                                            ? "Contacter via le formulaire"
+                                            : "Contact via form"}
+                                        </a>
+                                      </Button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Message client */}
+                              {c.message && (
+                                <div className="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 whitespace-pre-line">
+                                  {c.message}
+                                </div>
+                              )}
+
+                              {/* Bloc réponse rapide + boutons */}
+                              <div className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                  <span className="text-xs font-medium text-slate-600">
+                                    {language === "fr"
+                                      ? "Votre réponse rapide"
+                                      : "Quick reply"}
+                                  </span>
+                                  <span className="text-[11px] text-slate-400">
+                                    {language === "fr"
+                                      ? "Non envoyée automatiquement"
+                                      : "Not sent automatically"}
+                                  </span>
+                                </div>
+                                <Textarea
+                                  rows={2}
+                                  value={replyDrafts[c.id] || ""}
+                                  onChange={(e) =>
+                                    setReplyDrafts((prev) => ({
+                                      ...prev,
+                                      [c.id]: e.target.value,
+                                    }))
+                                  }
+                                  className="text-sm"
+                                  placeholder={
+                                    language === "fr"
+                                      ? "Tapez ici votre réponse…"
+                                      : "Type your answer here…"
+                                  }
+                                />
+
+                                <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                  {/* Message explicatif selon les canaux disponibles */}
+                                  <div className="text-[11px]">
+                                    {!hasAnyChannel ? (
+                                      <div className="text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1">
+                                        {language === "fr"
+                                          ? "Ce client n’a laissé aucun moyen de contact (ni e-mail, ni téléphone, ni compte client). Vous ne pouvez pas lui répondre directement depuis la plateforme. Vous pouvez néanmoins copier votre message si vous disposez d’un autre canal."
+                                          : "This client did not leave any contact details (no e-mail, no phone, no client account). You cannot reply to them directly from the platform. You can still copy your reply if you have another channel."}
+                                      </div>
+                                    ) : (
+                                      <div className="text-slate-400">
+                                        {language === "fr"
+                                          ? "Envoyez votre réponse par le canal de votre choix (WhatsApp, e-mail, téléphone ou formulaire)."
+                                          : "Send your reply using your preferred channel (WhatsApp, e-mail, phone or form)."}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Actions */}
+                                  <div className="flex flex-wrap justify-end gap-2 mt-1 sm:mt-0">
+                                    {/* Copier toujours disponible */}
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="xs"
+                                      onClick={() => handleCopyReply(c.id)}
+                                    >
+                                      <Copy className="w-3 h-3 mr-1" />
+                                      {language === "fr"
+                                        ? "Copier la réponse"
+                                        : "Copy reply"}
+                                    </Button>
+
+                                    {/* Les autres boutons seulement si canal existant */}
+                                    {hasPhone && (
+                                      <Button
+                                        variant="outline"
+                                        size="xs"
+                                        asChild
+                                      >
+                                        <a href={`tel:${c.client_phone}`}>
+                                          <Phone className="w-3 h-3 mr-1" />
+                                          {language === "fr"
+                                            ? "Appeler"
+                                            : "Call"}
+                                        </a>
+                                      </Button>
+                                    )}
+                                    {hasPhone && whatsappUrl && (
+                                      <Button
+                                        variant="outline"
+                                        size="xs"
+                                        asChild
+                                      >
+                                        <a
+                                          href={whatsappUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          <MessageCircle className="w-3 h-3 mr-1" />
+                                          WhatsApp
+                                        </a>
+                                      </Button>
+                                    )}
+                                    {hasEmail && emailHref && (
+                                      <Button size="xs" asChild>
+                                        <a href={emailHref}>
+                                          <Mail className="w-3 h-3 mr-1" />
+                                          {language === "fr"
+                                            ? "Envoyer par e-mail"
+                                            : "Send by e-mail"}
+                                        </a>
+                                      </Button>
+                                    )}
+                                    {hasClientProfile && clientFormUrl && (
+                                      <Button size="xs" variant="outline" asChild>
+                                        <a
+                                          href={clientFormUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          {language === "fr"
+                                            ? "Formulaire interne"
+                                            : "Internal form"}
+                                        </a>
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Statut à droite */}
+                          <div className="flex items-start justify-end">
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${contactStatusClass(
+                                c.status
+                              )}`}
+                            >
+                              {contactStatusLabel(c.status)}
+                            </span>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              <div className="text-xs text-slate-500">
+                {language === "fr"
+                  ? "Ces demandes sont directement liées à votre profil ouvrier (table op_ouvrier_contacts filtrée sur worker_id)."
+                  : "These requests are directly linked to your worker profile (table op_ouvrier_contacts filtered by worker_id)."}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-export default WorkerDetail;
+export default WorkerDashboard;
