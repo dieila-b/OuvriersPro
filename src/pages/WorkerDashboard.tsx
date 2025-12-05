@@ -30,6 +30,14 @@ type WorkerProfile = {
   created_at: string;
 };
 
+type ClientProfile = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+};
+
 type WorkerContact = {
   id: string;
   worker_id: string | null;
@@ -41,6 +49,7 @@ type WorkerContact = {
   status: string | null;
   origin: string | null;
   created_at: string;
+  client_profile?: ClientProfile | null;
 };
 
 type TabKey = "profile" | "subscription" | "stats" | "messages";
@@ -170,6 +179,10 @@ const WorkerDashboard: React.FC = () => {
       setContactsLoading(true);
       setContactsError(null);
 
+      // IMPORTANT :
+      // - Ici, on suppose une table des clients nommée "op_clients"
+      // - et une relation Supabase op_ouvrier_contacts.client_id -> op_clients.id
+      // Si le nom de la table est différent, remplace "op_clients" par le bon nom.
       const { data: contactsData, error: contactsErr } = await supabase
         .from("op_ouvrier_contacts")
         .select(
@@ -183,7 +196,14 @@ const WorkerDashboard: React.FC = () => {
           message,
           status,
           origin,
-          created_at
+          created_at,
+          client:op_clients (
+            id,
+            first_name,
+            last_name,
+            email,
+            phone
+          )
         `
         )
         .eq("worker_id", wp.id)
@@ -199,7 +219,34 @@ const WorkerDashboard: React.FC = () => {
             : `Error while loading your requests: ${contactsErr.message}`
         );
       } else {
-        setContacts((contactsData as WorkerContact[]) ?? []);
+        const mapped: WorkerContact[] =
+          (contactsData || []).map((row: any) => {
+            const client: ClientProfile | null = row.client ?? null;
+
+            // On reconstruit les infos client à partir du profil lié si besoin
+            const clientId: string | null =
+              row.client_id ?? client?.id ?? null;
+
+            const clientNameFromProfile =
+              client &&
+              `${client.first_name || ""} ${client.last_name || ""}`.trim();
+
+            return {
+              id: row.id,
+              worker_id: row.worker_id,
+              client_id: clientId,
+              client_name: row.client_name || clientNameFromProfile || null,
+              client_email: row.client_email || client?.email || null,
+              client_phone: row.client_phone || client?.phone || null,
+              message: row.message,
+              status: row.status,
+              origin: row.origin,
+              created_at: row.created_at,
+              client_profile: client,
+            };
+          }) ?? [];
+
+        setContacts(mapped);
       }
 
       setContactsLoading(false);
@@ -964,9 +1011,7 @@ const WorkerDashboard: React.FC = () => {
           {activeTab === "subscription" && (
             <div className="space-y-4">
               <h2 className="text-sm font-semibold text-slate-800 mb-2">
-                {language === "fr"
-                  ? "Mon abonnement"
-                  : "My subscription"}
+                {language === "fr" ? "Mon abonnement" : "My subscription"}
               </h2>
 
               {planUpdateError && (
@@ -1249,7 +1294,8 @@ const WorkerDashboard: React.FC = () => {
                     const hasEmail = !!c.client_email;
                     const hasPhone = !!c.client_phone;
                     const hasClientProfile = !!c.client_id;
-                    const hasAnyChannel = hasEmail || hasPhone || hasClientProfile;
+                    const hasAnyChannel =
+                      hasEmail || hasPhone || hasClientProfile;
 
                     return (
                       <li key={c.id}>
