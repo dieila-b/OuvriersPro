@@ -40,6 +40,9 @@ import ClientMessagesList from "./pages/ClientMessagesList";
 // Liste des ouvriers favoris
 import ClientFavoritesList from "./pages/ClientFavoritesList";
 
+// Formulaire interne pour qu'un ouvrier contacte un client précis
+import ClientContactForm from "./pages/ClientContactForm";
+
 // Protection routes
 import PrivateRoute from "./components/PrivateRoute";
 
@@ -132,6 +135,16 @@ const App = () => (
               element={
                 <PrivateRoute allowedRoles={["worker"]}>
                   <WorkerDashboard />
+                </PrivateRoute>
+              }
+            />
+
+            {/* 📨 Formulaire interne : un ouvrier répond à un client précis (protégé : worker) */}
+            <Route
+              path="/clients/:clientId/contact"
+              element={
+                <PrivateRoute allowedRoles={["worker"]}>
+                  <ClientContactForm />
                 </PrivateRoute>
               }
             />
