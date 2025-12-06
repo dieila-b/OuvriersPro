@@ -70,6 +70,11 @@ const WorkerDashboard: React.FC = () => {
   // Réponses rapides par message (id -> texte)
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
 
+  // Envoi via formulaire interne (par message)
+  const [sendingInternalReply, setSendingInternalReply] = useState<
+    Record<string, boolean>
+  >({});
+
   // Édition du profil
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -179,7 +184,6 @@ const WorkerDashboard: React.FC = () => {
       setContactsLoading(true);
       setContactsError(null);
 
-      // IMPORTANT :
       // On joint ici la table op_clients via la FK client_id -> op_clients.id
       const { data: contactsData, error: contactsErr } = await supabase
         .from("op_ouvrier_contacts")
@@ -415,6 +419,78 @@ const WorkerDashboard: React.FC = () => {
           ? "Copie automatique non disponible. Sélectionnez le texte et copiez-le manuellement."
           : "Automatic copy not available. Please select the text and copy it manually."
       );
+    }
+  };
+
+  // Envoi via formulaire interne (stocké dans op_client_worker_messages)
+  const handleSendInternalReply = async (contact: WorkerContact) => {
+    if (!profile) return;
+
+    const text = (replyDrafts[contact.id] || "").trim();
+
+    if (!text) {
+      window.alert(
+        language === "fr"
+          ? "Veuillez saisir une réponse avant d'utiliser le formulaire interne."
+          : "Please type a reply before using the internal form."
+      );
+      return;
+    }
+
+    if (!contact.client_id) {
+      window.alert(
+        language === "fr"
+          ? "Ce client n’a pas de compte rattaché. Vous ne pouvez pas utiliser le formulaire interne pour cette demande."
+          : "This client has no linked account. You cannot use the internal form for this request."
+      );
+      return;
+    }
+
+    try {
+      setSendingInternalReply((prev) => ({ ...prev, [contact.id]: true }));
+
+      const { error: insertError } = await supabase
+        .from("op_client_worker_messages")
+        .insert({
+          contact_id: contact.id,
+          worker_id: profile.id,
+          client_id: contact.client_id,
+          sender_role: "worker",
+          message: text,
+        });
+
+      if (insertError) {
+        console.error(insertError);
+        window.alert(
+          language === "fr"
+            ? "Impossible d’enregistrer votre réponse interne."
+            : "Unable to save your internal reply."
+        );
+        return;
+      }
+
+      // Optionnel : marquer la demande comme "en cours" si elle était nouvelle
+      if (!contact.status || contact.status === "new") {
+        await supabase
+          .from("op_ouvrier_contacts")
+          .update({ status: "in_progress" })
+          .eq("id", contact.id);
+      }
+
+      window.alert(
+        language === "fr"
+          ? "Votre réponse interne a été enregistrée. Le client pourra la consulter dans son espace."
+          : "Your internal reply has been saved. The client will see it in their space."
+      );
+    } catch (e) {
+      console.error(e);
+      window.alert(
+        language === "fr"
+          ? "Une erreur est survenue lors de l’enregistrement du message."
+          : "An error occurred while saving the message."
+      );
+    } finally {
+      setSendingInternalReply((prev) => ({ ...prev, [contact.id]: false }));
     }
   };
 
@@ -1274,9 +1350,7 @@ const WorkerDashboard: React.FC = () => {
                     const clientProfileUrl = c.client_id
                       ? `/clients/${c.client_id}`
                       : null;
-                    const clientFormUrl = c.client_id
-                      ? `/clients/${c.client_id}/contact`
-                      : null;
+                    const hasClientProfile = !!c.client_id;
 
                     const initials =
                       (c.client_name || "—")
@@ -1288,7 +1362,6 @@ const WorkerDashboard: React.FC = () => {
 
                     const hasEmail = !!c.client_email;
                     const hasPhone = !!c.client_phone;
-                    const hasClientProfile = !!c.client_id;
                     const hasAnyChannel =
                       hasEmail || hasPhone || hasClientProfile;
 
@@ -1334,7 +1407,7 @@ const WorkerDashboard: React.FC = () => {
                                   </div>
 
                                   {/* Actions liées au profil client (si client_id présent) */}
-                                  {hasClientProfile && (
+                                  {hasClientProfile && clientProfileUrl && (
                                     <div className="mt-1 flex flex-wrap gap-2 text-xs">
                                       <Button
                                         variant="ghost"
@@ -1342,28 +1415,13 @@ const WorkerDashboard: React.FC = () => {
                                         asChild
                                       >
                                         <a
-                                          href={clientProfileUrl!}
+                                          href={clientProfileUrl}
                                           target="_blank"
                                           rel="noopener noreferrer"
                                         >
                                           {language === "fr"
                                             ? "Voir le profil client"
                                             : "View client profile"}
-                                        </a>
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="xs"
-                                        asChild
-                                      >
-                                        <a
-                                          href={clientFormUrl!}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                        >
-                                          {language === "fr"
-                                            ? "Contacter via le formulaire"
-                                            : "Contact via form"}
                                         </a>
                                       </Button>
                                     </div>
@@ -1421,8 +1479,8 @@ const WorkerDashboard: React.FC = () => {
                                     ) : (
                                       <div className="text-slate-400">
                                         {language === "fr"
-                                          ? "Envoyez votre réponse par le canal de votre choix (WhatsApp, e-mail, téléphone ou formulaire)."
-                                          : "Send your reply using your preferred channel (WhatsApp, e-mail, phone or form)."}
+                                          ? "Envoyez votre réponse par le canal de votre choix (WhatsApp, e-mail, téléphone ou formulaire interne)."
+                                          : "Send your reply using your preferred channel (WhatsApp, e-mail, phone or internal form)."}
                                       </div>
                                     )}
                                   </div>
@@ -1442,7 +1500,7 @@ const WorkerDashboard: React.FC = () => {
                                         : "Copy reply"}
                                     </Button>
 
-                                    {/* Les autres boutons seulement si canal existant */}
+                                    {/* Appel téléphone */}
                                     {hasPhone && (
                                       <Button
                                         variant="outline"
@@ -1457,6 +1515,8 @@ const WorkerDashboard: React.FC = () => {
                                         </a>
                                       </Button>
                                     )}
+
+                                    {/* WhatsApp */}
                                     {hasPhone && whatsappUrl && (
                                       <Button
                                         variant="outline"
@@ -1473,6 +1533,8 @@ const WorkerDashboard: React.FC = () => {
                                         </a>
                                       </Button>
                                     )}
+
+                                    {/* E-mail */}
                                     {hasEmail && emailHref && (
                                       <Button size="xs" asChild>
                                         <a href={emailHref}>
@@ -1483,17 +1545,25 @@ const WorkerDashboard: React.FC = () => {
                                         </a>
                                       </Button>
                                     )}
-                                    {hasClientProfile && clientFormUrl && (
-                                      <Button size="xs" variant="outline" asChild>
-                                        <a
-                                          href={clientFormUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                        >
-                                          {language === "fr"
-                                            ? "Formulaire interne"
-                                            : "Internal form"}
-                                        </a>
+
+                                    {/* Formulaire interne (message stocké dans la table) */}
+                                    {hasClientProfile && (
+                                      <Button
+                                        size="xs"
+                                        variant="outline"
+                                        type="button"
+                                        disabled={sendingInternalReply[c.id]}
+                                        onClick={() =>
+                                          handleSendInternalReply(c)
+                                        }
+                                      >
+                                        {sendingInternalReply[c.id]
+                                          ? language === "fr"
+                                            ? "Envoi..."
+                                            : "Sending..."
+                                          : language === "fr"
+                                          ? "Formulaire interne"
+                                          : "Internal form"}
                                       </Button>
                                     )}
                                   </div>
