@@ -180,9 +180,7 @@ const WorkerDashboard: React.FC = () => {
       setContactsError(null);
 
       // IMPORTANT :
-      // - Ici, on suppose une table des clients nommée "op_clients"
-      // - et une relation Supabase op_ouvrier_contacts.client_id -> op_clients.id
-      // Si le nom de la table est différent, remplace "op_clients" par le bon nom.
+      // On joint ici la table op_clients via la FK client_id -> op_clients.id
       const { data: contactsData, error: contactsErr } = await supabase
         .from("op_ouvrier_contacts")
         .select(
@@ -223,7 +221,6 @@ const WorkerDashboard: React.FC = () => {
           (contactsData || []).map((row: any) => {
             const client: ClientProfile | null = row.client ?? null;
 
-            // On reconstruit les infos client à partir du profil lié si besoin
             const clientId: string | null =
               row.client_id ?? client?.id ?? null;
 
@@ -752,7 +749,7 @@ const WorkerDashboard: React.FC = () => {
                 </div>
               )}
               {profileUpdateSuccess && (
-                <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">
+                <div className="text-xs text-emerald-700 bg-emerald-50 border-emerald-100 border rounded px-3 py-2">
                   {profileUpdateSuccess}
                 </div>
               )}
@@ -949,9 +946,7 @@ const WorkerDashboard: React.FC = () => {
                       onChange={(e) =>
                         handleEditField(
                           "hourly_rate",
-                          e.target.value
-                            ? Number(e.target.value)
-                            : (null as any)
+                          e.target.value ? Number(e.target.value) : (null as any)
                         )
                       }
                     />
@@ -1020,7 +1015,7 @@ const WorkerDashboard: React.FC = () => {
                 </div>
               )}
               {planUpdateSuccess && (
-                <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">
+                <div className="text-xs text-emerald-700 bg-emerald-50 border-emerald-100 border rounded px-3 py-2">
                   {planUpdateSuccess}
                 </div>
               )}
