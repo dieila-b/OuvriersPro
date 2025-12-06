@@ -444,8 +444,8 @@ const WorkerDashboard: React.FC = () => {
         console.error("sendInternalReply error", error);
         window.alert(
           language === "fr"
-            ? "Impossible d'enregistrer votre réponse interne."
-            : "Unable to save your internal reply."
+            ? `Impossible d'enregistrer votre réponse interne.\n\nDétail : ${error.message}`
+            : `Unable to save your internal reply.\n\nDetails: ${error.message}`
         );
         return;
       }
@@ -463,12 +463,16 @@ const WorkerDashboard: React.FC = () => {
           ? "Votre réponse interne a été enregistrée."
           : "Your internal reply has been saved."
       );
-    } catch (e) {
+    } catch (e: any) {
       console.error("sendInternalReply exception", e);
       window.alert(
         language === "fr"
-          ? "Une erreur est survenue lors de l'enregistrement de votre réponse interne."
-          : "An error occurred while saving your internal reply."
+          ? `Une erreur est survenue lors de l'enregistrement de votre réponse interne.\n\nDétail : ${
+              e?.message || e
+            }`
+          : `An error occurred while saving your internal reply.\n\nDetails: ${
+              e?.message || e
+            }`
       );
     }
   };
