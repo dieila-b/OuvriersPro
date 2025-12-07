@@ -6,7 +6,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, Phone, MessageCircle, MapPin } from "lucide-react";
+import { Mail, Phone, MessageCircle, MapPin, Star } from "lucide-react";
 
 type WorkerProfile = {
   id: string;
@@ -26,24 +26,43 @@ type WorkerProfile = {
   currency: string | null;
 };
 
+type Review = {
+  id: string;
+  rating: number | null;
+  comment: string | null;
+  created_at: string;
+  client_name: string | null;
+};
+
 const WorkerDetail: React.FC = () => {
   const { language } = useLanguage();
   const params = useParams();
-  // compat : /workers/:id ou /workers/:workerId
   const workerId = (params.workerId as string) || (params.id as string);
 
   const [worker, setWorker] = useState<WorkerProfile | null>(null);
   const [loadingWorker, setLoadingWorker] = useState(true);
   const [workerError, setWorkerError] = useState<string | null>(null);
 
-  // formulaire de contact
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [message, setMessage] = useState("");
+  // Formulaire de contact (colonne de droite)
+  const [clientName, setClientName] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [requestType, setRequestType] = useState("Demande de devis");
+  const [approxBudget, setApproxBudget] = useState("");
+  const [desiredDate, setDesiredDate] = useState("");
+  const [clientMessage, setClientMessage] = useState("");
+  const [acceptedSharing, setAcceptedSharing] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+
+  // Avis clients (partie basse gauche)
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsError, setReviewsError] = useState<string | null>(null);
+  const [newRating, setNewRating] = useState(0);
+  const [newComment, setNewComment] = useState("");
+  const [submitReviewLoading, setSubmitReviewLoading] = useState(false);
 
   useEffect(() => {
     const loadWorker = async () => {
@@ -101,6 +120,37 @@ const WorkerDetail: React.FC = () => {
     loadWorker();
   }, [workerId, language]);
 
+  // Chargement des avis (si table présente)
+  useEffect(() => {
+    const loadReviews = async () => {
+      if (!workerId) return;
+
+      setReviewsLoading(true);
+      setReviewsError(null);
+
+      const { data, error } = await supabase
+        .from("op_ouvrier_reviews")
+        .select("id, rating, comment, created_at, client_name")
+        .eq("worker_id", workerId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("loadReviews error", error);
+        setReviewsError(
+          language === "fr"
+            ? "Impossible de charger les avis."
+            : "Unable to load reviews."
+        );
+      } else {
+        setReviews((data || []) as Review[]);
+      }
+
+      setReviewsLoading(false);
+    };
+
+    loadReviews();
+  }, [workerId, language]);
+
   const fullName =
     (worker?.first_name || "") +
     (worker?.last_name ? ` ${worker.last_name}` : "");
@@ -123,22 +173,36 @@ const WorkerDetail: React.FC = () => {
       })()
     : "";
 
-  /**
-   * Envoi de la demande :
-   * 1) vérifie que l’utilisateur est connecté
-   * 2) récupère ou crée un profil dans op_clients (user_id = auth.user.id)
-   * 3) insère la demande dans op_ouvrier_contacts en liant worker_id + client_id
-   */
-  const handleSubmit = async (e: React.FormEvent) => {
+  const averageRating =
+    reviews.length > 0
+      ? Math.round(
+          (reviews.reduce(
+            (sum, r) => sum + (r.rating || 0),
+            0
+          ) /
+            reviews.length) *
+            10
+        ) / 10
+      : 0;
+
+  const handleSubmitContact = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!worker) return;
+
+    if (!acceptedSharing) {
+      setSubmitError(
+        language === "fr"
+          ? "Vous devez accepter que vos coordonnées soient transmises à cet ouvrier."
+          : "You must accept sharing your details with this worker."
+      );
+      return;
+    }
 
     setSubmitting(true);
     setSubmitError(null);
     setSubmitSuccess(null);
 
     try {
-      // 1) utilisateur connecté
       const { data: authData, error: authError } = await supabase.auth.getUser();
       const user = authData?.user;
 
@@ -150,7 +214,7 @@ const WorkerDetail: React.FC = () => {
         );
       }
 
-      // 2) récupérer ou créer le profil client
+      // Récupérer ou créer le profil client
       let clientProfileId: string | null = null;
 
       const { data: existingClient, error: selectClientError } = await supabase
@@ -175,10 +239,10 @@ const WorkerDetail: React.FC = () => {
           .from("op_clients")
           .insert({
             user_id: user.id,
-            first_name: name || null,
+            first_name: clientName || null,
             last_name: null,
-            email: email || user.email || null,
-            phone: phone || null,
+            email: clientEmail || user.email || null,
+            phone: clientPhone || null,
           })
           .select("id")
           .maybeSingle();
@@ -203,16 +267,45 @@ const WorkerDetail: React.FC = () => {
         );
       }
 
-      // 3) insérer la demande dans op_ouvrier_contacts
+      // Message détaillé (comme dans le dashboard ouvrier)
+      const detailedMessageLines: string[] = [];
+      if (requestType) {
+        detailedMessageLines.push(
+          `${language === "fr" ? "Type de demande" : "Request type"} : ${
+            requestType
+          }`
+        );
+      }
+      if (approxBudget) {
+        detailedMessageLines.push(
+          `${language === "fr"
+            ? "Budget approximatif (facultatif)"
+            : "Approx. budget (optional)"
+          } : ${approxBudget}`
+        );
+      }
+      if (desiredDate) {
+        detailedMessageLines.push(
+          `${language === "fr"
+            ? "Date souhaitée (facultatif)"
+            : "Desired date (optional)"
+          } : ${desiredDate}`
+        );
+      }
+      if (clientMessage) {
+        detailedMessageLines.push(clientMessage);
+      }
+      const detailedMessage = detailedMessageLines.join("\n");
+
       const { error: contactError } = await supabase
         .from("op_ouvrier_contacts")
         .insert({
           worker_id: worker.id,
           client_id: clientProfileId,
-          client_name: name || null,
-          client_email: email || user.email || null,
-          client_phone: phone || null,
-          message: message || null,
+          client_name: clientName || null,
+          client_email: clientEmail || user.email || null,
+          client_phone: clientPhone || null,
+          message: detailedMessage || null,
           origin: "web",
           status: "new",
         });
@@ -228,16 +321,80 @@ const WorkerDetail: React.FC = () => {
 
       setSubmitSuccess(
         language === "fr"
-          ? "Votre demande a été envoyée à l’ouvrier."
-          : "Your request has been sent to the worker."
+          ? "Votre demande a été envoyée à cet ouvrier."
+          : "Your request has been sent to this worker."
       );
-      setMessage("");
-      // on garde nom / téléphone / email pour les prochaines demandes
+      // On garde les infos de contact, on vide seulement le message + champs optionnels
+      setRequestType("Demande de devis");
+      setApproxBudget("");
+      setDesiredDate("");
+      setClientMessage("");
     } catch (err: any) {
       console.error(err);
       setSubmitError(err.message || "Error");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!worker) return;
+    if (newRating <= 0) return;
+
+    setSubmitReviewLoading(true);
+
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      const user = authData?.user;
+      if (authError || !user) {
+        throw new Error(
+          language === "fr"
+            ? "Vous devez être connecté pour laisser un avis."
+            : "You must be logged in to leave a review."
+        );
+      }
+
+      const { data: clientProfile, error: clientError } = await supabase
+        .from("op_clients")
+        .select("first_name")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (clientError && clientError.code !== "PGRST116") {
+        console.error("client profile for review error", clientError);
+      }
+
+      const { data: newReview, error: insertReviewError } = await supabase
+        .from("op_ouvrier_reviews")
+        .insert({
+          worker_id: worker.id,
+          rating: newRating,
+          comment: newComment || null,
+          client_id: null,
+          client_name:
+            clientProfile?.first_name || user.email || "Client OuvriersPro",
+        })
+        .select("id, rating, comment, created_at, client_name")
+        .maybeSingle();
+
+      if (insertReviewError || !newReview) {
+        console.error("insert review error", insertReviewError);
+        throw new Error(
+          language === "fr"
+            ? "Impossible d’enregistrer votre avis."
+            : "Unable to save your review."
+        );
+      }
+
+      setReviews((prev) => [newReview as Review, ...prev]);
+      setNewRating(0);
+      setNewComment("");
+    } catch (err: any) {
+      console.error(err);
+      setReviewsError(err.message || "Error");
+    } finally {
+      setSubmitReviewLoading(false);
     }
   };
 
@@ -268,201 +425,524 @@ const WorkerDetail: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
-      <div className="max-w-6xl mx-auto px-4 flex flex-col lg:flex-row gap-6">
-        {/* Colonne gauche : profil ouvrier */}
-        <div className="flex-1 space-y-4">
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-pro-blue/10 flex items-center justify-center text-pro-blue font-semibold text-lg">
-                {fullName
-                  ? fullName
-                      .split(" ")
-                      .filter(Boolean)
-                      .slice(0, 2)
-                      .map((n) => n[0])
-                      .join("")
-                      .toUpperCase()
-                  : "OP"}
+      <div className="max-w-6xl mx-auto px-4">
+        {/* Bouton retour */}
+        <button
+          type="button"
+          onClick={() => window.history.back()}
+          className="mb-4 inline-flex items-center text-xs text-slate-500 hover:text-slate-700"
+        >
+          ←{" "}
+          {language === "fr"
+            ? "Retour aux résultats"
+            : "Back to search results"}
+        </button>
+
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Colonne gauche : profil, à propos, portfolio, galerie, avis */}
+          <div className="flex-1 space-y-4">
+            {/* Carte header + stats */}
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-full bg-pro-blue/10 flex items-center justify-center text-pro-blue font-semibold text-lg">
+                    {fullName
+                      ? fullName
+                          .split(" ")
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((n) => n[0])
+                          .join("")
+                          .toUpperCase()
+                      : "OP"}
+                  </div>
+                  <div>
+                    <h1 className="text-xl font-bold text-slate-900">
+                      {fullName ||
+                        (language === "fr" ? "Ouvrier" : "Worker")}
+                    </h1>
+                    {worker.profession && (
+                      <p className="text-sm text-slate-600">
+                        {worker.profession}
+                      </p>
+                    )}
+                    {location && (
+                      <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500">
+                        <MapPin className="w-3 h-3" />
+                        {location}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Stats (note, années, tarif) */}
+                <div className="grid grid-cols-3 gap-3 text-center text-xs">
+                  <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
+                    <div className="inline-flex items-center gap-1 text-amber-500">
+                      <Star className="w-4 h-4 fill-amber-400" />
+                      <span className="text-sm font-semibold">
+                        {averageRating > 0 ? averageRating.toFixed(1) : "—"}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      {language === "fr" ? "avis" : "reviews"}
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      {reviews.length}{" "}
+                      {language === "fr"
+                        ? reviews.length <= 1
+                          ? "avis"
+                          : "avis"
+                        : reviews.length <= 1
+                        ? "review"
+                        : "reviews"}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
+                    <div className="text-sm font-semibold text-slate-900">
+                      0
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      {language === "fr"
+                        ? "ans d'expérience"
+                        : "years experience"}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
+                    <div className="text-sm font-semibold text-slate-900">
+                      {worker.hourly_rate != null
+                        ? `${worker.hourly_rate.toLocaleString()} ${
+                            worker.currency || "GNF"
+                          }`
+                        : "—"}
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      {language === "fr" ? "par heure" : "per hour"}
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-slate-900">
-                  {fullName || (language === "fr" ? "Ouvrier" : "Worker")}
-                </h1>
-                {worker.profession && (
-                  <p className="text-sm text-slate-600">{worker.profession}</p>
+            </div>
+
+            {/* À propos */}
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-800 mb-2">
+                {language === "fr" ? "À propos" : "About"}
+              </h2>
+              <p className="text-sm text-slate-700 whitespace-pre-line">
+                {worker.description ||
+                  (language === "fr"
+                    ? "Aucune description fournie pour le moment."
+                    : "No description provided yet.")}
+              </p>
+            </div>
+
+            {/* Portfolio / Réalisations (placeholder, à brancher sur ta table de projets) */}
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-800 mb-1">
+                {language === "fr"
+                  ? "Portfolio / Réalisations"
+                  : "Portfolio / Works"}
+              </h2>
+              <p className="text-xs text-slate-500 mb-2">
+                {language === "fr"
+                  ? "Découvrez quelques projets réalisés par ce professionnel."
+                  : "Discover some projects completed by this professional."}
+              </p>
+              <p className="text-sm text-slate-500">
+                {language === "fr"
+                  ? "Aucune réalisation publiée pour le moment."
+                  : "No published work yet."}
+              </p>
+            </div>
+
+            {/* Galerie photos (placeholder simple – tu pourras brancher tes vraies photos plus tard) */}
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-800 mb-1">
+                {language === "fr" ? "Galerie photos" : "Photo gallery"}
+              </h2>
+              <p className="text-xs text-slate-500 mb-2">
+                {language === "fr"
+                  ? "Découvrez quelques réalisations de cet ouvrier."
+                  : "Discover some works from this worker."}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Ici tu peux remplacer par les vraies images Supabase */}
+                <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+              </div>
+            </div>
+
+            {/* Avis clients */}
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-800 mb-1">
+                {language === "fr" ? "Avis clients" : "Customer reviews"}
+              </h2>
+              {reviewsError && (
+                <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                  {reviewsError}
+                </div>
+              )}
+
+              {/* Résumé note + nombre avis */}
+              <div className="flex items-center gap-2 mb-3 text-sm">
+                <div className="inline-flex items-center gap-1 text-amber-500">
+                  <Star className="w-4 h-4 fill-amber-400" />
+                  <span className="font-semibold">
+                    {averageRating > 0 ? averageRating.toFixed(1) : "—"}
+                  </span>
+                </div>
+                <span className="text-xs text-slate-500">
+                  {reviews.length}{" "}
+                  {language === "fr"
+                    ? reviews.length <= 1
+                      ? "avis"
+                      : "avis"
+                    : reviews.length <= 1
+                    ? "review"
+                    : "reviews"}
+                </span>
+              </div>
+
+              {/* Liste des avis */}
+              <div className="space-y-3 mb-4">
+                {reviewsLoading && (
+                  <div className="text-xs text-slate-500">
+                    {language === "fr"
+                      ? "Chargement des avis..."
+                      : "Loading reviews..."}
+                  </div>
                 )}
-                {location && (
-                  <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500">
-                    <MapPin className="w-3 h-3" />
-                    {location}
-                  </p>
+                {!reviewsLoading && reviews.length === 0 && (
+                  <div className="text-xs text-slate-500">
+                    {language === "fr"
+                      ? "Aucun avis pour le moment."
+                      : "No review yet."}
+                  </div>
+                )}
+                {!reviewsLoading &&
+                  reviews.map((r) => (
+                    <div
+                      key={r.id}
+                      className="border border-slate-100 rounded-lg px-3 py-2 text-xs"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-semibold text-slate-800">
+                          {r.client_name || "Client"}
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          {new Date(r.created_at).toLocaleDateString(
+                            language === "fr" ? "fr-FR" : "en-GB"
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 mb-1">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`w-3 h-3 ${
+                              (r.rating || 0) > i
+                                ? "text-amber-500 fill-amber-400"
+                                : "text-slate-200"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      {r.comment && (
+                        <p className="text-slate-700 whitespace-pre-line">
+                          {r.comment}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+              </div>
+
+              {/* Formulaire pour laisser un avis */}
+              <form onSubmit={handleSubmitReview} className="border-t pt-3 mt-3">
+                <div className="text-xs font-semibold text-slate-700 mb-2">
+                  {language === "fr"
+                    ? "Laisser une note et un avis"
+                    : "Leave a rating and review"}
+                </div>
+                <div className="flex items-center gap-1 mb-2">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setNewRating(i + 1)}
+                      className="focus:outline-none"
+                    >
+                      <Star
+                        className={`w-4 h-4 ${
+                          newRating > i
+                            ? "text-amber-500 fill-amber-400"
+                            : "text-slate-200"
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+                <Textarea
+                  rows={3}
+                  className="text-sm mb-2"
+                  placeholder={
+                    language === "fr"
+                      ? "Votre avis…"
+                      : "Your review…"
+                  }
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="bg-pro-blue hover:bg-blue-700"
+                  disabled={submitReviewLoading || newRating === 0}
+                >
+                  {submitReviewLoading
+                    ? language === "fr"
+                      ? "Envoi de l’avis..."
+                      : "Sending review..."
+                    : language === "fr"
+                    ? "Envoyer l’avis"
+                    : "Submit review"}
+                </Button>
+              </form>
+            </div>
+          </div>
+
+          {/* Colonne droite : coordonnées + formulaire de contact */}
+          <div className="w-full lg:w-[360px] space-y-4">
+            {/* Coordonnées directes */}
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-800 mb-3">
+                {language === "fr"
+                  ? "Coordonnées directes"
+                  : "Direct contact"}
+              </h2>
+              <div className="space-y-2 text-xs">
+                {worker.phone && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start"
+                    asChild
+                  >
+                    <a href={`tel:${worker.phone}`}>
+                      <Phone className="w-3 h-3 mr-2" />
+                      {worker.phone}
+                    </a>
+                  </Button>
+                )}
+                {worker.email && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start"
+                    asChild
+                  >
+                    <a href={`mailto:${worker.email}`}>
+                      <Mail className="w-3 h-3 mr-2" />
+                      {worker.email}
+                    </a>
+                  </Button>
+                )}
+                {whatsappUrl && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start"
+                    asChild
+                  >
+                    <a
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <MessageCircle className="w-3 h-3 mr-2" />
+                      WhatsApp
+                    </a>
+                  </Button>
                 )}
               </div>
             </div>
 
-            {worker.hourly_rate != null && (
-              <div className="mt-4 text-sm">
-                <span className="text-xs text-slate-500 block">
-                  {language === "fr"
-                    ? "Tarif horaire indicatif"
-                    : "Indicative hourly rate"}
-                </span>
-                <span className="text-lg font-semibold text-slate-900">
-                  {worker.hourly_rate.toLocaleString()}{" "}
-                  {worker.currency || "GNF"}/h
-                </span>
-              </div>
-            )}
-
-            {worker.description && (
-              <div className="mt-4">
-                <h2 className="text-sm font-semibold text-slate-800 mb-1">
-                  {language === "fr" ? "À propos" : "About"}
-                </h2>
-                <p className="text-sm text-slate-700 whitespace-pre-line">
-                  {worker.description}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Colonne droite : formulaire de contact */}
-        <div className="w-full lg:w-[360px]">
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-800 mb-2">
-              {language === "fr"
-                ? "Contacter cet ouvrier"
-                : "Contact this worker"}
-            </h2>
-            <p className="text-xs text-slate-500 mb-3">
-              {language === "fr"
-                ? "Remplissez le formulaire pour être recontacté."
-                : "Fill in the form to be contacted back."}
-            </p>
-
-            {submitError && (
-              <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
-                {submitError}
-              </div>
-            )}
-            {submitSuccess && (
-              <div className="mb-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">
-                {submitSuccess}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-3 text-sm">
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">
-                  {language === "fr" ? "Votre nom" : "Your name"}
-                </label>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">
-                  {language === "fr" ? "Votre téléphone" : "Your phone"}
-                </label>
-                <Input
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">
-                  {language === "fr"
-                    ? "Votre email (facultatif)"
-                    : "Your email (optional)"}
-                </label>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">
-                  {language === "fr"
-                    ? "Votre demande / description des travaux"
-                    : "Your request / work description"}
-                </label>
-                <Textarea
-                  rows={4}
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  required
-                />
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full bg-pro-blue hover:bg-blue-700"
-                disabled={submitting}
-              >
-                {submitting
-                  ? language === "fr"
-                    ? "Envoi en cours..."
-                    : "Sending..."
-                  : language === "fr"
-                  ? "Envoyer ma demande"
-                  : "Send my request"}
-              </Button>
-            </form>
-
-            {/* Coordonnées directes si l’ouvrier les a publiées */}
-            <div className="mt-4 border-t border-slate-100 pt-3 space-y-2 text-xs">
-              <div className="font-semibold text-slate-700">
+            {/* Formulaire de contact (principal) */}
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-800 mb-1">
                 {language === "fr"
-                  ? "Coordonnées directes"
-                  : "Direct contact"}
-              </div>
-              {worker.phone && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start"
-                  asChild
-                >
-                  <a href={`tel:${worker.phone}`}>
-                    <Phone className="w-3 h-3 mr-2" />
-                    {worker.phone}
-                  </a>
-                </Button>
+                  ? "Contacter cet ouvrier"
+                  : "Contact this worker"}
+              </h2>
+              <p className="text-xs text-slate-500 mb-3">
+                {language === "fr"
+                  ? "Remplissez le formulaire ci-dessous pour être recontacté."
+                  : "Fill in the form below to be contacted back."}
+              </p>
+
+              {submitError && (
+                <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                  {submitError}
+                </div>
               )}
-              {whatsappUrl && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start"
-                  asChild
-                >
-                  <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
-                    <MessageCircle className="w-3 h-3 mr-2" />
-                    WhatsApp
-                  </a>
-                </Button>
+              {submitSuccess && (
+                <div className="mb-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">
+                  {submitSuccess}
+                </div>
               )}
-              {worker.email && (
+
+              <form onSubmit={handleSubmitContact} className="space-y-3 text-sm">
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr" ? "Votre nom" : "Your name"}
+                  </label>
+                  <Input
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr" ? "Votre téléphone" : "Your phone"}
+                  </label>
+                  <Input
+                    value={clientPhone}
+                    onChange={(e) => setClientPhone(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr"
+                      ? "Votre email (facultatif)"
+                      : "Your email (optional)"}
+                  </label>
+                  <Input
+                    type="email"
+                    value={clientEmail}
+                    onChange={(e) => setClientEmail(e.target.value)}
+                  />
+                </div>
+
+                {/* Type de demande */}
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr"
+                      ? "Type de demande"
+                      : "Request type"}
+                  </label>
+                  <select
+                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                    value={requestType}
+                    onChange={(e) => setRequestType(e.target.value)}
+                  >
+                    <option value="Demande de devis">
+                      {language === "fr"
+                        ? "Demande de devis"
+                        : "Quote request"}
+                    </option>
+                    <option value="Demande de rappel">
+                      {language === "fr"
+                        ? "Demande de rappel"
+                        : "Call back request"}
+                    </option>
+                    <option value="Autre">
+                      {language === "fr" ? "Autre" : "Other"}
+                    </option>
+                  </select>
+                </div>
+
+                {/* Budget approximatif */}
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr"
+                      ? "Budget approximatif (facultatif)"
+                      : "Approx. budget (optional)"}
+                  </label>
+                  <Input
+                    type="number"
+                    value={approxBudget}
+                    onChange={(e) => setApproxBudget(e.target.value)}
+                    placeholder="5000000"
+                  />
+                </div>
+
+                {/* Date souhaitée */}
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr"
+                      ? "Date souhaitée (facultatif)"
+                      : "Desired date (optional)"}
+                  </label>
+                  <Input
+                    type="date"
+                    value={desiredDate}
+                    onChange={(e) => setDesiredDate(e.target.value)}
+                  />
+                </div>
+
+                {/* Message détaillé */}
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr"
+                      ? "Votre message"
+                      : "Your message"}
+                  </label>
+                  <Textarea
+                    rows={4}
+                    value={clientMessage}
+                    onChange={(e) => setClientMessage(e.target.value)}
+                    required
+                    placeholder={
+                      language === "fr"
+                        ? "Décrivez vos besoins, les travaux à réaliser, les délais souhaités…"
+                        : "Describe your needs, work to be done, expected deadlines…"
+                    }
+                  />
+                </div>
+
+                {/* Checkbox partage des coordonnées */}
+                <div className="flex items-start gap-2 text-[11px]">
+                  <input
+                    id="share-consent"
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={acceptedSharing}
+                    onChange={(e) => setAcceptedSharing(e.target.checked)}
+                  />
+                  <label htmlFor="share-consent" className="text-slate-500">
+                    {language === "fr"
+                      ? "J’accepte que mes coordonnées soient transmises à cet ouvrier."
+                      : "I agree that my contact details are shared with this worker."}
+                  </label>
+                </div>
+
                 <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start"
-                  asChild
+                  type="submit"
+                  className="w-full bg-pro-blue hover:bg-blue-700"
+                  disabled={submitting}
                 >
-                  <a href={`mailto:${worker.email}`}>
-                    <Mail className="w-3 h-3 mr-2" />
-                    {worker.email}
-                  </a>
+                  {submitting
+                    ? language === "fr"
+                      ? "Envoi de la demande..."
+                      : "Sending request..."
+                    : language === "fr"
+                    ? "Envoyer la demande"
+                    : "Send request"}
                 </Button>
-              )}
+              </form>
+
+              <p className="mt-3 text-[11px] text-slate-400">
+                {language === "fr"
+                  ? "Vos données sont uniquement transmises à ce professionnel."
+                  : "Your data is only shared with this professional."}
+              </p>
             </div>
           </div>
         </div>
