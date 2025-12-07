@@ -170,7 +170,7 @@ const WorkerDetail: React.FC = () => {
     loadReviews();
   }, [workerId, language]);
 
-  // Chargement photos
+  // Chargement photos (tolérant aux noms de colonnes)
   useEffect(() => {
     const loadPhotos = async () => {
       if (!workerId) return;
@@ -178,9 +178,10 @@ const WorkerDetail: React.FC = () => {
       setPhotosLoading(true);
       setPhotosError(null);
 
+      // On ne spécifie plus les colonnes pour éviter l'erreur sur "image_url"
       const { data, error } = await supabase
         .from("op_ouvrier_photos")
-        .select("id, image_url, title")
+        .select("*")
         .eq("worker_id", workerId)
         .order("created_at", { ascending: false })
         .limit(6);
@@ -193,7 +194,18 @@ const WorkerDetail: React.FC = () => {
             : "Unable to load photos."
         );
       } else {
-        setPhotos((data || []) as WorkerPhoto[]);
+        const mapped: WorkerPhoto[] = (data || []).map((row: any) => ({
+          id: row.id,
+          // On tente plusieurs noms possibles pour la colonne d’URL
+          image_url:
+            row.image_url ??
+            row.photo_url ??
+            row.url ??
+            row.path ??
+            null,
+          title: row.title ?? row.caption ?? null,
+        }));
+        setPhotos(mapped);
       }
 
       setPhotosLoading(false);
@@ -329,17 +341,19 @@ const WorkerDetail: React.FC = () => {
       }
       if (approxBudget) {
         detailedMessageLines.push(
-          `${language === "fr"
-            ? "Budget approximatif (facultatif)"
-            : "Approx. budget (optional)"
+          `${
+            language === "fr"
+              ? "Budget approximatif (facultatif)"
+              : "Approx. budget (optional)"
           } : ${approxBudget}`
         );
       }
       if (desiredDate) {
         detailedMessageLines.push(
-          `${language === "fr"
-            ? "Date souhaitée (facultatif)"
-            : "Desired date (optional)"
+          `${
+            language === "fr"
+              ? "Date souhaitée (facultatif)"
+              : "Desired date (optional)"
           } : ${desiredDate}`
         );
       }
@@ -407,7 +421,7 @@ const WorkerDetail: React.FC = () => {
         );
       }
 
-      // Insertion minimale pour éviter les erreurs de colonnes / contraintes
+      // Insertion minimale : worker_id + rating + comment
       const { data: newReview, error: insertReviewError } = await supabase
         .from("op_ouvrier_reviews")
         .insert({
@@ -773,9 +787,7 @@ const WorkerDetail: React.FC = () => {
                   rows={3}
                   className="text-sm mb-2"
                   placeholder={
-                    language === "fr"
-                      ? "Votre avis…"
-                      : "Your review…"
+                    language === "fr" ? "Votre avis…" : "Your review…"
                   }
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
