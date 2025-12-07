@@ -34,6 +34,12 @@ type Review = {
   client_name: string | null;
 };
 
+type WorkerPhoto = {
+  id: string;
+  image_url: string | null;
+  title: string | null;
+};
+
 const WorkerDetail: React.FC = () => {
   const { language } = useLanguage();
   const params = useParams();
@@ -56,7 +62,7 @@ const WorkerDetail: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
-  // Avis clients (partie basse gauche)
+  // Avis clients
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviewsError, setReviewsError] = useState<string | null>(null);
@@ -64,6 +70,12 @@ const WorkerDetail: React.FC = () => {
   const [newComment, setNewComment] = useState("");
   const [submitReviewLoading, setSubmitReviewLoading] = useState(false);
 
+  // Photos
+  const [photos, setPhotos] = useState<WorkerPhoto[]>([]);
+  const [photosLoading, setPhotosLoading] = useState(false);
+  const [photosError, setPhotosError] = useState<string | null>(null);
+
+  // Chargement profil ouvrier
   useEffect(() => {
     const loadWorker = async () => {
       if (!workerId) {
@@ -120,7 +132,7 @@ const WorkerDetail: React.FC = () => {
     loadWorker();
   }, [workerId, language]);
 
-  // Chargement des avis (si table présente)
+  // Chargement avis
   useEffect(() => {
     const loadReviews = async () => {
       if (!workerId) return;
@@ -130,7 +142,7 @@ const WorkerDetail: React.FC = () => {
 
       const { data, error } = await supabase
         .from("op_ouvrier_reviews")
-        .select("id, rating, comment, created_at, client_name")
+        .select("*")
         .eq("worker_id", workerId)
         .order("created_at", { ascending: false });
 
@@ -142,13 +154,52 @@ const WorkerDetail: React.FC = () => {
             : "Unable to load reviews."
         );
       } else {
-        setReviews((data || []) as Review[]);
+        const mapped: Review[] = (data || []).map((r: any) => ({
+          id: r.id,
+          rating: r.rating ?? null,
+          comment: r.comment ?? null,
+          created_at: r.created_at,
+          client_name: r.client_name ?? r.name ?? null,
+        }));
+        setReviews(mapped);
       }
 
       setReviewsLoading(false);
     };
 
     loadReviews();
+  }, [workerId, language]);
+
+  // Chargement photos
+  useEffect(() => {
+    const loadPhotos = async () => {
+      if (!workerId) return;
+
+      setPhotosLoading(true);
+      setPhotosError(null);
+
+      const { data, error } = await supabase
+        .from("op_ouvrier_photos")
+        .select("id, image_url, title")
+        .eq("worker_id", workerId)
+        .order("created_at", { ascending: false })
+        .limit(6);
+
+      if (error) {
+        console.error("loadPhotos error", error);
+        setPhotosError(
+          language === "fr"
+            ? "Impossible de charger les photos."
+            : "Unable to load photos."
+        );
+      } else {
+        setPhotos((data || []) as WorkerPhoto[]);
+      }
+
+      setPhotosLoading(false);
+    };
+
+    loadPhotos();
   }, [workerId, language]);
 
   const fullName =
@@ -324,7 +375,6 @@ const WorkerDetail: React.FC = () => {
           ? "Votre demande a été envoyée à cet ouvrier."
           : "Your request has been sent to this worker."
       );
-      // On garde les infos de contact, on vide seulement le message + champs optionnels
       setRequestType("Demande de devis");
       setApproxBudget("");
       setDesiredDate("");
@@ -343,10 +393,12 @@ const WorkerDetail: React.FC = () => {
     if (newRating <= 0) return;
 
     setSubmitReviewLoading(true);
+    setReviewsError(null);
 
     try {
       const { data: authData, error: authError } = await supabase.auth.getUser();
       const user = authData?.user;
+
       if (authError || !user) {
         throw new Error(
           language === "fr"
@@ -355,27 +407,15 @@ const WorkerDetail: React.FC = () => {
         );
       }
 
-      const { data: clientProfile, error: clientError } = await supabase
-        .from("op_clients")
-        .select("first_name")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (clientError && clientError.code !== "PGRST116") {
-        console.error("client profile for review error", clientError);
-      }
-
+      // Insertion minimale pour éviter les erreurs de colonnes / contraintes
       const { data: newReview, error: insertReviewError } = await supabase
         .from("op_ouvrier_reviews")
         .insert({
           worker_id: worker.id,
           rating: newRating,
           comment: newComment || null,
-          client_id: null,
-          client_name:
-            clientProfile?.first_name || user.email || "Client OuvriersPro",
         })
-        .select("id, rating, comment, created_at, client_name")
+        .select("*")
         .maybeSingle();
 
       if (insertReviewError || !newReview) {
@@ -387,7 +427,16 @@ const WorkerDetail: React.FC = () => {
         );
       }
 
-      setReviews((prev) => [newReview as Review, ...prev]);
+      setReviews((prev) => [
+        {
+          id: newReview.id,
+          rating: newReview.rating ?? null,
+          comment: newReview.comment ?? null,
+          created_at: newReview.created_at,
+          client_name: newReview.client_name ?? null,
+        },
+        ...prev,
+      ]);
       setNewRating(0);
       setNewComment("");
     } catch (err: any) {
@@ -439,9 +488,9 @@ const WorkerDetail: React.FC = () => {
         </button>
 
         <div className="flex flex-col lg:flex-row gap-6">
-          {/* Colonne gauche : profil, à propos, portfolio, galerie, avis */}
+          {/* Colonne gauche */}
           <div className="flex-1 space-y-4">
-            {/* Carte header + stats */}
+            {/* Header */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -475,7 +524,7 @@ const WorkerDetail: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Stats (note, années, tarif) */}
+                {/* Stats */}
                 <div className="grid grid-cols-3 gap-3 text-center text-xs">
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                     <div className="inline-flex items-center gap-1 text-amber-500">
@@ -539,7 +588,7 @@ const WorkerDetail: React.FC = () => {
               </p>
             </div>
 
-            {/* Portfolio / Réalisations (placeholder, à brancher sur ta table de projets) */}
+            {/* Portfolio (placeholder simple) */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-1">
                 {language === "fr"
@@ -558,7 +607,7 @@ const WorkerDetail: React.FC = () => {
               </p>
             </div>
 
-            {/* Galerie photos (placeholder simple – tu pourras brancher tes vraies photos plus tard) */}
+            {/* Galerie photos */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-1">
                 {language === "fr" ? "Galerie photos" : "Photo gallery"}
@@ -568,11 +617,45 @@ const WorkerDetail: React.FC = () => {
                   ? "Découvrez quelques réalisations de cet ouvrier."
                   : "Discover some works from this worker."}
               </p>
+
+              {photosError && (
+                <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                  {photosError}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Ici tu peux remplacer par les vraies images Supabase */}
-                <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
-                <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
-                <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                {photosLoading && (
+                  <>
+                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                  </>
+                )}
+
+                {!photosLoading && photos.length === 0 && (
+                  <>
+                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                  </>
+                )}
+
+                {!photosLoading &&
+                  photos.map((p) => (
+                    <div
+                      key={p.id}
+                      className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-100"
+                    >
+                      {p.image_url ? (
+                        <img
+                          src={p.image_url}
+                          alt={p.title || ""}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : null}
+                    </div>
+                  ))}
               </div>
             </div>
 
@@ -581,13 +664,14 @@ const WorkerDetail: React.FC = () => {
               <h2 className="text-sm font-semibold text-slate-800 mb-1">
                 {language === "fr" ? "Avis clients" : "Customer reviews"}
               </h2>
+
               {reviewsError && (
                 <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
                   {reviewsError}
                 </div>
               )}
 
-              {/* Résumé note + nombre avis */}
+              {/* Résumé note + nb avis */}
               <div className="flex items-center gap-2 mb-3 text-sm">
                 <div className="inline-flex items-center gap-1 text-amber-500">
                   <Star className="w-4 h-4 fill-amber-400" />
@@ -607,7 +691,7 @@ const WorkerDetail: React.FC = () => {
                 </span>
               </div>
 
-              {/* Liste des avis */}
+              {/* Liste avis */}
               <div className="space-y-3 mb-4">
                 {reviewsLoading && (
                   <div className="text-xs text-slate-500">
@@ -660,7 +744,7 @@ const WorkerDetail: React.FC = () => {
                   ))}
               </div>
 
-              {/* Formulaire pour laisser un avis */}
+              {/* Formulaire avis */}
               <form onSubmit={handleSubmitReview} className="border-t pt-3 mt-3">
                 <div className="text-xs font-semibold text-slate-700 mb-2">
                   {language === "fr"
@@ -714,7 +798,7 @@ const WorkerDetail: React.FC = () => {
             </div>
           </div>
 
-          {/* Colonne droite : coordonnées + formulaire de contact */}
+          {/* Colonne droite : coordonnées + formulaire */}
           <div className="w-full lg:w-[360px] space-y-4">
             {/* Coordonnées directes */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
@@ -770,7 +854,7 @@ const WorkerDetail: React.FC = () => {
               </div>
             </div>
 
-            {/* Formulaire de contact (principal) */}
+            {/* Formulaire de contact */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-1">
                 {language === "fr"
@@ -830,7 +914,6 @@ const WorkerDetail: React.FC = () => {
                   />
                 </div>
 
-                {/* Type de demande */}
                 <div>
                   <label className="text-xs text-slate-500 block mb-1">
                     {language === "fr"
@@ -858,7 +941,6 @@ const WorkerDetail: React.FC = () => {
                   </select>
                 </div>
 
-                {/* Budget approximatif */}
                 <div>
                   <label className="text-xs text-slate-500 block mb-1">
                     {language === "fr"
@@ -873,7 +955,6 @@ const WorkerDetail: React.FC = () => {
                   />
                 </div>
 
-                {/* Date souhaitée */}
                 <div>
                   <label className="text-xs text-slate-500 block mb-1">
                     {language === "fr"
@@ -887,7 +968,6 @@ const WorkerDetail: React.FC = () => {
                   />
                 </div>
 
-                {/* Message détaillé */}
                 <div>
                   <label className="text-xs text-slate-500 block mb-1">
                     {language === "fr"
@@ -907,7 +987,6 @@ const WorkerDetail: React.FC = () => {
                   />
                 </div>
 
-                {/* Checkbox partage des coordonnées */}
                 <div className="flex items-start gap-2 text-[11px]">
                   <input
                     id="share-consent"
