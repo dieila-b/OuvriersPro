@@ -1,13 +1,12 @@
-// src/pages/WorkerDashboard.tsx
+// src/pages/WorkerDetail.tsx
 import React, { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import WorkerPhotosManager from "@/components/WorkerPhotosManager";
-import WorkerPortfolioManager from "@/components/WorkerPortfolioManager";
-import { Mail, Phone, MessageCircle, User, Copy } from "lucide-react";
+import { Mail, Phone, MessageCircle, MapPin } from "lucide-react";
 
 type WorkerProfile = {
   id: string;
@@ -23,105 +22,45 @@ type WorkerProfile = {
   district: string | null;
   profession: string | null;
   description: string | null;
-  plan_code: "FREE" | "MONTHLY" | "YEARLY" | null;
-  status: string | null;
   hourly_rate: number | null;
   currency: string | null;
-  created_at: string;
 };
 
-type ClientProfile = {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  email: string | null;
-  phone: string | null;
-};
-
-type WorkerContact = {
-  id: string;
-  worker_id: string | null;
-  client_id: string | null;
-  client_name: string | null;
-  client_email: string | null;
-  client_phone: string | null;
-  message: string | null;
-  status: string | null;
-  origin: string | null;
-  created_at: string;
-  client_profile?: ClientProfile | null;
-};
-
-type TabKey = "profile" | "subscription" | "stats" | "messages";
-
-const WorkerDashboard: React.FC = () => {
+const WorkerDetail: React.FC = () => {
   const { language } = useLanguage();
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<WorkerProfile | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const params = useParams();
+  // compat : /workers/:id ou /workers/:workerId
+  const workerId = (params.workerId as string) || (params.id as string);
 
-  const [activeTab, setActiveTab] = useState<TabKey>("profile");
+  const [worker, setWorker] = useState<WorkerProfile | null>(null);
+  const [loadingWorker, setLoadingWorker] = useState(true);
+  const [workerError, setWorkerError] = useState<string | null>(null);
 
-  // Messages / demandes de contact
-  const [contacts, setContacts] = useState<WorkerContact[]>([]);
-  const [contactsLoading, setContactsLoading] = useState(false);
-  const [contactsError, setContactsError] = useState<string | null>(null);
-
-  // Réponses rapides par message (id -> texte)
-  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
-
-  // Édition du profil
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [editProfile, setEditProfile] = useState<WorkerProfile | null>(null);
-  const [profileUpdateError, setProfileUpdateError] = useState<string | null>(
-    null
-  );
-  const [profileUpdateSuccess, setProfileUpdateSuccess] = useState<
-    string | null
-  >(null);
-
-  // Gestion abonnement
-  const [updatingPlan, setUpdatingPlan] = useState(false);
-  const [planUpdateError, setPlanUpdateError] = useState<string | null>(null);
-  const [planUpdateSuccess, setPlanUpdateSuccess] = useState<string | null>(
-    null
-  );
-
-  // Stats
-  const [statsLoading, setStatsLoading] = useState(false);
-  const [statsError, setStatsError] = useState<string | null>(null);
-  const [profileViews, setProfileViews] = useState<number>(0);
-  const [requestsCount, setRequestsCount] = useState<number>(0);
-  const [responseRate, setResponseRate] = useState<number>(0);
+  // formulaire de contact
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
-
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      setContacts([]);
-      setContactsError(null);
-
-      // 1) Utilisateur connecté
-      const { data, error: userError } = await supabase.auth.getUser();
-      const user = data?.user;
-
-      if (!isMounted) return;
-
-      if (userError || !user) {
-        setError(
+    const loadWorker = async () => {
+      if (!workerId) {
+        setWorkerError(
           language === "fr"
-            ? "Vous devez être connecté pour accéder à cet espace."
-            : "You must be logged in to access this area."
+            ? "Aucun ouvrier spécifié."
+            : "No worker specified."
         );
-        setLoading(false);
+        setLoadingWorker(false);
         return;
       }
 
-      // 2) Profil ouvrier
-      const { data: worker, error: workerError } = await supabase
+      setLoadingWorker(true);
+      setWorkerError(null);
+
+      const { data, error } = await supabase
         .from("op_ouvriers")
         .select(
           `
@@ -138,1403 +77,398 @@ const WorkerDashboard: React.FC = () => {
           district,
           profession,
           description,
-          plan_code,
-          status,
           hourly_rate,
-          currency,
-          created_at
+          currency
         `
         )
+        .eq("id", workerId)
+        .maybeSingle();
+
+      if (error || !data) {
+        console.error("loadWorker error", error);
+        setWorkerError(
+          language === "fr"
+            ? "Impossible de charger le profil de cet ouvrier."
+            : "Unable to load this worker profile."
+        );
+      } else {
+        setWorker(data as WorkerProfile);
+      }
+
+      setLoadingWorker(false);
+    };
+
+    loadWorker();
+  }, [workerId, language]);
+
+  const fullName =
+    (worker?.first_name || "") +
+    (worker?.last_name ? ` ${worker.last_name}` : "");
+
+  const location = [
+    worker?.country,
+    worker?.region,
+    worker?.city,
+    worker?.commune,
+    worker?.district,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+
+  const whatsappUrl = worker?.phone
+    ? (() => {
+        const clean = worker.phone.replace(/\s+/g, "");
+        const normalized = clean.startsWith("+") ? clean.slice(1) : clean;
+        return `https://wa.me/${normalized}`;
+      })()
+    : "";
+
+  /**
+   * Envoi de la demande :
+   * 1) vérifie que l’utilisateur est connecté
+   * 2) récupère ou crée un profil dans op_clients (user_id = auth.user.id)
+   * 3) insère la demande dans op_ouvrier_contacts en liant worker_id + client_id
+   */
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!worker) return;
+
+    setSubmitting(true);
+    setSubmitError(null);
+    setSubmitSuccess(null);
+
+    try {
+      // 1) utilisateur connecté
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      const user = authData?.user;
+
+      if (authError || !user) {
+        throw new Error(
+          language === "fr"
+            ? "Vous devez être connecté pour envoyer une demande."
+            : "You must be logged in to send a request."
+        );
+      }
+
+      // 2) récupérer ou créer le profil client
+      let clientProfileId: string | null = null;
+
+      const { data: existingClient, error: selectClientError } = await supabase
+        .from("op_clients")
+        .select("id")
         .eq("user_id", user.id)
         .maybeSingle();
 
-      if (!isMounted) return;
-
-      if (workerError) {
-        console.error(workerError);
-        setError(
+      if (selectClientError && selectClientError.code !== "PGRST116") {
+        console.error("select client error", selectClientError);
+        throw new Error(
           language === "fr"
-            ? `Erreur lors du chargement de votre profil : ${workerError.message}`
-            : `Error while loading your profile: ${workerError.message}`
+            ? "Impossible de récupérer votre profil client."
+            : "Unable to fetch your client profile."
         );
-        setLoading(false);
-        return;
       }
 
-      if (!worker) {
-        setError(
-          language === "fr"
-            ? "Aucun profil ouvrier associé à ce compte. Merci de compléter votre inscription."
-            : "No worker profile associated with this account. Please complete your registration."
-        );
-        setLoading(false);
-        return;
+      if (existingClient) {
+        clientProfileId = existingClient.id;
+      } else {
+        const { data: newClient, error: insertClientError } = await supabase
+          .from("op_clients")
+          .insert({
+            user_id: user.id,
+            first_name: name || null,
+            last_name: null,
+            email: email || user.email || null,
+            phone: phone || null,
+          })
+          .select("id")
+          .maybeSingle();
+
+        if (insertClientError || !newClient) {
+          console.error("insert client error", insertClientError);
+          throw new Error(
+            language === "fr"
+              ? "Impossible de créer votre profil client."
+              : "Unable to create your client profile."
+          );
+        }
+
+        clientProfileId = newClient.id;
       }
 
-      const wp = worker as WorkerProfile;
-      setProfile(wp);
-      setLoading(false);
+      if (!clientProfileId) {
+        throw new Error(
+          language === "fr"
+            ? "Profil client introuvable. Veuillez réessayer."
+            : "Client profile not found. Please try again."
+        );
+      }
 
-      // 3) Demandes de contact
-      setContactsLoading(true);
-      setContactsError(null);
-
-      // IMPORTANT :
-      // - Ici, on suppose une table des clients nommée "op_clients"
-      // - et une relation Supabase op_ouvrier_contacts.client_id -> op_clients.id
-      // Si le nom de la table est différent, remplace "op_clients" par le bon nom.
-      const { data: contactsData, error: contactsErr } = await supabase
+      // 3) insérer la demande dans op_ouvrier_contacts
+      const { error: contactError } = await supabase
         .from("op_ouvrier_contacts")
-        .select(
-          `
-          id,
-          worker_id,
-          client_id,
-          client_name,
-          client_email,
-          client_phone,
-          message,
-          status,
-          origin,
-          created_at,
-          client:op_clients (
-            id,
-            first_name,
-            last_name,
-            email,
-            phone
-          )
-        `
-        )
-        .eq("worker_id", wp.id)
-        .order("created_at", { ascending: false });
-
-      if (!isMounted) return;
-
-      if (contactsErr) {
-        console.error(contactsErr);
-        setContactsError(
-          language === "fr"
-            ? `Erreur lors du chargement de vos demandes : ${contactsErr.message}`
-            : `Error while loading your requests: ${contactsErr.message}`
-        );
-      } else {
-        const mapped: WorkerContact[] =
-          (contactsData || []).map((row: any) => {
-            const client: ClientProfile | null = row.client ?? null;
-
-            // On reconstruit les infos client à partir du profil lié si besoin
-            const clientId: string | null =
-              row.client_id ?? client?.id ?? null;
-
-            const clientNameFromProfile =
-              client &&
-              `${client.first_name || ""} ${client.last_name || ""}`.trim();
-
-            return {
-              id: row.id,
-              worker_id: row.worker_id,
-              client_id: clientId,
-              client_name: row.client_name || clientNameFromProfile || null,
-              client_email: row.client_email || client?.email || null,
-              client_phone: row.client_phone || client?.phone || null,
-              message: row.message,
-              status: row.status,
-              origin: row.origin,
-              created_at: row.created_at,
-              client_profile: client,
-            };
-          }) ?? [];
-
-        setContacts(mapped);
-      }
-
-      setContactsLoading(false);
-    };
-
-    fetchData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [language]);
-
-  // Statistiques
-  useEffect(() => {
-    const loadStats = async () => {
-      if (!profile || activeTab !== "stats") return;
-
-      setStatsLoading(true);
-      setStatsError(null);
-
-      try {
-        const { count, error } = await supabase
-          .from("op_ouvrier_views")
-          .select("*", { count: "exact", head: true })
-          .eq("worker_id", profile.id);
-
-        if (error) throw error;
-
-        const views = count ?? 0;
-        const totalRequests = contacts.length;
-        const responded = contacts.filter(
-          (c) => c.status === "in_progress" || c.status === "done"
-        ).length;
-
-        const rate =
-          totalRequests > 0
-            ? Math.round((responded / totalRequests) * 100)
-            : 0;
-
-        setProfileViews(views);
-        setRequestsCount(totalRequests);
-        setResponseRate(rate);
-      } catch (e) {
-        console.error("loadStats error", e);
-        setStatsError(
-          language === "fr"
-            ? "Impossible de charger les statistiques."
-            : "Unable to load statistics."
-        );
-      } finally {
-        setStatsLoading(false);
-      }
-    };
-
-    loadStats();
-  }, [activeTab, profile, contacts, language]);
-
-  // Helpers d'affichage
-  const planLabel = (plan: WorkerProfile["plan_code"]) => {
-    if (!plan) return language === "fr" ? "Non défini" : "Not set";
-    if (plan === "FREE") return language === "fr" ? "Gratuit" : "Free";
-    if (plan === "MONTHLY") return language === "fr" ? "Mensuel" : "Monthly";
-    if (plan === "YEARLY") return language === "fr" ? "Annuel" : "Yearly";
-    return plan;
-  };
-
-  const statusLabel = (s: string | null | undefined) => {
-    if (language === "fr") {
-      if (s === "approved") return "Validé";
-      if (s === "rejected") return "Refusé";
-      return "En attente";
-    } else {
-      if (s === "approved") return "Approved";
-      if (s === "rejected") return "Rejected";
-      return "Pending";
-    }
-  };
-
-  const statusClass = (s: string | null | undefined) => {
-    if (s === "approved")
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    if (s === "rejected") return "bg-red-50 text-red-700 border-red-200";
-    return "bg-amber-50 text-amber-700 border-amber-200";
-  };
-
-  const contactStatusLabel = (s: string | null | undefined) => {
-    if (language === "fr") {
-      if (s === "in_progress") return "En cours";
-      if (s === "done") return "Traité";
-      return "Nouveau";
-    } else {
-      if (s === "in_progress") return "In progress";
-      if (s === "done") return "Done";
-      return "New";
-    }
-  };
-
-  const contactStatusClass = (s: string | null | undefined) => {
-    if (s === "done")
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    if (s === "in_progress")
-      return "bg-amber-50 text-amber-700 border-amber-200";
-    return "bg-sky-50 text-sky-700 border-sky-200";
-  };
-
-  const originLabel = (o: string | null | undefined) => {
-    if (!o || o === "web") return "web";
-    if (o === "mobile") return "mobile";
-    if (o === "other") return language === "fr" ? "autre" : "other";
-    return o;
-  };
-
-  const formatDate = (value: string) => {
-    const d = new Date(value);
-    return d.toLocaleString(language === "fr" ? "fr-FR" : "en-GB", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  // helper WhatsApp avec texte optionnel
-  const phoneToWhatsappUrl = (phone?: string | null, text?: string) => {
-    if (!phone) return "";
-    const clean = phone.replace(/\s+/g, "");
-    if (clean.length < 8) return "";
-    const normalized = clean.startsWith("+") ? clean.slice(1) : clean;
-    let url = `https://wa.me/${normalized}`;
-    if (text && text.trim().length > 0) {
-      url += `?text=${encodeURIComponent(text.trim())}`;
-    }
-    return url;
-  };
-
-  // Copier la réponse dans le presse-papiers
-  const handleCopyReply = (contactId: string) => {
-    const text = (replyDrafts[contactId] || "").trim();
-    if (!text) {
-      window.alert(
-        language === "fr"
-          ? "Aucune réponse à copier."
-          : "No reply text to copy."
-      );
-      return;
-    }
-
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard
-        .writeText(text)
-        .then(() => {
-          window.alert(
-            language === "fr"
-              ? "Réponse copiée dans le presse-papiers."
-              : "Reply copied to clipboard."
-          );
-        })
-        .catch(() => {
-          window.alert(
-            language === "fr"
-              ? "Impossible de copier automatiquement. Sélectionnez le texte et copiez-le manuellement."
-              : "Could not copy automatically. Please select the text and copy it manually."
-          );
+        .insert({
+          worker_id: worker.id,
+          client_id: clientProfileId,
+          client_name: name || null,
+          client_email: email || user.email || null,
+          client_phone: phone || null,
+          message: message || null,
+          origin: "web",
+          status: "new",
         });
-    } else {
-      window.alert(
-        language === "fr"
-          ? "Copie automatique non disponible. Sélectionnez le texte et copiez-le manuellement."
-          : "Automatic copy not available. Please select the text and copy it manually."
-      );
-    }
-  };
 
-  // Gestion édition profil
-  const handleEditField = <K extends keyof WorkerProfile>(
-    field: K,
-    value: WorkerProfile[K]
-  ) => {
-    setEditProfile((prev) => (prev ? { ...prev, [field]: value } : prev));
-  };
-
-  const startEditProfile = () => {
-    if (!profile) return;
-    setEditProfile(profile);
-    setProfileUpdateError(null);
-    setProfileUpdateSuccess(null);
-    setIsEditingProfile(true);
-  };
-
-  const cancelEditProfile = () => {
-    setEditProfile(null);
-    setIsEditingProfile(false);
-    setProfileUpdateError(null);
-    setProfileUpdateSuccess(null);
-  };
-
-  const saveProfile = async () => {
-    if (!profile || !editProfile) return;
-
-    setSavingProfile(true);
-    setProfileUpdateError(null);
-    setProfileUpdateSuccess(null);
-
-    try {
-      const payload = {
-        first_name: editProfile.first_name,
-        last_name: editProfile.last_name,
-        phone: editProfile.phone,
-        profession: editProfile.profession,
-        description: editProfile.description,
-        country: editProfile.country,
-        region: editProfile.region,
-        city: editProfile.city,
-        commune: editProfile.commune,
-        district: editProfile.district,
-        hourly_rate: editProfile.hourly_rate,
-        currency: editProfile.currency,
-      };
-
-      const { data: updated, error: updateError } = await supabase
-        .from("op_ouvriers")
-        .update(payload)
-        .eq("id", profile.id)
-        .select(
-          `
-          id,
-          user_id,
-          first_name,
-          last_name,
-          email,
-          phone,
-          country,
-          region,
-          city,
-          commune,
-          district,
-          profession,
-          description,
-          plan_code,
-          status,
-          hourly_rate,
-          currency,
-          created_at
-        `
-        )
-        .maybeSingle();
-
-      if (updateError || !updated) {
-        console.error(updateError);
-        setProfileUpdateError(
+      if (contactError) {
+        console.error("insert contact error", contactError);
+        throw new Error(
           language === "fr"
-            ? "Impossible d'enregistrer les modifications."
-            : "Unable to save your changes."
-        );
-      } else {
-        const newProfile = updated as WorkerProfile;
-        setProfile(newProfile);
-        setEditProfile(newProfile);
-        setProfileUpdateSuccess(
-          language === "fr"
-            ? "Profil mis à jour avec succès."
-            : "Profile updated successfully."
-        );
-        setIsEditingProfile(false);
-      }
-    } catch (e) {
-      console.error(e);
-      setProfileUpdateError(
-        language === "fr"
-          ? "Une erreur est survenue lors de la mise à jour."
-          : "An error occurred while updating your profile."
-      );
-    } finally {
-      setSavingProfile(false);
-    }
-  };
-
-  // Gestion changement de plan
-  const updatePlan = async (newPlan: WorkerProfile["plan_code"]) => {
-    if (!profile) return;
-
-    setUpdatingPlan(true);
-    setPlanUpdateError(null);
-    setPlanUpdateSuccess(null);
-
-    try {
-      const { data: updated, error: updateError } = await supabase
-        .from("op_ouvriers")
-        .update({ plan_code: newPlan })
-        .eq("id", profile.id)
-        .select(
-          `
-          id,
-          user_id,
-          first_name,
-          last_name,
-          email,
-          phone,
-          country,
-          region,
-          city,
-          commune,
-          district,
-          profession,
-          description,
-          plan_code,
-          status,
-          hourly_rate,
-          currency,
-          created_at
-        `
-        )
-        .maybeSingle();
-
-      if (updateError || !updated) {
-        console.error(updateError);
-        setPlanUpdateError(
-          language === "fr"
-            ? "Impossible de mettre à jour votre abonnement."
-            : "Unable to update your subscription."
-        );
-      } else {
-        const newProfile = updated as WorkerProfile;
-        setProfile(newProfile);
-        setPlanUpdateSuccess(
-          language === "fr"
-            ? "Abonnement mis à jour avec succès."
-            : "Subscription updated successfully."
+            ? "Une erreur est survenue lors de l'envoi de votre demande."
+            : "An error occurred while sending your request."
         );
       }
-    } catch (e) {
-      console.error(e);
-      setPlanUpdateError(
+
+      setSubmitSuccess(
         language === "fr"
-          ? "Une erreur est survenue lors de la mise à jour de l'abonnement."
-          : "An error occurred while updating the subscription."
+          ? "Votre demande a été envoyée à l’ouvrier."
+          : "Your request has been sent to the worker."
       );
+      setMessage("");
+      // on garde nom / téléphone / email pour les prochaines demandes
+    } catch (err: any) {
+      console.error(err);
+      setSubmitError(err.message || "Error");
     } finally {
-      setUpdatingPlan(false);
+      setSubmitting(false);
     }
   };
 
-  if (loading) {
+  if (loadingWorker) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-sm text-slate-500">
           {language === "fr"
-            ? "Chargement de votre espace ouvrier..."
-            : "Loading your worker space..."}
+            ? "Chargement du profil ouvrier..."
+            : "Loading worker profile..."}
         </div>
       </div>
     );
   }
 
-  if (error || !profile) {
+  if (workerError || !worker) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-        <div className="max-w-md bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-          <div className="text-sm text-red-600 mb-3">{error}</div>
-          <Button
-            onClick={() => (window.location.href = "/")}
-            className="bg-pro-blue hover:bg-blue-700"
-          >
-            {language === "fr" ? "Retour à l'accueil" : "Return to home"}
-          </Button>
+        <div className="max-w-md bg-white border border-slate-200 rounded-xl p-6 shadow-sm text-sm text-red-600">
+          {workerError ||
+            (language === "fr"
+              ? "Ouvrier introuvable."
+              : "Worker not found.")}
         </div>
       </div>
     );
   }
-
-  const fullName =
-    (profile.first_name || "") +
-    (profile.last_name ? ` ${profile.last_name}` : "");
-
-  const displayProfile = isEditingProfile && editProfile ? editProfile : profile;
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
-      <div className="max-w-5xl mx-auto px-4">
-        {/* En-tête */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
-              {language === "fr" ? "Espace Ouvrier" : "Worker Dashboard"}
-            </h1>
-            <p className="text-sm text-slate-600 mt-1">
-              {language === "fr"
-                ? "Gérez votre profil, votre abonnement et suivez vos statistiques."
-                : "Manage your profile, subscription and follow your stats."}
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="text-sm font-semibold text-slate-800">
-              {fullName || (language === "fr" ? "Profil sans nom" : "No name")}
-            </div>
-            <div className="text-xs text-slate-500">
-              {profile.email || ""}
-            </div>
-            <div className="mt-1 inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-50 text-slate-700 border-slate-200">
-              {language === "fr" ? "Plan" : "Plan"} :{" "}
-              <span className="font-semibold ml-1">
-                {planLabel(profile.plan_code)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="border-b border-slate-200 mb-4">
-          <nav className="-mb-px flex flex-wrap gap-2">
-            {[
-              { key: "profile" as TabKey, labelFr: "Profil", labelEn: "Profile" },
-              {
-                key: "subscription" as TabKey,
-                labelFr: "Abonnement",
-                labelEn: "Subscription",
-              },
-              {
-                key: "stats" as TabKey,
-                labelFr: "Statistiques",
-                labelEn: "Stats",
-              },
-              {
-                key: "messages" as TabKey,
-                labelFr: "Messages",
-                labelEn: "Messages",
-              },
-            ].map((tab) => {
-              const isActive = activeTab === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`whitespace-nowrap px-3 py-2 text-sm border-b-2 -mb-px ${
-                    isActive
-                      ? "border-pro-blue text-pro-blue font-semibold"
-                      : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-200"
-                  }`}
-                >
-                  {language === "fr" ? tab.labelFr : tab.labelEn}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Contenu selon l’onglet */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-          {/* PROFIL */}
-          {activeTab === "profile" && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-slate-800">
-                  {language === "fr" ? "Mon profil" : "My profile"}
-                </h2>
-                {!isEditingProfile ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={startEditProfile}
-                  >
-                    {language === "fr"
-                      ? "Modifier mon profil"
-                      : "Edit my profile"}
-                  </Button>
-                ) : (
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={cancelEditProfile}
-                      disabled={savingProfile}
-                    >
-                      {language === "fr" ? "Annuler" : "Cancel"}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={saveProfile}
-                      disabled={savingProfile}
-                      className="bg-pro-blue hover:bg-blue-700"
-                    >
-                      {savingProfile
-                        ? language === "fr"
-                          ? "Enregistrement..."
-                          : "Saving..."
-                        : language === "fr"
-                        ? "Enregistrer"
-                        : "Save"}
-                    </Button>
-                  </div>
+      <div className="max-w-6xl mx-auto px-4 flex flex-col lg:flex-row gap-6">
+        {/* Colonne gauche : profil ouvrier */}
+        <div className="flex-1 space-y-4">
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-pro-blue/10 flex items-center justify-center text-pro-blue font-semibold text-lg">
+                {fullName
+                  ? fullName
+                      .split(" ")
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .map((n) => n[0])
+                      .join("")
+                      .toUpperCase()
+                  : "OP"}
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-slate-900">
+                  {fullName || (language === "fr" ? "Ouvrier" : "Worker")}
+                </h1>
+                {worker.profession && (
+                  <p className="text-sm text-slate-600">{worker.profession}</p>
                 )}
-              </div>
-
-              {/* Messages de mise à jour */}
-              {profileUpdateError && (
-                <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
-                  {profileUpdateError}
-                </div>
-              )}
-              {profileUpdateSuccess && (
-                <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">
-                  {profileUpdateSuccess}
-                </div>
-              )}
-
-              {/* Détails profil */}
-              {!isEditingProfile && (
-                <div className="grid md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Nom complet" : "Full name"}
-                    </div>
-                    <div className="font-medium text-slate-900">
-                      {fullName || "—"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Métier principal" : "Main trade"}
-                    </div>
-                    <div className="font-medium text-slate-900">
-                      {profile.profession || "—"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">Email</div>
-                    <div className="font-medium text-slate-900">
-                      {profile.email || "—"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Téléphone" : "Phone"}
-                    </div>
-                    <div className="font-medium text-slate-900">
-                      {profile.phone || "—"}
-                    </div>
-                  </div>
-                  <div className="md:col-span-2">
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Localisation" : "Location"}
-                    </div>
-                    <div className="font-medium text-slate-900">
-                      {[
-                        profile.country,
-                        profile.region,
-                        profile.city,
-                        profile.commune,
-                        profile.district,
-                      ]
-                        .filter(Boolean)
-                        .join(" • ") || "—"}
-                    </div>
-                  </div>
-                  <div className="md:col-span-2">
-                    <div className="text-xs text-slate-500">
-                      {language === "fr"
-                        ? "Description de vos services"
-                        : "Services description"}
-                    </div>
-                    <div className="text-slate-800 whitespace-pre-line">
-                      {profile.description || "—"}
-                    </div>
-                  </div>
-                  {profile.hourly_rate != null && (
-                    <div>
-                      <div className="text-xs text-slate-500">
-                        {language === "fr"
-                          ? "Tarif horaire déclaré"
-                          : "Declared hourly rate"}
-                      </div>
-                      <div className="font-medium text-slate-900">
-                        {profile.hourly_rate.toLocaleString()}{" "}
-                        {profile.currency || ""}/h
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {isEditingProfile && displayProfile && (
-                <div className="grid md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Prénom" : "First name"}
-                    </div>
-                    <Input
-                      value={displayProfile.first_name ?? ""}
-                      onChange={(e) =>
-                        handleEditField("first_name", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Nom" : "Last name"}
-                    </div>
-                    <Input
-                      value={displayProfile.last_name ?? ""}
-                      onChange={(e) =>
-                        handleEditField("last_name", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Métier principal" : "Main trade"}
-                    </div>
-                    <Input
-                      value={displayProfile.profession ?? ""}
-                      onChange={(e) =>
-                        handleEditField("profession", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Téléphone" : "Phone"}
-                    </div>
-                    <Input
-                      value={displayProfile.phone ?? ""}
-                      onChange={(e) =>
-                        handleEditField("phone", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Pays" : "Country"}
-                    </div>
-                    <Input
-                      value={displayProfile.country ?? ""}
-                      onChange={(e) =>
-                        handleEditField("country", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Région" : "Region"}
-                    </div>
-                    <Input
-                      value={displayProfile.region ?? ""}
-                      onChange={(e) =>
-                        handleEditField("region", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Ville" : "City"}
-                    </div>
-                    <Input
-                      value={displayProfile.city ?? ""}
-                      onChange={(e) =>
-                        handleEditField("city", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Commune" : "Commune"}
-                    </div>
-                    <Input
-                      value={displayProfile.commune ?? ""}
-                      onChange={(e) =>
-                        handleEditField("commune", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Quartier" : "District"}
-                    </div>
-                    <Input
-                      value={displayProfile.district ?? ""}
-                      onChange={(e) =>
-                        handleEditField("district", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr"
-                        ? "Tarif horaire (GNF)"
-                        : "Hourly rate (GNF)"}
-                    </div>
-                    <Input
-                      type="number"
-                      value={
-                        displayProfile.hourly_rate != null
-                          ? String(displayProfile.hourly_rate)
-                          : ""
-                      }
-                      onChange={(e) =>
-                        handleEditField(
-                          "hourly_rate",
-                          e.target.value
-                            ? Number(e.target.value)
-                            : (null as any)
-                        )
-                      }
-                    />
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Devise" : "Currency"}
-                    </div>
-                    <Input
-                      value={displayProfile.currency ?? ""}
-                      onChange={(e) =>
-                        handleEditField("currency", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <div className="text-xs text-slate-500">
-                      {language === "fr"
-                        ? "Description de vos services"
-                        : "Services description"}
-                    </div>
-                    <Textarea
-                      rows={4}
-                      value={displayProfile.description ?? ""}
-                      onChange={(e) =>
-                        handleEditField("description", e.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Statut + date création */}
-              <div className="mt-2 flex flex-wrap gap-2 items-center">
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusClass(
-                    profile.status
-                  )}`}
-                >
-                  {statusLabel(profile.status)}
-                </span>
-                <span className="text-xs text-slate-400">
-                  {language === "fr" ? "Créé le" : "Created at"}{" "}
-                  {formatDate(profile.created_at)}
-                </span>
-              </div>
-
-              {/* Photos + portfolio */}
-              <div className="pt-4 border-t border-slate-100 space-y-4">
-                <WorkerPhotosManager workerId={profile.id} />
-                <WorkerPortfolioManager workerId={profile.id} />
-              </div>
-            </div>
-          )}
-
-          {/* ABONNEMENT */}
-          {activeTab === "subscription" && (
-            <div className="space-y-4">
-              <h2 className="text-sm font-semibold text-slate-800 mb-2">
-                {language === "fr" ? "Mon abonnement" : "My subscription"}
-              </h2>
-
-              {planUpdateError && (
-                <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
-                  {planUpdateError}
-                </div>
-              )}
-              {planUpdateSuccess && (
-                <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">
-                  {planUpdateSuccess}
-                </div>
-              )}
-
-              <div className="text-sm">
-                <div className="mb-2">
-                  <span className="text-xs text-slate-500">
-                    {language === "fr" ? "Plan actuel" : "Current plan"}
-                  </span>
-                  <div className="mt-1 inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-200 text-sm">
-                    <span className="font-semibold mr-2">
-                      {planLabel(profile.plan_code)}
-                    </span>
-                    <span className="text-xs text-slate-500">
-                      {profile.plan_code === "FREE"
-                        ? language === "fr"
-                          ? "Visibilité limitée"
-                          : "Limited visibility"
-                        : language === "fr"
-                        ? "Visibilité avancée + contacts illimités"
-                        : "Boosted visibility + unlimited contacts"}
-                    </span>
-                  </div>
-                </div>
-
-                {profile.hourly_rate != null && (
-                  <div className="mt-3">
-                    <div className="text-xs text-slate-500">
-                      {language === "fr"
-                        ? "Tarif horaire déclaré"
-                        : "Declared hourly rate"}
-                    </div>
-                    <div className="font-medium text-slate-900">
-                      {profile.hourly_rate.toLocaleString()}{" "}
-                      {profile.currency || ""}/h
-                    </div>
-                  </div>
-                )}
-
-                {/* Actions changement de plan */}
-                <div className="pt-3 border-t border-slate-100 mt-3 flex flex-wrap gap-2">
-                  {profile.plan_code !== "FREE" && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={updatingPlan}
-                      onClick={() => updatePlan("FREE")}
-                    >
-                      {updatingPlan && profile.plan_code === "FREE"
-                        ? language === "fr"
-                          ? "Mise à jour..."
-                          : "Updating..."
-                        : language === "fr"
-                        ? "Revenir au plan Gratuit"
-                        : "Switch to Free"}
-                    </Button>
-                  )}
-
-                  {profile.plan_code !== "MONTHLY" && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={updatingPlan}
-                      className="bg-pro-blue hover:bg-blue-700"
-                      onClick={() => updatePlan("MONTHLY")}
-                    >
-                      {updatingPlan && profile.plan_code === "MONTHLY"
-                        ? language === "fr"
-                          ? "Mise à jour..."
-                          : "Updating..."
-                        : language === "fr"
-                        ? "Passer au plan Mensuel"
-                        : "Switch to Monthly"}
-                    </Button>
-                  )}
-
-                  {profile.plan_code !== "YEARLY" && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={updatingPlan}
-                      className="bg-amber-500 hover:bg-amber-600"
-                      onClick={() => updatePlan("YEARLY")}
-                    >
-                      {updatingPlan && profile.plan_code === "YEARLY"
-                        ? language === "fr"
-                          ? "Mise à jour..."
-                          : "Updating..."
-                        : language === "fr"
-                        ? "Passer au plan Annuel"
-                        : "Switch to Yearly"}
-                    </Button>
-                  )}
-                </div>
-
-                <div className="mt-4 text-xs text-slate-500">
-                  {language === "fr"
-                    ? "Pour l’instant, le changement de plan ne déclenche pas encore de paiement automatique. Vous pourrez connecter Stripe ou un autre moyen de paiement plus tard côté back-office."
-                    : "For now, changing plan does not trigger automatic payment yet. You can connect Stripe or another payment gateway later on the back office."}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STATS */}
-          {activeTab === "stats" && (
-            <div className="space-y-4">
-              <h2 className="text-sm font-semibold text-slate-800 mb-2">
-                {language === "fr"
-                  ? "Statistiques personnelles"
-                  : "Personal stats"}
-              </h2>
-
-              {statsError && (
-                <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
-                  {statsError}
-                </div>
-              )}
-
-              <p className="text-xs text-slate-500 mb-2">
-                {language === "fr"
-                  ? "Suivez les vues de votre profil, le nombre de demandes reçues et votre taux de réponse."
-                  : "Track your profile views, number of requests received and response rate."}
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                {/* Vues du profil */}
-                <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                  <div className="text-xs text-slate-500">
-                    {language === "fr" ? "Vues du profil" : "Profile views"}
-                  </div>
-                  <div className="text-2xl font-bold text-slate-900 mt-1">
-                    {statsLoading ? "…" : profileViews}
-                  </div>
-                </div>
-
-                {/* Demandes reçues */}
-                <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                  <div className="text-xs text-slate-500">
-                    {language === "fr"
-                      ? "Demandes reçues"
-                      : "Requests received"}
-                  </div>
-                  <div className="text-2xl font-bold text-slate-900 mt-1">
-                    {statsLoading ? "…" : requestsCount}
-                  </div>
-                </div>
-
-                {/* Taux de réponse */}
-                <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                  <div className="text-xs text-slate-500">
-                    {language === "fr"
-                      ? "Taux de réponse"
-                      : "Response rate"}
-                  </div>
-                  <div className="text-2xl font-bold text-slate-900 mt-1">
-                    {statsLoading
-                      ? "…"
-                      : requestsCount > 0
-                      ? `${responseRate}%`
-                      : "—"}
-                  </div>
-                  {requestsCount > 0 && !statsLoading && (
-                    <div className="text-[11px] text-slate-500 mt-1">
-                      {language === "fr"
-                        ? `${responseRate}% des demandes marquées comme "En cours" ou "Traité".`
-                        : `${responseRate}% of requests marked as "In progress" or "Done".`}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="text-xs text-slate-500">
-                {language === "fr"
-                  ? "Ces chiffres sont calculés à partir des vues (table op_ouvrier_views) et des demandes reçues (op_ouvrier_contacts)."
-                  : "These figures are based on views (table op_ouvrier_views) and received requests (op_ouvrier_contacts)."}
-              </div>
-            </div>
-          )}
-
-          {/* MESSAGES */}
-          {activeTab === "messages" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-800">
-                    {language === "fr"
-                      ? "Messages reçus"
-                      : "Received messages"}
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {language === "fr"
-                      ? "Répondez directement depuis cet espace : tapez votre message, puis envoyez-le par téléphone, WhatsApp, e-mail, formulaire interne ou copiez-le."
-                      : "Reply directly from here: type your message, then send it via phone, WhatsApp, e-mail, internal form or copy it."}
+                {location && (
+                  <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500">
+                    <MapPin className="w-3 h-3" />
+                    {location}
                   </p>
-                </div>
-                <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
-                  {language === "fr" ? "Total" : "Total"} :{" "}
-                  <span className="ml-1 font-semibold">
-                    {contacts.length}
-                  </span>
-                </span>
-              </div>
-
-              {contactsLoading && (
-                <div className="text-sm text-slate-500">
-                  {language === "fr"
-                    ? "Chargement de vos demandes..."
-                    : "Loading your requests..."}
-                </div>
-              )}
-
-              {contactsError && (
-                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
-                  {contactsError}
-                </div>
-              )}
-
-              {!contactsLoading && !contactsError && contacts.length === 0 && (
-                <div className="text-sm text-slate-500">
-                  {language === "fr"
-                    ? "Vous n’avez pas encore reçu de demandes de contact."
-                    : "You haven't received any contact requests yet."}
-                </div>
-              )}
-
-              {!contactsLoading && !contactsError && contacts.length > 0 && (
-                <ul className="space-y-4">
-                  {contacts.map((c) => {
-                    const replyDraft = (replyDrafts[c.id] || "").trim();
-
-                    const emailSubject =
-                      language === "fr"
-                        ? "Réponse à votre demande via OuvriersPro"
-                        : "Reply to your request via OuvriersPro";
-
-                    const emailBody =
-                      replyDraft.length > 0
-                        ? replyDraft
-                        : language === "fr"
-                        ? "Bonjour,\n\nJe fais suite à votre demande."
-                        : "Hello,\n\nI am following up on your request.";
-
-                    const emailHref = c.client_email
-                      ? `mailto:${c.client_email}?subject=${encodeURIComponent(
-                          emailSubject
-                        )}&body=${encodeURIComponent(emailBody)}`
-                      : "";
-
-                    const whatsappUrl = phoneToWhatsappUrl(
-                      c.client_phone,
-                      replyDraft || undefined
-                    );
-
-                    const clientProfileUrl = c.client_id
-                      ? `/clients/${c.client_id}`
-                      : null;
-                    const clientFormUrl = c.client_id
-                      ? `/clients/${c.client_id}/contact`
-                      : null;
-
-                    const initials =
-                      (c.client_name || "—")
-                        .split(" ")
-                        .filter(Boolean)
-                        .map((n) => n[0])
-                        .join("")
-                        .toUpperCase() || "—";
-
-                    const hasEmail = !!c.client_email;
-                    const hasPhone = !!c.client_phone;
-                    const hasClientProfile = !!c.client_id;
-                    const hasAnyChannel =
-                      hasEmail || hasPhone || hasClientProfile;
-
-                    return (
-                      <li key={c.id}>
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-4 shadow-sm hover:bg-slate-50 transition">
-                          <div className="flex gap-3 flex-1">
-                            {/* Avatar */}
-                            <div className="hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-pro-blue/10 text-pro-blue text-xs font-semibold shrink-0">
-                              {initials !== "—" ? (
-                                initials
-                              ) : (
-                                <User className="w-4 h-4" />
-                              )}
-                            </div>
-
-                            <div className="flex-1 space-y-2">
-                              {/* En-tête message */}
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <div>
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <div className="text-sm font-semibold text-slate-800">
-                                      {c.client_name || "—"}
-                                    </div>
-                                    <span className="text-[11px] text-slate-400">
-                                      {formatDate(c.created_at)} •{" "}
-                                      {originLabel(c.origin)}
-                                    </span>
-                                  </div>
-                                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-0.5">
-                                    {hasEmail && (
-                                      <span className="inline-flex items-center gap-1">
-                                        <Mail className="w-3 h-3" />
-                                        {c.client_email}
-                                      </span>
-                                    )}
-                                    {hasPhone && (
-                                      <span className="inline-flex items-center gap-1">
-                                        <Phone className="w-3 h-3" />
-                                        {c.client_phone}
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {/* Actions liées au profil client (si client_id présent) */}
-                                  {hasClientProfile && (
-                                    <div className="mt-1 flex flex-wrap gap-2 text-xs">
-                                      <Button
-                                        variant="ghost"
-                                        size="xs"
-                                        asChild
-                                      >
-                                        <a
-                                          href={clientProfileUrl!}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                        >
-                                          {language === "fr"
-                                            ? "Voir le profil client"
-                                            : "View client profile"}
-                                        </a>
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="xs"
-                                        asChild
-                                      >
-                                        <a
-                                          href={clientFormUrl!}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                        >
-                                          {language === "fr"
-                                            ? "Contacter via le formulaire"
-                                            : "Contact via form"}
-                                        </a>
-                                      </Button>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Message client */}
-                              {c.message && (
-                                <div className="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 whitespace-pre-line">
-                                  {c.message}
-                                </div>
-                              )}
-
-                              {/* Bloc réponse rapide + boutons */}
-                              <div className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                                <div className="flex items-center justify-between gap-2 mb-1">
-                                  <span className="text-xs font-medium text-slate-600">
-                                    {language === "fr"
-                                      ? "Votre réponse rapide"
-                                      : "Quick reply"}
-                                  </span>
-                                  <span className="text-[11px] text-slate-400">
-                                    {language === "fr"
-                                      ? "Non envoyée automatiquement"
-                                      : "Not sent automatically"}
-                                  </span>
-                                </div>
-                                <Textarea
-                                  rows={2}
-                                  value={replyDrafts[c.id] || ""}
-                                  onChange={(e) =>
-                                    setReplyDrafts((prev) => ({
-                                      ...prev,
-                                      [c.id]: e.target.value,
-                                    }))
-                                  }
-                                  className="text-sm"
-                                  placeholder={
-                                    language === "fr"
-                                      ? "Tapez ici votre réponse…"
-                                      : "Type your answer here…"
-                                  }
-                                />
-
-                                <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                                  {/* Message explicatif selon les canaux disponibles */}
-                                  <div className="text-[11px]">
-                                    {!hasAnyChannel ? (
-                                      <div className="text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1">
-                                        {language === "fr"
-                                          ? "Ce client n’a laissé aucun moyen de contact (ni e-mail, ni téléphone, ni compte client). Vous ne pouvez pas lui répondre directement depuis la plateforme. Vous pouvez néanmoins copier votre message si vous disposez d’un autre canal."
-                                          : "This client did not leave any contact details (no e-mail, no phone, no client account). You cannot reply to them directly from the platform. You can still copy your reply if you have another channel."}
-                                      </div>
-                                    ) : (
-                                      <div className="text-slate-400">
-                                        {language === "fr"
-                                          ? "Envoyez votre réponse par le canal de votre choix (WhatsApp, e-mail, téléphone ou formulaire)."
-                                          : "Send your reply using your preferred channel (WhatsApp, e-mail, phone or form)."}
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Actions */}
-                                  <div className="flex flex-wrap justify-end gap-2 mt-1 sm:mt-0">
-                                    {/* Copier toujours disponible */}
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="xs"
-                                      onClick={() => handleCopyReply(c.id)}
-                                    >
-                                      <Copy className="w-3 h-3 mr-1" />
-                                      {language === "fr"
-                                        ? "Copier la réponse"
-                                        : "Copy reply"}
-                                    </Button>
-
-                                    {/* Les autres boutons seulement si canal existant */}
-                                    {hasPhone && (
-                                      <Button
-                                        variant="outline"
-                                        size="xs"
-                                        asChild
-                                      >
-                                        <a href={`tel:${c.client_phone}`}>
-                                          <Phone className="w-3 h-3 mr-1" />
-                                          {language === "fr"
-                                            ? "Appeler"
-                                            : "Call"}
-                                        </a>
-                                      </Button>
-                                    )}
-                                    {hasPhone && whatsappUrl && (
-                                      <Button
-                                        variant="outline"
-                                        size="xs"
-                                        asChild
-                                      >
-                                        <a
-                                          href={whatsappUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                        >
-                                          <MessageCircle className="w-3 h-3 mr-1" />
-                                          WhatsApp
-                                        </a>
-                                      </Button>
-                                    )}
-                                    {hasEmail && emailHref && (
-                                      <Button size="xs" asChild>
-                                        <a href={emailHref}>
-                                          <Mail className="w-3 h-3 mr-1" />
-                                          {language === "fr"
-                                            ? "Envoyer par e-mail"
-                                            : "Send by e-mail"}
-                                        </a>
-                                      </Button>
-                                    )}
-                                    {hasClientProfile && clientFormUrl && (
-                                      <Button size="xs" variant="outline" asChild>
-                                        <a
-                                          href={clientFormUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                        >
-                                          {language === "fr"
-                                            ? "Formulaire interne"
-                                            : "Internal form"}
-                                        </a>
-                                      </Button>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Statut à droite */}
-                          <div className="flex items-start justify-end">
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${contactStatusClass(
-                                c.status
-                              )}`}
-                            >
-                              {contactStatusLabel(c.status)}
-                            </span>
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-
-              <div className="text-xs text-slate-500">
-                {language === "fr"
-                  ? "Ces demandes sont directement liées à votre profil ouvrier (table op_ouvrier_contacts filtrée sur worker_id)."
-                  : "These requests are directly linked to your worker profile (table op_ouvrier_contacts filtered by worker_id)."}
+                )}
               </div>
             </div>
-          )}
+
+            {worker.hourly_rate != null && (
+              <div className="mt-4 text-sm">
+                <span className="text-xs text-slate-500 block">
+                  {language === "fr"
+                    ? "Tarif horaire indicatif"
+                    : "Indicative hourly rate"}
+                </span>
+                <span className="text-lg font-semibold text-slate-900">
+                  {worker.hourly_rate.toLocaleString()}{" "}
+                  {worker.currency || "GNF"}/h
+                </span>
+              </div>
+            )}
+
+            {worker.description && (
+              <div className="mt-4">
+                <h2 className="text-sm font-semibold text-slate-800 mb-1">
+                  {language === "fr" ? "À propos" : "About"}
+                </h2>
+                <p className="text-sm text-slate-700 whitespace-pre-line">
+                  {worker.description}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Colonne droite : formulaire de contact */}
+        <div className="w-full lg:w-[360px]">
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-slate-800 mb-2">
+              {language === "fr"
+                ? "Contacter cet ouvrier"
+                : "Contact this worker"}
+            </h2>
+            <p className="text-xs text-slate-500 mb-3">
+              {language === "fr"
+                ? "Remplissez le formulaire pour être recontacté."
+                : "Fill in the form to be contacted back."}
+            </p>
+
+            {submitError && (
+              <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                {submitError}
+              </div>
+            )}
+            {submitSuccess && (
+              <div className="mb-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">
+                {submitSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-3 text-sm">
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">
+                  {language === "fr" ? "Votre nom" : "Your name"}
+                </label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">
+                  {language === "fr" ? "Votre téléphone" : "Your phone"}
+                </label>
+                <Input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">
+                  {language === "fr"
+                    ? "Votre email (facultatif)"
+                    : "Your email (optional)"}
+                </label>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">
+                  {language === "fr"
+                    ? "Votre demande / description des travaux"
+                    : "Your request / work description"}
+                </label>
+                <Textarea
+                  rows={4}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  required
+                />
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full bg-pro-blue hover:bg-blue-700"
+                disabled={submitting}
+              >
+                {submitting
+                  ? language === "fr"
+                    ? "Envoi en cours..."
+                    : "Sending..."
+                  : language === "fr"
+                  ? "Envoyer ma demande"
+                  : "Send my request"}
+              </Button>
+            </form>
+
+            {/* Coordonnées directes si l’ouvrier les a publiées */}
+            <div className="mt-4 border-t border-slate-100 pt-3 space-y-2 text-xs">
+              <div className="font-semibold text-slate-700">
+                {language === "fr"
+                  ? "Coordonnées directes"
+                  : "Direct contact"}
+              </div>
+              {worker.phone && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start"
+                  asChild
+                >
+                  <a href={`tel:${worker.phone}`}>
+                    <Phone className="w-3 h-3 mr-2" />
+                    {worker.phone}
+                  </a>
+                </Button>
+              )}
+              {whatsappUrl && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start"
+                  asChild
+                >
+                  <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
+                    <MessageCircle className="w-3 h-3 mr-2" />
+                    WhatsApp
+                  </a>
+                </Button>
+              )}
+              {worker.email && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start"
+                  asChild
+                >
+                  <a href={`mailto:${worker.email}`}>
+                    <Mail className="w-3 h-3 mr-2" />
+                    {worker.email}
+                  </a>
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-export default WorkerDashboard;
+export default WorkerDetail;
