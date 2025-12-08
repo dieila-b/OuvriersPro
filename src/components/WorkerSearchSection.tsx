@@ -76,7 +76,7 @@ const WorkerSearchSection: React.FC = () => {
       setError(null);
 
       try {
-        // ⚠️ Utilisation de la vue op_ouvriers_with_ratings
+        // Utilisation de la vue op_ouvriers_with_ratings
         const { data, error } = await supabase
           .from("op_ouvriers_with_ratings")
           .select(
@@ -196,10 +196,8 @@ const WorkerSearchSection: React.FC = () => {
 
     const next: Record<string, string> = {};
 
-    const currentKeyword = searchParams.get("keyword") || "";
-    const currentDistrict = searchParams.get("district") || "";
-    if (currentKeyword) next.keyword = currentKeyword;
-    if (currentDistrict) next.district = currentDistrict;
+    if (keyword) next.keyword = keyword;
+    if (selectedDistrict) next.district = selectedDistrict;
 
     if (selectedJob !== "all") next.job = selectedJob;
     if (selectedRegion) next.region = selectedRegion;
@@ -212,15 +210,16 @@ const WorkerSearchSection: React.FC = () => {
     setSearchParams(next, { replace: true });
   }, [
     initializedFromUrl,
+    keyword,
     selectedJob,
     selectedRegion,
     selectedCity,
     selectedCommune,
+    selectedDistrict,
     maxPrice,
     minRating,
     viewMode,
     setSearchParams,
-    searchParams,
   ]);
 
   // Listes de filtres dynamiques
@@ -511,21 +510,16 @@ const WorkerSearchSection: React.FC = () => {
               {text.filters}
             </h3>
 
-            {/* Mot clé (lecture seule - géré par HeroSection) */}
+            {/* Mot clé */}
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.keywordLabel}
               </label>
               <Input
                 value={keyword}
-                readOnly
+                onChange={(e) => setKeyword(e.target.value)}
                 placeholder={text.searchPlaceholder}
-                className="text-sm bg-gray-100 cursor-not-allowed"
-                title={
-                  language === "fr"
-                    ? "Utilisez la recherche en haut de page"
-                    : "Use the search at the top of the page"
-                }
+                className="text-sm"
               />
             </div>
 
@@ -617,20 +611,15 @@ const WorkerSearchSection: React.FC = () => {
               </select>
             </div>
 
-            {/* Quartier (lecture seule - géré par HeroSection) */}
+            {/* Quartier */}
             <div className="mb-6">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.district}
               </label>
               <select
                 value={selectedDistrict}
-                disabled
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100 cursor-not-allowed"
-                title={
-                  language === "fr"
-                    ? "Utilisez la recherche en haut de page"
-                    : "Use the search at the top of the page"
-                }
+                onChange={(e) => setSelectedDistrict(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="">{text.allDistricts}</option>
                 {districts.map((d) => (
