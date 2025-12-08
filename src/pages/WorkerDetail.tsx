@@ -170,7 +170,7 @@ const WorkerDetail: React.FC = () => {
     loadReviews();
   }, [workerId, language]);
 
-  // Chargement photos (tolérant aux noms de colonnes)
+  // Chargement photos (détection automatique de la colonne contenant le chemin)
   useEffect(() => {
     const loadPhotos = async () => {
       if (!workerId) return;
@@ -178,7 +178,7 @@ const WorkerDetail: React.FC = () => {
       setPhotosLoading(true);
       setPhotosError(null);
 
-      // On ne spécifie plus les colonnes pour éviter l'erreur sur "image_url"
+      // Important : on ne précise plus les colonnes pour ne pas déclencher d'erreur
       const { data, error } = await supabase
         .from("op_ouvrier_photos")
         .select("*")
@@ -194,17 +194,53 @@ const WorkerDetail: React.FC = () => {
             : "Unable to load photos."
         );
       } else {
-        const mapped: WorkerPhoto[] = (data || []).map((row: any) => ({
-          id: row.id,
-          // On tente plusieurs noms possibles pour la colonne d’URL
-          image_url:
+        const mapped: WorkerPhoto[] = (data || []).map((row: any) => {
+          // 1) Essayer des noms classiques
+          let url: string | null =
             row.image_url ??
             row.photo_url ??
             row.url ??
             row.path ??
-            null,
-          title: row.title ?? row.caption ?? null,
-        }));
+            row.file_path ??
+            null;
+
+          // 2) Si toujours rien, on détecte automatiquement une colonne texte qui ressemble à un chemin/URL d’image
+          if (!url) {
+            const candidateKey = Object.keys(row).find((key) => {
+              if (
+                key === "id" ||
+                key === "worker_id" ||
+                key === "title" ||
+                key === "created_at"
+              ) {
+                return false;
+              }
+              const val = row[key];
+              if (typeof val !== "string") return false;
+
+              const v = val.toLowerCase();
+              return (
+                v.startsWith("http") ||
+                v.includes("/") ||
+                v.endsWith(".jpg") ||
+                v.endsWith(".jpeg") ||
+                v.endsWith(".png") ||
+                v.endsWith(".webp")
+              );
+            });
+
+            if (candidateKey) {
+              url = row[candidateKey] as string;
+            }
+          }
+
+          return {
+            id: row.id,
+            image_url: url ?? null,
+            title: row.title ?? row.caption ?? null,
+          };
+        });
+
         setPhotos(mapped);
       }
 
@@ -421,7 +457,6 @@ const WorkerDetail: React.FC = () => {
         );
       }
 
-      // Insertion minimale : worker_id + rating + comment
       const { data: newReview, error: insertReviewError } = await supabase
         .from("op_ouvrier_reviews")
         .insert({
