@@ -170,7 +170,7 @@ const WorkerDetail: React.FC = () => {
     loadReviews();
   }, [workerId, language]);
 
-  // Chargement photos (utilise la colonne public_url)
+  // Chargement photos
   useEffect(() => {
     const loadPhotos = async () => {
       if (!workerId) return;
@@ -193,12 +193,7 @@ const WorkerDetail: React.FC = () => {
             : "Unable to load photos."
         );
       } else {
-        const mapped: WorkerPhoto[] = (data || []).map((row: any) => ({
-          id: row.id,
-          public_url: row.public_url ?? null,
-          title: row.title ?? null,
-        }));
-        setPhotos(mapped);
+        setPhotos((data || []) as WorkerPhoto[]);
       }
 
       setPhotosLoading(false);
@@ -355,17 +350,28 @@ const WorkerDetail: React.FC = () => {
       }
       const detailedMessage = detailedMessageLines.join("\n");
 
+      // ⚠️ Adapter à la structure de op_ouvrier_contacts
       const { error: contactError } = await supabase
         .from("op_ouvrier_contacts")
         .insert({
           worker_id: worker.id,
           client_id: clientProfileId,
+          // colonnes principales historiques
+          full_name:
+            clientName ||
+            (user.user_metadata as any)?.full_name ||
+            user.email ||
+            null,
+          email: clientEmail || user.email || null,
+          phone: clientPhone || null,
+          message: detailedMessage || "", // message est NOT NULL
+          status: "new",
+          origin: "web",
+          // colonnes "détaillées" côté ouvrier
           client_name: clientName || null,
           client_email: clientEmail || user.email || null,
           client_phone: clientPhone || null,
-          message: detailedMessage || null,
-          origin: "web",
-          status: "new",
+          worker_name: fullName || null,
         });
 
       if (contactError) {
@@ -592,7 +598,7 @@ const WorkerDetail: React.FC = () => {
               </p>
             </div>
 
-            {/* Portfolio placeholder */}
+            {/* Portfolio (placeholder simple) */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-1">
                 {language === "fr"
@@ -651,13 +657,13 @@ const WorkerDetail: React.FC = () => {
                       key={p.id}
                       className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-100"
                     >
-                      {p.public_url ? (
+                      {p.public_url && (
                         <img
                           src={p.public_url}
                           alt={p.title || ""}
                           className="w-full h-full object-cover"
                         />
-                      ) : null}
+                      )}
                     </div>
                   ))}
               </div>
