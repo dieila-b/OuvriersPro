@@ -36,7 +36,7 @@ type Review = {
 
 type WorkerPhoto = {
   id: string;
-  image_url: string | null;
+  public_url: string | null;
   title: string | null;
 };
 
@@ -170,7 +170,7 @@ const WorkerDetail: React.FC = () => {
     loadReviews();
   }, [workerId, language]);
 
-  // Chargement photos (détection automatique de la colonne contenant le chemin)
+  // Chargement photos (utilise la colonne public_url)
   useEffect(() => {
     const loadPhotos = async () => {
       if (!workerId) return;
@@ -178,10 +178,9 @@ const WorkerDetail: React.FC = () => {
       setPhotosLoading(true);
       setPhotosError(null);
 
-      // Important : on ne précise plus les colonnes pour ne pas déclencher d'erreur
       const { data, error } = await supabase
         .from("op_ouvrier_photos")
-        .select("*")
+        .select("id, public_url, title")
         .eq("worker_id", workerId)
         .order("created_at", { ascending: false })
         .limit(6);
@@ -194,53 +193,11 @@ const WorkerDetail: React.FC = () => {
             : "Unable to load photos."
         );
       } else {
-        const mapped: WorkerPhoto[] = (data || []).map((row: any) => {
-          // 1) Essayer des noms classiques
-          let url: string | null =
-            row.image_url ??
-            row.photo_url ??
-            row.url ??
-            row.path ??
-            row.file_path ??
-            null;
-
-          // 2) Si toujours rien, on détecte automatiquement une colonne texte qui ressemble à un chemin/URL d’image
-          if (!url) {
-            const candidateKey = Object.keys(row).find((key) => {
-              if (
-                key === "id" ||
-                key === "worker_id" ||
-                key === "title" ||
-                key === "created_at"
-              ) {
-                return false;
-              }
-              const val = row[key];
-              if (typeof val !== "string") return false;
-
-              const v = val.toLowerCase();
-              return (
-                v.startsWith("http") ||
-                v.includes("/") ||
-                v.endsWith(".jpg") ||
-                v.endsWith(".jpeg") ||
-                v.endsWith(".png") ||
-                v.endsWith(".webp")
-              );
-            });
-
-            if (candidateKey) {
-              url = row[candidateKey] as string;
-            }
-          }
-
-          return {
-            id: row.id,
-            image_url: url ?? null,
-            title: row.title ?? row.caption ?? null,
-          };
-        });
-
+        const mapped: WorkerPhoto[] = (data || []).map((row: any) => ({
+          id: row.id,
+          public_url: row.public_url ?? null,
+          title: row.title ?? null,
+        }));
         setPhotos(mapped);
       }
 
@@ -588,9 +545,7 @@ const WorkerDetail: React.FC = () => {
                     <div className="text-[11px] text-slate-400">
                       {reviews.length}{" "}
                       {language === "fr"
-                        ? reviews.length <= 1
-                          ? "avis"
-                          : "avis"
+                        ? "avis"
                         : reviews.length <= 1
                         ? "review"
                         : "reviews"}
@@ -637,7 +592,7 @@ const WorkerDetail: React.FC = () => {
               </p>
             </div>
 
-            {/* Portfolio (placeholder simple) */}
+            {/* Portfolio placeholder */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-1">
                 {language === "fr"
@@ -696,9 +651,9 @@ const WorkerDetail: React.FC = () => {
                       key={p.id}
                       className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-100"
                     >
-                      {p.image_url ? (
+                      {p.public_url ? (
                         <img
-                          src={p.image_url}
+                          src={p.public_url}
                           alt={p.title || ""}
                           className="w-full h-full object-cover"
                         />
@@ -731,9 +686,7 @@ const WorkerDetail: React.FC = () => {
                 <span className="text-xs text-slate-500">
                   {reviews.length}{" "}
                   {language === "fr"
-                    ? reviews.length <= 1
-                      ? "avis"
-                      : "avis"
+                    ? "avis"
                     : reviews.length <= 1
                     ? "review"
                     : "reviews"}
