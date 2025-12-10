@@ -24,6 +24,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 
 // Espace ouvrier connecté
 import WorkerDashboard from "./pages/WorkerDashboard";
+import WorkerInbox from "./pages/WorkerInbox"; // ✅ nouvelle page messagerie ouvrier
 
 // Espace Client / Particulier
 import ClientDashboard from "./pages/ClientDashboard";
@@ -74,7 +75,10 @@ const App = () => (
             <Route path="/register" element={<Register />} />
 
             {/* 📝 Formulaire d'inscription ouvrier + forfait */}
-            <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
+            <Route
+              path="/inscription-ouvrier"
+              element={<InscriptionOuvrier />}
+            />
 
             {/* 👤 Fiche ouvrier */}
             <Route path="/ouvrier/:id" element={<WorkerDetail />} />
@@ -129,12 +133,22 @@ const App = () => (
               }
             />
 
-            {/* 👷‍♂️ Espace ouvrier (protégé : worker) */}
+            {/* 👷‍♂️ Espace ouvrier : tableau de bord (protégé : worker) */}
             <Route
               path="/espace-ouvrier"
               element={
                 <PrivateRoute allowedRoles={["worker"]}>
                   <WorkerDashboard />
+                </PrivateRoute>
+              }
+            />
+
+            {/* 👷‍♂️ Espace ouvrier : messagerie 3 colonnes (protégé : worker) */}
+            <Route
+              path="/espace-ouvrier/messages"
+              element={
+                <PrivateRoute allowedRoles={["worker"]}>
+                  <WorkerInbox />
                 </PrivateRoute>
               }
             />
