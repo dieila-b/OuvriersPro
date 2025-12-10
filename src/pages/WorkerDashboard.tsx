@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import WorkerPhotosManager from "@/components/WorkerPhotosManager";
 import WorkerPortfolioManager from "@/components/WorkerPortfolioManager";
-import { Mail, Phone, MessageCircle, User, Copy } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 type WorkerProfile = {
   id: string;
@@ -30,45 +30,25 @@ type WorkerProfile = {
   created_at: string;
 };
 
-type ClientProfile = {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  email: string | null;
-  phone: string | null;
-};
-
 type WorkerContact = {
   id: string;
-  worker_id: string | null;
-  client_id: string | null;
-  client_name: string | null;
-  client_email: string | null;
-  client_phone: string | null;
-  message: string | null;
   status: string | null;
-  origin: string | null;
-  created_at: string;
-  client_profile?: ClientProfile | null;
 };
 
 type TabKey = "profile" | "subscription" | "stats" | "messages";
 
 const WorkerDashboard: React.FC = () => {
   const { language } = useLanguage();
+  const navigate = useNavigate();
+
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<WorkerProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
 
-  // Messages / demandes de contact
+  // Demandes de contact (utilisées uniquement pour les stats)
   const [contacts, setContacts] = useState<WorkerContact[]>([]);
-  const [contactsLoading, setContactsLoading] = useState(false);
-  const [contactsError, setContactsError] = useState<string | null>(null);
-
-  // Réponses rapides par message (id -> texte)
-  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
 
   // Édition du profil
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -102,7 +82,6 @@ const WorkerDashboard: React.FC = () => {
       setLoading(true);
       setError(null);
       setContacts([]);
-      setContactsError(null);
 
       // 1) Utilisateur connecté
       const { data, error: userError } = await supabase.auth.getUser();
@@ -175,77 +154,19 @@ const WorkerDashboard: React.FC = () => {
       setProfile(wp);
       setLoading(false);
 
-      // 3) Demandes de contact
-      setContactsLoading(true);
-      setContactsError(null);
-
-      // On joint ici la table op_clients via la FK client_id -> op_clients.id
+      // 3) Demandes de contact (pour les statistiques uniquement)
       const { data: contactsData, error: contactsErr } = await supabase
         .from("op_ouvrier_contacts")
-        .select(
-          `
-          id,
-          worker_id,
-          client_id,
-          client_name,
-          client_email,
-          client_phone,
-          message,
-          status,
-          origin,
-          created_at,
-          client:op_clients (
-            id,
-            first_name,
-            last_name,
-            email,
-            phone
-          )
-        `
-        )
-        .eq("worker_id", wp.id)
-        .order("created_at", { ascending: false });
+        .select("id, status")
+        .eq("worker_id", wp.id);
 
       if (!isMounted) return;
 
       if (contactsErr) {
-        console.error(contactsErr);
-        setContactsError(
-          language === "fr"
-            ? `Erreur lors du chargement de vos demandes : ${contactsErr.message}`
-            : `Error while loading your requests: ${contactsErr.message}`
-        );
-      } else {
-        const mapped: WorkerContact[] =
-          (contactsData || []).map((row: any) => {
-            const client: ClientProfile | null = row.client ?? null;
-
-            const clientId: string | null =
-              row.client_id ?? client?.id ?? null;
-
-            const clientNameFromProfile =
-              client &&
-              `${client.first_name || ""} ${client.last_name || ""}`.trim();
-
-            return {
-              id: row.id,
-              worker_id: row.worker_id,
-              client_id: clientId,
-              client_name: row.client_name || clientNameFromProfile || null,
-              client_email: row.client_email || client?.email || null,
-              client_phone: row.client_phone || client?.phone || null,
-              message: row.message,
-              status: row.status,
-              origin: row.origin,
-              created_at: row.created_at,
-              client_profile: client,
-            };
-          }) ?? [];
-
-        setContacts(mapped);
+        console.error("Error loading contacts for stats", contactsErr);
+      } else if (contactsData) {
+        setContacts(contactsData as WorkerContact[]);
       }
-
-      setContactsLoading(false);
     };
 
     fetchData();
@@ -328,33 +249,6 @@ const WorkerDashboard: React.FC = () => {
     return "bg-amber-50 text-amber-700 border-amber-200";
   };
 
-  const contactStatusLabel = (s: string | null | undefined) => {
-    if (language === "fr") {
-      if (s === "in_progress") return "En cours";
-      if (s === "done") return "Traité";
-      return "Nouveau";
-    } else {
-      if (s === "in_progress") return "In progress";
-      if (s === "done") return "Done";
-      return "New";
-    }
-  };
-
-  const contactStatusClass = (s: string | null | undefined) => {
-    if (s === "done")
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    if (s === "in_progress")
-      return "bg-amber-50 text-amber-700 border-amber-200";
-    return "bg-sky-50 text-sky-700 border-sky-200";
-  };
-
-  const originLabel = (o: string | null | undefined) => {
-    if (!o || o === "web") return "web";
-    if (o === "mobile") return "mobile";
-    if (o === "other") return language === "fr" ? "autre" : "other";
-    return o;
-  };
-
   const formatDate = (value: string) => {
     const d = new Date(value);
     return d.toLocaleString(language === "fr" ? "fr-FR" : "en-GB", {
@@ -364,117 +258,6 @@ const WorkerDashboard: React.FC = () => {
       hour: "2-digit",
       minute: "2-digit",
     });
-  };
-
-  // helper WhatsApp avec texte optionnel
-  const phoneToWhatsappUrl = (phone?: string | null, text?: string) => {
-    if (!phone) return "";
-    const clean = phone.replace(/\s+/g, "");
-    if (clean.length < 8) return "";
-    const normalized = clean.startsWith("+") ? clean.slice(1) : clean;
-    let url = `https://wa.me/${normalized}`;
-    if (text && text.trim().length > 0) {
-      url += `?text=${encodeURIComponent(text.trim())}`;
-    }
-    return url;
-  };
-
-  // Copier la réponse dans le presse-papiers
-  const handleCopyReply = (contactId: string) => {
-    const text = (replyDrafts[contactId] || "").trim();
-    if (!text) {
-      window.alert(
-        language === "fr"
-          ? "Aucune réponse à copier."
-          : "No reply text to copy."
-      );
-      return;
-    }
-
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard
-        .writeText(text)
-        .then(() => {
-          window.alert(
-            language === "fr"
-              ? "Réponse copiée dans le presse-papiers."
-              : "Reply copied to clipboard."
-          );
-        })
-        .catch(() => {
-          window.alert(
-            language === "fr"
-              ? "Impossible de copier automatiquement. Sélectionnez le texte et copiez-le manuellement."
-              : "Could not copy automatically. Please select the text and copy it manually."
-          );
-        });
-    } else {
-      window.alert(
-        language === "fr"
-          ? "Copie automatique non disponible. Sélectionnez le texte et copiez-le manuellement."
-          : "Automatic copy not available. Please select the text and copy it manually."
-      );
-    }
-  };
-
-  // Envoi de la réponse interne (stockée dans op_client_worker_messages)
-  const handleSendInternalReply = async (contact: WorkerContact) => {
-    if (!profile) return;
-
-    const draft = (replyDrafts[contact.id] || "").trim();
-    if (!draft) {
-      window.alert(
-        language === "fr"
-          ? "Veuillez saisir une réponse avant d'envoyer."
-          : "Please enter a reply before sending."
-      );
-      return;
-    }
-
-    try {
-      const { error } = await supabase.from("op_client_worker_messages").insert({
-        contact_id: contact.id,
-        worker_id: profile.id,
-        client_id: contact.client_id,
-        sender_role: "worker",
-        message: draft,
-      });
-
-      if (error) {
-        console.error("sendInternalReply error", error);
-        window.alert(
-          language === "fr"
-            ? `Impossible d'enregistrer votre réponse interne.\n\nDétail : ${error.message}`
-            : `Unable to save your internal reply.\n\nDetails: ${error.message}`
-        );
-        return;
-      }
-
-      // On vide le brouillon et on marque la demande comme "en cours"
-      setReplyDrafts((prev) => ({ ...prev, [contact.id]: "" }));
-      setContacts((prev) =>
-        prev.map((c) =>
-          c.id === contact.id ? { ...c, status: "in_progress" } : c
-        )
-      );
-
-      window.alert(
-        language === "fr"
-          ? "Votre réponse interne a été enregistrée."
-          : "Your internal reply has been saved."
-      );
-    } catch (e: any) {
-      console.error("sendInternalReply exception", e);
-      window.alert(
-        language === "fr"
-          ? `Une erreur est survenue lors de l'enregistrement de votre réponse interne.\n\nDétail : ${
-              e?.message || e
-            }`
-          : `An error occurred while saving your internal reply.\n\nDetails: ${
-              e?.message || e
-            }`
-      );
-    }
   };
 
   // Gestion édition profil
@@ -737,7 +520,13 @@ const WorkerDashboard: React.FC = () => {
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => setActiveTab(tab.key)}
+                  onClick={() => {
+                    if (tab.key === "messages") {
+                      navigate("/espace-ouvrier/messages");
+                    } else {
+                      setActiveTab(tab.key);
+                    }
+                  }}
                   className={`whitespace-nowrap px-3 py-2 text-sm border-b-2 -mb-px ${
                     isActive
                       ? "border-pro-blue text-pro-blue font-semibold"
@@ -1252,335 +1041,6 @@ const WorkerDashboard: React.FC = () => {
                 {language === "fr"
                   ? "Ces chiffres sont calculés à partir des vues (table op_ouvrier_views) et des demandes reçues (op_ouvrier_contacts)."
                   : "These figures are based on views (table op_ouvrier_views) and received requests (op_ouvrier_contacts)."}
-              </div>
-            </div>
-          )}
-
-          {/* MESSAGES */}
-          {activeTab === "messages" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-800">
-                    {language === "fr"
-                      ? "Messages reçus"
-                      : "Received messages"}
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {language === "fr"
-                      ? "Répondez directement depuis cet espace : tapez votre message, puis envoyez-le via la messagerie interne ou par téléphone, WhatsApp, e-mail."
-                      : "Reply directly from here: type your message, then send it via internal messaging or by phone, WhatsApp, e-mail."}
-                  </p>
-                </div>
-                <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
-                  {language === "fr" ? "Total" : "Total"} :{" "}
-                  <span className="ml-1 font-semibold">
-                    {contacts.length}
-                  </span>
-                </span>
-              </div>
-
-              {contactsLoading && (
-                <div className="text-sm text-slate-500">
-                  {language === "fr"
-                    ? "Chargement de vos demandes..."
-                    : "Loading your requests..."}
-                </div>
-              )}
-
-              {contactsError && (
-                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
-                  {contactsError}
-                </div>
-              )}
-
-              {!contactsLoading && !contactsError && contacts.length === 0 && (
-                <div className="text-sm text-slate-500">
-                  {language === "fr"
-                    ? "Vous n’avez pas encore reçu de demandes de contact."
-                    : "You haven't received any contact requests yet."}
-                </div>
-              )}
-
-              {!contactsLoading && !contactsError && contacts.length > 0 && (
-                <ul className="space-y-4">
-                  {contacts.map((c) => {
-                    const replyDraft = (replyDrafts[c.id] || "").trim();
-
-                    const emailSubject =
-                      language === "fr"
-                        ? "Réponse à votre demande via OuvriersPro"
-                        : "Reply to your request via OuvriersPro";
-
-                    const emailBody =
-                      replyDraft.length > 0
-                        ? replyDraft
-                        : language === "fr"
-                        ? "Bonjour,\n\nJe fais suite à votre demande."
-                        : "Hello,\n\nI am following up on your request.";
-
-                    const emailHref = c.client_email
-                      ? `mailto:${c.client_email}?subject=${encodeURIComponent(
-                          emailSubject
-                        )}&body=${encodeURIComponent(emailBody)}`
-                      : "";
-
-                    const whatsappUrl = phoneToWhatsappUrl(
-                      c.client_phone,
-                      replyDraft || undefined
-                    );
-
-                    const clientProfileUrl = c.client_id
-                      ? `/clients/${c.client_id}`
-                      : null;
-                    const clientFormUrl = c.client_id
-                      ? `/clients/${c.client_id}/contact`
-                      : null;
-
-                    const initials =
-                      (c.client_name || "—")
-                        .split(" ")
-                        .filter(Boolean)
-                        .map((n) => n[0])
-                        .join("")
-                        .toUpperCase() || "—";
-
-                    const hasEmail = !!c.client_email;
-                    const hasPhone = !!c.client_phone;
-                    const hasClientProfile = !!c.client_id;
-                    const hasAnyChannel =
-                      hasEmail || hasPhone || hasClientProfile;
-
-                    return (
-                      <li key={c.id}>
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-4 shadow-sm hover:bg-slate-50 transition">
-                          <div className="flex gap-3 flex-1">
-                            {/* Avatar */}
-                            <div className="hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-pro-blue/10 text-pro-blue text-xs font-semibold shrink-0">
-                              {initials !== "—" ? (
-                                initials
-                              ) : (
-                                <User className="w-4 h-4" />
-                              )}
-                            </div>
-
-                            <div className="flex-1 space-y-2">
-                              {/* En-tête message */}
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <div>
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <div className="text-sm font-semibold text-slate-800">
-                                      {c.client_name || "—"}
-                                    </div>
-                                    <span className="text-[11px] text-slate-400">
-                                      {formatDate(c.created_at)} •{" "}
-                                      {originLabel(c.origin)}
-                                    </span>
-                                  </div>
-                                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-0.5">
-                                    {hasEmail && (
-                                      <span className="inline-flex items-center gap-1">
-                                        <Mail className="w-3 h-3" />
-                                        {c.client_email}
-                                      </span>
-                                    )}
-                                    {hasPhone && (
-                                      <span className="inline-flex items-center gap-1">
-                                        <Phone className="w-3 h-3" />
-                                        {c.client_phone}
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {/* Actions liées au profil client (si client_id présent) */}
-                                  {hasClientProfile && (
-                                    <div className="mt-1 flex flex-wrap gap-2 text-xs">
-                                      <Button
-                                        variant="ghost"
-                                        size="xs"
-                                        asChild
-                                      >
-                                        <a
-                                          href={clientProfileUrl!}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                        >
-                                          {language === "fr"
-                                            ? "Voir le profil client"
-                                            : "View client profile"}
-                                        </a>
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="xs"
-                                        asChild
-                                      >
-                                        <a
-                                          href={clientFormUrl!}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                        >
-                                          {language === "fr"
-                                            ? "Formulaire détaillé"
-                                            : "Detailed form"}
-                                        </a>
-                                      </Button>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Message client */}
-                              {c.message && (
-                                <div className="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 whitespace-pre-line">
-                                  {c.message}
-                                </div>
-                              )}
-
-                              {/* Bloc réponse rapide + boutons */}
-                              <div className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                                <div className="flex items-center justify-between gap-2 mb-1">
-                                  <span className="text-xs font-medium text-slate-600">
-                                    {language === "fr"
-                                      ? "Votre réponse rapide"
-                                      : "Quick reply"}
-                                  </span>
-                                  <span className="text-[11px] text-slate-400">
-                                    {language === "fr"
-                                      ? "Non envoyée automatiquement"
-                                      : "Not sent automatically"}
-                                  </span>
-                                </div>
-                                <Textarea
-                                  rows={2}
-                                  value={replyDrafts[c.id] || ""}
-                                  onChange={(e) =>
-                                    setReplyDrafts((prev) => ({
-                                      ...prev,
-                                      [c.id]: e.target.value,
-                                    }))
-                                  }
-                                  className="text-sm"
-                                  placeholder={
-                                    language === "fr"
-                                      ? "Tapez ici votre réponse…"
-                                      : "Type your answer here…"
-                                  }
-                                />
-
-                                <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                                  {/* Message explicatif selon les canaux disponibles */}
-                                  <div className="text-[11px]">
-                                    {!hasAnyChannel ? (
-                                      <div className="text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1">
-                                        {language === "fr"
-                                          ? "Ce client n’a laissé aucun moyen de contact (ni e-mail, ni téléphone, ni compte client). Vous ne pouvez pas lui répondre directement. Vous pouvez néanmoins enregistrer une note interne ou copier votre message."
-                                          : "This client did not leave any contact details (no e-mail, no phone, no client account). You cannot reply to them directly. You can still save an internal note or copy your reply."}
-                                      </div>
-                                    ) : (
-                                      <div className="text-slate-400">
-                                        {language === "fr"
-                                          ? "Envoyez votre réponse via la messagerie interne ou le canal de votre choix (WhatsApp, e-mail, téléphone)."
-                                          : "Send your reply via internal messaging or your preferred channel (WhatsApp, e-mail, phone)."}
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Actions */}
-                                  <div className="flex flex-wrap justify-end gap-2 mt-1 sm:mt-0">
-                                    {/* Envoyer interne */}
-                                    <Button
-                                      type="button"
-                                      size="xs"
-                                      className="bg-pro-blue hover:bg-blue-700 text-white"
-                                      onClick={() => handleSendInternalReply(c)}
-                                    >
-                                      {language === "fr"
-                                        ? "Envoyer (interne)"
-                                        : "Send (internal)"}
-                                    </Button>
-
-                                    {/* Copier toujours disponible */}
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="xs"
-                                      onClick={() => handleCopyReply(c.id)}
-                                    >
-                                      <Copy className="w-3 h-3 mr-1" />
-                                      {language === "fr"
-                                        ? "Copier la réponse"
-                                        : "Copy reply"}
-                                    </Button>
-
-                                    {/* Les autres boutons seulement si canal existant */}
-                                    {hasPhone && (
-                                      <Button
-                                        variant="outline"
-                                        size="xs"
-                                        asChild
-                                      >
-                                        <a href={`tel:${c.client_phone}`}>
-                                          <Phone className="w-3 h-3 mr-1" />
-                                          {language === "fr"
-                                            ? "Appeler"
-                                            : "Call"}
-                                        </a>
-                                      </Button>
-                                    )}
-                                    {hasPhone && whatsappUrl && (
-                                      <Button
-                                        variant="outline"
-                                        size="xs"
-                                        asChild
-                                      >
-                                        <a
-                                          href={whatsappUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                        >
-                                          <MessageCircle className="w-3 h-3 mr-1" />
-                                          WhatsApp
-                                        </a>
-                                      </Button>
-                                    )}
-                                    {hasEmail && emailHref && (
-                                      <Button size="xs" asChild>
-                                        <a href={emailHref}>
-                                          <Mail className="w-3 h-3 mr-1" />
-                                          {language === "fr"
-                                            ? "Envoyer par e-mail"
-                                            : "Send by e-mail"}
-                                        </a>
-                                      </Button>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Statut à droite */}
-                          <div className="flex items-start justify-end">
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${contactStatusClass(
-                                c.status
-                              )}`}
-                            >
-                              {contactStatusLabel(c.status)}
-                            </span>
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-
-              <div className="text-xs text-slate-500">
-                {language === "fr"
-                  ? "Ces demandes sont directement liées à votre profil ouvrier (table op_ouvrier_contacts filtrée sur worker_id)."
-                  : "These requests are directly linked to your worker profile (table op_ouvrier_contacts filtered by worker_id)."}
               </div>
             </div>
           )}
