@@ -35,7 +35,8 @@ type WorkerContact = {
   status: string | null;
 };
 
-type TabKey = "profile" | "subscription" | "stats" | "messages";
+// On ne garde plus que 3 onglets dans ce composant
+type TabKey = "profile" | "subscription" | "stats";
 
 const WorkerDashboard: React.FC = () => {
   const { language } = useLanguage();
@@ -478,19 +479,32 @@ const WorkerDashboard: React.FC = () => {
                 : "Manage your profile, subscription and follow your stats."}
             </p>
           </div>
-          <div className="text-right">
-            <div className="text-sm font-semibold text-slate-800">
-              {fullName || (language === "fr" ? "Profil sans nom" : "No name")}
+
+          <div className="flex flex-col items-end gap-2">
+            <div className="text-right">
+              <div className="text-sm font-semibold text-slate-800">
+                {fullName || (language === "fr" ? "Profil sans nom" : "No name")}
+              </div>
+              <div className="text-xs text-slate-500">{profile.email || ""}</div>
+              <div className="mt-1 inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-50 text-slate-700 border-slate-200">
+                {language === "fr" ? "Plan" : "Plan"} :{" "}
+                <span className="font-semibold ml-1">
+                  {planLabel(profile.plan_code)}
+                </span>
+              </div>
             </div>
-            <div className="text-xs text-slate-500">
-              {profile.email || ""}
-            </div>
-            <div className="mt-1 inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-50 text-slate-700 border-slate-200">
-              {language === "fr" ? "Plan" : "Plan"} :{" "}
-              <span className="font-semibold ml-1">
-                {planLabel(profile.plan_code)}
-              </span>
-            </div>
+
+            {/* Bouton d'accès à la messagerie */}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => navigate("/espace-ouvrier/messages")}
+            >
+              {language === "fr"
+                ? "Accéder à la messagerie"
+                : "Open messaging center"}
+            </Button>
           </div>
         </div>
 
@@ -509,24 +523,13 @@ const WorkerDashboard: React.FC = () => {
                 labelFr: "Statistiques",
                 labelEn: "Stats",
               },
-              {
-                key: "messages" as TabKey,
-                labelFr: "Messages",
-                labelEn: "Messages",
-              },
             ].map((tab) => {
               const isActive = activeTab === tab.key;
               return (
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => {
-                    if (tab.key === "messages") {
-                      navigate("/espace-ouvrier/messages");
-                    } else {
-                      setActiveTab(tab.key);
-                    }
-                  }}
+                  onClick={() => setActiveTab(tab.key)}
                   className={`whitespace-nowrap px-3 py-2 text-sm border-b-2 -mb-px ${
                     isActive
                       ? "border-pro-blue text-pro-blue font-semibold"
