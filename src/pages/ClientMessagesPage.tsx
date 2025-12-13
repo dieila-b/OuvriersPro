@@ -335,7 +335,10 @@ const ClientMessagesList: React.FC = () => {
   };
 
   const workerName = selectedContact?.worker
-    ? fullName(selectedContact.worker.first_name, selectedContact.worker.last_name)
+    ? fullName(
+        selectedContact.worker.first_name,
+        selectedContact.worker.last_name
+      )
     : "—";
 
   const workerPhone = selectedContact?.worker?.phone || null;
@@ -343,12 +346,14 @@ const ClientMessagesList: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 py-6">
-      <div className="max-w-6xl mx-auto px-4">
+      {/* ✅ largeur max augmentée pour mieux profiter de l’espace */}
+      <div className="max-w-7xl mx-auto px-4">
         <h1 className="text-2xl font-bold text-slate-900 mb-4">{t.title}</h1>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Colonne 1 */}
-          <div className="bg-white rounded-xl border border-slate-200 flex flex-col">
+        {/* ✅ grille personnalisée : colonne du milieu plus large */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          {/* Colonne 1 : threads */}
+          <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:col-span-3">
             <div className="px-4 pt-3 flex items-center gap-3 border-b border-slate-100">
               <div className="flex gap-2">
                 <button className="px-3 py-1 text-xs font-medium rounded-full bg-blue-600 text-white">
@@ -421,8 +426,8 @@ const ClientMessagesList: React.FC = () => {
             </div>
           </div>
 
-          {/* Colonne 2 */}
-          <div className="bg-white rounded-xl border border-slate-200 flex flex-col">
+          {/* Colonne 2 : conversation (plus large) */}
+          <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:col-span-6">
             <div className="px-4 py-3 border-b border-slate-100">
               <div className="text-sm font-semibold text-slate-900">{t.aboutWorker}</div>
               {selectedContact && (
@@ -464,28 +469,33 @@ const ClientMessagesList: React.FC = () => {
                     </div>
                   )}
 
-                  {!messagesLoading && !messagesError && messages.map((m) => {
-                    const isClient = m.sender_role === "client";
-                    return (
-                      <div
-                        key={m.id}
-                        className={`mb-3 flex ${isClient ? "justify-end" : "justify-start"}`}
-                      >
+                  {!messagesLoading &&
+                    !messagesError &&
+                    messages.map((m) => {
+                      const isClient = m.sender_role === "client";
+                      return (
                         <div
-                          className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
-                            isClient
-                              ? "bg-blue-600 text-white rounded-br-sm"
-                              : "bg-slate-100 text-slate-800 rounded-bl-sm"
+                          key={m.id}
+                          className={`mb-3 flex ${
+                            isClient ? "justify-end" : "justify-start"
                           }`}
                         >
-                          <div className="text-[10px] opacity-80 mb-0.5">
-                            {isClient ? t.you : t.workerLabel} • {formatDateTime(m.created_at)}
+                          <div
+                            className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
+                              isClient
+                                ? "bg-blue-600 text-white rounded-br-sm"
+                                : "bg-slate-100 text-slate-800 rounded-bl-sm"
+                            }`}
+                          >
+                            <div className="text-[10px] opacity-80 mb-0.5">
+                              {isClient ? t.you : t.workerLabel} •{" "}
+                              {formatDateTime(m.created_at)}
+                            </div>
+                            <div className="whitespace-pre-line">{m.message}</div>
                           </div>
-                          <div className="whitespace-pre-line">{m.message}</div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                 </>
               )}
             </div>
@@ -513,8 +523,8 @@ const ClientMessagesList: React.FC = () => {
             </div>
           </div>
 
-          {/* Colonne 3 */}
-          <div className="bg-white rounded-xl border border-slate-200 flex flex-col">
+          {/* Colonne 3 : fiche ouvrier */}
+          <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:col-span-3">
             <div className="px-4 py-3 border-b border-slate-100">
               <div className="text-sm font-semibold text-slate-900">{workerName}</div>
               {selectedContact && (
