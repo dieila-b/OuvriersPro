@@ -24,7 +24,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 
 // Espace ouvrier connecté
 import WorkerDashboard from "./pages/WorkerDashboard";
-import WorkerMessagesPage from "./pages/WorkerMessagesPage"; // ✅ page messagerie 3 colonnes (la bonne)
+import WorkerMessagesPage from "./pages/WorkerMessagesPage"; // ✅ messagerie ouvrier 3 colonnes
 
 // Espace Client / Particulier
 import ClientDashboard from "./pages/ClientDashboard";
@@ -35,8 +35,8 @@ import ClientProfile from "./pages/ClientProfile";
 // Liste des demandes client
 import ClientRequestsList from "./pages/ClientRequestsList";
 
-// Liste des échanges client ↔ ouvriers
-import ClientMessagesList from "./pages/ClientMessagesList";
+// ✅ Nouvelle messagerie client 3 colonnes
+import ClientMessagesPage from "./pages/ClientMessagesPage";
 
 // Liste des ouvriers favoris
 import ClientFavoritesList from "./pages/ClientFavoritesList";
@@ -110,12 +110,12 @@ const App = () => (
               }
             />
 
-            {/* 💬 Mes échanges (protégé : user) */}
+            {/* 💬 Mes échanges (protégé : user) ✅ maintenant en 3 colonnes */}
             <Route
               path="/mes-echanges"
               element={
                 <PrivateRoute allowedRoles={["user"]}>
-                  <ClientMessagesList />
+                  <ClientMessagesPage />
                 </PrivateRoute>
               }
             />
