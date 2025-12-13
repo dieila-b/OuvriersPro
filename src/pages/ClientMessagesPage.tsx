@@ -1,4 +1,4 @@
-// src/pages/ClientMessagesPage.tsx
+// src/pages/ClientMessagesList.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -22,12 +22,11 @@ type ContactRow = {
   client_name: string | null;
   client_email: string | null;
   client_phone: string | null;
-  message: string | null; // message initial (formulaire)
+  message: string | null;
   status: string | null;
   origin: string | null;
   created_at: string;
 
-  // jointure ouvrier
   worker?: {
     id: string;
     first_name: string | null;
@@ -51,7 +50,7 @@ type MessageRow = {
   created_at: string;
 };
 
-const ClientMessagesPage: React.FC = () => {
+const ClientMessagesList: React.FC = () => {
   const { language } = useLanguage();
 
   const [client, setClient] = useState<ClientRow | null>(null);
@@ -151,7 +150,7 @@ const ClientMessagesPage: React.FC = () => {
     return url;
   };
 
-  // 1) Charger client + threads (contacts)
+  // Charger client + threads
   useEffect(() => {
     const load = async () => {
       setContactsLoading(true);
@@ -168,7 +167,6 @@ const ClientMessagesPage: React.FC = () => {
           );
         }
 
-        // Client profile
         const { data: clientData, error: clientError } = await supabase
           .from("op_clients")
           .select("id, user_id, first_name, last_name, email, phone")
@@ -183,10 +181,10 @@ const ClientMessagesPage: React.FC = () => {
               : "No client profile for this account."
           );
         }
+
         const c = clientData as ClientRow;
         setClient(c);
 
-        // Threads (contacts) : filtrage par client_id + jointure worker
         const { data: contactsData, error: contactsErr } = await supabase
           .from("op_ouvrier_contacts")
           .select(
@@ -219,17 +217,15 @@ const ClientMessagesPage: React.FC = () => {
 
         if (contactsErr) throw contactsErr;
 
-        const list = (contactsData || []) as any[];
-        const mapped: ContactRow[] = list.map((row) => ({
+        const mapped: ContactRow[] = (contactsData || []).map((row: any) => ({
           ...row,
           worker: row.worker ?? null,
         }));
 
         setContacts(mapped);
-
         if (mapped.length > 0) setSelectedContactId(mapped[0].id);
       } catch (e: any) {
-        console.error("ClientMessagesPage load contacts error", e);
+        console.error("ClientMessagesList load contacts error", e);
         setContactsError(
           e?.message ||
             (language === "fr"
@@ -249,7 +245,7 @@ const ClientMessagesPage: React.FC = () => {
     [contacts, selectedContactId]
   );
 
-  // 2) Charger les messages du thread sélectionné
+  // Charger messages du thread
   useEffect(() => {
     const loadMessages = async () => {
       if (!selectedContactId) {
@@ -280,7 +276,7 @@ const ClientMessagesPage: React.FC = () => {
         if (error) throw error;
         setMessages((data || []) as MessageRow[]);
       } catch (e) {
-        console.error("ClientMessagesPage load messages error", e);
+        console.error("ClientMessagesList load messages error", e);
         setMessagesError(t.loadMessagesError);
       } finally {
         setMessagesLoading(false);
@@ -288,7 +284,7 @@ const ClientMessagesPage: React.FC = () => {
     };
 
     loadMessages();
-  }, [selectedContactId, language]); // t dépend de language
+  }, [selectedContactId, language]);
 
   const handleSend = async () => {
     if (!client || !selectedContact || !newMessage.trim()) return;
@@ -327,7 +323,7 @@ const ClientMessagesPage: React.FC = () => {
       setMessages((prev) => [...prev, data as MessageRow]);
       setNewMessage("");
     } catch (e) {
-      console.error("ClientMessagesPage send error", e);
+      console.error("ClientMessagesList send error", e);
       setMessagesError(
         language === "fr"
           ? "Impossible d'envoyer votre message."
@@ -351,7 +347,7 @@ const ClientMessagesPage: React.FC = () => {
         <h1 className="text-2xl font-bold text-slate-900 mb-4">{t.title}</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Colonne 1 : threads */}
+          {/* Colonne 1 */}
           <div className="bg-white rounded-xl border border-slate-200 flex flex-col">
             <div className="px-4 pt-3 flex items-center gap-3 border-b border-slate-100">
               <div className="flex gap-2">
@@ -425,7 +421,7 @@ const ClientMessagesPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Colonne 2 : conversation */}
+          {/* Colonne 2 */}
           <div className="bg-white rounded-xl border border-slate-200 flex flex-col">
             <div className="px-4 py-3 border-b border-slate-100">
               <div className="text-sm font-semibold text-slate-900">{t.aboutWorker}</div>
@@ -447,7 +443,6 @@ const ClientMessagesPage: React.FC = () => {
                     {formatDate(selectedContact.created_at)}
                   </div>
 
-                  {/* Message initial */}
                   {selectedContact.message && (
                     <div className="mb-4 flex justify-end">
                       <div className="max-w-[85%] rounded-2xl bg-blue-600 text-white px-3 py-2 text-sm rounded-br-sm">
@@ -459,7 +454,6 @@ const ClientMessagesPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Messages */}
                   {messagesLoading && (
                     <div className="text-sm text-slate-500">{t.loadingMessages}</div>
                   )}
@@ -496,7 +490,6 @@ const ClientMessagesPage: React.FC = () => {
               )}
             </div>
 
-            {/* Saisie */}
             <div className="border-t border-slate-100 px-4 py-3">
               <Textarea
                 rows={2}
@@ -520,7 +513,7 @@ const ClientMessagesPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Colonne 3 : fiche ouvrier */}
+          {/* Colonne 3 */}
           <div className="bg-white rounded-xl border border-slate-200 flex flex-col">
             <div className="px-4 py-3 border-b border-slate-100">
               <div className="text-sm font-semibold text-slate-900">{workerName}</div>
@@ -604,7 +597,6 @@ const ClientMessagesPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Bandeau erreur messages */}
         {messagesError && (
           <div className="mt-4 bg-red-600 text-white text-sm px-4 py-3 rounded-lg max-w-lg ml-auto">
             <div className="font-semibold">
@@ -618,4 +610,4 @@ const ClientMessagesPage: React.FC = () => {
   );
 };
 
-export default ClientMessagesPage;
+export default ClientMessagesList;
