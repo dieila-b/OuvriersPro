@@ -107,6 +107,7 @@ const ClientMessagesList: React.FC = () => {
         : "Select a thread on the left to view the conversation.",
     you: language === "fr" ? "Vous" : "You",
     workerLabel: language === "fr" ? "Ouvrier" : "Worker",
+    threadFallback: language === "fr" ? "Demande de devis" : "Quote request",
   };
 
   const initials = (name: string | null) =>
@@ -148,6 +149,13 @@ const ClientMessagesList: React.FC = () => {
     let url = `https://wa.me/${normalized}`;
     if (text && text.trim()) url += `?text=${encodeURIComponent(text.trim())}`;
     return url;
+  };
+
+  // ✅ extrait "titre" propre (1 ligne) pour la liste à gauche
+  const getThreadTitle = (contact: ContactRow) => {
+    const raw = (contact.message || "").replace(/\s+/g, " ").trim();
+    if (raw) return raw;
+    return t.threadFallback;
   };
 
   // Charger client + threads
@@ -346,11 +354,9 @@ const ClientMessagesList: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 py-6">
-      {/* ✅ largeur max augmentée pour mieux profiter de l’espace */}
       <div className="max-w-7xl mx-auto px-4">
         <h1 className="text-2xl font-bold text-slate-900 mb-4">{t.title}</h1>
 
-        {/* ✅ grille personnalisée : colonne du milieu plus large */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           {/* Colonne 1 : threads */}
           <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:col-span-3">
@@ -366,7 +372,8 @@ const ClientMessagesList: React.FC = () => {
               <div className="ml-auto text-[11px] text-slate-400">{t.select}</div>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
+            {/* ✅ plus de scroll horizontal */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden">
               {contactsLoading && (
                 <div className="p-4 text-sm text-slate-500">{t.loadingContacts}</div>
               )}
@@ -386,6 +393,8 @@ const ClientMessagesList: React.FC = () => {
                   {contacts.map((c) => {
                     const w = c.worker;
                     const name = w ? fullName(w.first_name, w.last_name) : "Ouvrier";
+                    const threadTitle = getThreadTitle(c);
+
                     return (
                       <li key={c.id}>
                         <button
@@ -400,21 +409,22 @@ const ClientMessagesList: React.FC = () => {
                           <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-xs font-semibold text-slate-600">
                             {initials(name)}
                           </div>
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-sm font-semibold text-slate-900">
+
+                          {/* ✅ min-w-0 + truncate = pas de débordement => pas de scroll */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2 min-w-0">
+                              <span className="text-sm font-semibold text-slate-900 truncate">
                                 {name}
                               </span>
-                              <span className="flex items-center gap-1 text-xs text-slate-400">
+                              <span className="shrink-0 flex items-center gap-1 text-xs text-slate-400">
                                 <Clock className="w-3 h-3" />
                                 {formatDate(c.created_at)}
                               </span>
                             </div>
+
+                            {/* ✅ uniquement le “titre” du message (1 ligne) */}
                             <div className="text-xs text-slate-500 truncate">
-                              {c.message ||
-                                (language === "fr"
-                                  ? "Demande envoyée"
-                                  : "Request sent")}
+                              {threadTitle}
                             </div>
                           </div>
                         </button>
@@ -426,7 +436,7 @@ const ClientMessagesList: React.FC = () => {
             </div>
           </div>
 
-          {/* Colonne 2 : conversation (plus large) */}
+          {/* Colonne 2 : conversation */}
           <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:col-span-6">
             <div className="px-4 py-3 border-b border-slate-100">
               <div className="text-sm font-semibold text-slate-900">{t.aboutWorker}</div>
