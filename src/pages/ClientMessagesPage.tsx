@@ -1,10 +1,11 @@
 // src/pages/ClientMessagesList.tsx
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, Phone, MessageCircle, Clock, Info, Send } from "lucide-react";
+import { Mail, Phone, MessageCircle, Clock, Info, Send, ArrowLeft } from "lucide-react";
 
 type ClientRow = {
   id: string;
@@ -54,6 +55,7 @@ type ThreadFilter = "all" | "unread";
 
 const ClientMessagesList: React.FC = () => {
   const { language } = useLanguage();
+  const navigate = useNavigate();
 
   const [client, setClient] = useState<ClientRow | null>(null);
 
@@ -75,6 +77,8 @@ const ClientMessagesList: React.FC = () => {
   const [sending, setSending] = useState(false);
 
   const t = {
+    backToClientSpace:
+      language === "fr" ? "Retour à l’espace client" : "Back to client space",
     title: language === "fr" ? "Messagerie" : "Messages",
     all: language === "fr" ? "Tout" : "All",
     unread: language === "fr" ? "Non lus" : "Unread",
@@ -430,6 +434,19 @@ const ClientMessagesList: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 py-6">
       <div className="max-w-7xl mx-auto px-4">
+        {/* ✅ Bouton retour (ajout, sans toucher à ta config) */}
+        <div className="mb-3">
+          <Button
+            type="button"
+            variant="ghost"
+            className="gap-2 text-slate-700"
+            onClick={() => navigate("/espace-client")}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            {t.backToClientSpace}
+          </Button>
+        </div>
+
         <h1 className="text-2xl font-bold text-slate-900 mb-4">{t.title}</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
