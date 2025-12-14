@@ -50,6 +50,8 @@ type MessageRow = {
   created_at: string;
 };
 
+type ThreadFilter = "all" | "unread";
+
 const ClientMessagesList: React.FC = () => {
   const { language } = useLanguage();
 
@@ -58,6 +60,8 @@ const ClientMessagesList: React.FC = () => {
   const [contacts, setContacts] = useState<ContactRow[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
+
+  const [filter, setFilter] = useState<ThreadFilter>("all");
 
   const [selectedContactId, setSelectedContactId] = useState<string | null>(
     null
@@ -91,6 +95,10 @@ const ClientMessagesList: React.FC = () => {
       language === "fr"
         ? "Aucun échange pour le moment."
         : "No conversation yet.",
+    noUnread:
+      language === "fr"
+        ? "Aucun message non lu."
+        : "No unread messages.",
     typeHere:
       language === "fr" ? "Écrivez votre message" : "Type your message",
     send: language === "fr" ? "Envoyer" : "Send",
@@ -151,7 +159,13 @@ const ClientMessagesList: React.FC = () => {
     return url;
   };
 
-  // ✅ extrait "titre" propre (1 ligne) pour la liste à gauche
+  // ✅ “Non lus” basé sur op_ouvrier_contacts.status
+  const isUnreadThread = (c: ContactRow) => {
+    const s = (c.status || "").toLowerCase().trim();
+    return s === "new" || s === "unread" || s === "pending";
+  };
+
+  // ✅ extrait “titre” propre (1 ligne) pour la liste à gauche
   const getThreadTitle = (contact: ContactRow) => {
     const raw = (contact.message || "").replace(/\s+/g, " ").trim();
     if (raw) return raw;
@@ -231,7 +245,16 @@ const ClientMessagesList: React.FC = () => {
         }));
 
         setContacts(mapped);
-        if (mapped.length > 0) setSelectedContactId(mapped[0].id);
+
+        // Sélection par défaut : si filtre unread actif, prendre le 1er unread, sinon 1er.
+        const firstUnread = mapped.find((x) => isUnreadThread(x));
+        if (mapped.length > 0) {
+          setSelectedContactId(
+            filter === "unread" ? firstUnread?.id ?? mapped[0].id : mapped[0].id
+          );
+        } else {
+          setSelectedContactId(null);
+        }
       } catch (e: any) {
         console.error("ClientMessagesList load contacts error", e);
         setContactsError(
@@ -246,12 +269,52 @@ const ClientMessagesList: React.FC = () => {
     };
 
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language]);
 
   const selectedContact = useMemo(
     () => contacts.find((c) => c.id === selectedContactId) || null,
     [contacts, selectedContactId]
   );
+
+  const unreadCount = useMemo(
+    () => contacts.filter((c) => isUnreadThread(c)).length,
+    [contacts]
+  );
+
+  const displayedContacts = useMemo(() => {
+    if (filter === "unread") return contacts.filter((c) => isUnreadThread(c));
+    return contacts;
+  }, [contacts, filter]);
+
+  // ✅ Quand on clique un thread, on le sélectionne et on le marque “lu” si besoin
+  const handleSelectThread = async (contactId: string) => {
+    setSelectedContactId(contactId);
+
+    const c = contacts.find((x) => x.id === contactId);
+    if (!c) return;
+
+    if (!isUnreadThread(c)) return;
+
+    // Marquer lu (sans casser tes autres statuts)
+    try {
+      const { error } = await supabase
+        .from("op_ouvrier_contacts")
+        .update({ status: "read" })
+        .eq("id", contactId)
+        .in("status", ["new", "unread", "pending"]);
+
+      if (!error) {
+        setContacts((prev) =>
+          prev.map((x) => (x.id === contactId ? { ...x, status: "read" } : x))
+        );
+      } else {
+        console.warn("Unable to mark thread as read", error);
+      }
+    } catch (e) {
+      console.warn("Unable to mark thread as read", e);
+    }
+  };
 
   // Charger messages du thread
   useEffect(() => {
@@ -293,6 +356,18 @@ const ClientMessagesList: React.FC = () => {
 
     loadMessages();
   }, [selectedContactId, language]);
+
+  // ✅ Quand on change de filtre, si la sélection n’est plus dans la liste affichée, on recale la sélection
+  useEffect(() => {
+    if (displayedContacts.length === 0) {
+      setSelectedContactId(null);
+      return;
+    }
+    const stillVisible = displayedContacts.some((c) => c.id === selectedContactId);
+    if (!stillVisible) {
+      setSelectedContactId(displayedContacts[0].id);
+    }
+  }, [filter, displayedContacts, selectedContactId]);
 
   const handleSend = async () => {
     if (!client || !selectedContact || !newMessage.trim()) return;
@@ -362,17 +437,45 @@ const ClientMessagesList: React.FC = () => {
           <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:col-span-3">
             <div className="px-4 pt-3 flex items-center gap-3 border-b border-slate-100">
               <div className="flex gap-2">
-                <button className="px-3 py-1 text-xs font-medium rounded-full bg-blue-600 text-white">
+                <button
+                  type="button"
+                  onClick={() => setFilter("all")}
+                  className={`px-3 py-1 text-xs font-medium rounded-full ${
+                    filter === "all"
+                      ? "bg-blue-600 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
                   {t.all}
                 </button>
-                <button className="px-3 py-1 text-xs font-medium rounded-full bg-slate-100 text-slate-600">
+
+                <button
+                  type="button"
+                  onClick={() => setFilter("unread")}
+                  className={`px-3 py-1 text-xs font-medium rounded-full inline-flex items-center gap-2 ${
+                    filter === "unread"
+                      ? "bg-blue-600 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
                   {t.unread}
+                  {unreadCount > 0 && (
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full ${
+                        filter === "unread"
+                          ? "bg-white/20 text-white"
+                          : "bg-slate-200 text-slate-700"
+                      }`}
+                    >
+                      {unreadCount}
+                    </span>
+                  )}
                 </button>
               </div>
+
               <div className="ml-auto text-[11px] text-slate-400">{t.select}</div>
             </div>
 
-            {/* ✅ plus de scroll horizontal */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden">
               {contactsLoading && (
                 <div className="p-4 text-sm text-slate-500">{t.loadingContacts}</div>
@@ -384,22 +487,26 @@ const ClientMessagesList: React.FC = () => {
                   <span className="text-xs text-red-400">{contactsError}</span>
                 </div>
               )}
-              {!contactsLoading && !contactsError && contacts.length === 0 && (
-                <div className="p-4 text-sm text-slate-500">{t.noContacts}</div>
+
+              {!contactsLoading && !contactsError && displayedContacts.length === 0 && (
+                <div className="p-4 text-sm text-slate-500">
+                  {filter === "unread" ? t.noUnread : t.noContacts}
+                </div>
               )}
 
-              {!contactsLoading && !contactsError && contacts.length > 0 && (
+              {!contactsLoading && !contactsError && displayedContacts.length > 0 && (
                 <ul>
-                  {contacts.map((c) => {
+                  {displayedContacts.map((c) => {
                     const w = c.worker;
                     const name = w ? fullName(w.first_name, w.last_name) : "Ouvrier";
                     const threadTitle = getThreadTitle(c);
+                    const unread = isUnreadThread(c);
 
                     return (
                       <li key={c.id}>
                         <button
                           type="button"
-                          onClick={() => setSelectedContactId(c.id)}
+                          onClick={() => handleSelectThread(c.id)}
                           className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-slate-100 hover:bg-slate-50 ${
                             selectedContactId === c.id
                               ? "bg-orange-50 border-l-4 border-l-orange-500"
@@ -410,19 +517,23 @@ const ClientMessagesList: React.FC = () => {
                             {initials(name)}
                           </div>
 
-                          {/* ✅ min-w-0 + truncate = pas de débordement => pas de scroll */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-2 min-w-0">
                               <span className="text-sm font-semibold text-slate-900 truncate">
                                 {name}
                               </span>
-                              <span className="shrink-0 flex items-center gap-1 text-xs text-slate-400">
-                                <Clock className="w-3 h-3" />
-                                {formatDate(c.created_at)}
+
+                              <span className="shrink-0 flex items-center gap-2">
+                                {unread && (
+                                  <span className="inline-block w-2 h-2 rounded-full bg-orange-500" />
+                                )}
+                                <span className="flex items-center gap-1 text-xs text-slate-400">
+                                  <Clock className="w-3 h-3" />
+                                  {formatDate(c.created_at)}
+                                </span>
                               </span>
                             </div>
 
-                            {/* ✅ uniquement le “titre” du message (1 ligne) */}
                             <div className="text-xs text-slate-500 truncate">
                               {threadTitle}
                             </div>
