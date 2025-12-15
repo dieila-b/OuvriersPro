@@ -1,5 +1,5 @@
 // src/pages/ClientProfile.tsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { User, ArrowLeft, Save } from "lucide-react";
+import { User, ArrowLeft, Save, Star, Send, MessageCircle } from "lucide-react";
 
 type Profile = {
   id: string;
@@ -19,15 +19,59 @@ type Profile = {
   preferred_contact: string | null;
 };
 
+type ClientRow = {
+  id: string;
+  user_id: string | null;
+};
+
+type ReviewRow = {
+  id: string;
+  worker_id: string | null;
+  client_id: string | null;
+  rating: number | null;
+  comment: string | null;
+  created_at: string;
+
+  worker?: {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    profession: string | null;
+    city: string | null;
+  } | null;
+};
+
+type ReviewReplyRow = {
+  id: string;
+  review_id: string | null;
+  client_id: string | null;
+  message: string | null;
+  created_at: string;
+};
+
 const ClientProfile: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
 
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [client, setClient] = useState<ClientRow | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Avis
+  const [reviews, setReviews] = useState<ReviewRow[]>([]);
+  const [repliesByReviewId, setRepliesByReviewId] = useState<
+    Record<string, ReviewReplyRow[]>
+  >({});
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsError, setReviewsError] = useState<string | null>(null);
+
+  // Réponse (par avis)
+  const [replyDraft, setReplyDraft] = useState<Record<string, string>>({});
+  const [replySending, setReplySending] = useState<Record<string, boolean>>({});
 
   const t = {
     title: language === "fr" ? "Mon profil client" : "My client profile",
@@ -36,17 +80,14 @@ const ClientProfile: React.FC = () => {
         ? "Mettez à jour vos coordonnées pour être facilement recontacté par les ouvriers."
         : "Update your contact details so workers can easily reach you.",
     mainInfo: language === "fr" ? "Informations principales" : "Main information",
-    contactInfo:
-      language === "fr" ? "Coordonnées de contact" : "Contact information",
+    contactInfo: language === "fr" ? "Coordonnées de contact" : "Contact information",
     emailLabel: "Email",
     fullNameLabel: language === "fr" ? "Nom complet" : "Full name",
     phoneLabel: language === "fr" ? "Téléphone" : "Phone",
     countryLabel: language === "fr" ? "Pays" : "Country",
     cityLabel: language === "fr" ? "Ville" : "City",
     preferredContactLabel:
-      language === "fr"
-        ? "Préférences de contact"
-        : "Contact preferences",
+      language === "fr" ? "Préférences de contact" : "Contact preferences",
     preferredContactPlaceholder:
       language === "fr"
         ? "Ex : Contact de préférence par WhatsApp en soirée…"
@@ -66,36 +107,108 @@ const ClientProfile: React.FC = () => {
       language === "fr"
         ? "Erreur lors de l’enregistrement de votre profil."
         : "Error while saving your profile.",
+
+    // Avis
+    reviewsTitle: language === "fr" ? "Avis reçus" : "Reviews received",
+    reviewsSubtitle:
+      language === "fr"
+        ? "Les avis laissés par les ouvriers à propos de vous (visibles publiquement)."
+        : "Reviews left by workers about you (publicly visible).",
+    reviewsLoading: language === "fr" ? "Chargement des avis..." : "Loading reviews...",
+    reviewsEmpty:
+      language === "fr"
+        ? "Aucun avis pour le moment."
+        : "No reviews yet.",
+    replyPlaceholder:
+      language === "fr"
+        ? "Réagir / répondre à cet avis…"
+        : "React / reply to this review…",
+    replySend: language === "fr" ? "Envoyer" : "Send",
+    replyError:
+      language === "fr"
+        ? "Impossible d'envoyer votre réponse."
+        : "Unable to send your reply.",
+    reviewsError:
+      language === "fr"
+        ? "Impossible de charger les avis."
+        : "Unable to load reviews.",
   };
 
-  // Charger le profil
+  const formatDateTime = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleString(language === "fr" ? "fr-FR" : "en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const fullWorkerName = (w?: ReviewRow["worker"] | null) => {
+    if (!w) return language === "fr" ? "Ouvrier" : "Worker";
+    const n = `${w.first_name || ""} ${w.last_name || ""}`.trim();
+    return n || (language === "fr" ? "Ouvrier" : "Worker");
+  };
+
+  const stars = (rating: number | null) => {
+    const r = Math.max(0, Math.min(5, Number(rating || 0)));
+    return Array.from({ length: 5 }).map((_, i) => (
+      <Star
+        key={i}
+        className={`w-4 h-4 ${i < r ? "text-amber-500 fill-amber-500" : "text-slate-300"}`}
+      />
+    ));
+  };
+
+  // Charger le profil (op_users) + le client (op_clients) + avis
   useEffect(() => {
-    const loadProfile = async () => {
+    const loadAll = async () => {
       setLoading(true);
       setError(null);
+      setReviewsError(null);
 
       try {
-        const { data: authData, error: authError } =
-          await supabase.auth.getUser();
+        const { data: authData, error: authError } = await supabase.auth.getUser();
         if (authError || !authData?.user) {
           throw authError || new Error("No user");
         }
-
         const userId = authData.user.id;
 
-        const { data, error } = await supabase
+        // 1) Profil "compte"
+        const { data: userRow, error: userErr } = await supabase
           .from("op_users")
-          .select(
-            "id, email, full_name, phone, country, city, preferred_contact"
-          )
+          .select("id, email, full_name, phone, country, city, preferred_contact")
           .eq("id", userId)
           .maybeSingle();
 
-        if (error || !data) {
-          throw error || new Error("Profile not found");
+        if (userErr || !userRow) {
+          throw userErr || new Error("Profile not found");
+        }
+        setProfile(userRow as Profile);
+
+        // 2) Profil "client" (CRUCIAL pour client_id)
+        const { data: clientRow, error: clientErr } = await supabase
+          .from("op_clients")
+          .select("id, user_id")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (clientErr) throw clientErr;
+
+        if (!clientRow?.id) {
+          // Pas bloquant pour modifier op_users, mais nécessaire pour avis/réponses
+          setClient(null);
+          setReviews([]);
+          setRepliesByReviewId({});
+          return;
         }
 
-        setProfile(data as Profile);
+        const c = clientRow as ClientRow;
+        setClient(c);
+
+        // 3) Avis + réponses
+        await loadReviewsAndReplies(c.id);
       } catch (err) {
         console.error(err);
         setError(t.errorLoad);
@@ -104,14 +217,83 @@ const ClientProfile: React.FC = () => {
       }
     };
 
-    loadProfile();
+    loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [language]);
+
+  const loadReviewsAndReplies = async (clientId: string) => {
+    setReviewsLoading(true);
+    setReviewsError(null);
+
+    try {
+      // Avis laissés par les ouvriers SUR ce client
+      const { data: reviewsData, error: reviewsErr } = await supabase
+        .from("op_worker_client_reviews")
+        .select(
+          `
+          id,
+          worker_id,
+          client_id,
+          rating,
+          comment,
+          created_at,
+          worker:op_ouvriers (
+            id,
+            first_name,
+            last_name,
+            profession,
+            city
+          )
+        `
+        )
+        .eq("client_id", clientId)
+        .order("created_at", { ascending: false });
+
+      if (reviewsErr) throw reviewsErr;
+
+      const list = (reviewsData || []) as any[];
+      const mapped: ReviewRow[] = list.map((r) => ({
+        ...r,
+        worker: r.worker ?? null,
+      }));
+
+      setReviews(mapped);
+
+      // Réponses du client (réactions)
+      const reviewIds = mapped.map((r) => r.id).filter(Boolean);
+      if (reviewIds.length === 0) {
+        setRepliesByReviewId({});
+        return;
+      }
+
+      const { data: repliesData, error: repliesErr } = await supabase
+        .from("op_worker_client_review_replies")
+        .select("id, review_id, client_id, message, created_at")
+        .eq("client_id", clientId)
+        .in("review_id", reviewIds)
+        .order("created_at", { ascending: true });
+
+      if (repliesErr) throw repliesErr;
+
+      const replies = (repliesData || []) as ReviewReplyRow[];
+      const grouped: Record<string, ReviewReplyRow[]> = {};
+      for (const rep of replies) {
+        const rid = rep.review_id || "";
+        if (!rid) continue;
+        if (!grouped[rid]) grouped[rid] = [];
+        grouped[rid].push(rep);
+      }
+      setRepliesByReviewId(grouped);
+    } catch (e) {
+      console.error("loadReviewsAndReplies error", e);
+      setReviewsError(t.reviewsError);
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
 
   const handleChange = (
-    e:
-      | React.ChangeEvent<HTMLInputElement>
-      | React.ChangeEvent<HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
     setProfile((prev) => (prev ? { ...prev, [name]: value } : prev));
@@ -126,7 +308,7 @@ const ClientProfile: React.FC = () => {
     setSuccess(null);
 
     try {
-      const { error } = await supabase
+      const { error: updErr } = await supabase
         .from("op_users")
         .update({
           full_name: profile.full_name,
@@ -138,7 +320,7 @@ const ClientProfile: React.FC = () => {
         })
         .eq("id", profile.id);
 
-      if (error) throw error;
+      if (updErr) throw updErr;
 
       setSuccess(t.success);
     } catch (err) {
@@ -146,6 +328,49 @@ const ClientProfile: React.FC = () => {
       setError(t.errorSave);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const canReply = useMemo(() => Boolean(client?.id), [client?.id]);
+
+  const handleSendReply = async (review: ReviewRow) => {
+    if (!client?.id) return;
+
+    const text = (replyDraft[review.id] || "").trim();
+    if (!text) return;
+
+    setReplySending((prev) => ({ ...prev, [review.id]: true }));
+
+    try {
+      // IMPORTANT: client_id = op_clients.id (PAS auth uid)
+      const { data, error } = await supabase
+        .from("op_worker_client_review_replies")
+        .insert({
+          review_id: review.id,
+          client_id: client.id,
+          message: text,
+        })
+        .select("id, review_id, client_id, message, created_at")
+        .single();
+
+      if (error) throw error;
+
+      const reply = data as ReviewReplyRow;
+
+      setRepliesByReviewId((prev) => {
+        const next = { ...prev };
+        const arr = next[review.id] ? [...next[review.id]] : [];
+        arr.push(reply);
+        next[review.id] = arr;
+        return next;
+      });
+
+      setReplyDraft((prev) => ({ ...prev, [review.id]: "" }));
+    } catch (e) {
+      console.error("Reply insert error:", e);
+      setReviewsError(t.replyError);
+    } finally {
+      setReplySending((prev) => ({ ...prev, [review.id]: false }));
     }
   };
 
@@ -189,13 +414,12 @@ const ClientProfile: React.FC = () => {
               <h1 className="text-lg md:text-xl font-semibold text-slate-900">
                 {t.title}
               </h1>
-              <p className="text-xs md:text-sm text-slate-600">
-                {t.subtitle}
-              </p>
+              <p className="text-xs md:text-sm text-slate-600">{t.subtitle}</p>
             </div>
           </div>
         </div>
 
+        {/* PROFIL */}
         <Card className="p-6 md:p-7 rounded-2xl bg-white/90 shadow-sm border-slate-200 space-y-6">
           {error && (
             <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
@@ -224,9 +448,7 @@ const ClientProfile: React.FC = () => {
                     value={profile.full_name ?? ""}
                     onChange={handleChange}
                     placeholder={
-                      language === "fr"
-                        ? "Ex : Mamadou Diallo"
-                        : "e.g. John Doe"
+                      language === "fr" ? "Ex : Mamadou Diallo" : "e.g. John Doe"
                     }
                   />
                 </div>
@@ -270,9 +492,7 @@ const ClientProfile: React.FC = () => {
                     name="country"
                     value={profile.country ?? ""}
                     onChange={handleChange}
-                    placeholder={
-                      language === "fr" ? "Ex : Guinée" : "e.g. Guinea"
-                    }
+                    placeholder={language === "fr" ? "Ex : Guinée" : "e.g. Guinea"}
                   />
                 </div>
 
@@ -284,9 +504,7 @@ const ClientProfile: React.FC = () => {
                     name="city"
                     value={profile.city ?? ""}
                     onChange={handleChange}
-                    placeholder={
-                      language === "fr" ? "Ex : Conakry" : "e.g. Conakry"
-                    }
+                    placeholder={language === "fr" ? "Ex : Conakry" : "e.g. Conakry"}
                   />
                 </div>
               </div>
@@ -307,11 +525,7 @@ const ClientProfile: React.FC = () => {
             </div>
 
             <div className="pt-2 flex justify-end">
-              <Button
-                type="submit"
-                disabled={saving}
-                className="rounded-full px-5"
-              >
+              <Button type="submit" disabled={saving} className="rounded-full px-5">
                 {saving ? (
                   <>
                     <Save className="w-4 h-4 mr-2 animate-pulse" />
@@ -326,6 +540,129 @@ const ClientProfile: React.FC = () => {
               </Button>
             </div>
           </form>
+        </Card>
+
+        {/* AVIS */}
+        <Card className="mt-6 p-6 md:p-7 rounded-2xl bg-white/90 shadow-sm border-slate-200 space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">{t.reviewsTitle}</h2>
+              <p className="text-xs text-slate-600 mt-1">{t.reviewsSubtitle}</p>
+            </div>
+
+            <div className="text-xs text-slate-400">
+              {client?.id ? `client_id: ${client.id}` : "client_id: —"}
+            </div>
+          </div>
+
+          {reviewsError && (
+            <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+              {reviewsError}
+            </div>
+          )}
+
+          {reviewsLoading && (
+            <div className="text-sm text-slate-500">{t.reviewsLoading}</div>
+          )}
+
+          {!reviewsLoading && reviews.length === 0 && (
+            <div className="text-sm text-slate-500">{t.reviewsEmpty}</div>
+          )}
+
+          {!reviewsLoading && reviews.length > 0 && (
+            <div className="space-y-4">
+              {reviews.map((r) => {
+                const workerLabel = fullWorkerName(r.worker);
+                const replies = repliesByReviewId[r.id] || [];
+                const draft = replyDraft[r.id] || "";
+                const sendingThis = Boolean(replySending[r.id]);
+
+                return (
+                  <div key={r.id} className="rounded-xl border border-slate-200 p-4 bg-white">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-slate-900 truncate">
+                          {workerLabel}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          {[
+                            r.worker?.profession,
+                            r.worker?.city,
+                          ].filter(Boolean).join(" • ")}
+                        </div>
+
+                        <div className="mt-2 flex items-center gap-2">
+                          <div className="flex items-center gap-1">{stars(r.rating)}</div>
+                          <span className="text-xs text-slate-400">
+                            • {formatDateTime(r.created_at)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {r.comment && (
+                      <div className="mt-3 text-sm text-slate-800 whitespace-pre-line">
+                        {r.comment}
+                      </div>
+                    )}
+
+                    {/* Réponses du client */}
+                    {replies.length > 0 && (
+                      <div className="mt-4 space-y-2">
+                        {replies.map((rep) => (
+                          <div
+                            key={rep.id}
+                            className="rounded-lg bg-slate-50 border border-slate-100 p-3"
+                          >
+                            <div className="text-xs text-slate-500 flex items-center gap-2">
+                              <MessageCircle className="w-4 h-4 text-slate-400" />
+                              {language === "fr" ? "Votre réponse" : "Your reply"} •{" "}
+                              {formatDateTime(rep.created_at)}
+                            </div>
+                            <div className="mt-1 text-sm text-slate-800 whitespace-pre-line">
+                              {rep.message}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Zone réponse */}
+                    <div className="mt-4">
+                      <Textarea
+                        rows={2}
+                        placeholder={t.replyPlaceholder}
+                        value={draft}
+                        onChange={(e) =>
+                          setReplyDraft((prev) => ({ ...prev, [r.id]: e.target.value }))
+                        }
+                        disabled={!canReply || sendingThis}
+                      />
+                      <div className="mt-2 flex justify-end">
+                        <Button
+                          type="button"
+                          className="flex items-center gap-1 bg-orange-500 hover:bg-orange-600"
+                          onClick={() => handleSendReply(r)}
+                          disabled={!canReply || !draft.trim() || sendingThis}
+                        >
+                          <Send className="w-4 h-4" />
+                          {t.replySend}
+                        </Button>
+                      </div>
+
+                      {!canReply && (
+                        <div className="mt-2 text-xs text-slate-500">
+                          {language === "fr"
+                            ? "Votre profil client (op_clients) n’est pas encore relié à ce compte, donc la réponse n’est pas possible."
+                            : "Your client profile (op_clients) is not linked to this account, so replying is not possible."}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
       </div>
     </div>
