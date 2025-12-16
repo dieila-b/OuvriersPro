@@ -50,7 +50,7 @@ type ReviewReplyRow = {
   id: string;
   review_id: string | null;
   client_id: string | null;
-  message: string;
+  content: string | null; // ✅ content (PAS message)
   created_at: string;
 };
 
@@ -102,7 +102,7 @@ const ClientDashboard: React.FC = () => {
           role: (profile?.role as string) || "user",
         });
 
-        // ✅ Récupérer le client DB (op_clients.id) pour charger ses avis
+        // ✅ Récupérer le client DB (op_clients.id)
         const { data: c, error: cErr } = await supabase
           .from("op_clients")
           .select("id, user_id")
@@ -194,25 +194,18 @@ const ClientDashboard: React.FC = () => {
   };
 
   const t = {
-    title:
-      language === "fr"
-        ? "Espace client / particulier"
-        : "Client / individual space",
+    title: language === "fr" ? "Espace client / particulier" : "Client / individual space",
     subtitle:
       language === "fr"
         ? "Retrouvez vos demandes, vos échanges avec les ouvriers et vos informations personnelles."
         : "Access your requests, conversations with workers and personal information.",
     quickActions: language === "fr" ? "Actions rapides" : "Quick actions",
-    myRequests:
-      language === "fr" ? "Mes demandes de travaux" : "My work requests",
+    myRequests: language === "fr" ? "Mes demandes de travaux" : "My work requests",
     myRequestsDesc:
       language === "fr"
         ? "Suivez le statut de vos demandes et l’historique des échanges avec les ouvriers."
         : "Track the status of your requests and history of conversations with workers.",
-    myMessages:
-      language === "fr"
-        ? "Mes échanges avec les ouvriers"
-        : "My conversations with workers",
+    myMessages: language === "fr" ? "Mes échanges avec les ouvriers" : "My conversations with workers",
     myMessagesDesc:
       language === "fr"
         ? "Consultez l’historique de vos messages et coordonnées échangées."
@@ -227,16 +220,11 @@ const ClientDashboard: React.FC = () => {
       language === "fr"
         ? "Mettez à jour vos coordonnées pour être facilement recontacté par les ouvriers."
         : "Keep your contact details up to date so workers can reach you easily.",
-    goSearch:
-      language === "fr" ? "Rechercher un ouvrier" : "Search for a worker",
-    seeMyRequests:
-      language === "fr" ? "Voir mes demandes" : "View my requests",
-    seeMyMessages:
-      language === "fr" ? "Voir mes échanges" : "View my conversations",
-    seeMyFavorites:
-      language === "fr" ? "Voir mes favoris" : "View my favourites",
-    connectedLabel:
-      language === "fr" ? "Connecté en tant que" : "Logged in as",
+    goSearch: language === "fr" ? "Rechercher un ouvrier" : "Search for a worker",
+    seeMyRequests: language === "fr" ? "Voir mes demandes" : "View my requests",
+    seeMyMessages: language === "fr" ? "Voir mes échanges" : "View my conversations",
+    seeMyFavorites: language === "fr" ? "Voir mes favoris" : "View my favourites",
+    connectedLabel: language === "fr" ? "Connecté en tant que" : "Logged in as",
     logout: language === "fr" ? "Se déconnecter" : "Sign out",
 
     // ✅ Avis
@@ -245,20 +233,14 @@ const ClientDashboard: React.FC = () => {
       language === "fr"
         ? "Voici les avis laissés par les ouvriers à propos de vous."
         : "Here are the reviews workers left about you.",
-    reviewsEmpty:
-      language === "fr"
-        ? "Aucun avis pour le moment."
-        : "No reviews yet.",
+    reviewsEmpty: language === "fr" ? "Aucun avis pour le moment." : "No reviews yet.",
     reviewReply: language === "fr" ? "Réagir" : "Reply",
-    replyPlaceholder:
-      language === "fr" ? "Écrivez votre réaction..." : "Write your reply...",
+    replyPlaceholder: language === "fr" ? "Écrivez votre réaction..." : "Write your reply...",
     sendReply: language === "fr" ? "Envoyer" : "Send",
     published: language === "fr" ? "Publié" : "Published",
     private: language === "fr" ? "Non publié" : "Not published",
     loadReviewsError:
-      language === "fr"
-        ? "Impossible de charger vos avis."
-        : "Unable to load your reviews.",
+      language === "fr" ? "Impossible de charger vos avis." : "Unable to load your reviews.",
   };
 
   const displayName =
@@ -294,18 +276,21 @@ const ClientDashboard: React.FC = () => {
     setReplyOpenFor(reviewId);
     setReplyText("");
 
-    // Charger les réponses existantes (optionnel, mais utile)
+    // Charger les réponses existantes
     try {
       const { data, error } = await supabase
         .from("op_worker_client_review_replies")
-        .select("id, review_id, client_id, message, created_at")
+        .select("id, review_id, client_id, content, created_at")
         .eq("review_id", reviewId)
         .order("created_at", { ascending: true });
 
       if (error) throw error;
-      setRepliesByReview((prev) => ({ ...prev, [reviewId]: (data || []) as ReviewReplyRow[] }));
+
+      setRepliesByReview((prev) => ({
+        ...prev,
+        [reviewId]: (data || []) as ReviewReplyRow[],
+      }));
     } catch (e) {
-      // silencieux (RLS/absence)
       console.warn("Unable to load replies for review", reviewId, e);
     }
   };
@@ -318,14 +303,14 @@ const ClientDashboard: React.FC = () => {
     try {
       const payload = {
         review_id: replyOpenFor,
-        client_id: clientDb.id,
-        message: replyText.trim(),
+        client_id: clientDb.id,          // ✅ op_clients.id
+        content: replyText.trim(),       // ✅ content (PAS message)
       };
 
       const { data, error } = await supabase
         .from("op_worker_client_review_replies")
         .insert(payload)
-        .select("id, review_id, client_id, message, created_at")
+        .select("id, review_id, client_id, content, created_at")
         .single();
 
       if (error) throw error;
@@ -337,7 +322,6 @@ const ClientDashboard: React.FC = () => {
       setReplyText("");
     } catch (e) {
       console.error("sendReply error", e);
-      // On peut afficher une erreur UI si tu veux, mais on reste sobre ici
     } finally {
       setReplySending(false);
     }
@@ -374,7 +358,6 @@ const ClientDashboard: React.FC = () => {
           </div>
 
           <div className="flex flex-col items-stretch gap-3 md:items-end">
-            {/* ✅ Bouton qui envoie vers /search */}
             <Button
               type="button"
               onClick={() => navigate("/search")}
@@ -384,7 +367,6 @@ const ClientDashboard: React.FC = () => {
               {t.goSearch}
             </Button>
 
-            {/* Bouton déconnexion compact */}
             <Button
               variant="outline"
               size="sm"
@@ -398,7 +380,7 @@ const ClientDashboard: React.FC = () => {
         </header>
 
         <div className="grid gap-6 md:grid-cols-[1.75fr,1.25fr] items-start">
-          {/* Colonne gauche : actions principales + avis */}
+          {/* Colonne gauche */}
           <div className="space-y-6">
             <Card className="p-6 md:p-7 rounded-3xl bg-white/90 shadow-sm border border-slate-100">
               <div className="flex items-center justify-between mb-4">
@@ -411,7 +393,6 @@ const ClientDashboard: React.FC = () => {
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                {/* Mes demandes */}
                 <div className="relative rounded-2xl border border-slate-100 bg-slate-50/70 p-4 hover:border-pro-blue/60 hover:bg-white transition-shadow transition-colors shadow-xs hover:shadow-md">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-7 h-7 rounded-full bg-pro-blue/10 flex items-center justify-center">
@@ -428,7 +409,6 @@ const ClientDashboard: React.FC = () => {
                   </Button>
                 </div>
 
-                {/* Mes échanges */}
                 <div className="relative rounded-2xl border border-slate-100 bg-slate-50/70 p-4 hover:border-emerald-500/70 hover:bg-white transition-shadow transition-colors shadow-xs hover:shadow-md">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-7 h-7 rounded-full bg-emerald-50 flex items-center justify-center">
@@ -445,7 +425,6 @@ const ClientDashboard: React.FC = () => {
                   </Button>
                 </div>
 
-                {/* Mes favoris */}
                 <div className="relative rounded-2xl border border-slate-100 bg-slate-50/70 p-4 hover:border-rose-500/70 hover:bg-white transition-shadow transition-colors shadow-xs hover:shadow-md md:col-span-2">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-7 h-7 rounded-full bg-rose-50 flex items-center justify-center">
@@ -464,7 +443,7 @@ const ClientDashboard: React.FC = () => {
               </div>
             </Card>
 
-            {/* ✅ Avis reçus */}
+            {/* ✅ Avis */}
             <Card className="p-6 md:p-7 rounded-3xl bg-white/90 shadow-sm border border-slate-100">
               <div className="flex items-start justify-between gap-3 mb-4">
                 <div>
@@ -473,9 +452,7 @@ const ClientDashboard: React.FC = () => {
                 </div>
 
                 <div className="text-right">
-                  <div className="text-xs text-slate-500">
-                    {language === "fr" ? "Moyenne" : "Average"}
-                  </div>
+                  <div className="text-xs text-slate-500">{language === "fr" ? "Moyenne" : "Average"}</div>
                   <div className="flex items-center justify-end gap-1 text-sm font-semibold text-slate-900">
                     <Star className="w-4 h-4 text-orange-500" />
                     {avgRating ?? "—"}
@@ -517,9 +494,7 @@ const ClientDashboard: React.FC = () => {
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
                               <div className="text-sm font-semibold text-slate-900 truncate">{wName}</div>
-                              {wJob && (
-                                <span className="text-[11px] text-slate-500 truncate">• {wJob}</span>
-                              )}
+                              {wJob && <span className="text-[11px] text-slate-500 truncate">• {wJob}</span>}
                             </div>
                             <div className="text-[11px] text-slate-400 mt-0.5">
                               {formatDate(r.created_at)} •{" "}
@@ -544,7 +519,9 @@ const ClientDashboard: React.FC = () => {
                         {(r.title || r.content) && (
                           <div className="mt-3">
                             {r.title && <div className="text-sm font-semibold text-slate-900">{r.title}</div>}
-                            {r.content && <div className="text-sm text-slate-700 mt-1 whitespace-pre-line">{r.content}</div>}
+                            {r.content && (
+                              <div className="text-sm text-slate-700 mt-1 whitespace-pre-line">{r.content}</div>
+                            )}
                           </div>
                         )}
 
@@ -556,7 +533,7 @@ const ClientDashboard: React.FC = () => {
                                 <div className="text-[11px] text-slate-400">
                                   {language === "fr" ? "Votre réaction" : "Your reply"} • {formatDate(rep.created_at)}
                                 </div>
-                                <div className="text-sm text-slate-700 whitespace-pre-line">{rep.message}</div>
+                                <div className="text-sm text-slate-700 whitespace-pre-line">{rep.content}</div>
                               </div>
                             ))}
                           </div>
@@ -605,9 +582,8 @@ const ClientDashboard: React.FC = () => {
             </Card>
           </div>
 
-          {/* Colonne droite : profil + astuce */}
+          {/* Colonne droite */}
           <div className="space-y-6">
-            {/* Profil */}
             <Card className="p-6 rounded-3xl bg-white/90 shadow-sm border border-slate-100">
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div className="flex items-center gap-3">
@@ -650,7 +626,6 @@ const ClientDashboard: React.FC = () => {
               </div>
             </Card>
 
-            {/* Astuce */}
             <Card className="p-4 rounded-3xl bg-slate-900 text-slate-100 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div>
