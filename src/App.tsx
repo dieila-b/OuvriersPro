@@ -25,6 +25,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 // Espace ouvrier connecté
 import WorkerDashboard from "./pages/WorkerDashboard";
 import WorkerMessagesPage from "./pages/WorkerMessagesPage"; // ✅ messagerie ouvrier 3 colonnes
+import WorkerReviews from "./pages/WorkerReviews"; // ✅ NOUVEAU: avis ouvrier -> client
 
 // Espace Client / Particulier
 import ClientDashboard from "./pages/ClientDashboard";
@@ -40,6 +41,9 @@ import ClientMessagesPage from "./pages/ClientMessagesPage";
 
 // Liste des ouvriers favoris
 import ClientFavoritesList from "./pages/ClientFavoritesList";
+
+// ✅ NOUVEAU: avis reçus par le client (public + réponse client)
+import ClientReviews from "./pages/ClientReviews";
 
 // Formulaire interne pour qu'un ouvrier contacte un client précis
 import ClientContactForm from "./pages/ClientContactForm";
@@ -120,6 +124,16 @@ const App = () => (
               }
             />
 
+            {/* ⭐ Mes avis reçus (protégé : user) */}
+            <Route
+              path="/mes-avis"
+              element={
+                <PrivateRoute allowedRoles={["user"]}>
+                  <ClientReviews />
+                </PrivateRoute>
+              }
+            />
+
             {/* ❤️ Mes favoris (protégé : user) */}
             <Route
               path="/mes-favoris"
@@ -146,6 +160,16 @@ const App = () => (
               element={
                 <PrivateRoute allowedRoles={["worker"]}>
                   <WorkerMessagesPage />
+                </PrivateRoute>
+              }
+            />
+
+            {/* ⭐ Espace ouvrier : laisser des avis sur clients (protégé : worker) */}
+            <Route
+              path="/espace-ouvrier/avis"
+              element={
+                <PrivateRoute allowedRoles={["worker"]}>
+                  <WorkerReviews />
                 </PrivateRoute>
               }
             />
