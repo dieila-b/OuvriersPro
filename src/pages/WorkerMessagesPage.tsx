@@ -100,12 +100,16 @@ const WorkerMessagesPage: React.FC = () => {
   const [reviewPublish, setReviewPublish] = useState<boolean>(true);
   const [reviewSaving, setReviewSaving] = useState(false);
 
-  // ✅ Réponses du client sur l'avis
+  // ✅ Réponses (client + ouvrier) sur l'avis (même table)
   const [reviewReplies, setReviewReplies] = useState<ReviewReplyRow[]>([]);
   const [repliesLoading, setRepliesLoading] = useState(false);
   const [repliesError, setRepliesError] = useState<string | null>(null);
 
-  // Libellés
+  // ✅ Ouvrier répond à l'avis (réaction)
+  const [workerReplyContent, setWorkerReplyContent] = useState("");
+  const [workerReplySending, setWorkerReplySending] = useState(false);
+  const [workerReplyError, setWorkerReplyError] = useState<string | null>(null);
+
   const t = {
     title: language === "fr" ? "Messagerie" : "Messages",
     all: language === "fr" ? "Tout" : "All",
@@ -153,17 +157,27 @@ const WorkerMessagesPage: React.FC = () => {
     publicLabel: language === "fr" ? "Public" : "Public",
     privateLabel: language === "fr" ? "Privé" : "Private",
 
-    // ✅ Replies
-    repliesTitle: language === "fr" ? "Réponses du client" : "Client replies",
+    // Replies
+    repliesTitle: language === "fr" ? "Réponses" : "Replies",
     repliesEmpty:
       language === "fr"
-        ? "Aucune réponse du client pour le moment."
-        : "No client reply yet.",
+        ? "Aucune réponse pour le moment."
+        : "No reply yet.",
     repliesLoadError:
       language === "fr"
-        ? "Impossible de charger les réponses du client."
-        : "Unable to load client replies.",
+        ? "Impossible de charger les réponses."
+        : "Unable to load replies.",
     repliesLoading: language === "fr" ? "Chargement des réponses..." : "Loading replies...",
+
+    // ✅ Ouvrier réagit
+    replyAsWorkerTitle: language === "fr" ? "Réagir à l'avis" : "React to the review",
+    replyHere: language === "fr" ? "Écrivez votre réponse..." : "Write your reply...",
+    sendReply: language === "fr" ? "Répondre" : "Reply",
+    sendingReply: language === "fr" ? "Envoi..." : "Sending...",
+    replySendError:
+      language === "fr"
+        ? "Impossible d'envoyer votre réponse."
+        : "Unable to send your reply.",
   };
 
   const initials = (name: string | null) =>
@@ -231,7 +245,6 @@ const WorkerMessagesPage: React.FC = () => {
           throw new Error(language === "fr" ? "Vous devez être connecté." : "You must be logged in.");
         }
 
-        // Worker
         const { data: workerData, error: workerError } = await supabase
           .from("op_ouvriers")
           .select("id, user_id, first_name, last_name, email, phone")
@@ -250,7 +263,6 @@ const WorkerMessagesPage: React.FC = () => {
         const w = workerData as WorkerRow;
         setWorker(w);
 
-        // Contacts pour ce worker
         const { data: contactsData, error: contactsErr } = await supabase
           .from("op_ouvrier_contacts")
           .select("id, worker_id, client_id, client_name, client_email, client_phone, message, status, origin, created_at")
@@ -284,7 +296,6 @@ const WorkerMessagesPage: React.FC = () => {
     if (!current) return;
     if ((current.status || "new") !== "new") return;
 
-    // Optimistic UI
     setContacts((prev) =>
       prev.map((c) => (c.id === contactId ? { ...c, status: "in_progress" } : c))
     );
@@ -339,13 +350,15 @@ const WorkerMessagesPage: React.FC = () => {
     loadMessages();
   }, [selectedContactId, language]);
 
-  // ✅ Charger l'avis existant + les replies du client
+  // ✅ Charger l'avis existant + les replies
   useEffect(() => {
     const loadReviewAndReplies = async () => {
       setExistingReview(null);
       setReviewReplies([]);
       setReviewError(null);
       setRepliesError(null);
+      setWorkerReplyContent("");
+      setWorkerReplyError(null);
 
       if (!worker?.id || !selectedContact?.client_id) return;
 
@@ -353,7 +366,6 @@ const WorkerMessagesPage: React.FC = () => {
       setRepliesLoading(true);
 
       try {
-        // Priorité : avis lié au contact
         const { data: byContact, error: e1 } = await supabase
           .from("op_worker_client_reviews")
           .select("id, worker_id, client_id, contact_id, rating, title, content, is_published, created_at")
@@ -366,7 +378,6 @@ const WorkerMessagesPage: React.FC = () => {
 
         let found: ReviewRow | null = (byContact as ReviewRow) || null;
 
-        // Fallback : avis global (worker, client) sans contact_id
         if (!found) {
           const { data: byPair, error: e2 } = await supabase
             .from("op_worker_client_reviews")
@@ -389,7 +400,6 @@ const WorkerMessagesPage: React.FC = () => {
 
         setExistingReview(found);
 
-        // ✅ Charger les réponses du client sur cet avis
         const { data: reps, error: repErr } = await supabase
           .from("op_worker_client_review_replies")
           .select("id, review_id, client_id, content, created_at")
@@ -397,7 +407,6 @@ const WorkerMessagesPage: React.FC = () => {
           .order("created_at", { ascending: true });
 
         if (repErr) {
-          // Ici, 90% du temps c'est RLS (SELECT refusé)
           console.error("load review replies error", repErr);
           setRepliesError(repErr.message || t.repliesLoadError);
           setReviewReplies([]);
@@ -467,6 +476,40 @@ const WorkerMessagesPage: React.FC = () => {
     }
   };
 
+  // ✅ Ouvrier répond dans op_worker_client_review_replies
+  // Convention simple: client_id = null => réponse de l'ouvrier
+  const handleSendWorkerReply = async () => {
+    if (!worker?.id || !existingReview?.id) return;
+    if (!workerReplyContent.trim()) return;
+
+    setWorkerReplySending(true);
+    setWorkerReplyError(null);
+
+    try {
+      const payload = {
+        review_id: existingReview.id,
+        client_id: null,
+        content: workerReplyContent.trim(),
+      };
+
+      const { data, error } = await supabase
+        .from("op_worker_client_review_replies")
+        .insert(payload)
+        .select("id, review_id, client_id, content, created_at")
+        .single();
+
+      if (error) throw error;
+
+      setReviewReplies((prev) => [...prev, data as ReviewReplyRow]);
+      setWorkerReplyContent("");
+    } catch (e: any) {
+      console.error("handleSendWorkerReply error", e);
+      setWorkerReplyError(e?.message || t.replySendError);
+    } finally {
+      setWorkerReplySending(false);
+    }
+  };
+
   const openReviewModal = () => {
     setReviewRating(5);
     setReviewTitle("");
@@ -512,10 +555,10 @@ const WorkerMessagesPage: React.FC = () => {
       if (error) throw error;
 
       setExistingReview(data as ReviewRow);
-
-      // ✅ Recharger les replies (vide au départ)
       setReviewReplies([]);
       setRepliesError(null);
+      setWorkerReplyContent("");
+      setWorkerReplyError(null);
 
       setReviewOpen(false);
     } catch (e: any) {
@@ -678,10 +721,7 @@ const WorkerMessagesPage: React.FC = () => {
                     messages.map((m) => {
                       const isWorker = m.sender_role === "worker";
                       return (
-                        <div
-                          key={m.id}
-                          className={`mb-3 flex ${isWorker ? "justify-end" : "justify-start"}`}
-                        >
+                        <div key={m.id} className={`mb-3 flex ${isWorker ? "justify-end" : "justify-start"}`}>
                           <div
                             className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
                               isWorker
@@ -808,7 +848,7 @@ const WorkerMessagesPage: React.FC = () => {
                   <div className="text-sm text-slate-800">{selectedContact.client_name || "—"}</div>
                 </div>
 
-                {/* Bloc Avis + Réponses client */}
+                {/* Bloc Avis + Réponses */}
                 <div className="px-4 py-3">
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-xs font-semibold text-slate-700">{t.leaveReview}</div>
@@ -856,7 +896,7 @@ const WorkerMessagesPage: React.FC = () => {
                         {existingReview.is_published ? t.publicLabel : t.privateLabel}
                       </div>
 
-                      {/* ✅ Réponses du client */}
+                      {/* ✅ Réponses (Client + Ouvrier) */}
                       <div className="mt-4 border-t border-slate-200 pt-3">
                         <div className="text-xs font-semibold text-slate-700 mb-2">{t.repliesTitle}</div>
 
@@ -875,21 +915,60 @@ const WorkerMessagesPage: React.FC = () => {
 
                         {!repliesLoading && reviewReplies.length > 0 && (
                           <div className="space-y-2">
-                            {reviewReplies.map((rep) => (
-                              <div
-                                key={rep.id}
-                                className="rounded-lg bg-white border border-slate-100 px-3 py-2"
-                              >
-                                <div className="text-[11px] text-slate-400">
-                                  {language === "fr" ? "Client" : "Client"} • {formatDateTime(rep.created_at)}
+                            {reviewReplies.map((rep) => {
+                              const isClient = !!rep.client_id;
+                              return (
+                                <div
+                                  key={rep.id}
+                                  className={`rounded-lg border px-3 py-2 ${
+                                    isClient
+                                      ? "bg-white border-slate-100"
+                                      : "bg-blue-50 border-blue-100"
+                                  }`}
+                                >
+                                  <div className="text-[11px] text-slate-400">
+                                    {isClient ? t.client : t.you} • {formatDateTime(rep.created_at)}
+                                  </div>
+                                  <div className="text-sm text-slate-700 whitespace-pre-line">
+                                    {rep.content || ""}
+                                  </div>
                                 </div>
-                                <div className="text-sm text-slate-700 whitespace-pre-line">
-                                  {rep.content || ""}
-                                </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
+
+                        {/* ✅ Zone "réagir" côté ouvrier */}
+                        <div className="mt-3">
+                          <div className="text-xs font-semibold text-slate-700 mb-2">{t.replyAsWorkerTitle}</div>
+
+                          {workerReplyError && (
+                            <div className="mb-2 text-xs text-red-600">
+                              {t.replySendError}
+                              <div className="text-[11px] text-red-400">{workerReplyError}</div>
+                            </div>
+                          )}
+
+                          <Textarea
+                            rows={2}
+                            className="text-sm bg-white"
+                            placeholder={t.replyHere}
+                            value={workerReplyContent}
+                            onChange={(e) => setWorkerReplyContent(e.target.value)}
+                            disabled={!worker?.id || workerReplySending}
+                          />
+                          <div className="mt-2 flex justify-end">
+                            <Button
+                              type="button"
+                              className="flex items-center gap-1 bg-orange-500 hover:bg-orange-600"
+                              onClick={handleSendWorkerReply}
+                              disabled={!worker?.id || !workerReplyContent.trim() || workerReplySending}
+                            >
+                              <Send className="w-4 h-4" />
+                              {workerReplySending ? t.sendingReply : t.sendReply}
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ) : (
