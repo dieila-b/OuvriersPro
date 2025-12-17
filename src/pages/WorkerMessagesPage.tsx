@@ -59,6 +59,14 @@ type ReviewRow = {
   created_at: string;
 };
 
+type ReviewReplyRow = {
+  id: string;
+  review_id: string | null;
+  client_id: string | null;
+  content: string | null; // ✅ colonne réelle dans ta table
+  created_at: string;
+};
+
 type FilterKey = "all" | "unread";
 
 const WorkerMessagesPage: React.FC = () => {
@@ -71,10 +79,7 @@ const WorkerMessagesPage: React.FC = () => {
   const [contactsError, setContactsError] = useState<string | null>(null);
 
   const [filter, setFilter] = useState<FilterKey>("all");
-
-  const [selectedContactId, setSelectedContactId] = useState<string | null>(
-    null
-  );
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
 
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
@@ -95,33 +100,25 @@ const WorkerMessagesPage: React.FC = () => {
   const [reviewPublish, setReviewPublish] = useState<boolean>(true);
   const [reviewSaving, setReviewSaving] = useState(false);
 
+  // ✅ Réponses du client sur l'avis
+  const [reviewReplies, setReviewReplies] = useState<ReviewReplyRow[]>([]);
+  const [repliesLoading, setRepliesLoading] = useState(false);
+  const [repliesError, setRepliesError] = useState<string | null>(null);
+
   // Libellés
   const t = {
     title: language === "fr" ? "Messagerie" : "Messages",
     all: language === "fr" ? "Tout" : "All",
     unread: language === "fr" ? "Non lus" : "Unread",
     select: language === "fr" ? "Sélectionner" : "Select",
-    loadingContacts:
-      language === "fr" ? "Chargement des clients…" : "Loading clients…",
-    loadingMessages:
-      language === "fr" ? "Chargement des messages…" : "Loading messages…",
-    loadMessagesError:
-      language === "fr"
-        ? "Impossible de charger les messages."
-        : "Unable to load messages.",
-    loadContactsError:
-      language === "fr"
-        ? "Impossible de charger vos clients."
-        : "Unable to load your clients.",
-    noContacts:
-      language === "fr"
-        ? "Aucune demande reçue pour le moment."
-        : "No requests yet.",
-    typeHere:
-      language === "fr" ? "Écrivez votre message" : "Type your message",
+    loadingContacts: language === "fr" ? "Chargement des clients…" : "Loading clients…",
+    loadingMessages: language === "fr" ? "Chargement des messages…" : "Loading messages…",
+    loadMessagesError: language === "fr" ? "Impossible de charger les messages." : "Unable to load messages.",
+    loadContactsError: language === "fr" ? "Impossible de charger vos clients." : "Unable to load your clients.",
+    noContacts: language === "fr" ? "Aucune demande reçue pour le moment." : "No requests yet.",
+    typeHere: language === "fr" ? "Écrivez votre message" : "Type your message",
     send: language === "fr" ? "Envoyer" : "Send",
-    aboutClient:
-      language === "fr" ? "À propos de ce client" : "About this client",
+    aboutClient: language === "fr" ? "À propos de ce client" : "About this client",
     since: language === "fr" ? "Client depuis" : "Client since",
     webForm: language === "fr" ? "Formulaire site web" : "Web form",
     requestType: language === "fr" ? "Demande de devis" : "Quote request",
@@ -129,8 +126,7 @@ const WorkerMessagesPage: React.FC = () => {
       language === "fr"
         ? "Demande de devis via OuvrierPro"
         : "Request via OuvrierPro",
-    contactInfo:
-      language === "fr" ? "Informations de contact" : "Contact information",
+    contactInfo: language === "fr" ? "Informations de contact" : "Contact information",
     clientNameLabel: language === "fr" ? "Nom du client" : "Client name",
     noClientSelected:
       language === "fr"
@@ -138,35 +134,36 @@ const WorkerMessagesPage: React.FC = () => {
         : "Select a client on the left to view the conversation.",
     you: language === "fr" ? "Vous" : "You",
     client: language === "fr" ? "Client" : "Client",
-    loadingErrorTitle:
-      language === "fr" ? "Erreur de chargement" : "Loading error",
+    loadingErrorTitle: language === "fr" ? "Erreur de chargement" : "Loading error",
 
     // Avis
-    leaveReview:
-      language === "fr" ? "Laisser un avis public" : "Leave a public review",
+    leaveReview: language === "fr" ? "Laisser un avis public" : "Leave a public review",
     reviewTitle: language === "fr" ? "Titre (optionnel)" : "Title (optional)",
-    reviewContent:
-      language === "fr" ? "Votre avis" : "Your review",
-    publishReview:
-      language === "fr" ? "Rendre l’avis public" : "Make review public",
+    reviewContent: language === "fr" ? "Votre avis" : "Your review",
+    publishReview: language === "fr" ? "Rendre l’avis public" : "Make review public",
     saveReview: language === "fr" ? "Publier" : "Publish",
     savingReview: language === "fr" ? "Publication..." : "Publishing...",
-    alreadyReviewed:
-      language === "fr"
-        ? "Vous avez déjà laissé un avis pour cette demande."
-        : "You already left a review for this request.",
-    viewReview:
-      language === "fr" ? "Voir l’avis" : "View review",
     close: language === "fr" ? "Fermer" : "Close",
     reviewLoadError:
-      language === "fr"
-        ? "Impossible de charger l'avis."
-        : "Unable to load the review.",
+      language === "fr" ? "Impossible de charger l'avis." : "Unable to load the review.",
     reviewSendError:
-      language === "fr"
-        ? "Impossible de publier l'avis."
-        : "Unable to publish the review.",
+      language === "fr" ? "Impossible de publier l'avis." : "Unable to publish the review.",
     ratingLabel: language === "fr" ? "Note" : "Rating",
+    alreadyPublished: language === "fr" ? "Déjà publié" : "Already published",
+    publicLabel: language === "fr" ? "Public" : "Public",
+    privateLabel: language === "fr" ? "Privé" : "Private",
+
+    // ✅ Replies
+    repliesTitle: language === "fr" ? "Réponses du client" : "Client replies",
+    repliesEmpty:
+      language === "fr"
+        ? "Aucune réponse du client pour le moment."
+        : "No client reply yet.",
+    repliesLoadError:
+      language === "fr"
+        ? "Impossible de charger les réponses du client."
+        : "Unable to load client replies.",
+    repliesLoading: language === "fr" ? "Chargement des réponses..." : "Loading replies...",
   };
 
   const initials = (name: string | null) =>
@@ -229,29 +226,15 @@ const WorkerMessagesPage: React.FC = () => {
       setContactsError(null);
 
       try {
-        const { data: userData, error: userError } =
-          await supabase.auth.getUser();
+        const { data: userData, error: userError } = await supabase.auth.getUser();
         if (userError || !userData?.user) {
-          throw new Error(
-            language === "fr"
-              ? "Vous devez être connecté."
-              : "You must be logged in."
-          );
+          throw new Error(language === "fr" ? "Vous devez être connecté." : "You must be logged in.");
         }
 
         // Worker
         const { data: workerData, error: workerError } = await supabase
           .from("op_ouvriers")
-          .select(
-            `
-            id,
-            user_id,
-            first_name,
-            last_name,
-            email,
-            phone
-          `
-          )
+          .select("id, user_id, first_name, last_name, email, phone")
           .eq("user_id", userData.user.id)
           .maybeSingle();
 
@@ -270,20 +253,7 @@ const WorkerMessagesPage: React.FC = () => {
         // Contacts pour ce worker
         const { data: contactsData, error: contactsErr } = await supabase
           .from("op_ouvrier_contacts")
-          .select(
-            `
-            id,
-            worker_id,
-            client_id,
-            client_name,
-            client_email,
-            client_phone,
-            message,
-            status,
-            origin,
-            created_at
-          `
-          )
+          .select("id, worker_id, client_id, client_name, client_email, client_phone, message, status, origin, created_at")
           .eq("worker_id", w.id)
           .order("created_at", { ascending: false });
 
@@ -291,13 +261,7 @@ const WorkerMessagesPage: React.FC = () => {
 
         const list = (contactsData || []) as ContactRow[];
         setContacts(list);
-
-        // Sélection initiale : 1er de la liste "all"
-        if (list.length > 0) {
-          setSelectedContactId(list[0].id);
-        } else {
-          setSelectedContactId(null);
-        }
+        setSelectedContactId(list.length > 0 ? list[0].id : null);
       } catch (e: any) {
         console.error("Error loading contacts", e);
         setContactsError(
@@ -322,9 +286,7 @@ const WorkerMessagesPage: React.FC = () => {
 
     // Optimistic UI
     setContacts((prev) =>
-      prev.map((c) =>
-        c.id === contactId ? { ...c, status: "in_progress" } : c
-      )
+      prev.map((c) => (c.id === contactId ? { ...c, status: "in_progress" } : c))
     );
 
     const { error } = await supabase
@@ -354,17 +316,7 @@ const WorkerMessagesPage: React.FC = () => {
       try {
         const { data, error } = await supabase
           .from("op_client_worker_messages")
-          .select(
-            `
-            id,
-            contact_id,
-            worker_id,
-            client_id,
-            sender_role,
-            message,
-            created_at
-          `
-          )
+          .select("id, contact_id, worker_id, client_id, sender_role, message, created_at")
           .eq("contact_id", selectedContactId)
           .order("created_at", { ascending: true });
 
@@ -387,22 +339,24 @@ const WorkerMessagesPage: React.FC = () => {
     loadMessages();
   }, [selectedContactId, language]);
 
-  // Charger l'avis existant (1 avis max par contact recommandé)
+  // ✅ Charger l'avis existant + les replies du client
   useEffect(() => {
-    const loadReview = async () => {
+    const loadReviewAndReplies = async () => {
       setExistingReview(null);
+      setReviewReplies([]);
       setReviewError(null);
+      setRepliesError(null);
 
-      if (!worker || !selectedContact?.client_id) return;
+      if (!worker?.id || !selectedContact?.client_id) return;
 
       setReviewLoading(true);
+      setRepliesLoading(true);
+
       try {
-        // On cherche un avis lié à ce contact (priorité), sinon (worker, client) sans contact_id
+        // Priorité : avis lié au contact
         const { data: byContact, error: e1 } = await supabase
           .from("op_worker_client_reviews")
-          .select(
-            `id, worker_id, client_id, contact_id, rating, title, content, is_published, created_at`
-          )
+          .select("id, worker_id, client_id, contact_id, rating, title, content, is_published, created_at")
           .eq("worker_id", worker.id)
           .eq("client_id", selectedContact.client_id)
           .eq("contact_id", selectedContact.id)
@@ -410,34 +364,57 @@ const WorkerMessagesPage: React.FC = () => {
 
         if (e1) throw e1;
 
-        if (byContact) {
-          setExistingReview(byContact as ReviewRow);
+        let found: ReviewRow | null = (byContact as ReviewRow) || null;
+
+        // Fallback : avis global (worker, client) sans contact_id
+        if (!found) {
+          const { data: byPair, error: e2 } = await supabase
+            .from("op_worker_client_reviews")
+            .select("id, worker_id, client_id, contact_id, rating, title, content, is_published, created_at")
+            .eq("worker_id", worker.id)
+            .eq("client_id", selectedContact.client_id)
+            .is("contact_id", null)
+            .order("created_at", { ascending: false })
+            .limit(1);
+
+          if (e2) throw e2;
+          if (byPair && byPair.length > 0) found = byPair[0] as ReviewRow;
+        }
+
+        if (!found?.id) {
+          setExistingReview(null);
+          setReviewReplies([]);
           return;
         }
 
-        // Fallback éventuel (si tu autorises 1 avis global par client)
-        const { data: byPair, error: e2 } = await supabase
-          .from("op_worker_client_reviews")
-          .select(
-            `id, worker_id, client_id, contact_id, rating, title, content, is_published, created_at`
-          )
-          .eq("worker_id", worker.id)
-          .eq("client_id", selectedContact.client_id)
-          .is("contact_id", null)
-          .order("created_at", { ascending: false })
-          .limit(1);
+        setExistingReview(found);
 
-        if (e2) throw e2;
-        if (byPair && byPair.length > 0) setExistingReview(byPair[0] as ReviewRow);
+        // ✅ Charger les réponses du client sur cet avis
+        const { data: reps, error: repErr } = await supabase
+          .from("op_worker_client_review_replies")
+          .select("id, review_id, client_id, content, created_at")
+          .eq("review_id", found.id)
+          .order("created_at", { ascending: true });
+
+        if (repErr) {
+          // Ici, 90% du temps c'est RLS (SELECT refusé)
+          console.error("load review replies error", repErr);
+          setRepliesError(repErr.message || t.repliesLoadError);
+          setReviewReplies([]);
+          return;
+        }
+
+        setReviewReplies((reps || []) as ReviewReplyRow[]);
       } catch (e: any) {
-        console.error("loadReview error", e);
+        console.error("loadReviewAndReplies error", e);
         setReviewError(e?.message || t.reviewLoadError);
       } finally {
         setReviewLoading(false);
+        setRepliesLoading(false);
       }
     };
 
-    loadReview();
+    loadReviewAndReplies();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [worker?.id, selectedContactId, language]);
 
@@ -466,17 +443,7 @@ const WorkerMessagesPage: React.FC = () => {
       const { data, error } = await supabase
         .from("op_client_worker_messages")
         .insert(insertPayload)
-        .select(
-          `
-          id,
-          contact_id,
-          worker_id,
-          client_id,
-          sender_role,
-          message,
-          created_at
-        `
-        )
+        .select("id, contact_id, worker_id, client_id, sender_role, message, created_at")
         .single();
 
       if (error) throw error;
@@ -501,7 +468,6 @@ const WorkerMessagesPage: React.FC = () => {
   };
 
   const openReviewModal = () => {
-    // reset form à chaque ouverture (sauf si avis existe -> lecture)
     setReviewRating(5);
     setReviewTitle("");
     setReviewContent("");
@@ -530,7 +496,7 @@ const WorkerMessagesPage: React.FC = () => {
       const payload = {
         worker_id: worker.id,
         client_id: selectedContact.client_id,
-        contact_id: selectedContact.id, // recommandé : 1 avis par demande/conversation
+        contact_id: selectedContact.id,
         rating: reviewRating,
         title: reviewTitle.trim() ? reviewTitle.trim() : null,
         content: reviewContent.trim(),
@@ -540,14 +506,17 @@ const WorkerMessagesPage: React.FC = () => {
       const { data, error } = await supabase
         .from("op_worker_client_reviews")
         .insert(payload)
-        .select(
-          `id, worker_id, client_id, contact_id, rating, title, content, is_published, created_at`
-        )
+        .select("id, worker_id, client_id, contact_id, rating, title, content, is_published, created_at")
         .single();
 
       if (error) throw error;
 
       setExistingReview(data as ReviewRow);
+
+      // ✅ Recharger les replies (vide au départ)
+      setReviewReplies([]);
+      setRepliesError(null);
+
       setReviewOpen(false);
     } catch (e: any) {
       console.error("saveReview error", e);
@@ -562,9 +531,8 @@ const WorkerMessagesPage: React.FC = () => {
       <div className="max-w-6xl mx-auto px-4">
         <h1 className="text-2xl font-bold text-slate-900 mb-4">{t.title}</h1>
 
-        {/* Layout 3 colonnes : 3 / 6 / 3 */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          {/* Colonne 1 : liste des clients */}
+          {/* Colonne 1 : liste clients */}
           <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:col-span-3">
             <div className="px-4 pt-3 flex items-center gap-3 border-b border-slate-100">
               <div className="flex gap-2">
@@ -572,9 +540,7 @@ const WorkerMessagesPage: React.FC = () => {
                   type="button"
                   onClick={() => setFilter("all")}
                   className={`px-3 py-1 text-xs font-medium rounded-full ${
-                    filter === "all"
-                      ? "bg-blue-600 text-white"
-                      : "bg-slate-100 text-slate-600"
+                    filter === "all" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"
                   }`}
                 >
                   {t.all}
@@ -583,9 +549,7 @@ const WorkerMessagesPage: React.FC = () => {
                   type="button"
                   onClick={() => setFilter("unread")}
                   className={`px-3 py-1 text-xs font-medium rounded-full ${
-                    filter === "unread"
-                      ? "bg-blue-600 text-white"
-                      : "bg-slate-100 text-slate-600"
+                    filter === "unread" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"
                   }`}
                 >
                   {t.unread}
@@ -596,17 +560,11 @@ const WorkerMessagesPage: React.FC = () => {
                   )}
                 </button>
               </div>
-              <div className="ml-auto text-[11px] text-slate-400">
-                {t.select}
-              </div>
+              <div className="ml-auto text-[11px] text-slate-400">{t.select}</div>
             </div>
 
             <div className="flex-1 overflow-y-auto">
-              {contactsLoading && (
-                <div className="p-4 text-sm text-slate-500">
-                  {t.loadingContacts}
-                </div>
-              )}
+              {contactsLoading && <div className="p-4 text-sm text-slate-500">{t.loadingContacts}</div>}
 
               {contactsError && (
                 <div className="p-4 text-sm text-red-600">
@@ -616,78 +574,68 @@ const WorkerMessagesPage: React.FC = () => {
                 </div>
               )}
 
-              {!contactsLoading &&
-                !contactsError &&
-                filteredContacts.length === 0 && (
-                  <div className="p-4 text-sm text-slate-500">
-                    {t.noContacts}
-                  </div>
-                )}
+              {!contactsLoading && !contactsError && filteredContacts.length === 0 && (
+                <div className="p-4 text-sm text-slate-500">{t.noContacts}</div>
+              )}
 
-              {!contactsLoading &&
-                !contactsError &&
-                filteredContacts.length > 0 && (
-                  <ul>
-                    {filteredContacts.map((c) => {
-                      const isSelected = selectedContactId === c.id;
-                      const isUnread = (c.status || "new") === "new";
+              {!contactsLoading && !contactsError && filteredContacts.length > 0 && (
+                <ul>
+                  {filteredContacts.map((c) => {
+                    const isSelected = selectedContactId === c.id;
+                    const isUnread = (c.status || "new") === "new";
 
-                      return (
-                        <li key={c.id}>
-                          <button
-                            type="button"
-                            onClick={() => handleSelectContact(c.id)}
-                            className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-slate-100 hover:bg-slate-50 ${
-                              isSelected
-                                ? "bg-orange-50 border-l-4 border-l-orange-500"
-                                : ""
-                            }`}
-                          >
-                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-xs font-semibold text-slate-600">
-                              {initials(c.client_name)}
+                    return (
+                      <li key={c.id}>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectContact(c.id)}
+                          className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-slate-100 hover:bg-slate-50 ${
+                            isSelected ? "bg-orange-50 border-l-4 border-l-orange-500" : ""
+                          }`}
+                        >
+                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-xs font-semibold text-slate-600">
+                            {initials(c.client_name)}
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-semibold text-slate-900 truncate">
+                                {c.client_name || "Client"}
+                              </span>
+                              <span className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
+                                <Clock className="w-3 h-3" />
+                                {formatDate(c.created_at)}
+                              </span>
                             </div>
 
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-sm font-semibold text-slate-900 truncate">
-                                  {c.client_name || "Client"}
-                                </span>
-                                <span className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
-                                  <Clock className="w-3 h-3" />
-                                  {formatDate(c.created_at)}
-                                </span>
-                              </div>
-
-                              <div className="text-xs text-slate-500 truncate">
-                                {c.message ||
-                                  (language === "fr"
-                                    ? "Type de demande : Demande de devis"
-                                    : "Request type: Quote")}
-                              </div>
-
-                              {isUnread && (
-                                <div className="mt-1">
-                                  <span className="inline-flex items-center px-2 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                                    {language === "fr" ? "Nouveau" : "New"}
-                                  </span>
-                                </div>
-                              )}
+                            <div className="text-xs text-slate-500 truncate">
+                              {c.message ||
+                                (language === "fr"
+                                  ? "Type de demande : Demande de devis"
+                                  : "Request type: Quote")}
                             </div>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
+
+                            {isUnread && (
+                              <div className="mt-1">
+                                <span className="inline-flex items-center px-2 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                                  {language === "fr" ? "Nouveau" : "New"}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           </div>
 
-          {/* Colonne 2 : historique + saisie */}
+          {/* Colonne 2 : conversation */}
           <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:col-span-6">
             <div className="px-4 py-3 border-b border-slate-100">
-              <div className="text-sm font-semibold text-slate-900">
-                {t.aboutClient}
-              </div>
+              <div className="text-sm font-semibold text-slate-900">{t.aboutClient}</div>
               {selectedContact && (
                 <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
                   {t.since} {formatDate(selectedContact.created_at)}
@@ -699,11 +647,7 @@ const WorkerMessagesPage: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 py-3">
-              {!selectedContact && (
-                <div className="text-sm text-slate-500">
-                  {t.noClientSelected}
-                </div>
-              )}
+              {!selectedContact && <div className="text-sm text-slate-500">{t.noClientSelected}</div>}
 
               {selectedContact && (
                 <>
@@ -711,26 +655,16 @@ const WorkerMessagesPage: React.FC = () => {
                     {formatDate(selectedContact.created_at)}
                   </div>
 
-                  {/* Message initial du formulaire */}
                   {selectedContact.message && (
                     <div className="mb-4 flex justify-start">
                       <div className="max-w-[85%] rounded-2xl bg-slate-100 px-3 py-2 text-sm text-slate-800">
-                        <div className="text-[11px] font-semibold text-slate-500 mb-1">
-                          {t.client}
-                        </div>
-                        <div className="whitespace-pre-line">
-                          {selectedContact.message}
-                        </div>
+                        <div className="text-[11px] font-semibold text-slate-500 mb-1">{t.client}</div>
+                        <div className="whitespace-pre-line">{selectedContact.message}</div>
                       </div>
                     </div>
                   )}
 
-                  {/* Messages internes */}
-                  {messagesLoading && (
-                    <div className="text-sm text-slate-500">
-                      {t.loadingMessages}
-                    </div>
-                  )}
+                  {messagesLoading && <div className="text-sm text-slate-500">{t.loadingMessages}</div>}
 
                   {messagesError && (
                     <div className="text-sm text-red-600 mb-2 flex items-center gap-2">
@@ -746,9 +680,7 @@ const WorkerMessagesPage: React.FC = () => {
                       return (
                         <div
                           key={m.id}
-                          className={`mb-3 flex ${
-                            isWorker ? "justify-end" : "justify-start"
-                          }`}
+                          className={`mb-3 flex ${isWorker ? "justify-end" : "justify-start"}`}
                         >
                           <div
                             className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
@@ -758,8 +690,7 @@ const WorkerMessagesPage: React.FC = () => {
                             }`}
                           >
                             <div className="text-[10px] opacity-80 mb-0.5">
-                              {isWorker ? t.you : t.client} •{" "}
-                              {formatDateTime(m.created_at)}
+                              {isWorker ? t.you : t.client} • {formatDateTime(m.created_at)}
                             </div>
                             <div className="whitespace-pre-line">{m.message}</div>
                           </div>
@@ -770,7 +701,6 @@ const WorkerMessagesPage: React.FC = () => {
               )}
             </div>
 
-            {/* Zone de saisie */}
             <div className="border-t border-slate-100 px-4 py-3">
               <Textarea
                 rows={2}
@@ -794,7 +724,7 @@ const WorkerMessagesPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Colonne 3 : fiche client + avis */}
+          {/* Colonne 3 : fiche + avis + replies */}
           <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:col-span-3">
             <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-3">
               {selectedContact ? (
@@ -808,19 +738,13 @@ const WorkerMessagesPage: React.FC = () => {
                     </div>
                     <div className="text-[11px] text-slate-400">
                       {language === "fr"
-                        ? `Dernière activité: ${formatDate(
-                            selectedContact.created_at
-                          )}`
-                        : `Last activity: ${formatDate(
-                            selectedContact.created_at
-                          )}`}
+                        ? `Dernière activité: ${formatDate(selectedContact.created_at)}`
+                        : `Last activity: ${formatDate(selectedContact.created_at)}`}
                     </div>
                   </div>
                 </>
               ) : (
-                <div className="text-sm text-slate-500">
-                  {t.noClientSelected}
-                </div>
+                <div className="text-sm text-slate-500">{t.noClientSelected}</div>
               )}
             </div>
 
@@ -828,32 +752,21 @@ const WorkerMessagesPage: React.FC = () => {
               <>
                 <div className="px-4 py-3 border-b border-slate-100 flex gap-3">
                   <div className="flex flex-col items-center justify-center w-20 rounded-lg bg-slate-50 border border-slate-100 p-2 text-center">
-                    <div className="text-[11px] text-slate-500">
-                      {t.requestType}
-                    </div>
+                    <div className="text-[11px] text-slate-500">{t.requestType}</div>
                   </div>
                   <div className="flex-1">
-                    <div className="text-sm font-semibold text-slate-900">
-                      {t.requestType}
-                    </div>
-                    <div className="text-[11px] text-slate-500">
-                      {t.requestOrigin}
-                    </div>
+                    <div className="text-sm font-semibold text-slate-900">{t.requestType}</div>
+                    <div className="text-[11px] text-slate-500">{t.requestOrigin}</div>
                   </div>
                 </div>
 
                 <div className="px-4 py-3 border-b border-slate-100">
-                  <div className="text-xs font-semibold text-slate-700 mb-2">
-                    {t.contactInfo}
-                  </div>
+                  <div className="text-xs font-semibold text-slate-700 mb-2">{t.contactInfo}</div>
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center gap-2">
                       <Phone className="w-4 h-4 text-slate-400" />
                       {selectedContact.client_phone ? (
-                        <a
-                          href={`tel:${selectedContact.client_phone}`}
-                          className="text-slate-800"
-                        >
+                        <a href={`tel:${selectedContact.client_phone}`} className="text-slate-800">
                           {selectedContact.client_phone}
                         </a>
                       ) : (
@@ -864,10 +777,7 @@ const WorkerMessagesPage: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <Mail className="w-4 h-4 text-slate-400" />
                       {selectedContact.client_email ? (
-                        <a
-                          href={`mailto:${selectedContact.client_email}`}
-                          className="text-slate-800"
-                        >
+                        <a href={`mailto:${selectedContact.client_email}`} className="text-slate-800">
                           {selectedContact.client_email}
                         </a>
                       ) : (
@@ -894,29 +804,21 @@ const WorkerMessagesPage: React.FC = () => {
                 </div>
 
                 <div className="px-4 py-3 border-b border-slate-100">
-                  <div className="text-xs font-semibold text-slate-700 mb-1">
-                    {t.clientNameLabel}
-                  </div>
-                  <div className="text-sm text-slate-800">
-                    {selectedContact.client_name || "—"}
-                  </div>
+                  <div className="text-xs font-semibold text-slate-700 mb-1">{t.clientNameLabel}</div>
+                  <div className="text-sm text-slate-800">{selectedContact.client_name || "—"}</div>
                 </div>
 
-                {/* Bloc Avis */}
+                {/* Bloc Avis + Réponses client */}
                 <div className="px-4 py-3">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-xs font-semibold text-slate-700">
-                      {t.leaveReview}
-                    </div>
+                    <div className="text-xs font-semibold text-slate-700">{t.leaveReview}</div>
 
                     {reviewLoading ? (
                       <span className="text-[11px] text-slate-400">
                         {language === "fr" ? "Chargement..." : "Loading..."}
                       </span>
                     ) : existingReview ? (
-                      <span className="text-[11px] text-green-600">
-                        {language === "fr" ? "Déjà publié" : "Already published"}
-                      </span>
+                      <span className="text-[11px] text-green-600">{t.alreadyPublished}</span>
                     ) : null}
                   </div>
 
@@ -936,34 +838,58 @@ const WorkerMessagesPage: React.FC = () => {
                               key={i}
                               className={`w-4 h-4 ${
                                 i < (existingReview.rating || 0)
-                                  ? "text-orange-500"
+                                  ? "text-orange-500 fill-orange-500"
                                   : "text-slate-300"
                               }`}
                             />
                           ))}
                         </div>
-                        <div className="text-[11px] text-slate-400">
-                          {formatDate(existingReview.created_at)}
-                        </div>
+                        <div className="text-[11px] text-slate-400">{formatDate(existingReview.created_at)}</div>
                       </div>
 
                       {existingReview.title && (
-                        <div className="mt-2 text-sm font-semibold text-slate-900">
-                          {existingReview.title}
-                        </div>
+                        <div className="mt-2 text-sm font-semibold text-slate-900">{existingReview.title}</div>
                       )}
-                      <div className="mt-1 text-sm text-slate-700 whitespace-pre-line">
-                        {existingReview.content}
-                      </div>
+                      <div className="mt-1 text-sm text-slate-700 whitespace-pre-line">{existingReview.content}</div>
 
                       <div className="mt-2 text-[11px] text-slate-500">
-                        {language === "fr"
-                          ? existingReview.is_published
-                            ? "Public"
-                            : "Privé"
-                          : existingReview.is_published
-                          ? "Public"
-                          : "Private"}
+                        {existingReview.is_published ? t.publicLabel : t.privateLabel}
+                      </div>
+
+                      {/* ✅ Réponses du client */}
+                      <div className="mt-4 border-t border-slate-200 pt-3">
+                        <div className="text-xs font-semibold text-slate-700 mb-2">{t.repliesTitle}</div>
+
+                        {repliesError && (
+                          <div className="mb-2 text-xs text-red-600">
+                            {t.repliesLoadError}
+                            <div className="text-[11px] text-red-400">{repliesError}</div>
+                          </div>
+                        )}
+
+                        {repliesLoading && <div className="text-xs text-slate-500">{t.repliesLoading}</div>}
+
+                        {!repliesLoading && !repliesError && reviewReplies.length === 0 && (
+                          <div className="text-xs text-slate-500">{t.repliesEmpty}</div>
+                        )}
+
+                        {!repliesLoading && reviewReplies.length > 0 && (
+                          <div className="space-y-2">
+                            {reviewReplies.map((rep) => (
+                              <div
+                                key={rep.id}
+                                className="rounded-lg bg-white border border-slate-100 px-3 py-2"
+                              >
+                                <div className="text-[11px] text-slate-400">
+                                  {language === "fr" ? "Client" : "Client"} • {formatDateTime(rep.created_at)}
+                                </div>
+                                <div className="text-sm text-slate-700 whitespace-pre-line">
+                                  {rep.content || ""}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -982,7 +908,6 @@ const WorkerMessagesPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Bandeau d'erreur global pour les messages */}
         {messagesError && (
           <div className="mt-4 bg-red-600 text-white text-sm px-4 py-3 rounded-lg max-w-lg ml-auto">
             <div className="font-semibold">{t.loadingErrorTitle}</div>
@@ -992,18 +917,13 @@ const WorkerMessagesPage: React.FC = () => {
         )}
       </div>
 
-      {/* Modal Avis (sans dépendance externe) */}
+      {/* Modal Avis */}
       {reviewOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={closeReviewModal}
-          />
+          <div className="absolute inset-0 bg-black/40" onClick={closeReviewModal} />
           <div className="relative w-full max-w-lg mx-4 bg-white rounded-2xl border border-slate-200 shadow-xl">
             <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-              <div className="text-sm font-semibold text-slate-900">
-                {t.leaveReview}
-              </div>
+              <div className="text-sm font-semibold text-slate-900">{t.leaveReview}</div>
               <button
                 type="button"
                 onClick={closeReviewModal}
@@ -1016,9 +936,7 @@ const WorkerMessagesPage: React.FC = () => {
 
             <div className="p-4 space-y-4">
               <div>
-                <div className="text-xs font-semibold text-slate-700 mb-2">
-                  {t.ratingLabel}
-                </div>
+                <div className="text-xs font-semibold text-slate-700 mb-2">{t.ratingLabel}</div>
                 <div className="flex items-center gap-1">
                   {Array.from({ length: 5 }).map((_, i) => {
                     const value = i + 1;
@@ -1031,11 +949,7 @@ const WorkerMessagesPage: React.FC = () => {
                         className="p-1"
                         aria-label={`${value} / 5`}
                       >
-                        <Star
-                          className={`w-6 h-6 ${
-                            active ? "text-orange-500" : "text-slate-300"
-                          }`}
-                        />
+                        <Star className={`w-6 h-6 ${active ? "text-orange-500" : "text-slate-300"}`} />
                       </button>
                     );
                   })}
@@ -1043,25 +957,17 @@ const WorkerMessagesPage: React.FC = () => {
               </div>
 
               <div>
-                <div className="text-xs font-semibold text-slate-700 mb-2">
-                  {t.reviewTitle}
-                </div>
+                <div className="text-xs font-semibold text-slate-700 mb-2">{t.reviewTitle}</div>
                 <input
                   value={reviewTitle}
                   onChange={(e) => setReviewTitle(e.target.value)}
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder={
-                    language === "fr"
-                      ? "Ex: Client sérieux"
-                      : "e.g. Reliable client"
-                  }
+                  placeholder={language === "fr" ? "Ex: Client sérieux" : "e.g. Reliable client"}
                 />
               </div>
 
               <div>
-                <div className="text-xs font-semibold text-slate-700 mb-2">
-                  {t.reviewContent}
-                </div>
+                <div className="text-xs font-semibold text-slate-700 mb-2">{t.reviewContent}</div>
                 <Textarea
                   rows={5}
                   className="text-sm"
@@ -1090,11 +996,7 @@ const WorkerMessagesPage: React.FC = () => {
                 </label>
               </div>
 
-              {reviewError && (
-                <div className="text-sm text-red-600">
-                  {reviewError}
-                </div>
-              )}
+              {reviewError && <div className="text-sm text-red-600">{reviewError}</div>}
             </div>
 
             <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-end gap-2">
