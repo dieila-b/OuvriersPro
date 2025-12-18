@@ -4,16 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Mail,
-  Phone,
-  MessageCircle,
-  Clock,
-  Info,
-  Send,
-  Star,
-  X,
-} from "lucide-react";
+import { Mail, Phone, MessageCircle, Clock, Info, Send, Star, X } from "lucide-react";
 
 type WorkerRow = {
   id: string;
@@ -69,10 +60,13 @@ type ReviewReplyRow = {
   created_at: string;
 };
 
+type VoteType = "like" | "useful" | "not_useful";
 type FilterKey = "all" | "unread";
 
 const WorkerMessagesPage: React.FC = () => {
   const { language } = useLanguage();
+
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
 
   const [worker, setWorker] = useState<WorkerRow | null>(null);
 
@@ -102,7 +96,7 @@ const WorkerMessagesPage: React.FC = () => {
   const [reviewPublish, setReviewPublish] = useState<boolean>(true);
   const [reviewSaving, setReviewSaving] = useState(false);
 
-  // Réponses (client + ouvrier) sur l'avis
+  // Replies (client + ouvrier) sur l'avis
   const [reviewReplies, setReviewReplies] = useState<ReviewReplyRow[]>([]);
   const [repliesLoading, setRepliesLoading] = useState(false);
   const [repliesError, setRepliesError] = useState<string | null>(null);
@@ -112,40 +106,31 @@ const WorkerMessagesPage: React.FC = () => {
   const [workerReplySending, setWorkerReplySending] = useState(false);
   const [workerReplyError, setWorkerReplyError] = useState<string | null>(null);
 
+  // Votes (Like / Utile / Pas utile)
+  const [myVoteByReplyId, setMyVoteByReplyId] = useState<Record<string, VoteType | null>>({});
+  const [countsByReplyId, setCountsByReplyId] = useState<
+    Record<string, { like: number; useful: number; not_useful: number }>
+  >({});
+
   const t = {
     title: language === "fr" ? "Messagerie" : "Messages",
     all: language === "fr" ? "Tout" : "All",
     unread: language === "fr" ? "Non lus" : "Unread",
     select: language === "fr" ? "Sélectionner" : "Select",
-    loadingContacts:
-      language === "fr" ? "Chargement des clients…" : "Loading clients…",
-    loadingMessages:
-      language === "fr" ? "Chargement des messages…" : "Loading messages…",
-    loadMessagesError:
-      language === "fr"
-        ? "Impossible de charger les messages."
-        : "Unable to load messages.",
-    loadContactsError:
-      language === "fr"
-        ? "Impossible de charger vos clients."
-        : "Unable to load your clients.",
-    noContacts:
-      language === "fr"
-        ? "Aucune demande reçue pour le moment."
-        : "No requests yet.",
+    loadingContacts: language === "fr" ? "Chargement des clients…" : "Loading clients…",
+    loadingMessages: language === "fr" ? "Chargement des messages…" : "Loading messages…",
+    loadMessagesError: language === "fr" ? "Impossible de charger les messages." : "Unable to load messages.",
+    loadContactsError: language === "fr" ? "Impossible de charger vos clients." : "Unable to load your clients.",
+    noContacts: language === "fr" ? "Aucune demande reçue pour le moment." : "No requests yet.",
     typeHere: language === "fr" ? "Écrivez votre message" : "Type your message",
     send: language === "fr" ? "Envoyer" : "Send",
-    aboutClient:
-      language === "fr" ? "À propos de ce client" : "About this client",
+    aboutClient: language === "fr" ? "À propos de ce client" : "About this client",
     since: language === "fr" ? "Client depuis" : "Client since",
     webForm: language === "fr" ? "Formulaire site web" : "Web form",
     requestType: language === "fr" ? "Demande de devis" : "Quote request",
     requestOrigin:
-      language === "fr"
-        ? "Demande de devis via OuvrierPro"
-        : "Request via OuvrierPro",
-    contactInfo:
-      language === "fr" ? "Informations de contact" : "Contact information",
+      language === "fr" ? "Demande de devis via OuvrierPro" : "Request via OuvrierPro",
+    contactInfo: language === "fr" ? "Informations de contact" : "Contact information",
     clientNameLabel: language === "fr" ? "Nom du client" : "Client name",
     noClientSelected:
       language === "fr"
@@ -153,27 +138,19 @@ const WorkerMessagesPage: React.FC = () => {
         : "Select a client on the left to view the conversation.",
     you: language === "fr" ? "Vous" : "You",
     client: language === "fr" ? "Client" : "Client",
-    loadingErrorTitle:
-      language === "fr" ? "Erreur de chargement" : "Loading error",
+    loadingErrorTitle: language === "fr" ? "Erreur de chargement" : "Loading error",
 
     // Avis
-    leaveReview:
-      language === "fr" ? "Laisser un avis public" : "Leave a public review",
+    leaveReview: language === "fr" ? "Laisser un avis public" : "Leave a public review",
     reviewTitle: language === "fr" ? "Titre (optionnel)" : "Title (optional)",
     reviewContent: language === "fr" ? "Votre avis" : "Your review",
-    publishReview:
-      language === "fr" ? "Rendre l’avis public" : "Make review public",
+    publishReview: language === "fr" ? "Rendre l’avis public" : "Make review public",
     saveReview: language === "fr" ? "Publier" : "Publish",
     savingReview: language === "fr" ? "Publication..." : "Publishing...",
     close: language === "fr" ? "Fermer" : "Close",
-    reviewLoadError:
-      language === "fr"
-        ? "Impossible de charger l'avis."
-        : "Unable to load the review.",
+    reviewLoadError: language === "fr" ? "Impossible de charger l'avis." : "Unable to load the review.",
     reviewSendError:
-      language === "fr"
-        ? "Impossible de publier l'avis."
-        : "Unable to publish the review.",
+      language === "fr" ? "Impossible de publier l'avis." : "Unable to publish the review.",
     ratingLabel: language === "fr" ? "Note" : "Rating",
     alreadyPublished: language === "fr" ? "Déjà publié" : "Already published",
     publicLabel: language === "fr" ? "Public" : "Public",
@@ -181,28 +158,23 @@ const WorkerMessagesPage: React.FC = () => {
 
     // Replies
     repliesTitle: language === "fr" ? "Réponses" : "Replies",
-    repliesEmpty:
-      language === "fr"
-        ? "Aucune réponse pour le moment."
-        : "No reply yet.",
+    repliesEmpty: language === "fr" ? "Aucune réponse pour le moment." : "No reply yet.",
     repliesLoadError:
-      language === "fr"
-        ? "Impossible de charger les réponses."
-        : "Unable to load replies.",
-    repliesLoading:
-      language === "fr" ? "Chargement des réponses..." : "Loading replies...",
+      language === "fr" ? "Impossible de charger les réponses." : "Unable to load replies.",
+    repliesLoading: language === "fr" ? "Chargement des réponses..." : "Loading replies...",
 
     // Ouvrier réagit
-    replyAsWorkerTitle:
-      language === "fr" ? "Réagir à l'avis" : "React to the review",
-    replyHere:
-      language === "fr" ? "Écrivez votre réponse..." : "Write your reply...",
+    replyAsWorkerTitle: language === "fr" ? "Réagir à l'avis" : "React to the review",
+    replyHere: language === "fr" ? "Écrivez votre réponse..." : "Write your reply...",
     sendReply: language === "fr" ? "Répondre" : "Reply",
     sendingReply: language === "fr" ? "Envoi..." : "Sending...",
     replySendError:
-      language === "fr"
-        ? "Impossible d'envoyer votre réponse."
-        : "Unable to send your reply.",
+      language === "fr" ? "Impossible d'envoyer votre réponse." : "Unable to send your reply.",
+
+    // Votes
+    like: language === "fr" ? "J’aime" : "Like",
+    useful: language === "fr" ? "Utile" : "Useful",
+    notUseful: language === "fr" ? "Pas utile" : "Not useful",
   };
 
   const initials = (name: string | null) =>
@@ -247,9 +219,7 @@ const WorkerMessagesPage: React.FC = () => {
   );
 
   const filteredContacts = useMemo(() => {
-    if (filter === "unread") {
-      return contacts.filter((c) => (c.status || "new") === "new");
-    }
+    if (filter === "unread") return contacts.filter((c) => (c.status || "new") === "new");
     return contacts;
   }, [contacts, filter]);
 
@@ -258,21 +228,21 @@ const WorkerMessagesPage: React.FC = () => {
     [contacts, selectedContactId]
   );
 
-  // Load worker + contacts
+  // 0) Auth user id
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setAuthUserId(data.user?.id ?? null));
+  }, []);
+
+  // 1) Load worker + contacts
   useEffect(() => {
     const loadContacts = async () => {
       setContactsLoading(true);
       setContactsError(null);
 
       try {
-        const { data: userData, error: userError } =
-          await supabase.auth.getUser();
+        const { data: userData, error: userError } = await supabase.auth.getUser();
         if (userError || !userData?.user) {
-          throw new Error(
-            language === "fr"
-              ? "Vous devez être connecté."
-              : "You must be logged in."
-          );
+          throw new Error(language === "fr" ? "Vous devez être connecté." : "You must be logged in.");
         }
 
         const { data: workerData, error: workerError } = await supabase
@@ -284,9 +254,7 @@ const WorkerMessagesPage: React.FC = () => {
         if (workerError) throw workerError;
         if (!workerData) {
           throw new Error(
-            language === "fr"
-              ? "Aucun profil ouvrier associé à ce compte."
-              : "No worker profile for this account."
+            language === "fr" ? "Aucun profil ouvrier associé à ce compte." : "No worker profile for this account."
           );
         }
 
@@ -295,9 +263,7 @@ const WorkerMessagesPage: React.FC = () => {
 
         const { data: contactsData, error: contactsErr } = await supabase
           .from("op_ouvrier_contacts")
-          .select(
-            "id, worker_id, client_id, client_name, client_email, client_phone, message, status, origin, created_at"
-          )
+          .select("id, worker_id, client_id, client_name, client_email, client_phone, message, status, origin, created_at")
           .eq("worker_id", w.id)
           .order("created_at", { ascending: false });
 
@@ -307,13 +273,7 @@ const WorkerMessagesPage: React.FC = () => {
         setContacts(list);
         setSelectedContactId(list.length > 0 ? list[0].id : null);
       } catch (e: any) {
-        console.error("Error loading contacts", e);
-        setContactsError(
-          e?.message ||
-            (language === "fr"
-              ? "Impossible de charger vos clients."
-              : "Unable to load your clients.")
-        );
+        setContactsError(e?.message || (language === "fr" ? "Impossible de charger vos clients." : "Unable to load your clients."));
       } finally {
         setContactsLoading(false);
       }
@@ -322,30 +282,21 @@ const WorkerMessagesPage: React.FC = () => {
     loadContacts();
   }, [language]);
 
-  // Mark read
   const markContactAsRead = async (contactId: string) => {
     const current = contacts.find((c) => c.id === contactId);
     if (!current) return;
     if ((current.status || "new") !== "new") return;
 
-    setContacts((prev) =>
-      prev.map((c) => (c.id === contactId ? { ...c, status: "in_progress" } : c))
-    );
+    setContacts((prev) => prev.map((c) => (c.id === contactId ? { ...c, status: "in_progress" } : c)));
 
-    const { error } = await supabase
-      .from("op_ouvrier_contacts")
-      .update({ status: "in_progress" })
-      .eq("id", contactId);
+    const { error } = await supabase.from("op_ouvrier_contacts").update({ status: "in_progress" }).eq("id", contactId);
 
     if (error) {
-      setContacts((prev) =>
-        prev.map((c) => (c.id === contactId ? { ...c, status: "new" } : c))
-      );
-      console.error("markContactAsRead error", error);
+      setContacts((prev) => prev.map((c) => (c.id === contactId ? { ...c, status: "new" } : c)));
     }
   };
 
-  // Load messages
+  // 2) Load messages for selected contact
   useEffect(() => {
     const loadMessages = async () => {
       if (!selectedContactId) {
@@ -359,23 +310,14 @@ const WorkerMessagesPage: React.FC = () => {
       try {
         const { data, error } = await supabase
           .from("op_client_worker_messages")
-          .select(
-            "id, contact_id, worker_id, client_id, sender_role, message, created_at"
-          )
+          .select("id, contact_id, worker_id, client_id, sender_role, message, created_at")
           .eq("contact_id", selectedContactId)
           .order("created_at", { ascending: true });
 
         if (error) throw error;
-
         setMessages((data || []) as MessageRow[]);
       } catch (e: any) {
-        console.error("Error loading messages", e);
-        setMessagesError(
-          e?.message ||
-            (language === "fr"
-              ? "Impossible de charger les messages."
-              : "Unable to load messages.")
-        );
+        setMessagesError(e?.message || (language === "fr" ? "Impossible de charger les messages." : "Unable to load messages."));
       } finally {
         setMessagesLoading(false);
       }
@@ -384,7 +326,7 @@ const WorkerMessagesPage: React.FC = () => {
     loadMessages();
   }, [selectedContactId, language]);
 
-  // Load review + replies
+  // 3) Load existing review + replies
   useEffect(() => {
     const loadReviewAndReplies = async () => {
       setExistingReview(null);
@@ -393,6 +335,8 @@ const WorkerMessagesPage: React.FC = () => {
       setRepliesError(null);
       setWorkerReplyContent("");
       setWorkerReplyError(null);
+      setMyVoteByReplyId({});
+      setCountsByReplyId({});
 
       if (!worker?.id || !selectedContact?.client_id) return;
 
@@ -402,9 +346,7 @@ const WorkerMessagesPage: React.FC = () => {
       try {
         const { data: byContact, error: e1 } = await supabase
           .from("op_worker_client_reviews")
-          .select(
-            "id, worker_id, client_id, contact_id, rating, title, content, is_published, created_at"
-          )
+          .select("id, worker_id, client_id, contact_id, rating, title, content, is_published, created_at")
           .eq("worker_id", worker.id)
           .eq("client_id", selectedContact.client_id)
           .eq("contact_id", selectedContact.id)
@@ -417,9 +359,7 @@ const WorkerMessagesPage: React.FC = () => {
         if (!found) {
           const { data: byPair, error: e2 } = await supabase
             .from("op_worker_client_reviews")
-            .select(
-              "id, worker_id, client_id, contact_id, rating, title, content, is_published, created_at"
-            )
+            .select("id, worker_id, client_id, contact_id, rating, title, content, is_published, created_at")
             .eq("worker_id", worker.id)
             .eq("client_id", selectedContact.client_id)
             .is("contact_id", null)
@@ -430,11 +370,7 @@ const WorkerMessagesPage: React.FC = () => {
           if (byPair && byPair.length > 0) found = byPair[0] as ReviewRow;
         }
 
-        if (!found?.id) {
-          setExistingReview(null);
-          setReviewReplies([]);
-          return;
-        }
+        if (!found?.id) return;
 
         setExistingReview(found);
 
@@ -445,7 +381,6 @@ const WorkerMessagesPage: React.FC = () => {
           .order("created_at", { ascending: true });
 
         if (repErr) {
-          console.error("load review replies error", repErr);
           setRepliesError(repErr.message || t.repliesLoadError);
           setReviewReplies([]);
           return;
@@ -453,7 +388,6 @@ const WorkerMessagesPage: React.FC = () => {
 
         setReviewReplies((reps || []) as ReviewReplyRow[]);
       } catch (e: any) {
-        console.error("loadReviewAndReplies error", e);
         setReviewError(e?.message || t.reviewLoadError);
       } finally {
         setReviewLoading(false);
@@ -489,9 +423,7 @@ const WorkerMessagesPage: React.FC = () => {
       const { data, error } = await supabase
         .from("op_client_worker_messages")
         .insert(insertPayload)
-        .select(
-          "id, contact_id, worker_id, client_id, sender_role, message, created_at"
-        )
+        .select("id, contact_id, worker_id, client_id, sender_role, message, created_at")
         .single();
 
       if (error) throw error;
@@ -499,26 +431,114 @@ const WorkerMessagesPage: React.FC = () => {
       setMessages((prev) => [...prev, data as MessageRow]);
       setNewMessage("");
 
-      if ((selectedContact.status || "new") === "new") {
-        await markContactAsRead(selectedContact.id);
-      }
+      if ((selectedContact.status || "new") === "new") await markContactAsRead(selectedContact.id);
     } catch (e: any) {
-      console.error("Error sending message", e);
-      setMessagesError(
-        e?.message ||
-          (language === "fr"
-            ? "Impossible d'envoyer votre message."
-            : "Unable to send your message.")
-      );
+      setMessagesError(e?.message || (language === "fr" ? "Impossible d'envoyer votre message." : "Unable to send your message."));
     } finally {
       setSending(false);
     }
   };
 
-  /**
-   * ✅ Ouvrier répond dans op_worker_client_review_replies
-   * IMPORTANT: pour passer la RLS, on envoie worker_id + sender_role='worker' + client_id=NULL
-   */
+  // 4) Votes: load my votes + counts (after replies loaded)
+  const loadMyVotes = async (replyIds: string[]) => {
+    if (!authUserId || replyIds.length === 0) return;
+
+    const { data, error } = await supabase
+      .from("op_review_reply_votes")
+      .select("reply_id, vote_type")
+      .eq("voter_user_id", authUserId)
+      .in("reply_id", replyIds);
+
+    if (error) throw error;
+
+    const map: Record<string, VoteType | null> = {};
+    for (const row of data ?? []) map[row.reply_id] = row.vote_type as VoteType;
+    setMyVoteByReplyId(map);
+  };
+
+  const loadCounts = async (replyIds: string[]) => {
+    if (replyIds.length === 0) return;
+
+    const init: Record<string, { like: number; useful: number; not_useful: number }> = {};
+    replyIds.forEach((id) => (init[id] = { like: 0, useful: 0, not_useful: 0 }));
+
+    const types: VoteType[] = ["like", "useful", "not_useful"];
+    for (const vt of types) {
+      const { data, error } = await supabase
+        .from("op_review_reply_votes")
+        .select("reply_id")
+        .in("reply_id", replyIds)
+        .eq("vote_type", vt);
+
+      if (error) throw error;
+
+      for (const row of data ?? []) init[row.reply_id][vt] += 1;
+    }
+
+    setCountsByReplyId(init);
+  };
+
+  const loadVotesAndCounts = async () => {
+    const replyIds = reviewReplies.map((r) => r.id);
+    await Promise.all([loadMyVotes(replyIds), loadCounts(replyIds)]);
+  };
+
+  useEffect(() => {
+    if (reviewReplies.length > 0) loadVotesAndCounts().catch(console.error);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewReplies.map((r) => r.id).join(","), authUserId]);
+
+  // 5) TOGGLE vote
+  const toggleVote = async (replyId: string, voteType: VoteType) => {
+    const current = myVoteByReplyId[replyId] ?? null;
+    if (!authUserId) return;
+
+    // CASE 1: same vote => delete (toggle off)
+    if (current === voteType) {
+      const { error } = await supabase
+        .from("op_review_reply_votes")
+        .delete()
+        .eq("reply_id", replyId)
+        .eq("voter_user_id", authUserId);
+
+      if (error) throw error;
+
+      setMyVoteByReplyId((prev) => ({ ...prev, [replyId]: null }));
+      setCountsByReplyId((prev) => {
+        const base = prev[replyId] ?? { like: 0, useful: 0, not_useful: 0 };
+        return {
+          ...prev,
+          [replyId]: { ...base, [voteType]: Math.max(0, base[voteType] - 1) },
+        };
+      });
+      return;
+    }
+
+    // CASE 2: different vote or none => upsert (replace)
+    const payload = { reply_id: replyId, voter_user_id: authUserId, vote_type: voteType };
+
+    const { error } = await supabase
+      .from("op_review_reply_votes")
+      .upsert(payload, { onConflict: "reply_id,voter_user_id" });
+
+    if (error) throw error;
+
+    setMyVoteByReplyId((prev) => ({ ...prev, [replyId]: voteType }));
+
+    setCountsByReplyId((prev) => {
+      const base = prev[replyId] ?? { like: 0, useful: 0, not_useful: 0 };
+      const next = { ...base };
+
+      // if replacing an old vote, decrement old
+      if (current) next[current] = Math.max(0, next[current] - 1);
+      // increment new
+      next[voteType] = next[voteType] + 1;
+
+      return { ...prev, [replyId]: next };
+    });
+  };
+
+  // 6) Worker reply insert (IMPORTANT: sender_role NOT NULL)
   const handleSendWorkerReply = async () => {
     if (!worker?.id || !existingReview?.id) return;
     if (!workerReplyContent.trim()) return;
@@ -530,8 +550,8 @@ const WorkerMessagesPage: React.FC = () => {
       const payload = {
         review_id: existingReview.id,
         worker_id: worker.id,
-        sender_role: "worker" as const,
         client_id: null,
+        sender_role: "worker" as const,
         content: workerReplyContent.trim(),
       };
 
@@ -546,7 +566,6 @@ const WorkerMessagesPage: React.FC = () => {
       setReviewReplies((prev) => [...prev, data as ReviewReplyRow]);
       setWorkerReplyContent("");
     } catch (e: any) {
-      console.error("handleSendWorkerReply error", e);
       setWorkerReplyError(e?.message || t.replySendError);
     } finally {
       setWorkerReplySending(false);
@@ -568,17 +587,11 @@ const WorkerMessagesPage: React.FC = () => {
     if (!worker || !selectedContact?.client_id) return;
 
     if (!reviewContent.trim()) {
-      setReviewError(
-        language === "fr" ? "Le contenu est obligatoire." : "Content is required."
-      );
+      setReviewError(language === "fr" ? "Le contenu est obligatoire." : "Content is required.");
       return;
     }
     if (reviewRating < 1 || reviewRating > 5) {
-      setReviewError(
-        language === "fr"
-          ? "La note doit être entre 1 et 5."
-          : "Rating must be 1 to 5."
-      );
+      setReviewError(language === "fr" ? "La note doit être entre 1 et 5." : "Rating must be 1 to 5.");
       return;
     }
 
@@ -599,9 +612,7 @@ const WorkerMessagesPage: React.FC = () => {
       const { data, error } = await supabase
         .from("op_worker_client_reviews")
         .insert(payload)
-        .select(
-          "id, worker_id, client_id, contact_id, rating, title, content, is_published, created_at"
-        )
+        .select("id, worker_id, client_id, contact_id, rating, title, content, is_published, created_at")
         .single();
 
       if (error) throw error;
@@ -614,7 +625,6 @@ const WorkerMessagesPage: React.FC = () => {
 
       setReviewOpen(false);
     } catch (e: any) {
-      console.error("saveReview error", e);
       setReviewError(e?.message || t.reviewSendError);
     } finally {
       setReviewSaving(false);
@@ -635,9 +645,7 @@ const WorkerMessagesPage: React.FC = () => {
                   type="button"
                   onClick={() => setFilter("all")}
                   className={`px-3 py-1 text-xs font-medium rounded-full ${
-                    filter === "all"
-                      ? "bg-blue-600 text-white"
-                      : "bg-slate-100 text-slate-600"
+                    filter === "all" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"
                   }`}
                 >
                   {t.all}
@@ -646,9 +654,7 @@ const WorkerMessagesPage: React.FC = () => {
                   type="button"
                   onClick={() => setFilter("unread")}
                   className={`px-3 py-1 text-xs font-medium rounded-full ${
-                    filter === "unread"
-                      ? "bg-blue-600 text-white"
-                      : "bg-slate-100 text-slate-600"
+                    filter === "unread" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"
                   }`}
                 >
                   {t.unread}
@@ -663,9 +669,7 @@ const WorkerMessagesPage: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto">
-              {contactsLoading && (
-                <div className="p-4 text-sm text-slate-500">{t.loadingContacts}</div>
-              )}
+              {contactsLoading && <div className="p-4 text-sm text-slate-500">{t.loadingContacts}</div>}
 
               {contactsError && (
                 <div className="p-4 text-sm text-red-600">
@@ -691,9 +695,7 @@ const WorkerMessagesPage: React.FC = () => {
                           type="button"
                           onClick={() => handleSelectContact(c.id)}
                           className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-slate-100 hover:bg-slate-50 ${
-                            isSelected
-                              ? "bg-orange-50 border-l-4 border-l-orange-500"
-                              : ""
+                            isSelected ? "bg-orange-50 border-l-4 border-l-orange-500" : ""
                           }`}
                         >
                           <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-xs font-semibold text-slate-600">
@@ -750,9 +752,7 @@ const WorkerMessagesPage: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 py-3">
-              {!selectedContact && (
-                <div className="text-sm text-slate-500">{t.noClientSelected}</div>
-              )}
+              {!selectedContact && <div className="text-sm text-slate-500">{t.noClientSelected}</div>}
 
               {selectedContact && (
                 <>
@@ -763,17 +763,13 @@ const WorkerMessagesPage: React.FC = () => {
                   {selectedContact.message && (
                     <div className="mb-4 flex justify-start">
                       <div className="max-w-[85%] rounded-2xl bg-slate-100 px-3 py-2 text-sm text-slate-800">
-                        <div className="text-[11px] font-semibold text-slate-500 mb-1">
-                          {t.client}
-                        </div>
+                        <div className="text-[11px] font-semibold text-slate-500 mb-1">{t.client}</div>
                         <div className="whitespace-pre-line">{selectedContact.message}</div>
                       </div>
                     </div>
                   )}
 
-                  {messagesLoading && (
-                    <div className="text-sm text-slate-500">{t.loadingMessages}</div>
-                  )}
+                  {messagesLoading && <div className="text-sm text-slate-500">{t.loadingMessages}</div>}
 
                   {messagesError && (
                     <div className="text-sm text-red-600 mb-2 flex items-center gap-2">
@@ -787,15 +783,10 @@ const WorkerMessagesPage: React.FC = () => {
                     messages.map((m) => {
                       const isWorker = m.sender_role === "worker";
                       return (
-                        <div
-                          key={m.id}
-                          className={`mb-3 flex ${isWorker ? "justify-end" : "justify-start"}`}
-                        >
+                        <div key={m.id} className={`mb-3 flex ${isWorker ? "justify-end" : "justify-start"}`}>
                           <div
                             className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
-                              isWorker
-                                ? "bg-blue-600 text-white rounded-br-sm"
-                                : "bg-slate-100 text-slate-800 rounded-bl-sm"
+                              isWorker ? "bg-blue-600 text-white rounded-br-sm" : "bg-slate-100 text-slate-800 rounded-bl-sm"
                             }`}
                           >
                             <div className="text-[10px] opacity-80 mb-0.5">
@@ -946,9 +937,7 @@ const WorkerMessagesPage: React.FC = () => {
                             <Star
                               key={i}
                               className={`w-4 h-4 ${
-                                i < (existingReview.rating || 0)
-                                  ? "text-orange-500 fill-orange-500"
-                                  : "text-slate-300"
+                                i < (existingReview.rating || 0) ? "text-orange-500 fill-orange-500" : "text-slate-300"
                               }`}
                             />
                           ))}
@@ -965,7 +954,7 @@ const WorkerMessagesPage: React.FC = () => {
                         {existingReview.is_published ? t.publicLabel : t.privateLabel}
                       </div>
 
-                      {/* Réponses */}
+                      {/* Réponses + Votes */}
                       <div className="mt-4 border-t border-slate-200 pt-3">
                         <div className="text-xs font-semibold text-slate-700 mb-2">{t.repliesTitle}</div>
 
@@ -983,9 +972,12 @@ const WorkerMessagesPage: React.FC = () => {
                         )}
 
                         {!repliesLoading && reviewReplies.length > 0 && (
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             {reviewReplies.map((rep) => {
-                              const isClient = rep.sender_role === "client" || !!rep.client_id;
+                              const isClient = rep.sender_role === "client";
+                              const myVote = myVoteByReplyId[rep.id] ?? null;
+                              const counts = countsByReplyId[rep.id] ?? { like: 0, useful: 0, not_useful: 0 };
+
                               return (
                                 <div
                                   key={rep.id}
@@ -996,8 +988,38 @@ const WorkerMessagesPage: React.FC = () => {
                                   <div className="text-[11px] text-slate-400">
                                     {isClient ? t.client : t.you} • {formatDateTime(rep.created_at)}
                                   </div>
-                                  <div className="text-sm text-slate-700 whitespace-pre-line">
+                                  <div className="text-sm text-slate-700 whitespace-pre-line mt-1">
                                     {rep.content || ""}
+                                  </div>
+
+                                  {/* Votes */}
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    <Button
+                                      type="button"
+                                      variant={myVote === "like" ? "default" : "outline"}
+                                      className="h-8 px-3 text-xs"
+                                      onClick={() => toggleVote(rep.id, "like")}
+                                    >
+                                      {t.like} ({counts.like})
+                                    </Button>
+
+                                    <Button
+                                      type="button"
+                                      variant={myVote === "useful" ? "default" : "outline"}
+                                      className="h-8 px-3 text-xs"
+                                      onClick={() => toggleVote(rep.id, "useful")}
+                                    >
+                                      {t.useful} ({counts.useful})
+                                    </Button>
+
+                                    <Button
+                                      type="button"
+                                      variant={myVote === "not_useful" ? "default" : "outline"}
+                                      className="h-8 px-3 text-xs"
+                                      onClick={() => toggleVote(rep.id, "not_useful")}
+                                    >
+                                      {t.notUseful} ({counts.not_useful})
+                                    </Button>
                                   </div>
                                 </div>
                               );
@@ -1006,7 +1028,7 @@ const WorkerMessagesPage: React.FC = () => {
                         )}
 
                         {/* Zone "réagir" côté ouvrier */}
-                        <div className="mt-3">
+                        <div className="mt-4">
                           <div className="text-xs font-semibold text-slate-700 mb-2">{t.replyAsWorkerTitle}</div>
 
                           {workerReplyError && (
@@ -1120,9 +1142,7 @@ const WorkerMessagesPage: React.FC = () => {
                   value={reviewContent}
                   onChange={(e) => setReviewContent(e.target.value)}
                   placeholder={
-                    language === "fr"
-                      ? "Décrivez votre expérience avec ce client…"
-                      : "Describe your experience with this client…"
+                    language === "fr" ? "Décrivez votre expérience avec ce client…" : "Describe your experience with this client…"
                   }
                   disabled={reviewSaving}
                 />
