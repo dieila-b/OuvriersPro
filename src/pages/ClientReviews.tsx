@@ -1,3 +1,4 @@
+// src/pages/ClientReviews.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -8,8 +9,8 @@ import { ArrowLeft, Loader2, Star } from "lucide-react";
 import ClientReviewReplies from "@/components/reviews/ClientReviewReplies";
 
 type ClientRow = {
-  id: string; // op_clients.id
-  user_id: string | null; // auth.users.id
+  id: string;
+  user_id: string | null;
   first_name: string | null;
   last_name: string | null;
   email: string | null;
@@ -40,7 +41,6 @@ const ClientReviews: React.FC = () => {
   const navigate = useNavigate();
 
   const [client, setClient] = useState<ClientRow | null>(null);
-
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +97,6 @@ const ClientReviews: React.FC = () => {
         const { data: authData, error: authError } = await supabase.auth.getUser();
         if (authError || !authData?.user) throw authError || new Error("No user");
 
-        // 1) récupérer op_clients.id via user_id = auth.uid()
         const { data: clientData, error: clientErr } = await supabase
           .from("op_clients")
           .select("id, user_id, first_name, last_name, email, phone")
@@ -110,7 +109,6 @@ const ClientReviews: React.FC = () => {
         const c = clientData as ClientRow;
         setClient(c);
 
-        // 2) charger avis reçus (reviews) + jointure worker
         const { data: reviewsData, error: reviewsErr } = await supabase
           .from("op_worker_client_reviews")
           .select(
@@ -214,14 +212,9 @@ const ClientReviews: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Réaction client */}
                   <div className="mt-4 text-xs text-slate-500">{t.replyInfo}</div>
 
-                  <ClientReviewReplies
-                    reviewId={r.id}
-                    clientId={client?.id}
-                    canReply={true}
-                  />
+                  <ClientReviewReplies reviewId={r.id} clientId={client?.id ?? null} canReply={true} />
                 </Card>
               );
             })}
