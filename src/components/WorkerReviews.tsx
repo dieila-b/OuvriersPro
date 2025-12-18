@@ -1,5 +1,5 @@
 // src/components/WorkerReviews.tsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -22,12 +22,15 @@ type ReviewRow = {
   created_at: string | null;
 };
 
+type VoteType = "like" | "useful" | "not_useful";
+
 const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
   const { language } = useLanguage();
 
   const [authChecked, setAuthChecked] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
 
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(false);
@@ -40,84 +43,90 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
-  const text = {
-    title: language === "fr" ? "Avis clients" : "Customer reviews",
-    noReviews:
-      language === "fr" ? "Aucun avis pour le moment." : "No reviews yet.",
-    leaveTitle:
-      language === "fr"
-        ? "Laisser une note et un avis"
-        : "Leave a rating and a review",
-    mustLogin:
-      language === "fr"
-        ? "Vous devez être connecté pour laisser un avis."
-        : "You must be logged in to leave a review.",
-    yourRating: language === "fr" ? "Votre note" : "Your rating",
-    yourComment: language === "fr" ? "Votre avis" : "Your review",
-    send: language === "fr" ? "Envoyer l'avis" : "Submit review",
-    sending: language === "fr" ? "Envoi en cours..." : "Submitting...",
-    errorLoad:
-      language === "fr"
-        ? "Impossible de charger les avis pour le moment."
-        : "Unable to load reviews at the moment.",
-    errorSubmit:
-      language === "fr"
-        ? "Impossible d'enregistrer votre avis pour le moment."
-        : "Unable to save your review at the moment.",
-    successSubmit:
-      language === "fr"
-        ? "Merci, votre avis a bien été enregistré."
-        : "Thank you, your review has been saved.",
-    requiredRating:
-      language === "fr"
-        ? "Merci de sélectionner une note."
-        : "Please select a rating.",
-    checkingSession:
-      language === "fr"
-        ? "Vérification de la session..."
-        : "Checking session...",
-    loadingReviews:
-      language === "fr" ? "Chargement des avis..." : "Loading reviews...",
-    averageLabel:
-      language === "fr" ? "Note moyenne" : "Average rating",
-    reviewsCountLabel:
-      language === "fr" ? "avis" : "reviews",
-  };
+  // Votes sur les avis (review.id => reply_id)
+  const [myVoteByReviewId, setMyVoteByReviewId] = useState<Record<string, VoteType | null>>({});
+  const [countsByReviewId, setCountsByReviewId] = useState<Record<string, { like: number; useful: number; not_useful: number }>>(
+    {}
+  );
+  const [voteError, setVoteError] = useState<string | null>(null);
 
-  // 🔐 Vérifier la session (pour le formulaire uniquement)
+  const text = useMemo(() => {
+    return {
+      title: language === "fr" ? "Avis clients" : "Customer reviews",
+      noReviews: language === "fr" ? "Aucun avis pour le moment." : "No reviews yet.",
+      leaveTitle: language === "fr" ? "Laisser une note et un avis" : "Leave a rating and a review",
+      mustLogin: language === "fr" ? "Vous devez être connecté pour laisser un avis." : "You must be logged in to leave a review.",
+      yourRating: language === "fr" ? "Votre note" : "Your rating",
+      yourComment: language === "fr" ? "Votre avis" : "Your review",
+      send: language === "fr" ? "Envoyer l'avis" : "Submit review",
+      sending: language === "fr" ? "Envoi en cours..." : "Submitting...",
+      errorLoad: language === "fr" ? "Impossible de charger les avis pour le moment." : "Unable to load reviews at the moment.",
+      errorSubmit: language === "fr" ? "Impossible d'enregistrer votre avis pour le moment." : "Unable to save your review at the moment.",
+      successSubmit: language === "fr" ? "Merci, votre avis a bien été enregistré." : "Thank you, your review has been saved.",
+      requiredRating: language === "fr" ? "Merci de sélectionner une note." : "Please select a rating.",
+      checkingSession: language === "fr" ? "Vérification de la session..." : "Checking session...",
+      loadingReviews: language === "fr" ? "Chargement des avis..." : "Loading reviews...",
+      averageLabel: language === "fr" ? "Note moyenne" : "Average rating",
+      reviewsCountLabel: language === "fr" ? "avis" : "reviews",
+      like: language === "fr" ? "J’aime" : "Like",
+      useful: language === "fr" ? "Utile" : "Useful",
+      notUseful: language === "fr" ? "Pas utile" : "Not useful",
+      reactLogin: language === "fr" ? "Connectez-vous pour réagir." : "Log in to react.",
+      voteError: language === "fr" ? "Impossible d’enregistrer votre réaction." : "Unable to save your reaction.",
+    };
+  }, [language]);
+
+  // 🔐 Session (form + votes)
   useEffect(() => {
+    let mounted = true;
+
     const checkAuth = async () => {
       try {
         const { data, error } = await supabase.auth.getUser();
+        if (!mounted) return;
+
         if (error) {
           console.error("auth error", error);
           setIsAuthenticated(false);
           setCurrentUser(null);
+          setAuthUserId(null);
         } else if (data?.user) {
           setIsAuthenticated(true);
           setCurrentUser(data.user);
+          setAuthUserId(data.user.id);
         } else {
           setIsAuthenticated(false);
           setCurrentUser(null);
+          setAuthUserId(null);
         }
       } catch (e) {
         console.error("auth check exception", e);
         setIsAuthenticated(false);
         setCurrentUser(null);
+        setAuthUserId(null);
       } finally {
         setAuthChecked(true);
       }
     };
 
     checkAuth();
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      if (!mounted) return;
+      setIsAuthenticated(!!session?.user);
+      setCurrentUser(session?.user ?? null);
+      setAuthUserId(session?.user?.id ?? null);
+    });
+
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
-  // 🔄 Charger les avis existants (public)
+  // 🔄 Charger les avis (public)
   const loadReviews = async () => {
-    if (!workerId) {
-      console.warn("WorkerReviews: workerId is empty");
-      return;
-    }
+    if (!workerId) return;
 
     setLoadingReviews(true);
     setReviewsError(null);
@@ -125,13 +134,9 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
     try {
       const { data, error } = await supabase
         .from("op_ouvrier_reviews")
-        .select(
-          "id, worker_id, client_id, author_name, rating, comment, created_at"
-        )
+        .select("id, worker_id, client_id, author_name, rating, comment, created_at")
         .eq("worker_id", workerId)
         .order("created_at", { ascending: false });
-
-      console.log("WorkerReviews -> fetched reviews for", workerId, data, error);
 
       if (error) {
         console.error("load reviews error", error);
@@ -155,7 +160,114 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workerId]);
 
-  // ⭐ clic sur les étoiles (formulaire)
+  // -----------------------
+  // Votes
+  // -----------------------
+  const loadMyVotes = async (reviewIds: string[]) => {
+    if (!authUserId || reviewIds.length === 0) return;
+
+    const { data, error } = await supabase
+      .from("op_review_reply_votes")
+      .select("reply_id, vote_type")
+      .eq("voter_user_id", authUserId)
+      .in("reply_id", reviewIds);
+
+    if (error) throw error;
+
+    const map: Record<string, VoteType | null> = {};
+    for (const row of data ?? []) map[row.reply_id] = row.vote_type as VoteType;
+    setMyVoteByReviewId(map);
+  };
+
+  const loadCounts = async (reviewIds: string[]) => {
+    if (reviewIds.length === 0) return;
+
+    const init: Record<string, { like: number; useful: number; not_useful: number }> = {};
+    reviewIds.forEach((id) => (init[id] = { like: 0, useful: 0, not_useful: 0 }));
+
+    const types: VoteType[] = ["like", "useful", "not_useful"];
+    for (const vt of types) {
+      const { data, error } = await supabase
+        .from("op_review_reply_votes")
+        .select("reply_id")
+        .in("reply_id", reviewIds)
+        .eq("vote_type", vt);
+
+      if (error) throw error;
+      for (const row of data ?? []) init[row.reply_id][vt] += 1;
+    }
+
+    setCountsByReviewId(init);
+  };
+
+  const loadVotesAndCounts = async () => {
+    const ids = reviews.map((r) => r.id);
+    if (ids.length === 0) {
+      setMyVoteByReviewId({});
+      setCountsByReviewId({});
+      return;
+    }
+    await Promise.all([loadMyVotes(ids), loadCounts(ids)]);
+  };
+
+  useEffect(() => {
+    setVoteError(null);
+    loadVotesAndCounts().catch((e) => console.error("loadVotesAndCounts error", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviews.map((r) => r.id).join(","), authUserId]);
+
+  const toggleVote = async (reviewId: string, voteType: VoteType) => {
+    if (!authUserId) {
+      setVoteError(text.reactLogin);
+      return;
+    }
+
+    setVoteError(null);
+    const current = myVoteByReviewId[reviewId] ?? null;
+
+    if (current === voteType) {
+      const { error } = await supabase
+        .from("op_review_reply_votes")
+        .delete()
+        .eq("reply_id", reviewId)
+        .eq("voter_user_id", authUserId);
+
+      if (error) {
+        console.error("toggleVote delete error", error);
+        setVoteError(text.voteError);
+        return;
+      }
+
+      setMyVoteByReviewId((prev) => ({ ...prev, [reviewId]: null }));
+      setCountsByReviewId((prev) => {
+        const base = prev[reviewId] ?? { like: 0, useful: 0, not_useful: 0 };
+        return { ...prev, [reviewId]: { ...base, [voteType]: Math.max(0, base[voteType] - 1) } };
+      });
+      return;
+    }
+
+    const payload = { reply_id: reviewId, voter_user_id: authUserId, vote_type: voteType };
+    const { error } = await supabase.from("op_review_reply_votes").upsert(payload, {
+      onConflict: "reply_id,voter_user_id",
+    });
+
+    if (error) {
+      console.error("toggleVote upsert error", error);
+      setVoteError(text.voteError);
+      return;
+    }
+
+    setMyVoteByReviewId((prev) => ({ ...prev, [reviewId]: voteType }));
+    setCountsByReviewId((prev) => {
+      const base = prev[reviewId] ?? { like: 0, useful: 0, not_useful: 0 };
+      const next = { ...base };
+      if (current) next[current] = Math.max(0, next[current] - 1);
+      next[voteType] = next[voteType] + 1;
+      return { ...prev, [reviewId]: next };
+    });
+  };
+
+  // ⭐ clic sur étoiles (formulaire)
   const displayRating = hoverRating ?? rating;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -184,7 +296,7 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
 
       const { error } = await supabase.from("op_ouvrier_reviews").insert({
         worker_id: workerId,
-        client_id: currentUser.id, // RLS : client_id = auth.uid()
+        client_id: currentUser.id,
         author_name: displayName,
         rating,
         comment: comment.trim() || null,
@@ -198,7 +310,7 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
         setRating(0);
         setHoverRating(null);
         setComment("");
-        await loadReviews(); // rafraîchir liste + stats
+        await loadReviews();
       }
     } catch (e) {
       console.error("insert review exception", e);
@@ -208,120 +320,121 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
     }
   };
 
-  // 📊 Calcul local de la note moyenne & nombre d'avis
+  // 📊 Stats
   const reviewsCount = reviews.length;
   const averageRating =
-    reviewsCount > 0
-      ? Number(
-          (
-            reviews.reduce(
-              (sum, r) => sum + (r.rating ?? 0),
-              0
-            ) / reviewsCount
-          ).toFixed(1)
-        )
-      : null;
+    reviewsCount > 0 ? Number((reviews.reduce((sum, r) => sum + (r.rating ?? 0), 0) / reviewsCount).toFixed(1)) : null;
 
   return (
     <Card className="p-6">
       <h2 className="text-xl font-semibold mb-4">{text.title}</h2>
 
-      {/* Résumé note moyenne + nombre d'avis */}
+      {/* Résumé */}
       <div className="flex items-center gap-4 mb-4">
         <div className="flex items-center gap-1">
           <StarIcon className="w-5 h-5 text-yellow-500 fill-yellow-500" />
-          <span className="text-lg font-semibold">
-            {averageRating !== null ? averageRating.toFixed(1) : "—"}
-          </span>
+          <span className="text-lg font-semibold">{averageRating !== null ? averageRating.toFixed(1) : "—"}</span>
         </div>
         <span className="text-sm text-muted-foreground">
-          {reviewsCount > 0
-            ? `${reviewsCount} ${text.reviewsCountLabel}`
-            : text.noReviews}
+          {reviewsCount > 0 ? `${reviewsCount} ${text.reviewsCountLabel}` : text.noReviews}
         </span>
       </div>
 
-      {/* Liste des avis */}
-      {loadingReviews && (
-        <p className="text-sm text-muted-foreground">
-          {text.loadingReviews}
-        </p>
-      )}
+      {voteError && <p className="text-sm text-destructive mb-3">{voteError}</p>}
 
-      {reviewsError && (
-        <p className="text-sm text-destructive mb-4">{reviewsError}</p>
-      )}
+      {/* Liste avis */}
+      {loadingReviews && <p className="text-sm text-muted-foreground">{text.loadingReviews}</p>}
+      {reviewsError && <p className="text-sm text-destructive mb-4">{reviewsError}</p>}
 
       {!loadingReviews && !reviewsError && reviewsCount > 0 && (
         <div className="space-y-4 mb-6">
-          {reviews.map((review) => (
-            <div
-              key={review.id}
-              className="p-4 bg-muted/30 rounded-lg border border-border"
-            >
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="font-medium">
-                  {review.author_name ||
-                    (language === "fr"
-                      ? "Client anonyme"
-                      : "Anonymous client")}
-                </span>
-                <div className="flex items-center gap-0.5">
-                  {[...Array(5)].map((_, i) => (
-                    <StarIcon
-                      key={i}
-                      className={`w-4 h-4 ${
-                        i < (review.rating || 0)
-                          ? "text-yellow-500 fill-yellow-500"
-                          : "text-muted-foreground/30"
-                      }`}
-                    />
-                  ))}
+          {reviews.map((review) => {
+            const myVote = myVoteByReviewId[review.id] ?? null;
+            const counts = countsByReviewId[review.id] ?? { like: 0, useful: 0, not_useful: 0 };
+
+            return (
+              <div key={review.id} className="p-4 bg-muted/30 rounded-lg border border-border">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="font-medium">
+                    {review.author_name || (language === "fr" ? "Client anonyme" : "Anonymous client")}
+                  </span>
+                  <div className="flex items-center gap-0.5">
+                    {[...Array(5)].map((_, i) => (
+                      <StarIcon
+                        key={i}
+                        className={`w-4 h-4 ${
+                          i < (review.rating || 0) ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground/30"
+                        }`}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-              {review.comment && (
-                <p className="text-sm text-muted-foreground">
-                  {review.comment}
-                </p>
-              )}
-              {review.created_at && (
-                <p className="text-xs text-muted-foreground mt-1.5">
-                  {new Date(review.created_at).toLocaleDateString(
-                    language === "fr" ? "fr-FR" : "en-US",
-                    {
+
+                {review.comment && <p className="text-sm text-muted-foreground">{review.comment}</p>}
+
+                {/* Votes */}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant={myVote === "like" ? "default" : "outline"}
+                    className="h-8 px-3 text-xs"
+                    onClick={() => toggleVote(review.id, "like")}
+                    disabled={!authUserId}
+                    title={!authUserId ? text.reactLogin : undefined}
+                  >
+                    {text.like} ({counts.like})
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant={myVote === "useful" ? "default" : "outline"}
+                    className="h-8 px-3 text-xs"
+                    onClick={() => toggleVote(review.id, "useful")}
+                    disabled={!authUserId}
+                    title={!authUserId ? text.reactLogin : undefined}
+                  >
+                    {text.useful} ({counts.useful})
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant={myVote === "not_useful" ? "default" : "outline"}
+                    className="h-8 px-3 text-xs"
+                    onClick={() => toggleVote(review.id, "not_useful")}
+                    disabled={!authUserId}
+                    title={!authUserId ? text.reactLogin : undefined}
+                  >
+                    {text.notUseful} ({counts.not_useful})
+                  </Button>
+                </div>
+
+                {review.created_at && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {new Date(review.created_at).toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", {
                       year: "numeric",
                       month: "long",
                       day: "numeric",
-                    }
-                  )}
-                </p>
-              )}
-            </div>
-          ))}
+                    })}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Formulaire de dépôt d'avis */}
+      {/* Formulaire dépôt d'avis */}
       <div className="mt-4 pt-4 border-t border-border">
-        <h3 className="text-base font-semibold mb-3">
-          {text.leaveTitle}
-        </h3>
+        <h3 className="text-base font-semibold mb-3">{text.leaveTitle}</h3>
 
         {!authChecked ? (
-          <p className="text-sm text-muted-foreground">
-            {text.checkingSession}
-          </p>
+          <p className="text-sm text-muted-foreground">{text.checkingSession}</p>
         ) : !isAuthenticated ? (
-          <p className="text-sm text-muted-foreground">
-            {text.mustLogin}
-          </p>
+          <p className="text-sm text-muted-foreground">{text.mustLogin}</p>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Note */}
             <div>
-              <label className="block text-sm font-medium mb-1">
-                {text.yourRating}
-              </label>
+              <label className="block text-sm font-medium mb-1">{text.yourRating}</label>
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5].map((value) => (
                   <button
@@ -334,9 +447,7 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
                   >
                     <StarIcon
                       className={`w-6 h-6 ${
-                        value <= displayRating
-                          ? "text-yellow-500 fill-yellow-500"
-                          : "text-muted-foreground/30"
+                        value <= displayRating ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground/30"
                       }`}
                     />
                   </button>
@@ -344,24 +455,13 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
               </div>
             </div>
 
-            {/* Commentaire */}
             <div>
-              <label className="block text-sm font-medium mb-1">
-                {text.yourComment}
-              </label>
-              <Textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                rows={3}
-              />
+              <label className="block text-sm font-medium mb-1">{text.yourComment}</label>
+              <Textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} />
             </div>
 
-            {submitError && (
-              <p className="text-sm text-destructive">{submitError}</p>
-            )}
-            {submitSuccess && (
-              <p className="text-sm text-emerald-600">{submitSuccess}</p>
-            )}
+            {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+            {submitSuccess && <p className="text-sm text-emerald-600">{submitSuccess}</p>}
 
             <Button type="submit" disabled={submitting}>
               {submitting ? text.sending : text.send}
