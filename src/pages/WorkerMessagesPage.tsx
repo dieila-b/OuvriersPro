@@ -4,7 +4,19 @@ import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, Phone, MessageCircle, Clock, Info, Send, Star, X } from "lucide-react";
+import {
+  Mail,
+  Phone,
+  MessageCircle,
+  Clock,
+  Info,
+  Send,
+  Star,
+  X,
+  ThumbsUp,
+  BadgeCheck,
+  ThumbsDown,
+} from "lucide-react";
 
 type WorkerRow = {
   id: string;
@@ -106,7 +118,7 @@ const WorkerMessagesPage: React.FC = () => {
   const [workerReplySending, setWorkerReplySending] = useState(false);
   const [workerReplyError, setWorkerReplyError] = useState<string | null>(null);
 
-  // Votes (Like / Utile / Pas utile)
+  // Votes (Like / Utile / Pas utile) — même logique que côté client
   const [myVoteByReplyId, setMyVoteByReplyId] = useState<Record<string, VoteType | null>>({});
   const [countsByReplyId, setCountsByReplyId] = useState<
     Record<string, { like: number; useful: number; not_useful: number }>
@@ -254,7 +266,9 @@ const WorkerMessagesPage: React.FC = () => {
         if (workerError) throw workerError;
         if (!workerData) {
           throw new Error(
-            language === "fr" ? "Aucun profil ouvrier associé à ce compte." : "No worker profile for this account."
+            language === "fr"
+              ? "Aucun profil ouvrier associé à ce compte."
+              : "No worker profile for this account."
           );
         }
 
@@ -263,7 +277,9 @@ const WorkerMessagesPage: React.FC = () => {
 
         const { data: contactsData, error: contactsErr } = await supabase
           .from("op_ouvrier_contacts")
-          .select("id, worker_id, client_id, client_name, client_email, client_phone, message, status, origin, created_at")
+          .select(
+            "id, worker_id, client_id, client_name, client_email, client_phone, message, status, origin, created_at"
+          )
           .eq("worker_id", w.id)
           .order("created_at", { ascending: false });
 
@@ -273,7 +289,10 @@ const WorkerMessagesPage: React.FC = () => {
         setContacts(list);
         setSelectedContactId(list.length > 0 ? list[0].id : null);
       } catch (e: any) {
-        setContactsError(e?.message || (language === "fr" ? "Impossible de charger vos clients." : "Unable to load your clients."));
+        setContactsError(
+          e?.message ||
+            (language === "fr" ? "Impossible de charger vos clients." : "Unable to load your clients.")
+        );
       } finally {
         setContactsLoading(false);
       }
@@ -317,7 +336,10 @@ const WorkerMessagesPage: React.FC = () => {
         if (error) throw error;
         setMessages((data || []) as MessageRow[]);
       } catch (e: any) {
-        setMessagesError(e?.message || (language === "fr" ? "Impossible de charger les messages." : "Unable to load messages."));
+        setMessagesError(
+          e?.message ||
+            (language === "fr" ? "Impossible de charger les messages." : "Unable to load messages.")
+        );
       } finally {
         setMessagesLoading(false);
       }
@@ -335,6 +357,8 @@ const WorkerMessagesPage: React.FC = () => {
       setRepliesError(null);
       setWorkerReplyContent("");
       setWorkerReplyError(null);
+
+      // reset votes
       setMyVoteByReplyId({});
       setCountsByReplyId({});
 
@@ -433,13 +457,16 @@ const WorkerMessagesPage: React.FC = () => {
 
       if ((selectedContact.status || "new") === "new") await markContactAsRead(selectedContact.id);
     } catch (e: any) {
-      setMessagesError(e?.message || (language === "fr" ? "Impossible d'envoyer votre message." : "Unable to send your message."));
+      setMessagesError(
+        e?.message ||
+          (language === "fr" ? "Impossible d'envoyer votre message." : "Unable to send your message.")
+      );
     } finally {
       setSending(false);
     }
   };
 
-  // 4) Votes: load my votes + counts (after replies loaded)
+  // 4) Votes: charger "mon vote" + compteurs (après replies)
   const loadMyVotes = async (replyIds: string[]) => {
     if (!authUserId || replyIds.length === 0) return;
 
@@ -471,7 +498,6 @@ const WorkerMessagesPage: React.FC = () => {
         .eq("vote_type", vt);
 
       if (error) throw error;
-
       for (const row of data ?? []) init[row.reply_id][vt] += 1;
     }
 
@@ -480,20 +506,26 @@ const WorkerMessagesPage: React.FC = () => {
 
   const loadVotesAndCounts = async () => {
     const replyIds = reviewReplies.map((r) => r.id);
+    if (replyIds.length === 0) {
+      setMyVoteByReplyId({});
+      setCountsByReplyId({});
+      return;
+    }
     await Promise.all([loadMyVotes(replyIds), loadCounts(replyIds)]);
   };
 
   useEffect(() => {
-    if (reviewReplies.length > 0) loadVotesAndCounts().catch(console.error);
+    loadVotesAndCounts().catch((e) => console.error("loadVotesAndCounts error", e));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reviewReplies.map((r) => r.id).join(","), authUserId]);
 
-  // 5) TOGGLE vote
+  // 5) Toggle vote (même logique client)
   const toggleVote = async (replyId: string, voteType: VoteType) => {
-    const current = myVoteByReplyId[replyId] ?? null;
     if (!authUserId) return;
 
-    // CASE 1: same vote => delete (toggle off)
+    const current = myVoteByReplyId[replyId] ?? null;
+
+    // same vote => DELETE
     if (current === voteType) {
       const { error } = await supabase
         .from("op_review_reply_votes")
@@ -514,7 +546,7 @@ const WorkerMessagesPage: React.FC = () => {
       return;
     }
 
-    // CASE 2: different vote or none => upsert (replace)
+    // different vote or none => UPSERT
     const payload = { reply_id: replyId, voter_user_id: authUserId, vote_type: voteType };
 
     const { error } = await supabase
@@ -529,9 +561,7 @@ const WorkerMessagesPage: React.FC = () => {
       const base = prev[replyId] ?? { like: 0, useful: 0, not_useful: 0 };
       const next = { ...base };
 
-      // if replacing an old vote, decrement old
       if (current) next[current] = Math.max(0, next[current] - 1);
-      // increment new
       next[voteType] = next[voteType] + 1;
 
       return { ...prev, [replyId]: next };
@@ -550,8 +580,8 @@ const WorkerMessagesPage: React.FC = () => {
       const payload = {
         review_id: existingReview.id,
         worker_id: worker.id,
-        client_id: null,
         sender_role: "worker" as const,
+        client_id: null,
         content: workerReplyContent.trim(),
       };
 
@@ -622,6 +652,10 @@ const WorkerMessagesPage: React.FC = () => {
       setRepliesError(null);
       setWorkerReplyContent("");
       setWorkerReplyError(null);
+
+      // reset votes (pas de replies encore)
+      setMyVoteByReplyId({});
+      setCountsByReplyId({});
 
       setReviewOpen(false);
     } catch (e: any) {
@@ -786,7 +820,9 @@ const WorkerMessagesPage: React.FC = () => {
                         <div key={m.id} className={`mb-3 flex ${isWorker ? "justify-end" : "justify-start"}`}>
                           <div
                             className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
-                              isWorker ? "bg-blue-600 text-white rounded-br-sm" : "bg-slate-100 text-slate-800 rounded-bl-sm"
+                              isWorker
+                                ? "bg-blue-600 text-white rounded-br-sm"
+                                : "bg-slate-100 text-slate-800 rounded-bl-sm"
                             }`}
                           >
                             <div className="text-[10px] opacity-80 mb-0.5">
@@ -937,7 +973,9 @@ const WorkerMessagesPage: React.FC = () => {
                             <Star
                               key={i}
                               className={`w-4 h-4 ${
-                                i < (existingReview.rating || 0) ? "text-orange-500 fill-orange-500" : "text-slate-300"
+                                i < (existingReview.rating || 0)
+                                  ? "text-orange-500 fill-orange-500"
+                                  : "text-slate-300"
                               }`}
                             />
                           ))}
@@ -1000,6 +1038,7 @@ const WorkerMessagesPage: React.FC = () => {
                                       className="h-8 px-3 text-xs"
                                       onClick={() => toggleVote(rep.id, "like")}
                                     >
+                                      <ThumbsUp className="w-4 h-4 mr-2" />
                                       {t.like} ({counts.like})
                                     </Button>
 
@@ -1009,6 +1048,7 @@ const WorkerMessagesPage: React.FC = () => {
                                       className="h-8 px-3 text-xs"
                                       onClick={() => toggleVote(rep.id, "useful")}
                                     >
+                                      <BadgeCheck className="w-4 h-4 mr-2" />
                                       {t.useful} ({counts.useful})
                                     </Button>
 
@@ -1018,6 +1058,7 @@ const WorkerMessagesPage: React.FC = () => {
                                       className="h-8 px-3 text-xs"
                                       onClick={() => toggleVote(rep.id, "not_useful")}
                                     >
+                                      <ThumbsDown className="w-4 h-4 mr-2" />
                                       {t.notUseful} ({counts.not_useful})
                                     </Button>
                                   </div>
@@ -1142,7 +1183,9 @@ const WorkerMessagesPage: React.FC = () => {
                   value={reviewContent}
                   onChange={(e) => setReviewContent(e.target.value)}
                   placeholder={
-                    language === "fr" ? "Décrivez votre expérience avec ce client…" : "Describe your experience with this client…"
+                    language === "fr"
+                      ? "Décrivez votre expérience avec ce client…"
+                      : "Describe your experience with this client…"
                   }
                   disabled={reviewSaving}
                 />
