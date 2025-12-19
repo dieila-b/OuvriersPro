@@ -24,6 +24,15 @@ type ReviewRow = {
 
 type VoteType = "like" | "useful" | "not_useful";
 
+type VoteRow = {
+  id: string;
+  reply_id: string;
+  voter_user_id: string;
+  vote_type: VoteType;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
 const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
   const { language } = useLanguage();
 
@@ -43,36 +52,67 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
-  // Votes sur les avis (review.id => reply_id)
-  const [myVoteByReviewId, setMyVoteByReviewId] = useState<Record<string, VoteType | null>>({});
-  const [countsByReviewId, setCountsByReviewId] = useState<Record<string, { like: number; useful: number; not_useful: number }>>(
-    {}
-  );
+  // Votes
+  const [myVoteByReviewId, setMyVoteByReviewId] = useState<
+    Record<string, VoteType | null>
+  >({});
+  const [countsByReviewId, setCountsByReviewId] = useState<
+    Record<string, { like: number; useful: number; not_useful: number }>
+  >({});
   const [voteError, setVoteError] = useState<string | null>(null);
 
   const text = useMemo(() => {
     return {
       title: language === "fr" ? "Avis clients" : "Customer reviews",
-      noReviews: language === "fr" ? "Aucun avis pour le moment." : "No reviews yet.",
-      leaveTitle: language === "fr" ? "Laisser une note et un avis" : "Leave a rating and a review",
-      mustLogin: language === "fr" ? "Vous devez être connecté pour laisser un avis." : "You must be logged in to leave a review.",
+      noReviews:
+        language === "fr" ? "Aucun avis pour le moment." : "No reviews yet.",
+      leaveTitle:
+        language === "fr"
+          ? "Laisser une note et un avis"
+          : "Leave a rating and a review",
+      mustLogin:
+        language === "fr"
+          ? "Vous devez être connecté pour laisser un avis."
+          : "You must be logged in to leave a review.",
       yourRating: language === "fr" ? "Votre note" : "Your rating",
       yourComment: language === "fr" ? "Votre avis" : "Your review",
       send: language === "fr" ? "Envoyer l'avis" : "Submit review",
       sending: language === "fr" ? "Envoi en cours..." : "Submitting...",
-      errorLoad: language === "fr" ? "Impossible de charger les avis pour le moment." : "Unable to load reviews at the moment.",
-      errorSubmit: language === "fr" ? "Impossible d'enregistrer votre avis pour le moment." : "Unable to save your review at the moment.",
-      successSubmit: language === "fr" ? "Merci, votre avis a bien été enregistré." : "Thank you, your review has been saved.",
-      requiredRating: language === "fr" ? "Merci de sélectionner une note." : "Please select a rating.",
-      checkingSession: language === "fr" ? "Vérification de la session..." : "Checking session...",
-      loadingReviews: language === "fr" ? "Chargement des avis..." : "Loading reviews...",
+      errorLoad:
+        language === "fr"
+          ? "Impossible de charger les avis pour le moment."
+          : "Unable to load reviews at the moment.",
+      errorSubmit:
+        language === "fr"
+          ? "Impossible d'enregistrer votre avis pour le moment."
+          : "Unable to save your review at the moment.",
+      successSubmit:
+        language === "fr"
+          ? "Merci, votre avis a bien été enregistré."
+          : "Thank you, your review has been saved.",
+      requiredRating:
+        language === "fr"
+          ? "Merci de sélectionner une note."
+          : "Please select a rating.",
+      checkingSession:
+        language === "fr"
+          ? "Vérification de la session..."
+          : "Checking session...",
+      loadingReviews:
+        language === "fr" ? "Chargement des avis..." : "Loading reviews...",
       averageLabel: language === "fr" ? "Note moyenne" : "Average rating",
       reviewsCountLabel: language === "fr" ? "avis" : "reviews",
       like: language === "fr" ? "J’aime" : "Like",
       useful: language === "fr" ? "Utile" : "Useful",
       notUseful: language === "fr" ? "Pas utile" : "Not useful",
-      reactLogin: language === "fr" ? "Connectez-vous pour réagir." : "Log in to react.",
-      voteError: language === "fr" ? "Impossible d’enregistrer votre réaction." : "Unable to save your reaction.",
+      reactLogin:
+        language === "fr"
+          ? "Connectez-vous pour réagir."
+          : "Log in to react.",
+      voteError:
+        language === "fr"
+          ? "Impossible d’enregistrer votre réaction."
+          : "Unable to save your reaction.",
     };
   }, [language]);
 
@@ -161,61 +201,78 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
   }, [workerId]);
 
   // -----------------------
-  // Votes
+  // Votes (1 requête pour counts)
   // -----------------------
-  const loadMyVotes = async (reviewIds: string[]) => {
-    if (!authUserId || reviewIds.length === 0) return;
+  const loadVotesAndCounts = async () => {
+    const reviewIds = reviews.map((r) => r.id);
+    if (reviewIds.length === 0) {
+      setMyVoteByReviewId({});
+      setCountsByReviewId({});
+      return;
+    }
 
-    const { data, error } = await supabase
+    // init counts
+    const initCounts: Record<
+      string,
+      { like: number; useful: number; not_useful: number }
+    > = {};
+    reviewIds.forEach((id) => {
+      initCounts[id] = { like: 0, useful: 0, not_useful: 0 };
+    });
+
+    // 1) counts (public: SELECT true)
+    const { data: allVotes, error: votesError } = await supabase
+      .from("op_review_reply_votes")
+      .select("reply_id, vote_type")
+      .in("reply_id", reviewIds);
+
+    if (votesError) {
+      console.error("loadCounts error", votesError);
+      throw votesError;
+    }
+
+    for (const v of (allVotes ?? []) as Array<{ reply_id: string; vote_type: VoteType }>) {
+      if (!initCounts[v.reply_id]) continue;
+      if (v.vote_type === "like") initCounts[v.reply_id].like += 1;
+      if (v.vote_type === "useful") initCounts[v.reply_id].useful += 1;
+      if (v.vote_type === "not_useful") initCounts[v.reply_id].not_useful += 1;
+    }
+
+    setCountsByReviewId(initCounts);
+
+    // 2) my votes (si connecté)
+    if (!authUserId) {
+      setMyVoteByReviewId({});
+      return;
+    }
+
+    const { data: myVotes, error: myVotesError } = await supabase
       .from("op_review_reply_votes")
       .select("reply_id, vote_type")
       .eq("voter_user_id", authUserId)
       .in("reply_id", reviewIds);
 
-    if (error) throw error;
+    if (myVotesError) {
+      console.error("loadMyVotes error", myVotesError);
+      throw myVotesError;
+    }
 
     const map: Record<string, VoteType | null> = {};
-    for (const row of data ?? []) map[row.reply_id] = row.vote_type as VoteType;
+    for (const row of myVotes ?? []) {
+      map[(row as any).reply_id] = (row as any).vote_type as VoteType;
+    }
     setMyVoteByReviewId(map);
   };
 
-  const loadCounts = async (reviewIds: string[]) => {
-    if (reviewIds.length === 0) return;
-
-    const init: Record<string, { like: number; useful: number; not_useful: number }> = {};
-    reviewIds.forEach((id) => (init[id] = { like: 0, useful: 0, not_useful: 0 }));
-
-    const types: VoteType[] = ["like", "useful", "not_useful"];
-    for (const vt of types) {
-      const { data, error } = await supabase
-        .from("op_review_reply_votes")
-        .select("reply_id")
-        .in("reply_id", reviewIds)
-        .eq("vote_type", vt);
-
-      if (error) throw error;
-      for (const row of data ?? []) init[row.reply_id][vt] += 1;
-    }
-
-    setCountsByReviewId(init);
-  };
-
-  const loadVotesAndCounts = async () => {
-    const ids = reviews.map((r) => r.id);
-    if (ids.length === 0) {
-      setMyVoteByReviewId({});
-      setCountsByReviewId({});
-      return;
-    }
-    await Promise.all([loadMyVotes(ids), loadCounts(ids)]);
-  };
+  const reviewsKey = useMemo(() => reviews.map((r) => r.id).join(","), [reviews]);
 
   useEffect(() => {
     setVoteError(null);
     loadVotesAndCounts().catch((e) => console.error("loadVotesAndCounts error", e));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reviews.map((r) => r.id).join(","), authUserId]);
+  }, [reviewsKey, authUserId]);
 
+  // ✅ Toggle vote sans UPSERT (compatible même sans UNIQUE)
   const toggleVote = async (reviewId: string, voteType: VoteType) => {
     if (!authUserId) {
       setVoteError(text.reactLogin);
@@ -225,6 +282,7 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
     setVoteError(null);
     const current = myVoteByReviewId[reviewId] ?? null;
 
+    // Si même vote => suppression
     if (current === voteType) {
       const { error } = await supabase
         .from("op_review_reply_votes")
@@ -234,26 +292,47 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
 
       if (error) {
         console.error("toggleVote delete error", error);
-        setVoteError(text.voteError);
+        setVoteError(`${text.voteError} (${error.code ?? "no_code"}: ${error.message})`);
         return;
       }
 
       setMyVoteByReviewId((prev) => ({ ...prev, [reviewId]: null }));
       setCountsByReviewId((prev) => {
         const base = prev[reviewId] ?? { like: 0, useful: 0, not_useful: 0 };
-        return { ...prev, [reviewId]: { ...base, [voteType]: Math.max(0, base[voteType] - 1) } };
+        return {
+          ...prev,
+          [reviewId]: { ...base, [voteType]: Math.max(0, base[voteType] - 1) },
+        };
       });
       return;
     }
 
-    const payload = { reply_id: reviewId, voter_user_id: authUserId, vote_type: voteType };
-    const { error } = await supabase.from("op_review_reply_votes").upsert(payload, {
-      onConflict: "reply_id,voter_user_id",
-    });
+    // Sinon : on supprime tout vote existant pour (reply_id, voter_user_id) puis on insère le nouveau
+    const { error: delError } = await supabase
+      .from("op_review_reply_votes")
+      .delete()
+      .eq("reply_id", reviewId)
+      .eq("voter_user_id", authUserId);
 
-    if (error) {
-      console.error("toggleVote upsert error", error);
-      setVoteError(text.voteError);
+    if (delError) {
+      console.error("toggleVote pre-delete error", delError);
+      setVoteError(`${text.voteError} (${delError.code ?? "no_code"}: ${delError.message})`);
+      return;
+    }
+
+    const payload = {
+      reply_id: reviewId,
+      voter_user_id: authUserId,
+      vote_type: voteType,
+    };
+
+    const { error: insError } = await supabase
+      .from("op_review_reply_votes")
+      .insert(payload);
+
+    if (insError) {
+      console.error("toggleVote insert error", insError);
+      setVoteError(`${text.voteError} (${insError.code ?? "no_code"}: ${insError.message})`);
       return;
     }
 
@@ -323,7 +402,13 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
   // 📊 Stats
   const reviewsCount = reviews.length;
   const averageRating =
-    reviewsCount > 0 ? Number((reviews.reduce((sum, r) => sum + (r.rating ?? 0), 0) / reviewsCount).toFixed(1)) : null;
+    reviewsCount > 0
+      ? Number(
+          (
+            reviews.reduce((sum, r) => sum + (r.rating ?? 0), 0) / reviewsCount
+          ).toFixed(1)
+        )
+      : null;
 
   return (
     <Card className="p-6">
@@ -333,44 +418,64 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
       <div className="flex items-center gap-4 mb-4">
         <div className="flex items-center gap-1">
           <StarIcon className="w-5 h-5 text-yellow-500 fill-yellow-500" />
-          <span className="text-lg font-semibold">{averageRating !== null ? averageRating.toFixed(1) : "—"}</span>
+          <span className="text-lg font-semibold">
+            {averageRating !== null ? averageRating.toFixed(1) : "—"}
+          </span>
         </div>
         <span className="text-sm text-muted-foreground">
-          {reviewsCount > 0 ? `${reviewsCount} ${text.reviewsCountLabel}` : text.noReviews}
+          {reviewsCount > 0
+            ? `${reviewsCount} ${text.reviewsCountLabel}`
+            : text.noReviews}
         </span>
       </div>
 
       {voteError && <p className="text-sm text-destructive mb-3">{voteError}</p>}
 
       {/* Liste avis */}
-      {loadingReviews && <p className="text-sm text-muted-foreground">{text.loadingReviews}</p>}
-      {reviewsError && <p className="text-sm text-destructive mb-4">{reviewsError}</p>}
+      {loadingReviews && (
+        <p className="text-sm text-muted-foreground">{text.loadingReviews}</p>
+      )}
+      {reviewsError && (
+        <p className="text-sm text-destructive mb-4">{reviewsError}</p>
+      )}
 
       {!loadingReviews && !reviewsError && reviewsCount > 0 && (
         <div className="space-y-4 mb-6">
           {reviews.map((review) => {
             const myVote = myVoteByReviewId[review.id] ?? null;
-            const counts = countsByReviewId[review.id] ?? { like: 0, useful: 0, not_useful: 0 };
+            const counts = countsByReviewId[review.id] ?? {
+              like: 0,
+              useful: 0,
+              not_useful: 0,
+            };
 
             return (
-              <div key={review.id} className="p-4 bg-muted/30 rounded-lg border border-border">
+              <div
+                key={review.id}
+                className="p-4 bg-muted/30 rounded-lg border border-border"
+              >
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="font-medium">
-                    {review.author_name || (language === "fr" ? "Client anonyme" : "Anonymous client")}
+                    {review.author_name ||
+                      (language === "fr" ? "Client anonyme" : "Anonymous client")}
                   </span>
                   <div className="flex items-center gap-0.5">
                     {[...Array(5)].map((_, i) => (
                       <StarIcon
                         key={i}
                         className={`w-4 h-4 ${
-                          i < (review.rating || 0) ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground/30"
+                          i < (review.rating || 0)
+                            ? "text-yellow-500 fill-yellow-500"
+                            : "text-muted-foreground/30"
                         }`}
                       />
                     ))}
                   </div>
                 </div>
 
-                {review.comment && <p className="text-sm text-muted-foreground">{review.comment}</p>}
+                {review.comment && (
+                  <p className="text-sm text-muted-foreground">{review.comment}</p>
+                )}
 
                 {/* Votes */}
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -410,11 +515,10 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
 
                 {review.created_at && (
                   <p className="text-xs text-muted-foreground mt-2">
-                    {new Date(review.created_at).toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
+                    {new Date(review.created_at).toLocaleDateString(
+                      language === "fr" ? "fr-FR" : "en-US",
+                      { year: "numeric", month: "long", day: "numeric" }
+                    )}
                   </p>
                 )}
               </div>
@@ -434,7 +538,9 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">{text.yourRating}</label>
+              <label className="block text-sm font-medium mb-1">
+                {text.yourRating}
+              </label>
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5].map((value) => (
                   <button
@@ -447,7 +553,9 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
                   >
                     <StarIcon
                       className={`w-6 h-6 ${
-                        value <= displayRating ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground/30"
+                        value <= displayRating
+                          ? "text-yellow-500 fill-yellow-500"
+                          : "text-muted-foreground/30"
                       }`}
                     />
                   </button>
@@ -456,12 +564,22 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">{text.yourComment}</label>
-              <Textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} />
+              <label className="block text-sm font-medium mb-1">
+                {text.yourComment}
+              </label>
+              <Textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                rows={3}
+              />
             </div>
 
-            {submitError && <p className="text-sm text-destructive">{submitError}</p>}
-            {submitSuccess && <p className="text-sm text-emerald-600">{submitSuccess}</p>}
+            {submitError && (
+              <p className="text-sm text-destructive">{submitError}</p>
+            )}
+            {submitSuccess && (
+              <p className="text-sm text-emerald-600">{submitSuccess}</p>
+            )}
 
             <Button type="submit" disabled={submitting}>
               {submitting ? text.sending : text.send}
