@@ -54,7 +54,7 @@ const WorkerDetail: React.FC = () => {
   // Auth (pour voter)
   const [authUserId, setAuthUserId] = useState<string | null>(null);
 
-  // Formulaire de contact (colonne de droite)
+  // Formulaire de contact
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [clientEmail, setClientEmail] = useState("");
@@ -67,7 +67,7 @@ const WorkerDetail: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
-  // Avis clients
+  // Avis
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviewsError, setReviewsError] = useState<string | null>(null);
@@ -75,8 +75,10 @@ const WorkerDetail: React.FC = () => {
   const [newComment, setNewComment] = useState("");
   const [submitReviewLoading, setSubmitReviewLoading] = useState(false);
 
-  // Votes sur les avis (review.id utilisé comme reply_id)
-  const [myVoteByReviewId, setMyVoteByReviewId] = useState<Record<string, VoteType | null>>({});
+  // Votes (review.id utilisé comme reply_id)
+  const [myVoteByReviewId, setMyVoteByReviewId] = useState<
+    Record<string, VoteType | null>
+  >({});
   const [countsByReviewId, setCountsByReviewId] = useState<
     Record<string, { like: number; useful: number; not_useful: number }>
   >({});
@@ -92,12 +94,16 @@ const WorkerDetail: React.FC = () => {
       like: language === "fr" ? "J’aime" : "Like",
       useful: language === "fr" ? "Utile" : "Useful",
       notUseful: language === "fr" ? "Pas utile" : "Not useful",
-      mustLogin: language === "fr" ? "Connectez-vous pour réagir." : "Log in to react.",
-      voteError: language === "fr" ? "Impossible d’enregistrer votre réaction." : "Unable to save your reaction.",
+      mustLogin:
+        language === "fr" ? "Connectez-vous pour réagir." : "Log in to react.",
+      voteError:
+        language === "fr"
+          ? "Impossible d’enregistrer votre réaction."
+          : "Unable to save your reaction.",
     };
   }, [language]);
 
-  // Auth user id (fiable)
+  // Auth user id
   useEffect(() => {
     let mounted = true;
 
@@ -120,11 +126,13 @@ const WorkerDetail: React.FC = () => {
     };
   }, []);
 
-  // Chargement profil ouvrier
+  // Profil ouvrier
   useEffect(() => {
     const loadWorker = async () => {
       if (!workerId) {
-        setWorkerError(language === "fr" ? "Aucun ouvrier spécifié." : "No worker specified.");
+        setWorkerError(
+          language === "fr" ? "Aucun ouvrier spécifié." : "No worker specified."
+        );
         setLoadingWorker(false);
         return;
       }
@@ -158,7 +166,11 @@ const WorkerDetail: React.FC = () => {
 
       if (error || !data) {
         console.error("loadWorker error", error);
-        setWorkerError(language === "fr" ? "Impossible de charger le profil de cet ouvrier." : "Unable to load this worker profile.");
+        setWorkerError(
+          language === "fr"
+            ? "Impossible de charger le profil de cet ouvrier."
+            : "Unable to load this worker profile."
+        );
       } else {
         setWorker(data as WorkerProfile);
       }
@@ -169,7 +181,7 @@ const WorkerDetail: React.FC = () => {
     loadWorker();
   }, [workerId, language]);
 
-  // Chargement avis
+  // Avis
   useEffect(() => {
     const loadReviews = async () => {
       if (!workerId) return;
@@ -185,7 +197,9 @@ const WorkerDetail: React.FC = () => {
 
       if (error) {
         console.error("loadReviews error", error);
-        setReviewsError(language === "fr" ? "Impossible de charger les avis." : "Unable to load reviews.");
+        setReviewsError(
+          language === "fr" ? "Impossible de charger les avis." : "Unable to load reviews."
+        );
       } else {
         const mapped: Review[] = (data || []).map((r: any) => ({
           id: r.id,
@@ -203,7 +217,7 @@ const WorkerDetail: React.FC = () => {
     loadReviews();
   }, [workerId, language]);
 
-  // Chargement photos
+  // Photos
   useEffect(() => {
     const loadPhotos = async () => {
       if (!workerId) return;
@@ -220,7 +234,9 @@ const WorkerDetail: React.FC = () => {
 
       if (error) {
         console.error("loadPhotos error", error);
-        setPhotosError(language === "fr" ? "Impossible de charger les photos." : "Unable to load photos.");
+        setPhotosError(
+          language === "fr" ? "Impossible de charger les photos." : "Unable to load photos."
+        );
       } else {
         setPhotos((data || []) as WorkerPhoto[]);
       }
@@ -231,9 +247,18 @@ const WorkerDetail: React.FC = () => {
     loadPhotos();
   }, [workerId, language]);
 
-  const fullName = (worker?.first_name || "") + (worker?.last_name ? ` ${worker.last_name}` : "");
+  const fullName =
+    (worker?.first_name || "") + (worker?.last_name ? ` ${worker.last_name}` : "");
 
-  const location = [worker?.country, worker?.region, worker?.city, worker?.commune, worker?.district].filter(Boolean).join(" • ");
+  const location = [
+    worker?.country,
+    worker?.region,
+    worker?.city,
+    worker?.commune,
+    worker?.district,
+  ]
+    .filter(Boolean)
+    .join(" • ");
 
   const whatsappUrl = worker?.phone
     ? (() => {
@@ -245,68 +270,79 @@ const WorkerDetail: React.FC = () => {
 
   const averageRating =
     reviews.length > 0
-      ? Math.round((reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length) * 10) / 10
+      ? Math.round(
+          (reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length) * 10
+        ) / 10
       : 0;
 
   // -----------------------
-  // Votes (sur reviews)
+  // Votes (counts 1 requête)
   // -----------------------
-  const loadMyVotes = async (reviewIds: string[]) => {
-    if (!authUserId || reviewIds.length === 0) return;
+  const loadVotesAndCounts = async () => {
+    const reviewIds = reviews.map((r) => r.id);
+    if (reviewIds.length === 0) {
+      setMyVoteByReviewId({});
+      setCountsByReviewId({});
+      return;
+    }
 
-    const { data, error } = await supabase
+    const initCounts: Record<
+      string,
+      { like: number; useful: number; not_useful: number }
+    > = {};
+    reviewIds.forEach((id) => {
+      initCounts[id] = { like: 0, useful: 0, not_useful: 0 };
+    });
+
+    const { data: allVotes, error: votesError } = await supabase
+      .from("op_review_reply_votes")
+      .select("reply_id, vote_type")
+      .in("reply_id", reviewIds);
+
+    if (votesError) {
+      console.error("loadCounts error", votesError);
+      throw votesError;
+    }
+
+    for (const v of (allVotes ?? []) as Array<{ reply_id: string; vote_type: VoteType }>) {
+      if (!initCounts[v.reply_id]) continue;
+      if (v.vote_type === "like") initCounts[v.reply_id].like += 1;
+      if (v.vote_type === "useful") initCounts[v.reply_id].useful += 1;
+      if (v.vote_type === "not_useful") initCounts[v.reply_id].not_useful += 1;
+    }
+
+    setCountsByReviewId(initCounts);
+
+    if (!authUserId) {
+      setMyVoteByReviewId({});
+      return;
+    }
+
+    const { data: myVotes, error: myVotesError } = await supabase
       .from("op_review_reply_votes")
       .select("reply_id, vote_type")
       .eq("voter_user_id", authUserId)
       .in("reply_id", reviewIds);
 
-    if (error) throw error;
+    if (myVotesError) {
+      console.error("loadMyVotes error", myVotesError);
+      throw myVotesError;
+    }
 
     const map: Record<string, VoteType | null> = {};
-    for (const row of data ?? []) map[row.reply_id] = row.vote_type as VoteType;
+    for (const row of myVotes ?? []) {
+      map[(row as any).reply_id] = (row as any).vote_type as VoteType;
+    }
     setMyVoteByReviewId(map);
   };
 
-  const loadCounts = async (reviewIds: string[]) => {
-    if (reviewIds.length === 0) return;
-
-    const init: Record<string, { like: number; useful: number; not_useful: number }> = {};
-    reviewIds.forEach((id) => (init[id] = { like: 0, useful: 0, not_useful: 0 }));
-
-    const types: VoteType[] = ["like", "useful", "not_useful"];
-    for (const vt of types) {
-      const { data, error } = await supabase
-        .from("op_review_reply_votes")
-        .select("reply_id")
-        .in("reply_id", reviewIds)
-        .eq("vote_type", vt);
-
-      if (error) throw error;
-
-      for (const row of data ?? []) init[row.reply_id][vt] += 1;
-    }
-
-    setCountsByReviewId(init);
-  };
-
-  const loadVotesAndCounts = async () => {
-    const ids = reviews.map((r) => r.id);
-    if (ids.length === 0) {
-      setMyVoteByReviewId({});
-      setCountsByReviewId({});
-      return;
-    }
-    await Promise.all([loadMyVotes(ids), loadCounts(ids)]);
-  };
+  const reviewsKey = useMemo(() => reviews.map((r) => r.id).join(","), [reviews]);
 
   useEffect(() => {
     setVoteError(null);
-    loadVotesAndCounts().catch((e) => {
-      console.error("loadVotesAndCounts error", e);
-      // ne bloque pas l’écran si ça échoue
-    });
+    loadVotesAndCounts().catch((e) => console.error("loadVotesAndCounts error", e));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reviews.map((r) => r.id).join(","), authUserId]);
+  }, [reviewsKey, authUserId]);
 
   const toggleVote = async (reviewId: string, voteType: VoteType) => {
     if (!authUserId) {
@@ -317,7 +353,7 @@ const WorkerDetail: React.FC = () => {
     setVoteError(null);
     const current = myVoteByReviewId[reviewId] ?? null;
 
-    // 1) same => delete
+    // Same => delete
     if (current === voteType) {
       const { error } = await supabase
         .from("op_review_reply_votes")
@@ -327,28 +363,41 @@ const WorkerDetail: React.FC = () => {
 
       if (error) {
         console.error("toggleVote delete error", error);
-        setVoteError(tVotes.voteError);
+        setVoteError(`${tVotes.voteError} (${error.code ?? "no_code"}: ${error.message})`);
         return;
       }
 
       setMyVoteByReviewId((prev) => ({ ...prev, [reviewId]: null }));
       setCountsByReviewId((prev) => {
         const base = prev[reviewId] ?? { like: 0, useful: 0, not_useful: 0 };
-        return { ...prev, [reviewId]: { ...base, [voteType]: Math.max(0, base[voteType] - 1) } };
+        return {
+          ...prev,
+          [reviewId]: { ...base, [voteType]: Math.max(0, base[voteType] - 1) },
+        };
       });
       return;
     }
 
-    // 2) other/none => upsert
-    const payload = { reply_id: reviewId, voter_user_id: authUserId, vote_type: voteType };
+    // Different/none => delete then insert (pas besoin de UNIQUE)
+    const { error: delError } = await supabase
+      .from("op_review_reply_votes")
+      .delete()
+      .eq("reply_id", reviewId)
+      .eq("voter_user_id", authUserId);
 
-    const { error } = await supabase.from("op_review_reply_votes").upsert(payload, {
-      onConflict: "reply_id,voter_user_id",
-    });
+    if (delError) {
+      console.error("toggleVote pre-delete error", delError);
+      setVoteError(`${tVotes.voteError} (${delError.code ?? "no_code"}: ${delError.message})`);
+      return;
+    }
 
-    if (error) {
-      console.error("toggleVote upsert error", error);
-      setVoteError(tVotes.voteError);
+    const { error: insError } = await supabase
+      .from("op_review_reply_votes")
+      .insert({ reply_id: reviewId, voter_user_id: authUserId, vote_type: voteType });
+
+    if (insError) {
+      console.error("toggleVote insert error", insError);
+      setVoteError(`${tVotes.voteError} (${insError.code ?? "no_code"}: ${insError.message})`);
       return;
     }
 
@@ -363,7 +412,7 @@ const WorkerDetail: React.FC = () => {
   };
 
   // -----------------------
-  // Contact / review submit (inchangé)
+  // Contact / review submit
   // -----------------------
   const handleSubmitContact = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -387,7 +436,11 @@ const WorkerDetail: React.FC = () => {
       const user = authData?.user;
 
       if (authError || !user) {
-        throw new Error(language === "fr" ? "Vous devez être connecté pour envoyer une demande." : "You must be logged in to send a request.");
+        throw new Error(
+          language === "fr"
+            ? "Vous devez être connecté pour envoyer une demande."
+            : "You must be logged in to send a request."
+        );
       }
 
       // Récupérer ou créer le profil client
@@ -401,7 +454,11 @@ const WorkerDetail: React.FC = () => {
 
       if (selectClientError && selectClientError.code !== "PGRST116") {
         console.error("select client error", selectClientError);
-        throw new Error(language === "fr" ? "Impossible de récupérer votre profil client." : "Unable to fetch your client profile.");
+        throw new Error(
+          language === "fr"
+            ? "Impossible de récupérer votre profil client."
+            : "Unable to fetch your client profile."
+        );
       }
 
       if (existingClient) {
@@ -421,46 +478,78 @@ const WorkerDetail: React.FC = () => {
 
         if (insertClientError || !newClient) {
           console.error("insert client error", insertClientError);
-          throw new Error(language === "fr" ? "Impossible de créer votre profil client." : "Unable to create your client profile.");
+          throw new Error(
+            language === "fr"
+              ? "Impossible de créer votre profil client."
+              : "Unable to create your client profile."
+          );
         }
 
         clientProfileId = newClient.id;
       }
 
       if (!clientProfileId) {
-        throw new Error(language === "fr" ? "Profil client introuvable. Veuillez réessayer." : "Client profile not found. Please try again.");
+        throw new Error(
+          language === "fr"
+            ? "Profil client introuvable. Veuillez réessayer."
+            : "Client profile not found. Please try again."
+        );
       }
 
       const detailedMessageLines: string[] = [];
-      if (requestType) detailedMessageLines.push(`${language === "fr" ? "Type de demande" : "Request type"} : ${requestType}`);
-      if (approxBudget)
-        detailedMessageLines.push(`${language === "fr" ? "Budget approximatif (facultatif)" : "Approx. budget (optional)"} : ${approxBudget}`);
-      if (desiredDate)
-        detailedMessageLines.push(`${language === "fr" ? "Date souhaitée (facultatif)" : "Desired date (optional)"} : ${desiredDate}`);
+      if (requestType) {
+        detailedMessageLines.push(
+          `${language === "fr" ? "Type de demande" : "Request type"} : ${requestType}`
+        );
+      }
+      if (approxBudget) {
+        detailedMessageLines.push(
+          `${language === "fr" ? "Budget approximatif (facultatif)" : "Approx. budget (optional)"} : ${approxBudget}`
+        );
+      }
+      if (desiredDate) {
+        detailedMessageLines.push(
+          `${language === "fr" ? "Date souhaitée (facultatif)" : "Desired date (optional)"} : ${desiredDate}`
+        );
+      }
       if (clientMessage) detailedMessageLines.push(clientMessage);
       const detailedMessage = detailedMessageLines.join("\n");
 
-      const { error: contactError } = await supabase.from("op_ouvrier_contacts").insert({
-        worker_id: worker.id,
-        client_id: clientProfileId,
-        full_name: clientName || (user.user_metadata as any)?.full_name || user.email || null,
-        email: clientEmail || user.email || null,
-        phone: clientPhone || null,
-        message: detailedMessage || "",
-        status: "new",
-        origin: "web",
-        client_name: clientName || null,
-        client_email: clientEmail || user.email || null,
-        client_phone: clientPhone || null,
-        worker_name: fullName || null,
-      });
+      const { error: contactError } = await supabase
+        .from("op_ouvrier_contacts")
+        .insert({
+          worker_id: worker.id,
+          client_id: clientProfileId,
+          full_name:
+            clientName ||
+            (user.user_metadata as any)?.full_name ||
+            user.email ||
+            null,
+          email: clientEmail || user.email || null,
+          phone: clientPhone || null,
+          message: detailedMessage || "",
+          status: "new",
+          origin: "web",
+          client_name: clientName || null,
+          client_email: clientEmail || user.email || null,
+          client_phone: clientPhone || null,
+          worker_name: fullName || null,
+        });
 
       if (contactError) {
         console.error("insert contact error", contactError);
-        throw new Error(language === "fr" ? "Une erreur est survenue lors de l'envoi de votre demande." : "An error occurred while sending your request.");
+        throw new Error(
+          language === "fr"
+            ? "Une erreur est survenue lors de l'envoi de votre demande."
+            : "An error occurred while sending your request."
+        );
       }
 
-      setSubmitSuccess(language === "fr" ? "Votre demande a été envoyée à cet ouvrier." : "Your request has been sent to this worker.");
+      setSubmitSuccess(
+        language === "fr"
+          ? "Votre demande a été envoyée à cet ouvrier."
+          : "Your request has been sent to this worker."
+      );
       setRequestType("Demande de devis");
       setApproxBudget("");
       setDesiredDate("");
@@ -486,7 +575,11 @@ const WorkerDetail: React.FC = () => {
       const user = authData?.user;
 
       if (authError || !user) {
-        throw new Error(language === "fr" ? "Vous devez être connecté pour laisser un avis." : "You must be logged in to leave a review.");
+        throw new Error(
+          language === "fr"
+            ? "Vous devez être connecté pour laisser un avis."
+            : "You must be logged in to leave a review."
+        );
       }
 
       const { data: newReview, error: insertReviewError } = await supabase
@@ -501,7 +594,11 @@ const WorkerDetail: React.FC = () => {
 
       if (insertReviewError || !newReview) {
         console.error("insert review error", insertReviewError);
-        throw new Error(language === "fr" ? "Impossible d’enregistrer votre avis." : "Unable to save your review.");
+        throw new Error(
+          language === "fr"
+            ? "Impossible d’enregistrer votre avis."
+            : "Unable to save your review."
+        );
       }
 
       setReviews((prev) => [
@@ -527,7 +624,11 @@ const WorkerDetail: React.FC = () => {
   if (loadingWorker) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-sm text-slate-500">{language === "fr" ? "Chargement du profil ouvrier..." : "Loading worker profile..."}</div>
+        <div className="text-sm text-slate-500">
+          {language === "fr"
+            ? "Chargement du profil ouvrier..."
+            : "Loading worker profile..."}
+        </div>
       </div>
     );
   }
@@ -536,7 +637,8 @@ const WorkerDetail: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
         <div className="max-w-md bg-white border border-slate-200 rounded-xl p-6 shadow-sm text-sm text-red-600">
-          {workerError || (language === "fr" ? "Ouvrier introuvable." : "Worker not found.")}
+          {workerError ||
+            (language === "fr" ? "Ouvrier introuvable." : "Worker not found.")}
         </div>
       </div>
     );
@@ -572,8 +674,12 @@ const WorkerDetail: React.FC = () => {
                       : "OP"}
                   </div>
                   <div>
-                    <h1 className="text-xl font-bold text-slate-900">{fullName || (language === "fr" ? "Ouvrier" : "Worker")}</h1>
-                    {worker.profession && <p className="text-sm text-slate-600">{worker.profession}</p>}
+                    <h1 className="text-xl font-bold text-slate-900">
+                      {fullName || (language === "fr" ? "Ouvrier" : "Worker")}
+                    </h1>
+                    {worker.profession && (
+                      <p className="text-sm text-slate-600">{worker.profession}</p>
+                    )}
                     {location && (
                       <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500">
                         <MapPin className="w-3 h-3" />
@@ -588,24 +694,39 @@ const WorkerDetail: React.FC = () => {
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                     <div className="inline-flex items-center gap-1 text-amber-500">
                       <Star className="w-4 h-4 fill-amber-400" />
-                      <span className="text-sm font-semibold">{averageRating > 0 ? averageRating.toFixed(1) : "—"}</span>
+                      <span className="text-sm font-semibold">
+                        {averageRating > 0 ? averageRating.toFixed(1) : "—"}
+                      </span>
                     </div>
-                    <div className="text-[11px] text-slate-500">{language === "fr" ? "avis" : "reviews"}</div>
+                    <div className="text-[11px] text-slate-500">
+                      {language === "fr" ? "avis" : "reviews"}
+                    </div>
                     <div className="text-[11px] text-slate-400">
-                      {reviews.length} {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
+                      {reviews.length}{" "}
+                      {language === "fr"
+                        ? "avis"
+                        : reviews.length <= 1
+                        ? "review"
+                        : "reviews"}
                     </div>
                   </div>
 
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                     <div className="text-sm font-semibold text-slate-900">0</div>
-                    <div className="text-[11px] text-slate-500">{language === "fr" ? "ans d'expérience" : "years experience"}</div>
+                    <div className="text-[11px] text-slate-500">
+                      {language === "fr" ? "ans d'expérience" : "years experience"}
+                    </div>
                   </div>
 
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                     <div className="text-sm font-semibold text-slate-900">
-                      {worker.hourly_rate != null ? `${worker.hourly_rate.toLocaleString()} ${worker.currency || "GNF"}` : "—"}
+                      {worker.hourly_rate != null
+                        ? `${worker.hourly_rate.toLocaleString()} ${worker.currency || "GNF"}`
+                        : "—"}
                     </div>
-                    <div className="text-[11px] text-slate-500">{language === "fr" ? "par heure" : "per hour"}</div>
+                    <div className="text-[11px] text-slate-500">
+                      {language === "fr" ? "par heure" : "per hour"}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -613,32 +734,32 @@ const WorkerDetail: React.FC = () => {
 
             {/* À propos */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-2">{language === "fr" ? "À propos" : "About"}</h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-2">
+                {language === "fr" ? "À propos" : "About"}
+              </h2>
               <p className="text-sm text-slate-700 whitespace-pre-line">
-                {worker.description || (language === "fr" ? "Aucune description fournie pour le moment." : "No description provided yet.")}
+                {worker.description ||
+                  (language === "fr"
+                    ? "Aucune description fournie pour le moment."
+                    : "No description provided yet.")}
               </p>
-            </div>
-
-            {/* Portfolio (placeholder simple) */}
-            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-1">{language === "fr" ? "Portfolio / Réalisations" : "Portfolio / Works"}</h2>
-              <p className="text-xs text-slate-500 mb-2">
-                {language === "fr"
-                  ? "Découvrez quelques projets réalisés par ce professionnel."
-                  : "Discover some projects completed by this professional."}
-              </p>
-              <p className="text-sm text-slate-500">{language === "fr" ? "Aucune réalisation publiée pour le moment." : "No published work yet."}</p>
             </div>
 
             {/* Galerie photos */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-1">{language === "fr" ? "Galerie photos" : "Photo gallery"}</h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-1">
+                {language === "fr" ? "Galerie photos" : "Photo gallery"}
+              </h2>
               <p className="text-xs text-slate-500 mb-2">
-                {language === "fr" ? "Découvrez quelques réalisations de cet ouvrier." : "Discover some works from this worker."}
+                {language === "fr"
+                  ? "Découvrez quelques réalisations de cet ouvrier."
+                  : "Discover some works from this worker."}
               </p>
 
               {photosError && (
-                <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{photosError}</div>
+                <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                  {photosError}
+                </div>
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -660,8 +781,17 @@ const WorkerDetail: React.FC = () => {
 
                 {!photosLoading &&
                   photos.map((p) => (
-                    <div key={p.id} className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
-                      {p.public_url && <img src={p.public_url} alt={p.title || ""} className="w-full h-full object-cover" />}
+                    <div
+                      key={p.id}
+                      className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-100"
+                    >
+                      {p.public_url && (
+                        <img
+                          src={p.public_url}
+                          alt={p.title || ""}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
                     </div>
                   ))}
               </div>
@@ -669,48 +799,74 @@ const WorkerDetail: React.FC = () => {
 
             {/* Avis clients */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-1">{language === "fr" ? "Avis clients" : "Customer reviews"}</h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-1">
+                {language === "fr" ? "Avis clients" : "Customer reviews"}
+              </h2>
 
               {reviewsError && (
-                <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{reviewsError}</div>
+                <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                  {reviewsError}
+                </div>
               )}
 
-              {/* Résumé note + nb avis */}
               <div className="flex items-center gap-2 mb-3 text-sm">
                 <div className="inline-flex items-center gap-1 text-amber-500">
                   <Star className="w-4 h-4 fill-amber-400" />
-                  <span className="font-semibold">{averageRating > 0 ? averageRating.toFixed(1) : "—"}</span>
+                  <span className="font-semibold">
+                    {averageRating > 0 ? averageRating.toFixed(1) : "—"}
+                  </span>
                 </div>
                 <span className="text-xs text-slate-500">
-                  {reviews.length} {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
+                  {reviews.length}{" "}
+                  {language === "fr"
+                    ? "avis"
+                    : reviews.length <= 1
+                    ? "review"
+                    : "reviews"}
                 </span>
               </div>
 
               {voteError && (
-                <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{voteError}</div>
+                <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                  {voteError}
+                </div>
               )}
 
-              {/* Liste avis */}
               <div className="space-y-3 mb-4">
                 {reviewsLoading && (
-                  <div className="text-xs text-slate-500">{language === "fr" ? "Chargement des avis..." : "Loading reviews..."}</div>
+                  <div className="text-xs text-slate-500">
+                    {language === "fr" ? "Chargement des avis..." : "Loading reviews..."}
+                  </div>
                 )}
 
                 {!reviewsLoading && reviews.length === 0 && (
-                  <div className="text-xs text-slate-500">{language === "fr" ? "Aucun avis pour le moment." : "No review yet."}</div>
+                  <div className="text-xs text-slate-500">
+                    {language === "fr" ? "Aucun avis pour le moment." : "No review yet."}
+                  </div>
                 )}
 
                 {!reviewsLoading &&
                   reviews.map((r) => {
                     const myVote = myVoteByReviewId[r.id] ?? null;
-                    const counts = countsByReviewId[r.id] ?? { like: 0, useful: 0, not_useful: 0 };
+                    const counts = countsByReviewId[r.id] ?? {
+                      like: 0,
+                      useful: 0,
+                      not_useful: 0,
+                    };
 
                     return (
-                      <div key={r.id} className="border border-slate-100 rounded-lg px-3 py-2 text-xs">
+                      <div
+                        key={r.id}
+                        className="border border-slate-100 rounded-lg px-3 py-2 text-xs"
+                      >
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold text-slate-800">{r.client_name || "Client"}</span>
+                          <span className="font-semibold text-slate-800">
+                            {r.client_name || "Client"}
+                          </span>
                           <span className="text-[11px] text-slate-400">
-                            {new Date(r.created_at).toLocaleDateString(language === "fr" ? "fr-FR" : "en-GB")}
+                            {new Date(r.created_at).toLocaleDateString(
+                              language === "fr" ? "fr-FR" : "en-GB"
+                            )}
                           </span>
                         </div>
 
@@ -718,14 +874,19 @@ const WorkerDetail: React.FC = () => {
                           {Array.from({ length: 5 }).map((_, i) => (
                             <Star
                               key={i}
-                              className={`w-3 h-3 ${(r.rating || 0) > i ? "text-amber-500 fill-amber-400" : "text-slate-200"}`}
+                              className={`w-3 h-3 ${
+                                (r.rating || 0) > i
+                                  ? "text-amber-500 fill-amber-400"
+                                  : "text-slate-200"
+                              }`}
                             />
                           ))}
                         </div>
 
-                        {r.comment && <p className="text-slate-700 whitespace-pre-line">{r.comment}</p>}
+                        {r.comment && (
+                          <p className="text-slate-700 whitespace-pre-line">{r.comment}</p>
+                        )}
 
-                        {/* Votes */}
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Button
                             type="button"
@@ -765,16 +926,28 @@ const WorkerDetail: React.FC = () => {
                   })}
               </div>
 
-              {/* Formulaire avis */}
               <form onSubmit={handleSubmitReview} className="border-t pt-3 mt-3">
                 <div className="text-xs font-semibold text-slate-700 mb-2">
-                  {language === "fr" ? "Laisser une note et un avis" : "Leave a rating and review"}
+                  {language === "fr"
+                    ? "Laisser une note et un avis"
+                    : "Leave a rating and review"}
                 </div>
 
                 <div className="flex items-center gap-1 mb-2">
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <button key={i} type="button" onClick={() => setNewRating(i + 1)} className="focus:outline-none">
-                      <Star className={`w-4 h-4 ${newRating > i ? "text-amber-500 fill-amber-400" : "text-slate-200"}`} />
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setNewRating(i + 1)}
+                      className="focus:outline-none"
+                    >
+                      <Star
+                        className={`w-4 h-4 ${
+                          newRating > i
+                            ? "text-amber-500 fill-amber-400"
+                            : "text-slate-200"
+                        }`}
+                      />
                     </button>
                   ))}
                 </div>
@@ -787,7 +960,12 @@ const WorkerDetail: React.FC = () => {
                   onChange={(e) => setNewComment(e.target.value)}
                 />
 
-                <Button type="submit" size="sm" className="bg-pro-blue hover:bg-blue-700" disabled={submitReviewLoading || newRating === 0}>
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="bg-pro-blue hover:bg-blue-700"
+                  disabled={submitReviewLoading || newRating === 0}
+                >
                   {submitReviewLoading
                     ? language === "fr"
                       ? "Envoi de l’avis..."
@@ -800,10 +978,12 @@ const WorkerDetail: React.FC = () => {
             </div>
           </div>
 
-          {/* Colonne droite : coordonnées + formulaire */}
+          {/* Colonne droite */}
           <div className="w-full lg:w-[360px] space-y-4">
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-3">{language === "fr" ? "Coordonnées directes" : "Direct contact"}</h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-3">
+                {language === "fr" ? "Coordonnées directes" : "Direct contact"}
+              </h2>
               <div className="space-y-2 text-xs">
                 {worker.phone && (
                   <Button variant="outline" size="sm" className="w-full justify-start" asChild>
@@ -833,63 +1013,114 @@ const WorkerDetail: React.FC = () => {
             </div>
 
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-1">{language === "fr" ? "Contacter cet ouvrier" : "Contact this worker"}</h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-1">
+                {language === "fr" ? "Contacter cet ouvrier" : "Contact this worker"}
+              </h2>
               <p className="text-xs text-slate-500 mb-3">
-                {language === "fr" ? "Remplissez le formulaire ci-dessous pour être recontacté." : "Fill in the form below to be contacted back."}
+                {language === "fr"
+                  ? "Remplissez le formulaire ci-dessous pour être recontacté."
+                  : "Fill in the form below to be contacted back."}
               </p>
 
-              {submitError && <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{submitError}</div>}
+              {submitError && (
+                <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                  {submitError}
+                </div>
+              )}
               {submitSuccess && (
-                <div className="mb-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">{submitSuccess}</div>
+                <div className="mb-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">
+                  {submitSuccess}
+                </div>
               )}
 
               <form onSubmit={handleSubmitContact} className="space-y-3 text-sm">
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Votre nom" : "Your name"}</label>
-                  <Input value={clientName} onChange={(e) => setClientName(e.target.value)} required />
-                </div>
-
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Votre téléphone" : "Your phone"}</label>
-                  <Input value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} required />
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr" ? "Votre nom" : "Your name"}
+                  </label>
+                  <Input
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    required
+                  />
                 </div>
 
                 <div>
                   <label className="text-xs text-slate-500 block mb-1">
-                    {language === "fr" ? "Votre email (facultatif)" : "Your email (optional)"}
+                    {language === "fr" ? "Votre téléphone" : "Your phone"}
                   </label>
-                  <Input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} />
+                  <Input
+                    value={clientPhone}
+                    onChange={(e) => setClientPhone(e.target.value)}
+                    required
+                  />
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Type de demande" : "Request type"}</label>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr"
+                      ? "Votre email (facultatif)"
+                      : "Your email (optional)"}
+                  </label>
+                  <Input
+                    type="email"
+                    value={clientEmail}
+                    onChange={(e) => setClientEmail(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr" ? "Type de demande" : "Request type"}
+                  </label>
                   <select
                     className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-pro-blue"
                     value={requestType}
                     onChange={(e) => setRequestType(e.target.value)}
                   >
-                    <option value="Demande de devis">{language === "fr" ? "Demande de devis" : "Quote request"}</option>
-                    <option value="Demande de rappel">{language === "fr" ? "Demande de rappel" : "Call back request"}</option>
+                    <option value="Demande de devis">
+                      {language === "fr" ? "Demande de devis" : "Quote request"}
+                    </option>
+                    <option value="Demande de rappel">
+                      {language === "fr"
+                        ? "Demande de rappel"
+                        : "Call back request"}
+                    </option>
                     <option value="Autre">{language === "fr" ? "Autre" : "Other"}</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="text-xs text-slate-500 block mb-1">
-                    {language === "fr" ? "Budget approximatif (facultatif)" : "Approx. budget (optional)"}
+                    {language === "fr"
+                      ? "Budget approximatif (facultatif)"
+                      : "Approx. budget (optional)"}
                   </label>
-                  <Input type="number" value={approxBudget} onChange={(e) => setApproxBudget(e.target.value)} placeholder="5000000" />
+                  <Input
+                    type="number"
+                    value={approxBudget}
+                    onChange={(e) => setApproxBudget(e.target.value)}
+                    placeholder="5000000"
+                  />
                 </div>
 
                 <div>
                   <label className="text-xs text-slate-500 block mb-1">
-                    {language === "fr" ? "Date souhaitée (facultatif)" : "Desired date (optional)"}
+                    {language === "fr"
+                      ? "Date souhaitée (facultatif)"
+                      : "Desired date (optional)"}
                   </label>
-                  <Input type="date" value={desiredDate} onChange={(e) => setDesiredDate(e.target.value)} />
+                  <Input
+                    type="date"
+                    value={desiredDate}
+                    onChange={(e) => setDesiredDate(e.target.value)}
+                  />
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Votre message" : "Your message"}</label>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr" ? "Votre message" : "Your message"}
+                  </label>
                   <Textarea
                     rows={4}
                     value={clientMessage}
@@ -918,7 +1149,11 @@ const WorkerDetail: React.FC = () => {
                   </label>
                 </div>
 
-                <Button type="submit" className="w-full bg-pro-blue hover:bg-blue-700" disabled={submitting}>
+                <Button
+                  type="submit"
+                  className="w-full bg-pro-blue hover:bg-blue-700"
+                  disabled={submitting}
+                >
                   {submitting
                     ? language === "fr"
                       ? "Envoi de la demande..."
@@ -930,7 +1165,9 @@ const WorkerDetail: React.FC = () => {
               </form>
 
               <p className="mt-3 text-[11px] text-slate-400">
-                {language === "fr" ? "Vos données sont uniquement transmises à ce professionnel." : "Your data is only shared with this professional."}
+                {language === "fr"
+                  ? "Vos données sont uniquement transmises à ce professionnel."
+                  : "Your data is only shared with this professional."}
               </p>
             </div>
           </div>
