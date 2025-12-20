@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import WorkerPhotosManager from "@/components/WorkerPhotosManager";
 import WorkerPortfolioManager from "@/components/WorkerPortfolioManager";
 import { useNavigate } from "react-router-dom";
+import { WorkerLocationEditor } from "@/components/worker/WorkerLocationEditor";
 
 type WorkerProfile = {
   id: string;
@@ -27,6 +28,11 @@ type WorkerProfile = {
   status: string | null;
   hourly_rate: number | null;
   currency: string | null;
+
+  // ✅ Ajout localisation
+  latitude: number | null;
+  longitude: number | null;
+
   created_at: string;
 };
 
@@ -55,19 +61,13 @@ const WorkerDashboard: React.FC = () => {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [editProfile, setEditProfile] = useState<WorkerProfile | null>(null);
-  const [profileUpdateError, setProfileUpdateError] = useState<string | null>(
-    null
-  );
-  const [profileUpdateSuccess, setProfileUpdateSuccess] = useState<
-    string | null
-  >(null);
+  const [profileUpdateError, setProfileUpdateError] = useState<string | null>(null);
+  const [profileUpdateSuccess, setProfileUpdateSuccess] = useState<string | null>(null);
 
   // Gestion abonnement
   const [updatingPlan, setUpdatingPlan] = useState(false);
   const [planUpdateError, setPlanUpdateError] = useState<string | null>(null);
-  const [planUpdateSuccess, setPlanUpdateSuccess] = useState<string | null>(
-    null
-  );
+  const [planUpdateSuccess, setPlanUpdateSuccess] = useState<string | null>(null);
 
   // Stats
   const [statsLoading, setStatsLoading] = useState(false);
@@ -122,6 +122,8 @@ const WorkerDashboard: React.FC = () => {
           status,
           hourly_rate,
           currency,
+          latitude,
+          longitude,
           created_at
         `
         )
@@ -195,14 +197,9 @@ const WorkerDashboard: React.FC = () => {
 
         const views = count ?? 0;
         const totalRequests = contacts.length;
-        const responded = contacts.filter(
-          (c) => c.status === "in_progress" || c.status === "done"
-        ).length;
+        const responded = contacts.filter((c) => c.status === "in_progress" || c.status === "done").length;
 
-        const rate =
-          totalRequests > 0
-            ? Math.round((responded / totalRequests) * 100)
-            : 0;
+        const rate = totalRequests > 0 ? Math.round((responded / totalRequests) * 100) : 0;
 
         setProfileViews(views);
         setRequestsCount(totalRequests);
@@ -210,9 +207,7 @@ const WorkerDashboard: React.FC = () => {
       } catch (e) {
         console.error("loadStats error", e);
         setStatsError(
-          language === "fr"
-            ? "Impossible de charger les statistiques."
-            : "Unable to load statistics."
+          language === "fr" ? "Impossible de charger les statistiques." : "Unable to load statistics."
         );
       } finally {
         setStatsLoading(false);
@@ -244,8 +239,7 @@ const WorkerDashboard: React.FC = () => {
   };
 
   const statusClass = (s: string | null | undefined) => {
-    if (s === "approved")
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (s === "approved") return "bg-emerald-50 text-emerald-700 border-emerald-200";
     if (s === "rejected") return "bg-red-50 text-red-700 border-red-200";
     return "bg-amber-50 text-amber-700 border-amber-200";
   };
@@ -262,10 +256,7 @@ const WorkerDashboard: React.FC = () => {
   };
 
   // Gestion édition profil
-  const handleEditField = <K extends keyof WorkerProfile>(
-    field: K,
-    value: WorkerProfile[K]
-  ) => {
+  const handleEditField = <K extends keyof WorkerProfile>(field: K, value: WorkerProfile[K]) => {
     setEditProfile((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
 
@@ -292,6 +283,8 @@ const WorkerDashboard: React.FC = () => {
     setProfileUpdateSuccess(null);
 
     try {
+      // ✅ NOTE: on ne met pas latitude/longitude ici,
+      // car la localisation est gérée par WorkerLocationEditor (plus sûr et plus clair).
       const payload = {
         first_name: editProfile.first_name,
         last_name: editProfile.last_name,
@@ -305,6 +298,7 @@ const WorkerDashboard: React.FC = () => {
         district: editProfile.district,
         hourly_rate: editProfile.hourly_rate,
         currency: editProfile.currency,
+        updated_at: new Date().toISOString(),
       };
 
       const { data: updated, error: updateError } = await supabase
@@ -330,6 +324,8 @@ const WorkerDashboard: React.FC = () => {
           status,
           hourly_rate,
           currency,
+          latitude,
+          longitude,
           created_at
         `
         )
@@ -338,18 +334,14 @@ const WorkerDashboard: React.FC = () => {
       if (updateError || !updated) {
         console.error(updateError);
         setProfileUpdateError(
-          language === "fr"
-            ? "Impossible d'enregistrer les modifications."
-            : "Unable to save your changes."
+          language === "fr" ? "Impossible d'enregistrer les modifications." : "Unable to save your changes."
         );
       } else {
         const newProfile = updated as WorkerProfile;
         setProfile(newProfile);
         setEditProfile(newProfile);
         setProfileUpdateSuccess(
-          language === "fr"
-            ? "Profil mis à jour avec succès."
-            : "Profile updated successfully."
+          language === "fr" ? "Profil mis à jour avec succès." : "Profile updated successfully."
         );
         setIsEditingProfile(false);
       }
@@ -376,7 +368,7 @@ const WorkerDashboard: React.FC = () => {
     try {
       const { data: updated, error: updateError } = await supabase
         .from("op_ouvriers")
-        .update({ plan_code: newPlan })
+        .update({ plan_code: newPlan, updated_at: new Date().toISOString() })
         .eq("id", profile.id)
         .select(
           `
@@ -397,6 +389,8 @@ const WorkerDashboard: React.FC = () => {
           status,
           hourly_rate,
           currency,
+          latitude,
+          longitude,
           created_at
         `
         )
@@ -405,17 +399,13 @@ const WorkerDashboard: React.FC = () => {
       if (updateError || !updated) {
         console.error(updateError);
         setPlanUpdateError(
-          language === "fr"
-            ? "Impossible de mettre à jour votre abonnement."
-            : "Unable to update your subscription."
+          language === "fr" ? "Impossible de mettre à jour votre abonnement." : "Unable to update your subscription."
         );
       } else {
         const newProfile = updated as WorkerProfile;
         setProfile(newProfile);
         setPlanUpdateSuccess(
-          language === "fr"
-            ? "Abonnement mis à jour avec succès."
-            : "Subscription updated successfully."
+          language === "fr" ? "Abonnement mis à jour avec succès." : "Subscription updated successfully."
         );
       }
     } catch (e) {
@@ -434,9 +424,7 @@ const WorkerDashboard: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-sm text-slate-500">
-          {language === "fr"
-            ? "Chargement de votre espace ouvrier..."
-            : "Loading your worker space..."}
+          {language === "fr" ? "Chargement de votre espace ouvrier..." : "Loading your worker space..."}
         </div>
       </div>
     );
@@ -447,10 +435,7 @@ const WorkerDashboard: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
         <div className="max-w-md bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
           <div className="text-sm text-red-600 mb-3">{error}</div>
-          <Button
-            onClick={() => (window.location.href = "/")}
-            className="bg-pro-blue hover:bg-blue-700"
-          >
+          <Button onClick={() => (window.location.href = "/")} className="bg-pro-blue hover:bg-blue-700">
             {language === "fr" ? "Retour à l'accueil" : "Return to home"}
           </Button>
         </div>
@@ -458,10 +443,7 @@ const WorkerDashboard: React.FC = () => {
     );
   }
 
-  const fullName =
-    (profile.first_name || "") +
-    (profile.last_name ? ` ${profile.last_name}` : "");
-
+  const fullName = (profile.first_name || "") + (profile.last_name ? ` ${profile.last_name}` : "");
   const displayProfile = isEditingProfile && editProfile ? editProfile : profile;
 
   return (
@@ -488,9 +470,7 @@ const WorkerDashboard: React.FC = () => {
               <div className="text-xs text-slate-500">{profile.email || ""}</div>
               <div className="mt-1 inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-50 text-slate-700 border-slate-200">
                 {language === "fr" ? "Plan" : "Plan"} :{" "}
-                <span className="font-semibold ml-1">
-                  {planLabel(profile.plan_code)}
-                </span>
+                <span className="font-semibold ml-1">{planLabel(profile.plan_code)}</span>
               </div>
             </div>
 
@@ -501,9 +481,7 @@ const WorkerDashboard: React.FC = () => {
               variant="outline"
               onClick={() => navigate("/espace-ouvrier/messages")}
             >
-              {language === "fr"
-                ? "Accéder à la messagerie"
-                : "Open messaging center"}
+              {language === "fr" ? "Accéder à la messagerie" : "Open messaging center"}
             </Button>
           </div>
         </div>
@@ -513,16 +491,8 @@ const WorkerDashboard: React.FC = () => {
           <nav className="-mb-px flex flex-wrap gap-2">
             {[
               { key: "profile" as TabKey, labelFr: "Profil", labelEn: "Profile" },
-              {
-                key: "subscription" as TabKey,
-                labelFr: "Abonnement",
-                labelEn: "Subscription",
-              },
-              {
-                key: "stats" as TabKey,
-                labelFr: "Statistiques",
-                labelEn: "Stats",
-              },
+              { key: "subscription" as TabKey, labelFr: "Abonnement", labelEn: "Subscription" },
+              { key: "stats" as TabKey, labelFr: "Statistiques", labelEn: "Stats" },
             ].map((tab) => {
               const isActive = activeTab === tab.key;
               return (
@@ -549,29 +519,14 @@ const WorkerDashboard: React.FC = () => {
           {activeTab === "profile" && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-slate-800">
-                  {language === "fr" ? "Mon profil" : "My profile"}
-                </h2>
+                <h2 className="text-sm font-semibold text-slate-800">{language === "fr" ? "Mon profil" : "My profile"}</h2>
                 {!isEditingProfile ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={startEditProfile}
-                  >
-                    {language === "fr"
-                      ? "Modifier mon profil"
-                      : "Edit my profile"}
+                  <Button type="button" variant="outline" size="sm" onClick={startEditProfile}>
+                    {language === "fr" ? "Modifier mon profil" : "Edit my profile"}
                   </Button>
                 ) : (
                   <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={cancelEditProfile}
-                      disabled={savingProfile}
-                    >
+                    <Button type="button" variant="outline" size="sm" onClick={cancelEditProfile} disabled={savingProfile}>
                       {language === "fr" ? "Annuler" : "Cancel"}
                     </Button>
                     <Button
@@ -609,71 +564,56 @@ const WorkerDashboard: React.FC = () => {
               {!isEditingProfile && (
                 <div className="grid md:grid-cols-2 gap-4 text-sm">
                   <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Nom complet" : "Full name"}
-                    </div>
-                    <div className="font-medium text-slate-900">
-                      {fullName || "—"}
-                    </div>
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Nom complet" : "Full name"}</div>
+                    <div className="font-medium text-slate-900">{fullName || "—"}</div>
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Métier principal" : "Main trade"}
-                    </div>
-                    <div className="font-medium text-slate-900">
-                      {profile.profession || "—"}
-                    </div>
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Métier principal" : "Main trade"}</div>
+                    <div className="font-medium text-slate-900">{profile.profession || "—"}</div>
                   </div>
                   <div>
                     <div className="text-xs text-slate-500">Email</div>
-                    <div className="font-medium text-slate-900">
-                      {profile.email || "—"}
-                    </div>
+                    <div className="font-medium text-slate-900">{profile.email || "—"}</div>
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Téléphone" : "Phone"}
-                    </div>
-                    <div className="font-medium text-slate-900">
-                      {profile.phone || "—"}
-                    </div>
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Téléphone" : "Phone"}</div>
+                    <div className="font-medium text-slate-900">{profile.phone || "—"}</div>
                   </div>
+
                   <div className="md:col-span-2">
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Localisation" : "Location"}
-                    </div>
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Localisation (texte)" : "Location (text)"}</div>
                     <div className="font-medium text-slate-900">
-                      {[
-                        profile.country,
-                        profile.region,
-                        profile.city,
-                        profile.commune,
-                        profile.district,
-                      ]
+                      {[profile.country, profile.region, profile.city, profile.commune, profile.district]
                         .filter(Boolean)
                         .join(" • ") || "—"}
                     </div>
                   </div>
+
                   <div className="md:col-span-2">
                     <div className="text-xs text-slate-500">
-                      {language === "fr"
-                        ? "Description de vos services"
-                        : "Services description"}
+                      {language === "fr" ? "Coordonnées GPS" : "GPS coordinates"}
                     </div>
-                    <div className="text-slate-800 whitespace-pre-line">
-                      {profile.description || "—"}
+                    <div className="font-medium text-slate-900">
+                      {profile.latitude != null && profile.longitude != null
+                        ? `${profile.latitude}, ${profile.longitude}`
+                        : "—"}
                     </div>
                   </div>
+
+                  <div className="md:col-span-2">
+                    <div className="text-xs text-slate-500">
+                      {language === "fr" ? "Description de vos services" : "Services description"}
+                    </div>
+                    <div className="text-slate-800 whitespace-pre-line">{profile.description || "—"}</div>
+                  </div>
+
                   {profile.hourly_rate != null && (
                     <div>
                       <div className="text-xs text-slate-500">
-                        {language === "fr"
-                          ? "Tarif horaire déclaré"
-                          : "Declared hourly rate"}
+                        {language === "fr" ? "Tarif horaire déclaré" : "Declared hourly rate"}
                       </div>
                       <div className="font-medium text-slate-900">
-                        {profile.hourly_rate.toLocaleString()}{" "}
-                        {profile.currency || ""}/h
+                        {profile.hourly_rate.toLocaleString()} {profile.currency || ""}/h
                       </div>
                     </div>
                   )}
@@ -683,165 +623,83 @@ const WorkerDashboard: React.FC = () => {
               {isEditingProfile && displayProfile && (
                 <div className="grid md:grid-cols-2 gap-4 text-sm">
                   <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Prénom" : "First name"}
-                    </div>
-                    <Input
-                      value={displayProfile.first_name ?? ""}
-                      onChange={(e) =>
-                        handleEditField("first_name", e.target.value)
-                      }
-                    />
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Prénom" : "First name"}</div>
+                    <Input value={displayProfile.first_name ?? ""} onChange={(e) => handleEditField("first_name", e.target.value)} />
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Nom" : "Last name"}
-                    </div>
-                    <Input
-                      value={displayProfile.last_name ?? ""}
-                      onChange={(e) =>
-                        handleEditField("last_name", e.target.value)
-                      }
-                    />
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Nom" : "Last name"}</div>
+                    <Input value={displayProfile.last_name ?? ""} onChange={(e) => handleEditField("last_name", e.target.value)} />
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Métier principal" : "Main trade"}
-                    </div>
-                    <Input
-                      value={displayProfile.profession ?? ""}
-                      onChange={(e) =>
-                        handleEditField("profession", e.target.value)
-                      }
-                    />
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Métier principal" : "Main trade"}</div>
+                    <Input value={displayProfile.profession ?? ""} onChange={(e) => handleEditField("profession", e.target.value)} />
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Téléphone" : "Phone"}
-                    </div>
-                    <Input
-                      value={displayProfile.phone ?? ""}
-                      onChange={(e) =>
-                        handleEditField("phone", e.target.value)
-                      }
-                    />
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Téléphone" : "Phone"}</div>
+                    <Input value={displayProfile.phone ?? ""} onChange={(e) => handleEditField("phone", e.target.value)} />
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Pays" : "Country"}
-                    </div>
-                    <Input
-                      value={displayProfile.country ?? ""}
-                      onChange={(e) =>
-                        handleEditField("country", e.target.value)
-                      }
-                    />
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Pays" : "Country"}</div>
+                    <Input value={displayProfile.country ?? ""} onChange={(e) => handleEditField("country", e.target.value)} />
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Région" : "Region"}
-                    </div>
-                    <Input
-                      value={displayProfile.region ?? ""}
-                      onChange={(e) =>
-                        handleEditField("region", e.target.value)
-                      }
-                    />
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Région" : "Region"}</div>
+                    <Input value={displayProfile.region ?? ""} onChange={(e) => handleEditField("region", e.target.value)} />
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Ville" : "City"}
-                    </div>
-                    <Input
-                      value={displayProfile.city ?? ""}
-                      onChange={(e) =>
-                        handleEditField("city", e.target.value)
-                      }
-                    />
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Ville" : "City"}</div>
+                    <Input value={displayProfile.city ?? ""} onChange={(e) => handleEditField("city", e.target.value)} />
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Commune" : "Commune"}
-                    </div>
-                    <Input
-                      value={displayProfile.commune ?? ""}
-                      onChange={(e) =>
-                        handleEditField("commune", e.target.value)
-                      }
-                    />
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Commune" : "Commune"}</div>
+                    <Input value={displayProfile.commune ?? ""} onChange={(e) => handleEditField("commune", e.target.value)} />
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Quartier" : "District"}
-                    </div>
-                    <Input
-                      value={displayProfile.district ?? ""}
-                      onChange={(e) =>
-                        handleEditField("district", e.target.value)
-                      }
-                    />
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Quartier" : "District"}</div>
+                    <Input value={displayProfile.district ?? ""} onChange={(e) => handleEditField("district", e.target.value)} />
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr"
-                        ? "Tarif horaire (GNF)"
-                        : "Hourly rate (GNF)"}
-                    </div>
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Tarif horaire (GNF)" : "Hourly rate (GNF)"}</div>
                     <Input
                       type="number"
-                      value={
-                        displayProfile.hourly_rate != null
-                          ? String(displayProfile.hourly_rate)
-                          : ""
-                      }
+                      value={displayProfile.hourly_rate != null ? String(displayProfile.hourly_rate) : ""}
                       onChange={(e) =>
-                        handleEditField(
-                          "hourly_rate",
-                          e.target.value ? Number(e.target.value) : (null as any)
-                        )
+                        handleEditField("hourly_rate", e.target.value ? Number(e.target.value) : (null as any))
                       }
                     />
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Devise" : "Currency"}
-                    </div>
-                    <Input
-                      value={displayProfile.currency ?? ""}
-                      onChange={(e) =>
-                        handleEditField("currency", e.target.value)
-                      }
-                    />
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Devise" : "Currency"}</div>
+                    <Input value={displayProfile.currency ?? ""} onChange={(e) => handleEditField("currency", e.target.value)} />
                   </div>
                   <div className="md:col-span-2">
                     <div className="text-xs text-slate-500">
-                      {language === "fr"
-                        ? "Description de vos services"
-                        : "Services description"}
+                      {language === "fr" ? "Description de vos services" : "Services description"}
                     </div>
-                    <Textarea
-                      rows={4}
-                      value={displayProfile.description ?? ""}
-                      onChange={(e) =>
-                        handleEditField("description", e.target.value)
-                      }
-                    />
+                    <Textarea rows={4} value={displayProfile.description ?? ""} onChange={(e) => handleEditField("description", e.target.value)} />
                   </div>
                 </div>
               )}
 
+              {/* ✅ Localisation GPS (géolocalisation + saisie manuelle) */}
+              <WorkerLocationEditor
+                workerId={profile.id}
+                initialLat={profile.latitude}
+                initialLng={profile.longitude}
+                language={language === "fr" ? "fr" : "en"}
+                onSaved={(lat, lng) => {
+                  setProfile((prev) => (prev ? { ...prev, latitude: lat, longitude: lng } : prev));
+                  setEditProfile((prev) => (prev ? { ...prev, latitude: lat, longitude: lng } : prev));
+                }}
+              />
+
               {/* Statut + date création */}
               <div className="mt-2 flex flex-wrap gap-2 items-center">
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusClass(
-                    profile.status
-                  )}`}
-                >
+                <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusClass(profile.status)}`}>
                   {statusLabel(profile.status)}
                 </span>
                 <span className="text-xs text-slate-400">
-                  {language === "fr" ? "Créé le" : "Created at"}{" "}
-                  {formatDate(profile.created_at)}
+                  {language === "fr" ? "Créé le" : "Created at"} {formatDate(profile.created_at)}
                 </span>
               </div>
 
@@ -873,13 +731,9 @@ const WorkerDashboard: React.FC = () => {
 
               <div className="text-sm">
                 <div className="mb-2">
-                  <span className="text-xs text-slate-500">
-                    {language === "fr" ? "Plan actuel" : "Current plan"}
-                  </span>
+                  <span className="text-xs text-slate-500">{language === "fr" ? "Plan actuel" : "Current plan"}</span>
                   <div className="mt-1 inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-200 text-sm">
-                    <span className="font-semibold mr-2">
-                      {planLabel(profile.plan_code)}
-                    </span>
+                    <span className="font-semibold mr-2">{planLabel(profile.plan_code)}</span>
                     <span className="text-xs text-slate-500">
                       {profile.plan_code === "FREE"
                         ? language === "fr"
@@ -895,13 +749,10 @@ const WorkerDashboard: React.FC = () => {
                 {profile.hourly_rate != null && (
                   <div className="mt-3">
                     <div className="text-xs text-slate-500">
-                      {language === "fr"
-                        ? "Tarif horaire déclaré"
-                        : "Declared hourly rate"}
+                      {language === "fr" ? "Tarif horaire déclaré" : "Declared hourly rate"}
                     </div>
                     <div className="font-medium text-slate-900">
-                      {profile.hourly_rate.toLocaleString()}{" "}
-                      {profile.currency || ""}/h
+                      {profile.hourly_rate.toLocaleString()} {profile.currency || ""}/h
                     </div>
                   </div>
                 )}
@@ -909,20 +760,8 @@ const WorkerDashboard: React.FC = () => {
                 {/* Actions changement de plan */}
                 <div className="pt-3 border-t border-slate-100 mt-3 flex flex-wrap gap-2">
                   {profile.plan_code !== "FREE" && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={updatingPlan}
-                      onClick={() => updatePlan("FREE")}
-                    >
-                      {updatingPlan && profile.plan_code === "FREE"
-                        ? language === "fr"
-                          ? "Mise à jour..."
-                          : "Updating..."
-                        : language === "fr"
-                        ? "Revenir au plan Gratuit"
-                        : "Switch to Free"}
+                    <Button type="button" variant="outline" size="sm" disabled={updatingPlan} onClick={() => updatePlan("FREE")}>
+                      {language === "fr" ? "Revenir au plan Gratuit" : "Switch to Free"}
                     </Button>
                   )}
 
@@ -934,13 +773,7 @@ const WorkerDashboard: React.FC = () => {
                       className="bg-pro-blue hover:bg-blue-700"
                       onClick={() => updatePlan("MONTHLY")}
                     >
-                      {updatingPlan && profile.plan_code === "MONTHLY"
-                        ? language === "fr"
-                          ? "Mise à jour..."
-                          : "Updating..."
-                        : language === "fr"
-                        ? "Passer au plan Mensuel"
-                        : "Switch to Monthly"}
+                      {language === "fr" ? "Passer au plan Mensuel" : "Switch to Monthly"}
                     </Button>
                   )}
 
@@ -952,13 +785,7 @@ const WorkerDashboard: React.FC = () => {
                       className="bg-amber-500 hover:bg-amber-600"
                       onClick={() => updatePlan("YEARLY")}
                     >
-                      {updatingPlan && profile.plan_code === "YEARLY"
-                        ? language === "fr"
-                          ? "Mise à jour..."
-                          : "Updating..."
-                        : language === "fr"
-                        ? "Passer au plan Annuel"
-                        : "Switch to Yearly"}
+                      {language === "fr" ? "Passer au plan Annuel" : "Switch to Yearly"}
                     </Button>
                   )}
                 </div>
@@ -976,9 +803,7 @@ const WorkerDashboard: React.FC = () => {
           {activeTab === "stats" && (
             <div className="space-y-4">
               <h2 className="text-sm font-semibold text-slate-800 mb-2">
-                {language === "fr"
-                  ? "Statistiques personnelles"
-                  : "Personal stats"}
+                {language === "fr" ? "Statistiques personnelles" : "Personal stats"}
               </h2>
 
               {statsError && (
@@ -994,41 +819,20 @@ const WorkerDashboard: React.FC = () => {
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                {/* Vues du profil */}
                 <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                  <div className="text-xs text-slate-500">
-                    {language === "fr" ? "Vues du profil" : "Profile views"}
-                  </div>
-                  <div className="text-2xl font-bold text-slate-900 mt-1">
-                    {statsLoading ? "…" : profileViews}
-                  </div>
+                  <div className="text-xs text-slate-500">{language === "fr" ? "Vues du profil" : "Profile views"}</div>
+                  <div className="text-2xl font-bold text-slate-900 mt-1">{statsLoading ? "…" : profileViews}</div>
                 </div>
 
-                {/* Demandes reçues */}
                 <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                  <div className="text-xs text-slate-500">
-                    {language === "fr"
-                      ? "Demandes reçues"
-                      : "Requests received"}
-                  </div>
-                  <div className="text-2xl font-bold text-slate-900 mt-1">
-                    {statsLoading ? "…" : requestsCount}
-                  </div>
+                  <div className="text-xs text-slate-500">{language === "fr" ? "Demandes reçues" : "Requests received"}</div>
+                  <div className="text-2xl font-bold text-slate-900 mt-1">{statsLoading ? "…" : requestsCount}</div>
                 </div>
 
-                {/* Taux de réponse */}
                 <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                  <div className="text-xs text-slate-500">
-                    {language === "fr"
-                      ? "Taux de réponse"
-                      : "Response rate"}
-                  </div>
+                  <div className="text-xs text-slate-500">{language === "fr" ? "Taux de réponse" : "Response rate"}</div>
                   <div className="text-2xl font-bold text-slate-900 mt-1">
-                    {statsLoading
-                      ? "…"
-                      : requestsCount > 0
-                      ? `${responseRate}%`
-                      : "—"}
+                    {statsLoading ? "…" : requestsCount > 0 ? `${responseRate}%` : "—"}
                   </div>
                   {requestsCount > 0 && !statsLoading && (
                     <div className="text-[11px] text-slate-500 mt-1">
