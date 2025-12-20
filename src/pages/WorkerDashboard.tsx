@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import WorkerPhotosManager from "@/components/WorkerPhotosManager";
 import WorkerPortfolioManager from "@/components/WorkerPortfolioManager";
 import { useNavigate } from "react-router-dom";
-import { WorkerLocationEditor } from "@/components/worker/WorkerLocationEditor";
+import { WorkerLocationEditor } from "@/components/workers/WorkerLocationEditor";
 
 type WorkerProfile = {
   id: string;
