@@ -24,6 +24,10 @@ type WorkerProfile = {
   description: string | null;
   hourly_rate: number | null;
   currency: string | null;
+
+  // ✅ Déjà présents dans votre table
+  latitude: number | null;
+  longitude: number | null;
 };
 
 type Review = {
@@ -101,20 +105,17 @@ const WorkerDetail: React.FC = () => {
       notUseful: language === "fr" ? "Pas utile" : "Not useful",
       mustLogin: language === "fr" ? "Connectez-vous pour réagir." : "Log in to react.",
       voteError:
-        language === "fr"
-          ? "Impossible d’enregistrer votre réaction."
-          : "Unable to save your reaction.",
+        language === "fr" ? "Impossible d’enregistrer votre réaction." : "Unable to save your reaction.",
     };
   }, [language]);
 
-  // ✅ Traductions carte
   const tMap = useMemo(() => {
     return {
       title: language === "fr" ? "Localisation" : "Location",
       subtitle:
         language === "fr"
-          ? "Voir la zone d’intervention de cet ouvrier sur Google Maps."
-          : "View this worker’s area on Google Maps.",
+          ? "Localisation approximative / zone d’intervention."
+          : "Approximate location / service area.",
       open: language === "fr" ? "Ouvrir dans Google Maps" : "Open in Google Maps",
       missing: language === "fr" ? "Localisation non renseignée." : "Location not provided.",
     };
@@ -173,7 +174,9 @@ const WorkerDetail: React.FC = () => {
           profession,
           description,
           hourly_rate,
-          currency
+          currency,
+          latitude,
+          longitude
         `
         )
         .eq("id", workerId)
@@ -264,23 +267,35 @@ const WorkerDetail: React.FC = () => {
     .filter(Boolean)
     .join(" • ");
 
-  // ✅ Query text pour Google Maps (plus précis : on garde des virgules)
+  // ✅ Localisation adresse (fallback si pas de lat/lng)
   const locationQuery = useMemo(() => {
     const parts = [worker?.district, worker?.commune, worker?.city, worker?.region, worker?.country].filter(Boolean);
     return parts.join(", ");
   }, [worker?.district, worker?.commune, worker?.city, worker?.region, worker?.country]);
 
-  // ✅ URL Google Maps (lien externe)
-  const googleMapsUrl = useMemo(() => {
-    if (!locationQuery) return "";
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationQuery)}`;
-  }, [locationQuery]);
+  // ✅ Utiliser lat/lng si disponibles
+  const hasCoords = Number.isFinite(worker?.latitude as any) && Number.isFinite(worker?.longitude as any);
 
-  // ✅ URL Google Maps Embed (carte interactive)
+  const googleMapsUrl = useMemo(() => {
+    if (hasCoords && worker?.latitude != null && worker?.longitude != null) {
+      // pin exact
+      return `https://www.google.com/maps?q=${worker.latitude},${worker.longitude}`;
+    }
+    if (locationQuery) {
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationQuery)}`;
+    }
+    return "";
+  }, [hasCoords, worker?.latitude, worker?.longitude, locationQuery]);
+
   const googleMapsEmbedUrl = useMemo(() => {
-    if (!locationQuery) return "";
-    return `https://www.google.com/maps?q=${encodeURIComponent(locationQuery)}&output=embed`;
-  }, [locationQuery]);
+    if (hasCoords && worker?.latitude != null && worker?.longitude != null) {
+      return `https://www.google.com/maps?q=${worker.latitude},${worker.longitude}&output=embed`;
+    }
+    if (locationQuery) {
+      return `https://www.google.com/maps?q=${encodeURIComponent(locationQuery)}&output=embed`;
+    }
+    return "";
+  }, [hasCoords, worker?.latitude, worker?.longitude, locationQuery]);
 
   const whatsappUrl = worker?.phone
     ? (() => {
@@ -306,11 +321,9 @@ const WorkerDetail: React.FC = () => {
       return;
     }
 
-    // init counts
     const initCounts: Record<string, { like: number; useful: number; not_useful: number }> = {};
     for (const id of reviewIds) initCounts[id] = { like: 0, useful: 0, not_useful: 0 };
 
-    // 1 requête : tous les votes pour calculer les compteurs
     const { data: allVotes, error: votesError } = await supabase
       .from("op_review_votes")
       .select("review_id, voter_user_id, vote_type")
@@ -335,7 +348,6 @@ const WorkerDetail: React.FC = () => {
       }
     }
 
-    // s’assurer que tous les ids existent dans myVotesMap
     for (const id of reviewIds) if (!(id in myVotesMap)) myVotesMap[id] = null;
 
     setCountsByReviewId(initCounts);
@@ -359,7 +371,6 @@ const WorkerDetail: React.FC = () => {
     setVoteError(null);
     const current = myVoteByReviewId[reviewId] ?? null;
 
-    // Même vote => delete
     if (current === voteType) {
       const { error } = await supabase
         .from("op_review_votes")
@@ -376,17 +387,12 @@ const WorkerDetail: React.FC = () => {
       setMyVoteByReviewId((prev) => ({ ...prev, [reviewId]: null }));
       setCountsByReviewId((prev) => {
         const base = prev[reviewId] ?? { like: 0, useful: 0, not_useful: 0 };
-        return {
-          ...prev,
-          [reviewId]: { ...base, [voteType]: Math.max(0, base[voteType] - 1) },
-        };
+        return { ...prev, [reviewId]: { ...base, [voteType]: Math.max(0, base[voteType] - 1) } };
       });
       return;
     }
 
-    // Autre/none => upsert (grâce à UNIQUE review_id + voter_user_id)
     const payload = { review_id: reviewId, voter_user_id: authUserId, vote_type: voteType };
-
     const { error: upsertError } = await supabase.from("op_review_votes").upsert(payload, {
       onConflict: "review_id,voter_user_id",
     });
@@ -397,7 +403,6 @@ const WorkerDetail: React.FC = () => {
       return;
     }
 
-    // Optimistic UI
     setMyVoteByReviewId((prev) => ({ ...prev, [reviewId]: voteType }));
     setCountsByReviewId((prev) => {
       const base = prev[reviewId] ?? { like: 0, useful: 0, not_useful: 0 };
@@ -440,7 +445,6 @@ const WorkerDetail: React.FC = () => {
         );
       }
 
-      // Récupérer ou créer le profil client
       let clientProfileId: string | null = null;
 
       const { data: existingClient, error: selectClientError } = await supabase
@@ -451,7 +455,9 @@ const WorkerDetail: React.FC = () => {
 
       if (selectClientError && selectClientError.code !== "PGRST116") {
         console.error("select client error", selectClientError);
-        throw new Error(language === "fr" ? "Impossible de récupérer votre profil client." : "Unable to fetch your client profile.");
+        throw new Error(
+          language === "fr" ? "Impossible de récupérer votre profil client." : "Unable to fetch your client profile."
+        );
       }
 
       if (existingClient) {
@@ -471,14 +477,18 @@ const WorkerDetail: React.FC = () => {
 
         if (insertClientError || !newClient) {
           console.error("insert client error", insertClientError);
-          throw new Error(language === "fr" ? "Impossible de créer votre profil client." : "Unable to create your client profile.");
+          throw new Error(
+            language === "fr" ? "Impossible de créer votre profil client." : "Unable to create your client profile."
+          );
         }
 
         clientProfileId = newClient.id;
       }
 
       if (!clientProfileId) {
-        throw new Error(language === "fr" ? "Profil client introuvable. Veuillez réessayer." : "Client profile not found. Please try again.");
+        throw new Error(
+          language === "fr" ? "Profil client introuvable. Veuillez réessayer." : "Client profile not found. Please try again."
+        );
       }
 
       const detailedMessageLines: string[] = [];
@@ -511,7 +521,9 @@ const WorkerDetail: React.FC = () => {
 
       if (contactError) {
         console.error("insert contact error", contactError);
-        throw new Error(language === "fr" ? "Une erreur est survenue lors de l'envoi de votre demande." : "An error occurred while sending your request.");
+        throw new Error(
+          language === "fr" ? "Une erreur est survenue lors de l'envoi de votre demande." : "An error occurred while sending your request."
+        );
       }
 
       setSubmitSuccess(language === "fr" ? "Votre demande a été envoyée à cet ouvrier." : "Your request has been sent to this worker.");
@@ -598,15 +610,18 @@ const WorkerDetail: React.FC = () => {
     );
   }
 
+  const hasAnyLocation = Boolean(locationQuery) || hasCoords;
+
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="max-w-6xl mx-auto px-4">
+        {/* ✅ bouton retour (ne dépend pas d'App.tsx) */}
         <button
           type="button"
-          onClick={() => window.history.back()}
+          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/search"))}
           className="mb-4 inline-flex items-center text-xs text-slate-500 hover:text-slate-700"
         >
-          ← {language === "fr" ? "Retour aux résultats" : "Back to search results"}
+          ← {language === "fr" ? "Retour" : "Back"}
         </button>
 
         <div className="flex flex-col lg:flex-row gap-6">
@@ -646,14 +661,10 @@ const WorkerDetail: React.FC = () => {
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                     <div className="inline-flex items-center gap-1 text-amber-500">
                       <Star className="w-4 h-4 fill-amber-400" />
-                      <span className="text-sm font-semibold">
-                        {averageRating > 0 ? averageRating.toFixed(1) : "—"}
-                      </span>
+                      <span className="text-sm font-semibold">{averageRating > 0 ? averageRating.toFixed(1) : "—"}</span>
                     </div>
                     <div className="text-[11px] text-slate-500">{language === "fr" ? "avis" : "reviews"}</div>
-                    <div className="text-[11px] text-slate-400">
-                      {reviews.length} {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
-                    </div>
+                    <div className="text-[11px] text-slate-400">{reviews.length} {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}</div>
                   </div>
 
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
@@ -665,9 +676,7 @@ const WorkerDetail: React.FC = () => {
 
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                     <div className="text-sm font-semibold text-slate-900">
-                      {worker.hourly_rate != null
-                        ? `${worker.hourly_rate.toLocaleString()} ${worker.currency || "GNF"}`
-                        : "—"}
+                      {worker.hourly_rate != null ? `${worker.hourly_rate.toLocaleString()} ${worker.currency || "GNF"}` : "—"}
                     </div>
                     <div className="text-[11px] text-slate-500">{language === "fr" ? "par heure" : "per hour"}</div>
                   </div>
@@ -675,12 +684,12 @@ const WorkerDetail: React.FC = () => {
               </div>
             </div>
 
-            {/* ✅ Localisation / Google Maps */}
+            {/* ✅ Google Maps (lat/lng > adresse) */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-1">{tMap.title}</h2>
               <p className="text-xs text-slate-500 mb-3">{tMap.subtitle}</p>
 
-              {!locationQuery ? (
+              {!hasAnyLocation ? (
                 <div className="text-xs text-slate-500">{tMap.missing}</div>
               ) : (
                 <>
@@ -691,8 +700,15 @@ const WorkerDetail: React.FC = () => {
                         {tMap.open}
                       </a>
                     </Button>
-                    <div className="text-xs text-slate-500 truncate">
-                      <span className="font-medium text-slate-700">{locationQuery}</span>
+
+                    <div className="text-xs text-slate-500">
+                      {hasCoords && worker.latitude != null && worker.longitude != null ? (
+                        <span className="font-medium text-slate-700">
+                          {worker.latitude.toFixed(6)}, {worker.longitude.toFixed(6)}
+                        </span>
+                      ) : (
+                        <span className="font-medium text-slate-700">{locationQuery}</span>
+                      )}
                     </div>
                   </div>
 
@@ -711,9 +727,7 @@ const WorkerDetail: React.FC = () => {
 
             {/* À propos */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-2">
-                {language === "fr" ? "À propos" : "About"}
-              </h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-2">{language === "fr" ? "À propos" : "About"}</h2>
               <p className="text-sm text-slate-700 whitespace-pre-line">
                 {worker.description ||
                   (language === "fr" ? "Aucune description fournie pour le moment." : "No description provided yet.")}
@@ -722,9 +736,7 @@ const WorkerDetail: React.FC = () => {
 
             {/* Galerie photos */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-1">
-                {language === "fr" ? "Galerie photos" : "Photo gallery"}
-              </h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-1">{language === "fr" ? "Galerie photos" : "Photo gallery"}</h2>
               <p className="text-xs text-slate-500 mb-2">
                 {language === "fr" ? "Découvrez quelques réalisations de cet ouvrier." : "Discover some works from this worker."}
               </p>
@@ -754,10 +766,7 @@ const WorkerDetail: React.FC = () => {
 
                 {!photosLoading &&
                   photos.map((p) => (
-                    <div
-                      key={p.id}
-                      className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-100"
-                    >
+                    <div key={p.id} className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
                       {p.public_url && <img src={p.public_url} alt={p.title || ""} className="w-full h-full object-cover" />}
                     </div>
                   ))}
@@ -771,9 +780,7 @@ const WorkerDetail: React.FC = () => {
               </h2>
 
               {reviewsError && (
-                <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
-                  {reviewsError}
-                </div>
+                <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{reviewsError}</div>
               )}
 
               <div className="flex items-center gap-2 mb-3 text-sm">
@@ -787,22 +794,16 @@ const WorkerDetail: React.FC = () => {
               </div>
 
               {voteError && (
-                <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
-                  {voteError}
-                </div>
+                <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{voteError}</div>
               )}
 
               <div className="space-y-3 mb-4">
                 {reviewsLoading && (
-                  <div className="text-xs text-slate-500">
-                    {language === "fr" ? "Chargement des avis..." : "Loading reviews..."}
-                  </div>
+                  <div className="text-xs text-slate-500">{language === "fr" ? "Chargement des avis..." : "Loading reviews..."}</div>
                 )}
 
                 {!reviewsLoading && reviews.length === 0 && (
-                  <div className="text-xs text-slate-500">
-                    {language === "fr" ? "Aucun avis pour le moment." : "No review yet."}
-                  </div>
+                  <div className="text-xs text-slate-500">{language === "fr" ? "Aucun avis pour le moment." : "No review yet."}</div>
                 )}
 
                 {!reviewsLoading &&
@@ -823,9 +824,7 @@ const WorkerDetail: React.FC = () => {
                           {Array.from({ length: 5 }).map((_, i) => (
                             <Star
                               key={i}
-                              className={`w-3 h-3 ${
-                                (r.rating || 0) > i ? "text-amber-500 fill-amber-400" : "text-slate-200"
-                              }`}
+                              className={`w-3 h-3 ${(r.rating || 0) > i ? "text-amber-500 fill-amber-400" : "text-slate-200"}`}
                             />
                           ))}
                         </div>
@@ -879,11 +878,7 @@ const WorkerDetail: React.FC = () => {
                 <div className="flex items-center gap-1 mb-2">
                   {Array.from({ length: 5 }).map((_, i) => (
                     <button key={i} type="button" onClick={() => setNewRating(i + 1)} className="focus:outline-none">
-                      <Star
-                        className={`w-4 h-4 ${
-                          newRating > i ? "text-amber-500 fill-amber-400" : "text-slate-200"
-                        }`}
-                      />
+                      <Star className={`w-4 h-4 ${newRating > i ? "text-amber-500 fill-amber-400" : "text-slate-200"}`} />
                     </button>
                   ))}
                 </div>
@@ -898,12 +893,8 @@ const WorkerDetail: React.FC = () => {
 
                 <Button type="submit" size="sm" className="bg-pro-blue hover:bg-blue-700" disabled={submitReviewLoading || newRating === 0}>
                   {submitReviewLoading
-                    ? language === "fr"
-                      ? "Envoi de l’avis..."
-                      : "Sending review..."
-                    : language === "fr"
-                    ? "Envoyer l’avis"
-                    : "Submit review"}
+                    ? language === "fr" ? "Envoi de l’avis..." : "Sending review..."
+                    : language === "fr" ? "Envoyer l’avis" : "Submit review"}
                 </Button>
               </form>
             </div>
@@ -943,6 +934,7 @@ const WorkerDetail: React.FC = () => {
               </div>
             </div>
 
+            {/* Formulaire contact (inchangé) */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-1">
                 {language === "fr" ? "Contacter cet ouvrier" : "Contact this worker"}
@@ -952,14 +944,10 @@ const WorkerDetail: React.FC = () => {
               </p>
 
               {submitError && (
-                <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
-                  {submitError}
-                </div>
+                <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{submitError}</div>
               )}
               {submitSuccess && (
-                <div className="mb-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">
-                  {submitSuccess}
-                </div>
+                <div className="mb-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">{submitSuccess}</div>
               )}
 
               <form onSubmit={handleSubmitContact} className="space-y-3 text-sm">
@@ -1037,17 +1025,15 @@ const WorkerDetail: React.FC = () => {
 
                 <Button type="submit" className="w-full bg-pro-blue hover:bg-blue-700" disabled={submitting}>
                   {submitting
-                    ? language === "fr"
-                      ? "Envoi de la demande..."
-                      : "Sending request..."
-                    : language === "fr"
-                    ? "Envoyer la demande"
-                    : "Send request"}
+                    ? language === "fr" ? "Envoi de la demande..." : "Sending request..."
+                    : language === "fr" ? "Envoyer la demande" : "Send request"}
                 </Button>
               </form>
 
               <p className="mt-3 text-[11px] text-slate-400">
-                {language === "fr" ? "Vos données sont uniquement transmises à ce professionnel." : "Your data is only shared with this professional."}
+                {language === "fr"
+                  ? "Vos données sont uniquement transmises à ce professionnel."
+                  : "Your data is only shared with this professional."}
               </p>
             </div>
           </div>
