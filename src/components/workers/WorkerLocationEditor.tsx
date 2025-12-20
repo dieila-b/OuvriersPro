@@ -3,14 +3,14 @@ import React, { useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MapPin, LocateFixed, Save, AlertTriangle, ExternalLink } from "lucide-react";
+import { MapPin, LocateFixed, Save, AlertTriangle } from "lucide-react";
 
 type Props = {
-  workerId: string; // op_ouvriers.id
+  workerId: string;                 // op_ouvriers.id
   initialLat?: number | null;
   initialLng?: number | null;
   language?: "fr" | "en";
-  onSaved?: (lat: number | null, lng: number | null) => void;
+  onSaved?: (lat: number | null, lng: number | null) => void; // optionnel (pour rafraîchir UI)
 };
 
 export const WorkerLocationEditor: React.FC<Props> = ({
@@ -50,27 +50,30 @@ export const WorkerLocationEditor: React.FC<Props> = ({
         language === "fr"
           ? "Autorisation refusée. Activez la localisation dans votre navigateur."
           : "Permission denied. Enable location access in your browser.",
-      geoError: language === "fr" ? "Impossible d’obtenir la position." : "Unable to get position.",
+      geoError:
+        language === "fr"
+          ? "Impossible d’obtenir la position."
+          : "Unable to get position.",
       invalid:
         language === "fr"
           ? "Coordonnées invalides (latitude -90..90, longitude -180..180)."
           : "Invalid coordinates (lat -90..90, lng -180..180).",
-      saveError: language === "fr" ? "Erreur lors de l’enregistrement." : "Error while saving.",
+      saveError:
+        language === "fr"
+          ? "Erreur lors de l’enregistrement."
+          : "Error while saving.",
       openInMaps: language === "fr" ? "Ouvrir dans Google Maps" : "Open in Google Maps",
-      locating: language === "fr" ? "Localisation..." : "Locating...",
-      hint: language === "fr" ? "Renseignez les coordonnées pour activer la carte." : "Fill coordinates to enable map.",
     };
   }, [language]);
 
   const parsed = useMemo(() => {
-    const latN = lat.trim() === "" ? null : Number(String(lat).replace(",", "."));
-    const lngN = lng.trim() === "" ? null : Number(String(lng).replace(",", "."));
+    const latN = lat.trim() === "" ? null : Number(lat);
+    const lngN = lng.trim() === "" ? null : Number(lng);
 
     const latOk = latN == null || (Number.isFinite(latN) && latN >= -90 && latN <= 90);
     const lngOk = lngN == null || (Number.isFinite(lngN) && lngN >= -180 && lngN <= 180);
 
-    const valid = latOk && lngOk && latN != null && lngN != null;
-    return { latN, lngN, latOk, lngOk, valid };
+    return { latN, lngN, latOk, lngOk, valid: latOk && lngOk && !(latN == null) && !(lngN == null) };
   }, [lat, lng]);
 
   const mapsUrl = useMemo(() => {
@@ -101,7 +104,7 @@ export const WorkerLocationEditor: React.FC<Props> = ({
       },
       (err) => {
         console.error("geolocation error", err);
-        if ((err as any)?.code === 1) setError(t.geoDenied);
+        if (err?.code === 1) setError(t.geoDenied);
         else setError(t.geoError);
         setGeoLoading(false);
       },
@@ -120,7 +123,7 @@ export const WorkerLocationEditor: React.FC<Props> = ({
     const latN = parsed.latN;
     const lngN = parsed.lngN;
 
-    if (!parsed.valid || latN == null || lngN == null) {
+    if (!parsed.latOk || !parsed.lngOk || latN == null || lngN == null) {
       setError(t.invalid);
       return;
     }
@@ -170,7 +173,7 @@ export const WorkerLocationEditor: React.FC<Props> = ({
           disabled={geoLoading}
         >
           <LocateFixed className="w-4 h-4 mr-2" />
-          {geoLoading ? t.locating : t.useMyPos}
+          {geoLoading ? (language === "fr" ? "Localisation..." : "Locating...") : t.useMyPos}
         </Button>
       </div>
 
@@ -219,14 +222,20 @@ export const WorkerLocationEditor: React.FC<Props> = ({
             target="_blank"
             rel="noopener noreferrer"
           >
-            <ExternalLink className="w-3.5 h-3.5" />
             {t.openInMaps}
           </a>
         ) : (
-          <span className="text-[11px] text-slate-400">{t.hint}</span>
+          <span className="text-[11px] text-slate-400">
+            {language === "fr" ? "Renseignez les coordonnées pour activer la carte." : "Fill coordinates to enable map."}
+          </span>
         )}
 
-        <Button type="button" onClick={handleSave} className="rounded-full px-4" disabled={saving}>
+        <Button
+          type="button"
+          onClick={handleSave}
+          className="rounded-full px-4"
+          disabled={saving}
+        >
           <Save className="w-4 h-4 mr-2" />
           {saving ? t.saving : t.save}
         </Button>
@@ -234,6 +243,3 @@ export const WorkerLocationEditor: React.FC<Props> = ({
     </div>
   );
 };
-
-// ✅ Ajout pour compatibilité si un fichier l'importe en default
-export default WorkerLocationEditor;
