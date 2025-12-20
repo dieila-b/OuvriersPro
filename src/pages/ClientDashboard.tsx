@@ -16,6 +16,7 @@ import {
   Star,
   Send,
   Info,
+  ArrowLeft,
 } from "lucide-react";
 
 type ClientInfo = {
@@ -171,9 +172,7 @@ const ClientDashboard: React.FC = () => {
         console.error("ClientDashboard loadReviews error", e);
         setReviewsError(
           e?.message ||
-            (language === "fr"
-              ? "Impossible de charger vos avis."
-              : "Unable to load your reviews.")
+            (language === "fr" ? "Impossible de charger vos avis." : "Unable to load your reviews.")
         );
       } finally {
         setReviewsLoading(false);
@@ -189,6 +188,17 @@ const ClientDashboard: React.FC = () => {
     } catch (err) {
       console.error("Erreur de déconnexion:", err);
     } finally {
+      navigate("/", { replace: true });
+    }
+  };
+
+  // ✅ Bouton retour (en haut à gauche)
+  const handleBack = () => {
+    // Si un historique existe, on revient en arrière.
+    // Sinon, on renvoie vers l’accueil.
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      navigate(-1);
+    } else {
       navigate("/", { replace: true });
     }
   };
@@ -226,6 +236,7 @@ const ClientDashboard: React.FC = () => {
     seeMyFavorites: language === "fr" ? "Voir mes favoris" : "View my favourites",
     connectedLabel: language === "fr" ? "Connecté en tant que" : "Logged in as",
     logout: language === "fr" ? "Se déconnecter" : "Sign out",
+    backTopLeft: language === "fr" ? "Retour" : "Back",
 
     // ✅ Avis
     reviewsTitle: language === "fr" ? "Avis reçus" : "Reviews received",
@@ -239,8 +250,7 @@ const ClientDashboard: React.FC = () => {
     sendReply: language === "fr" ? "Envoyer" : "Send",
     published: language === "fr" ? "Publié" : "Published",
     private: language === "fr" ? "Non publié" : "Not published",
-    loadReviewsError:
-      language === "fr" ? "Impossible de charger vos avis." : "Unable to load your reviews.",
+    loadReviewsError: language === "fr" ? "Impossible de charger vos avis." : "Unable to load your reviews.",
   };
 
   const displayName =
@@ -303,8 +313,8 @@ const ClientDashboard: React.FC = () => {
     try {
       const payload = {
         review_id: replyOpenFor,
-        client_id: clientDb.id,          // ✅ op_clients.id
-        content: replyText.trim(),       // ✅ content (PAS message)
+        client_id: clientDb.id, // ✅ op_clients.id
+        content: replyText.trim(), // ✅ content (PAS message)
       };
 
       const { data, error } = await supabase
@@ -340,19 +350,34 @@ const ClientDashboard: React.FC = () => {
         {/* En-tête / Hero */}
         <header className="mb-8 rounded-3xl bg-white/90 border border-slate-100 shadow-sm px-5 py-5 md:px-8 md:py-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700 border border-emerald-100 mb-3">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              {loadingUser ? (
-                language === "fr" ? "Connexion en cours..." : "Checking session..."
-              ) : (
-                <>
-                  {t.connectedLabel} <span className="font-semibold">{displayName}</span>
-                  <span className="opacity-70">
-                    {language === "fr" ? "(client / particulier)" : "(client / individual)"}
-                  </span>
-                </>
-              )}
+            {/* ✅ Ligne top-left: bouton retour + badge */}
+            <div className="flex items-center gap-3 mb-3">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleBack}
+                className="rounded-full text-xs text-slate-600 hover:text-slate-900"
+              >
+                <ArrowLeft className="w-4 h-4 mr-1" />
+                {t.backTopLeft}
+              </Button>
+
+              <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700 border border-emerald-100">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                {loadingUser ? (
+                  language === "fr" ? "Connexion en cours..." : "Checking session..."
+                ) : (
+                  <>
+                    {t.connectedLabel} <span className="font-semibold">{displayName}</span>
+                    <span className="opacity-70">
+                      {language === "fr" ? "(client / particulier)" : "(client / individual)"}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
+
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-1">{t.title}</h1>
             <p className="text-sm md:text-base text-slate-600 max-w-xl">{t.subtitle}</p>
           </div>
