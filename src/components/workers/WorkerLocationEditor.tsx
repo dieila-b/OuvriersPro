@@ -1,118 +1,119 @@
-// src/components/workers/WorkerLocationEditor.tsx
+// src/components/worker/WorkerLocationEditor.tsx
 import React, { useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MapPin, LocateFixed, Save, AlertTriangle } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { MapPin, LocateFixed, Save, ExternalLink } from "lucide-react";
 
 type Props = {
-  workerId: string;                 // op_ouvriers.id
+  workerId: string;
   initialLat?: number | null;
   initialLng?: number | null;
-  language?: "fr" | "en";
-  onSaved?: (lat: number | null, lng: number | null) => void; // optionnel (pour rafraîchir UI)
+  onSaved?: (coords: { latitude: number; longitude: number }) => void;
 };
 
-export const WorkerLocationEditor: React.FC<Props> = ({
+const WorkerLocationEditor: React.FC<Props> = ({
   workerId,
-  initialLat = null,
-  initialLng = null,
-  language = "fr",
+  initialLat,
+  initialLng,
   onSaved,
 }) => {
-  const [lat, setLat] = useState<string>(initialLat != null ? String(initialLat) : "");
-  const [lng, setLng] = useState<string>(initialLng != null ? String(initialLng) : "");
+  const { language } = useLanguage();
 
-  const [geoLoading, setGeoLoading] = useState(false);
+  const [lat, setLat] = useState<string>(
+    initialLat != null ? String(initialLat) : ""
+  );
+  const [lng, setLng] = useState<string>(
+    initialLng != null ? String(initialLng) : ""
+  );
+
+  const [locating, setLocating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const t = useMemo(() => {
-    return {
-      title: language === "fr" ? "Localisation" : "Location",
-      subtitle:
-        language === "fr"
-          ? "Utilisez votre position actuelle ou saisissez les coordonnées manuellement."
-          : "Use your current position or enter coordinates manually.",
-      useMyPos: language === "fr" ? "Utiliser ma position" : "Use my position",
-      latitude: "Latitude",
-      longitude: "Longitude",
-      example: language === "fr" ? "Ex : 9.5092" : "e.g. 9.5092",
-      save: language === "fr" ? "Enregistrer" : "Save",
-      saving: language === "fr" ? "Enregistrement..." : "Saving...",
-      saved: language === "fr" ? "Localisation mise à jour." : "Location updated.",
-      geoUnsupported:
-        language === "fr"
-          ? "La géolocalisation n’est pas supportée sur ce navigateur."
-          : "Geolocation is not supported by this browser.",
-      geoDenied:
-        language === "fr"
-          ? "Autorisation refusée. Activez la localisation dans votre navigateur."
-          : "Permission denied. Enable location access in your browser.",
-      geoError:
-        language === "fr"
-          ? "Impossible d’obtenir la position."
-          : "Unable to get position.",
-      invalid:
-        language === "fr"
-          ? "Coordonnées invalides (latitude -90..90, longitude -180..180)."
-          : "Invalid coordinates (lat -90..90, lng -180..180).",
-      saveError:
-        language === "fr"
-          ? "Erreur lors de l’enregistrement."
-          : "Error while saving.",
-      openInMaps: language === "fr" ? "Ouvrir dans Google Maps" : "Open in Google Maps",
-    };
-  }, [language]);
+  const t = {
+    title: language === "fr" ? "Localisation (GPS)" : "Location (GPS)",
+    subtitle:
+      language === "fr"
+        ? "Ajoutez votre position pour apparaître dans les recherches “autour de moi”."
+        : "Add your position to appear in “near me” searches.",
+    useMyPos: language === "fr" ? "Utiliser ma position" : "Use my location",
+    lat: language === "fr" ? "Latitude" : "Latitude",
+    lng: language === "fr" ? "Longitude" : "Longitude",
+    save: language === "fr" ? "Enregistrer" : "Save",
+    saving: language === "fr" ? "Enregistrement..." : "Saving...",
+    locating: language === "fr" ? "Géolocalisation..." : "Locating...",
+    invalid:
+      language === "fr"
+        ? "Veuillez saisir une latitude/longitude valides."
+        : "Please enter valid latitude/longitude.",
+    geolocUnsupported:
+      language === "fr"
+        ? "La géolocalisation n'est pas supportée par ce navigateur."
+        : "Geolocation is not supported by this browser.",
+    geolocDenied:
+      language === "fr"
+        ? "Autorisation refusée. Activez la localisation dans votre navigateur."
+        : "Permission denied. Enable location in your browser.",
+    saved:
+      language === "fr"
+        ? "Position enregistrée avec succès."
+        : "Location saved successfully.",
+    openMap:
+      language === "fr" ? "Ouvrir dans Google Maps" : "Open in Google Maps",
+  };
 
   const parsed = useMemo(() => {
-    const latN = lat.trim() === "" ? null : Number(lat);
-    const lngN = lng.trim() === "" ? null : Number(lng);
-
-    const latOk = latN == null || (Number.isFinite(latN) && latN >= -90 && latN <= 90);
-    const lngOk = lngN == null || (Number.isFinite(lngN) && lngN >= -180 && lngN <= 180);
-
-    return { latN, lngN, latOk, lngOk, valid: latOk && lngOk && !(latN == null) && !(lngN == null) };
+    const la = Number(lat);
+    const lo = Number(lng);
+    const isValid =
+      Number.isFinite(la) &&
+      Number.isFinite(lo) &&
+      Math.abs(la) <= 90 &&
+      Math.abs(lo) <= 180;
+    return { la, lo, isValid };
   }, [lat, lng]);
 
-  const mapsUrl = useMemo(() => {
-    if (parsed.latN != null && parsed.lngN != null && Number.isFinite(parsed.latN) && Number.isFinite(parsed.lngN)) {
-      return `https://www.google.com/maps?q=${parsed.latN},${parsed.lngN}`;
-    }
-    return "";
-  }, [parsed.latN, parsed.lngN]);
+  const googleMapsUrl = useMemo(() => {
+    if (!parsed.isValid) return null;
+    return `https://www.google.com/maps?q=${parsed.la},${parsed.lo}`;
+  }, [parsed.isValid, parsed.la, parsed.lo]);
 
-  const handleUseMyPosition = async () => {
+  const handleUseMyLocation = () => {
     setError(null);
     setSuccess(null);
 
     if (!navigator.geolocation) {
-      setError(t.geoUnsupported);
+      setError(t.geolocUnsupported);
       return;
     }
 
-    setGeoLoading(true);
-
+    setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const nextLat = pos.coords.latitude;
-        const nextLng = pos.coords.longitude;
-        setLat(String(nextLat));
-        setLng(String(nextLng));
-        setGeoLoading(false);
+        const la = pos.coords.latitude;
+        const lo = pos.coords.longitude;
+        setLat(String(la));
+        setLng(String(lo));
+        setLocating(false);
       },
       (err) => {
         console.error("geolocation error", err);
-        if (err?.code === 1) setError(t.geoDenied);
-        else setError(t.geoError);
-        setGeoLoading(false);
+        setLocating(false);
+
+        // 1 = PERMISSION_DENIED
+        if (err?.code === 1) setError(t.geolocDenied);
+        else
+          setError(
+            language === "fr"
+              ? "Impossible de récupérer votre position."
+              : "Unable to retrieve your location."
+          );
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 12000,
-        maximumAge: 0,
-      }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
 
@@ -120,10 +121,8 @@ export const WorkerLocationEditor: React.FC<Props> = ({
     setError(null);
     setSuccess(null);
 
-    const latN = parsed.latN;
-    const lngN = parsed.lngN;
-
-    if (!parsed.latOk || !parsed.lngOk || latN == null || lngN == null) {
+    if (!workerId) return;
+    if (!parsed.isValid) {
       setError(t.invalid);
       return;
     }
@@ -133,8 +132,8 @@ export const WorkerLocationEditor: React.FC<Props> = ({
       const { error: updErr } = await supabase
         .from("op_ouvriers")
         .update({
-          latitude: latN,
-          longitude: lngN,
+          latitude: parsed.la,
+          longitude: parsed.lo,
           updated_at: new Date().toISOString(),
         })
         .eq("id", workerId);
@@ -142,104 +141,121 @@ export const WorkerLocationEditor: React.FC<Props> = ({
       if (updErr) throw updErr;
 
       setSuccess(t.saved);
-      onSaved?.(latN, lngN);
+      onSaved?.({ latitude: parsed.la, longitude: parsed.lo });
     } catch (e: any) {
       console.error("save location error", e);
-      setError(`${t.saveError}${e?.message ? ` (${e.message})` : ""}`);
+      setError(
+        e?.message ||
+          (language === "fr"
+            ? "Erreur lors de l'enregistrement."
+            : "Error while saving.")
+      );
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+    <Card className="p-4 rounded-xl border border-slate-200 bg-white">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-pro-blue/10 flex items-center justify-center">
-              <MapPin className="w-4 h-4 text-pro-blue" />
+            <div className="w-9 h-9 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center">
+              <MapPin className="w-4 h-4 text-slate-700" />
             </div>
-            <h2 className="text-sm font-semibold text-slate-900">{t.title}</h2>
+            <div>
+              <div className="text-sm font-semibold text-slate-900">
+                {t.title}
+              </div>
+              <div className="text-xs text-slate-500">{t.subtitle}</div>
+            </div>
           </div>
-          <p className="text-xs text-slate-500 mt-1">{t.subtitle}</p>
         </div>
 
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="rounded-full text-xs"
-          onClick={handleUseMyPosition}
-          disabled={geoLoading}
+          className="rounded-full"
+          onClick={handleUseMyLocation}
+          disabled={locating}
         >
           <LocateFixed className="w-4 h-4 mr-2" />
-          {geoLoading ? (language === "fr" ? "Localisation..." : "Locating...") : t.useMyPos}
+          {locating ? t.locating : t.useMyPos}
         </Button>
       </div>
 
       {error && (
-        <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2 flex gap-2">
-          <AlertTriangle className="w-4 h-4 mt-0.5" />
-          <div>{error}</div>
+        <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+          {error}
         </div>
       )}
-
       {success && (
-        <div className="mt-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2">
+        <div className="mt-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2">
           {success}
         </div>
       )}
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <div>
-          <label className="block text-[11px] font-medium text-slate-600 mb-1">{t.latitude}</label>
+          <label className="block text-xs font-medium text-slate-600 mb-1">
+            {t.lat}
+          </label>
           <Input
-            inputMode="decimal"
             value={lat}
             onChange={(e) => setLat(e.target.value)}
-            placeholder={t.example}
-            className={!parsed.latOk ? "border-red-300 focus-visible:ring-red-200" : ""}
+            placeholder="9.6412"
+            inputMode="decimal"
           />
         </div>
-
         <div>
-          <label className="block text-[11px] font-medium text-slate-600 mb-1">{t.longitude}</label>
+          <label className="block text-xs font-medium text-slate-600 mb-1">
+            {t.lng}
+          </label>
           <Input
-            inputMode="decimal"
             value={lng}
             onChange={(e) => setLng(e.target.value)}
-            placeholder={t.example}
-            className={!parsed.lngOk ? "border-red-300 focus-visible:ring-red-200" : ""}
+            placeholder="-13.5784"
+            inputMode="decimal"
           />
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-2">
-        {mapsUrl ? (
-          <a
-            className="text-xs text-pro-blue hover:underline inline-flex items-center gap-1"
-            href={mapsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {t.openInMaps}
-          </a>
-        ) : (
-          <span className="text-[11px] text-slate-400">
-            {language === "fr" ? "Renseignez les coordonnées pour activer la carte." : "Fill coordinates to enable map."}
-          </span>
-        )}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="text-xs text-slate-500">
+          {parsed.isValid
+            ? language === "fr"
+              ? "Coordonnées valides."
+              : "Valid coordinates."
+            : language === "fr"
+            ? "Saisissez des coordonnées (lat [-90..90], lng [-180..180])."
+            : "Enter coordinates (lat [-90..90], lng [-180..180])."}
+        </div>
 
-        <Button
-          type="button"
-          onClick={handleSave}
-          className="rounded-full px-4"
-          disabled={saving}
-        >
-          <Save className="w-4 h-4 mr-2" />
-          {saving ? t.saving : t.save}
-        </Button>
+        <div className="flex items-center gap-2">
+          {googleMapsUrl && (
+            <Button asChild variant="outline" size="sm" className="rounded-full">
+              <a href={googleMapsUrl} target="_blank" rel="noreferrer">
+                <ExternalLink className="w-4 h-4 mr-2" />
+                {t.openMap}
+              </a>
+            </Button>
+          )}
+
+          <Button
+            type="button"
+            size="sm"
+            className="rounded-full bg-pro-blue hover:bg-pro-blue/90"
+            onClick={handleSave}
+            disabled={saving || !parsed.isValid}
+          >
+            <Save className="w-4 h-4 mr-2" />
+            {saving ? t.saving : t.save}
+          </Button>
+        </div>
       </div>
-    </div>
+    </Card>
   );
 };
+
+export default WorkerLocationEditor;
