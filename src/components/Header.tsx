@@ -1,5 +1,5 @@
 // src/components/Header.tsx
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Languages, Search as SearchIcon, User, Menu, X } from "lucide-react";
@@ -12,8 +12,6 @@ import {
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 
-const HEADER_OFFSET = 96; // hauteur approximative du header sticky
-
 const Header = () => {
   const { language, setLanguage, t } = useLanguage();
   const { user, isAdmin, isWorker } = useAuthProfile();
@@ -22,107 +20,103 @@ const Header = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const closeMobile = () => setMobileOpen(false);
+  // ✅ fermeture menu mobile quand on change de route
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname, location.search, location.hash]);
 
-  // Libellé du bouton compte
-  const accountLabel = user
-    ? language === "fr"
-      ? "Mon compte"
-      : "My account"
-    : language === "fr"
-    ? "Se connecter"
-    : "Sign in";
+  // ✅ lock scroll quand menu mobile ouvert
+  useEffect(() => {
+    if (!mobileOpen) {
+      document.body.style.overflow = "";
+      return;
+    }
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
 
-  // Destination selon le rôle
-  const accountPath = user
-    ? isAdmin
-      ? "/admin/dashboard"
-      : isWorker
-      ? "/espace-ouvrier"
-      : "/espace-client" // client / particulier par défaut
-    : "/mon-compte";
+  const accountLabel = useMemo(() => {
+    if (user) return language === "fr" ? "Mon compte" : "My account";
+    return language === "fr" ? "Se connecter" : "Sign in";
+  }, [user, language]);
 
-  // Scroll lissé vers une section de la home
+  const accountPath = useMemo(() => {
+    if (!user) return "/mon-compte";
+    if (isAdmin) return "/admin/dashboard";
+    if (isWorker) return "/espace-ouvrier";
+    return "/espace-client";
+  }, [user, isAdmin, isWorker]);
+
+  // ✅ scroll précis (utilise la hauteur réelle du header sticky)
   const scrollToSection = (id: string) => {
     const el = document.getElementById(id);
     if (!el) return;
 
-    const rect = el.getBoundingClientRect();
-    const y = rect.top + window.scrollY - HEADER_OFFSET;
+    const headerEl = document.querySelector("header") as HTMLElement | null;
+    const headerHeight = headerEl?.offsetHeight ?? 72;
 
-    window.scrollTo({
-      top: y,
-      behavior: "smooth",
-    });
+    const y = el.getBoundingClientRect().top + window.scrollY - headerHeight - 8;
+    window.scrollTo({ top: Math.max(y, 0), behavior: "smooth" });
   };
 
-  // Clic sur "Rechercher"
   const handleSearchClick = () => {
-    if (location.pathname === "/search") {
-      // déjà sur /search → on rescrolle vers la section
+    // ✅ recherche = section "search" sur la home, pas /search
+    if (location.pathname === "/") {
       scrollToSection("search");
     } else {
-      // changement d'URL vers /search
-      navigate("/search");
+      navigate("/#search");
     }
   };
 
-  // Gestion clics sur FAQ / Contact (sections de la home)
   const handleNavClickSection = (sectionId: string) => {
     if (location.pathname === "/") {
-      // On est déjà sur la home → scroll direct
       scrollToSection(sectionId);
     } else {
-      // On change de route vers la home avec un hash
       navigate(`/#${sectionId}`);
     }
   };
 
+  const NavLinkButton = ({
+    children,
+    onClick,
+  }: {
+    children: React.ReactNode;
+    onClick: () => void;
+  }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-sm font-medium text-pro-gray hover:text-pro-blue transition-colors"
+    >
+      {children}
+    </button>
+  );
+
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-      {/* wrapper full-width + max-w */}
+    <header className="bg-white/95 backdrop-blur border-b border-gray-200 sticky top-0 z-50">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="h-16 flex items-center justify-between">
+        <div className="h-16 flex items-center justify-between gap-3">
           {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2">
-            <div className="w-10 h-10 bg-pro-blue rounded-lg flex items-center justify-center">
+          <Link to="/" className="flex items-center gap-2 min-w-0">
+            <div className="w-10 h-10 bg-pro-blue rounded-lg flex items-center justify-center flex-shrink-0">
               <span className="text-white font-bold text-lg">OP</span>
             </div>
-            <span className="text-lg sm:text-xl font-bold text-pro-gray">
+            <span className="text-base sm:text-xl font-bold text-pro-gray truncate">
               OuvriersPro
             </span>
           </Link>
 
           {/* Navigation Desktop */}
-          <nav className="hidden md:flex items-center space-x-6">
-            {/* 🔎 Rechercher → route /search */}
-            <button
-              type="button"
-              onClick={handleSearchClick}
-              className="text-pro-gray hover:text-pro-blue transition-colors"
-            >
-              {t("nav.search")}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleNavClickSection("faq")}
-              className="text-pro-gray hover:text-pro-blue transition-colors"
-            >
-              {t("nav.faq")}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleNavClickSection("contact")}
-              className="text-pro-gray hover:text-pro-blue transition-colors"
-            >
-              {t("nav.contact")}
-            </button>
+          <nav className="hidden md:flex items-center gap-6">
+            <NavLinkButton onClick={handleSearchClick}>{t("nav.search")}</NavLinkButton>
+            <NavLinkButton onClick={() => handleNavClickSection("faq")}>{t("nav.faq")}</NavLinkButton>
+            <NavLinkButton onClick={() => handleNavClickSection("contact")}>{t("nav.contact")}</NavLinkButton>
           </nav>
 
           {/* Actions Desktop */}
-          <div className="hidden md:flex items-center space-x-3">
-            {/* Lien Admin discret si role = admin */}
+          <div className="hidden md:flex items-center gap-3">
             {isAdmin && (
               <Link
                 to="/admin/dashboard"
@@ -132,40 +126,29 @@ const Header = () => {
               </Link>
             )}
 
-            {/* CTA Compte : "Se connecter" (non loggé) / "Mon compte" (loggé) */}
             <Link to={accountPath}>
               <Button
                 size="sm"
                 className="bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center gap-2"
               >
                 <User className="w-4 h-4" />
-                {accountLabel}
+                <span className="hidden lg:inline">{accountLabel}</span>
+                <span className="lg:hidden">{language === "fr" ? "Compte" : "Account"}</span>
               </Button>
             </Link>
 
-            {/* Language Switcher */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center space-x-1"
-                >
+                <Button variant="outline" size="sm" className="flex items-center gap-1">
                   <Languages className="w-4 h-4" />
                   <span className="uppercase">{language}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white">
-                <DropdownMenuItem
-                  onClick={() => setLanguage("fr")}
-                  className="cursor-pointer"
-                >
+                <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
                   🇫🇷 Français
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setLanguage("en")}
-                  className="cursor-pointer"
-                >
+                <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
                   🇬🇧 English
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -174,109 +157,115 @@ const Header = () => {
 
           {/* Mobile actions */}
           <div className="md:hidden flex items-center gap-2">
-            {/* Language Switcher mobile */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center space-x-1"
-                >
+                <Button variant="outline" size="sm" className="flex items-center gap-1">
                   <Languages className="w-4 h-4" />
                   <span className="uppercase">{language}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white">
-                <DropdownMenuItem
-                  onClick={() => setLanguage("fr")}
-                  className="cursor-pointer"
-                >
+                <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
                   🇫🇷 Français
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setLanguage("en")}
-                  className="cursor-pointer"
-                >
+                <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
                   🇬🇧 English
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Hamburger */}
             <Button
               variant="outline"
               size="sm"
               onClick={() => setMobileOpen((v) => !v)}
               aria-label="Menu mobile"
             >
-              {mobileOpen ? (
-                <X className="w-4 h-4" />
-              ) : (
-                <Menu className="w-4 h-4" />
-              )}
+              {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Mobile menu panel */}
+      {/* ✅ Mobile overlay + panel (évite les scrolls/bugs et rend propre sur tous écrans) */}
       {mobileOpen && (
-        <div className="md:hidden border-t bg-white">
-          <div className="w-full max-w-6xl mx-auto px-4 py-3 flex flex-col gap-2">
-            {/* 🔎 Rechercher (mobile) */}
-            <button
-              type="button"
-              onClick={() => {
-                handleSearchClick();
-                closeMobile();
-              }}
-              className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
-            >
-              <SearchIcon className="w-4 h-4" />
-              {t("nav.search")}
-            </button>
+        <div className="md:hidden fixed inset-0 z-[60]">
+          {/* overlay */}
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/35"
+            aria-label="Fermer le menu"
+            onClick={() => setMobileOpen(false)}
+          />
+          {/* panel */}
+          <div className="absolute top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-lg">
+            <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-pro-gray">
+                  {language === "fr" ? "Menu" : "Menu"}
+                </span>
+                <Button variant="outline" size="sm" onClick={() => setMobileOpen(false)}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                handleNavClickSection("faq");
-                closeMobile();
-              }}
-              className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
-            >
-              {t("nav.faq")}
-            </button>
+              <div className="mt-3 flex flex-col gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleSearchClick();
+                    setMobileOpen(false);
+                  }}
+                  className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
+                >
+                  <SearchIcon className="w-4 h-4" />
+                  {t("nav.search")}
+                </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                handleNavClickSection("contact");
-                closeMobile();
-              }}
-              className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
-            >
-              {t("nav.contact")}
-            </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleNavClickSection("faq");
+                    setMobileOpen(false);
+                  }}
+                  className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
+                >
+                  {t("nav.faq")}
+                </button>
 
-            {/* Lien Admin mobile */}
-            {isAdmin && (
-              <Link
-                to="/admin/dashboard"
-                onClick={closeMobile}
-                className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
-              >
-                <User className="w-4 h-4" />
-                Admin
-              </Link>
-            )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleNavClickSection("contact");
+                    setMobileOpen(false);
+                  }}
+                  className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
+                >
+                  {t("nav.contact")}
+                </button>
 
-            {/* CTA mobile Compte */}
-            <Link to={accountPath} onClick={closeMobile} className="pt-2">
-              <Button className="w-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center justify-center gap-2">
-                <User className="w-4 h-4" />
-                {accountLabel}
-              </Button>
-            </Link>
+                {isAdmin && (
+                  <Link
+                    to="/admin/dashboard"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
+                  >
+                    <User className="w-4 h-4" />
+                    Admin
+                  </Link>
+                )}
+
+                <div className="pt-2">
+                  <Link to={accountPath} onClick={() => setMobileOpen(false)}>
+                    <Button className="w-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center justify-center gap-2">
+                      <User className="w-4 h-4" />
+                      {accountLabel}
+                    </Button>
+                  </Link>
+                </div>
+
+                <div className="pb-2" />
+              </div>
+            </div>
           </div>
         </div>
       )}
