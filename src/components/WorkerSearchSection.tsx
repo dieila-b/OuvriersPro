@@ -6,7 +6,16 @@ import { supabase } from "@/lib/supabase";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Star, MapPin, Search, LayoutList, LayoutGrid } from "lucide-react";
+import {
+  Star,
+  MapPin,
+  Search,
+  LayoutList,
+  LayoutGrid,
+  LocateFixed,
+  Info,
+  RotateCcw,
+} from "lucide-react";
 
 type DbWorker = {
   id: string;
@@ -26,6 +35,10 @@ type DbWorker = {
   computed_average_rating: number | null;
   computed_rating_count: number | null;
   status: string | null;
+
+  // ✅ Geo (si la vue les expose)
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 interface WorkerCard {
@@ -42,7 +55,42 @@ interface WorkerCard {
   currency: string;
   rating: number;
   ratingCount: number;
+
+  // ✅ Geo
+  latitude: number | null;
+  longitude: number | null;
+
+  // ✅ Distance calculée (km) si position client dispo
+  distanceKm: number | null;
 }
+
+const DEFAULT_MAX_PRICE = 300000;
+const DEFAULT_RADIUS_KM = 10;
+
+const toRad = (deg: number) => (deg * Math.PI) / 180;
+
+// Haversine (km)
+const haversineKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371; // km
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+const formatKm = (km: number, language: string) => {
+  if (!Number.isFinite(km)) return "—";
+  if (km < 1) {
+    const meters = Math.round(km * 1000);
+    return language === "fr" ? `${meters} m` : `${meters} m`;
+  }
+  const rounded = Math.round(km * 10) / 10;
+  return language === "fr" ? `${rounded} km` : `${rounded} km`;
+};
 
 const WorkerSearchSection: React.FC = () => {
   const { language } = useLanguage();
@@ -57,7 +105,7 @@ const WorkerSearchSection: React.FC = () => {
   // Filtres
   const [keyword, setKeyword] = useState("");
   const [selectedJob, setSelectedJob] = useState<string>("all");
-  const [maxPrice, setMaxPrice] = useState<number>(300000);
+  const [maxPrice, setMaxPrice] = useState<number>(DEFAULT_MAX_PRICE);
   const [minRating, setMinRating] = useState<number>(0);
 
   const [selectedRegion, setSelectedRegion] = useState<string>("");
@@ -68,15 +116,26 @@ const WorkerSearchSection: React.FC = () => {
   // Vue liste / mosaïque
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
+  // ✅ Recherche “autour de moi”
+  const [useMyPosition, setUseMyPosition] = useState(false);
+  const [radiusKm, setRadiusKm] = useState<number>(DEFAULT_RADIUS_KM);
+  const [myLat, setMyLat] = useState<number | null>(null);
+  const [myLng, setMyLng] = useState<number | null>(null);
+  const [geoLocating, setGeoLocating] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
+
   // 1) Chargement Supabase
   useEffect(() => {
     const fetchWorkers = async () => {
-      console.log("🔄 [WorkerSearchSection] Chargement ouvriers…");
       setLoading(true);
       setError(null);
 
       try {
-        // Utilisation de la vue op_ouvriers_with_ratings
+        /**
+         * ⚠️ Important:
+         * Votre vue op_ouvriers_with_ratings doit idéalement exposer latitude/longitude.
+         * Si ce n’est pas le cas, ajoutez-les dans la vue.
+         */
         const { data, error } = await supabase
           .from("op_ouvriers_with_ratings")
           .select(
@@ -97,20 +156,16 @@ const WorkerSearchSection: React.FC = () => {
             rating_count,
             computed_average_rating,
             computed_rating_count,
-            status
+            status,
+            latitude,
+            longitude
           `
           )
           .eq("status", "approved");
 
-        if (error) {
-          throw error;
-        }
+        if (error) throw error;
 
         const rows = (data ?? []) as DbWorker[];
-        console.log(
-          "✅ [WorkerSearchSection] Ouvriers bruts chargés:",
-          rows.length
-        );
 
         const mapped: WorkerCard[] = rows.map((w) => {
           const effectiveRating =
@@ -118,11 +173,14 @@ const WorkerSearchSection: React.FC = () => {
           const effectiveCount =
             w.computed_rating_count ?? w.rating_count ?? 0;
 
+          const lat = typeof w.latitude === "number" ? w.latitude : null;
+          const lng = typeof w.longitude === "number" ? w.longitude : null;
+
           return {
             id: w.id,
             name:
               ((w.first_name || "") +
-                (w.last_name ? ` ${w.last_name}` : "")) || "Ouvrier",
+                (w.last_name ? ` ${w.last_name}` : "")).trim() || "Ouvrier",
             job: w.profession ?? "",
             country: w.country ?? "",
             region: w.region ?? "",
@@ -132,14 +190,17 @@ const WorkerSearchSection: React.FC = () => {
             experienceYears: w.years_experience ?? 0,
             hourlyRate: w.hourly_rate ?? 0,
             currency: w.currency ?? "GNF",
-            rating: effectiveRating,
-            ratingCount: effectiveCount,
+            rating: Number(effectiveRating) || 0,
+            ratingCount: Number(effectiveCount) || 0,
+            latitude: lat,
+            longitude: lng,
+            distanceKm: null,
           };
         });
 
         setWorkers(mapped);
       } catch (err: any) {
-        console.error("❌ [WorkerSearchSection] Erreur chargement:", err);
+        console.error("WorkerSearchSection fetch error:", err);
         setWorkers([]);
         setError(
           language === "fr"
@@ -154,7 +215,7 @@ const WorkerSearchSection: React.FC = () => {
     fetchWorkers();
   }, [language]);
 
-  // 2) Sync filtres depuis URL (à chaque changement d'URL)
+  // 2) Sync filtres depuis URL
   useEffect(() => {
     const spKeyword = searchParams.get("keyword") ?? "";
     const spJob = searchParams.get("job") ?? "all";
@@ -162,18 +223,15 @@ const WorkerSearchSection: React.FC = () => {
     const spCity = searchParams.get("city") ?? "";
     const spCommune = searchParams.get("commune") ?? "";
     const spDistrict = searchParams.get("district") ?? "";
-    const spMaxPrice = Number(searchParams.get("maxPrice") ?? "300000");
+    const spMaxPrice = Number(searchParams.get("maxPrice") ?? String(DEFAULT_MAX_PRICE));
     const spMinRating = Number(searchParams.get("minRating") ?? "0");
     const spView = (searchParams.get("view") as "list" | "grid") ?? "list";
 
-    console.log("📥 [WorkerSearchSection] Sync depuis URL:", {
-      spKeyword,
-      spJob,
-      spDistrict,
-      spRegion,
-      spCity,
-      spCommune,
-    });
+    // ✅ autour de moi
+    const spNear = searchParams.get("near") === "1";
+    const spRadius = Number(searchParams.get("radiusKm") ?? String(DEFAULT_RADIUS_KM));
+    const spLat = searchParams.get("lat");
+    const spLng = searchParams.get("lng");
 
     setKeyword(spKeyword);
     setSelectedJob(spJob);
@@ -181,16 +239,22 @@ const WorkerSearchSection: React.FC = () => {
     setSelectedCity(spCity);
     setSelectedCommune(spCommune);
     setSelectedDistrict(spDistrict);
-    setMaxPrice(Number.isFinite(spMaxPrice) ? spMaxPrice : 300000);
+    setMaxPrice(Number.isFinite(spMaxPrice) ? spMaxPrice : DEFAULT_MAX_PRICE);
     setMinRating(Number.isFinite(spMinRating) ? spMinRating : 0);
     setViewMode(spView);
 
-    if (!initializedFromUrl) {
-      setInitializedFromUrl(true);
-    }
+    setUseMyPosition(spNear);
+    setRadiusKm(Number.isFinite(spRadius) ? spRadius : DEFAULT_RADIUS_KM);
+
+    const latNum = spLat != null ? Number(spLat) : null;
+    const lngNum = spLng != null ? Number(spLng) : null;
+    setMyLat(Number.isFinite(latNum as number) ? (latNum as number) : null);
+    setMyLng(Number.isFinite(lngNum as number) ? (lngNum as number) : null);
+
+    if (!initializedFromUrl) setInitializedFromUrl(true);
   }, [searchParams, initializedFromUrl]);
 
-  // 3) Synchronisation URL depuis filtres locaux
+  // 3) Sync URL depuis filtres
   useEffect(() => {
     if (!initializedFromUrl) return;
 
@@ -203,9 +267,17 @@ const WorkerSearchSection: React.FC = () => {
     if (selectedRegion) next.region = selectedRegion;
     if (selectedCity) next.city = selectedCity;
     if (selectedCommune) next.commune = selectedCommune;
-    if (maxPrice !== 300000) next.maxPrice = String(maxPrice);
+    if (maxPrice !== DEFAULT_MAX_PRICE) next.maxPrice = String(maxPrice);
     if (minRating !== 0) next.minRating = String(minRating);
     if (viewMode !== "list") next.view = viewMode;
+
+    // ✅ autour de moi
+    if (useMyPosition) next.near = "1";
+    if (useMyPosition && radiusKm !== DEFAULT_RADIUS_KM) next.radiusKm = String(radiusKm);
+    if (useMyPosition && myLat != null && myLng != null) {
+      next.lat = String(myLat);
+      next.lng = String(myLng);
+    }
 
     setSearchParams(next, { replace: true });
   }, [
@@ -219,18 +291,18 @@ const WorkerSearchSection: React.FC = () => {
     maxPrice,
     minRating,
     viewMode,
+    useMyPosition,
+    radiusKm,
+    myLat,
+    myLng,
     setSearchParams,
   ]);
 
-  // Listes de filtres dynamiques
+  // Listes dynamiques
   const jobs = useMemo(
     () =>
       Array.from(
-        new Set(
-          workers
-            .map((w) => w.job)
-            .filter((j) => j && j.trim().length > 0)
-        )
+        new Set(workers.map((w) => w.job).filter((j) => j && j.trim().length > 0))
       ),
     [workers]
   );
@@ -238,11 +310,7 @@ const WorkerSearchSection: React.FC = () => {
   const regions = useMemo(
     () =>
       Array.from(
-        new Set(
-          workers
-            .map((w) => w.region)
-            .filter((r) => r && r.trim().length > 0)
-        )
+        new Set(workers.map((w) => w.region).filter((r) => r && r.trim().length > 0))
       ),
     [workers]
   );
@@ -295,61 +363,85 @@ const WorkerSearchSection: React.FC = () => {
     [workers, selectedRegion, selectedCity, selectedCommune]
   );
 
-  // Application des filtres
+  const formatCurrency = (value: number, currency: string) => {
+    if (currency === "GNF") return `${value.toLocaleString("fr-FR")} GNF`;
+    return `${value} ${currency}`;
+  };
+
+  const computeDistance = (w: WorkerCard) => {
+    if (!useMyPosition) return null;
+    if (myLat == null || myLng == null) return null;
+    if (w.latitude == null || w.longitude == null) return null;
+    return haversineKm(myLat, myLng, w.latitude, w.longitude);
+  };
+
+  // Application des filtres + distance + tri
   const filteredWorkers = useMemo(() => {
-    const filtered = workers.filter((w) => {
-      const matchKeyword =
-        !keyword ||
-        w.name.toLowerCase().includes(keyword.toLowerCase()) ||
-        w.job.toLowerCase().includes(keyword.toLowerCase());
+    const list = workers
+      .map((w) => {
+        const distanceKm = computeDistance(w);
+        return { ...w, distanceKm };
+      })
+      .filter((w) => {
+        const kw = keyword.trim().toLowerCase();
 
-      const matchJob = selectedJob === "all" || w.job === selectedJob;
-      const matchPrice = w.hourlyRate <= maxPrice;
-      const matchRating = w.rating >= minRating;
+        const matchKeyword =
+          !kw ||
+          w.name.toLowerCase().includes(kw) ||
+          w.job.toLowerCase().includes(kw);
 
-      const regionNorm = w.region?.trim().toLowerCase() || "";
-      const cityNorm = w.city?.trim().toLowerCase() || "";
-      const communeNorm = w.commune?.trim().toLowerCase() || "";
-      const districtNorm = w.district?.trim().toLowerCase() || "";
+        const matchJob = selectedJob === "all" || w.job === selectedJob;
+        const matchPrice = w.hourlyRate <= maxPrice;
+        const matchRating = w.rating >= minRating;
 
-      const matchRegion =
-        !selectedRegion ||
-        regionNorm === selectedRegion.trim().toLowerCase();
-      const matchCity =
-        !selectedCity || cityNorm === selectedCity.trim().toLowerCase();
-      const matchCommune =
-        !selectedCommune ||
-        communeNorm === selectedCommune.trim().toLowerCase();
-      const matchDistrict =
-        !selectedDistrict ||
-        districtNorm === selectedDistrict.trim().toLowerCase();
+        const regionNorm = w.region?.trim().toLowerCase() || "";
+        const cityNorm = w.city?.trim().toLowerCase() || "";
+        const communeNorm = w.commune?.trim().toLowerCase() || "";
+        const districtNorm = w.district?.trim().toLowerCase() || "";
 
-      return (
-        matchKeyword &&
-        matchJob &&
-        matchPrice &&
-        matchRating &&
-        matchRegion &&
-        matchCity &&
-        matchCommune &&
-        matchDistrict
-      );
-    });
+        const matchRegion =
+          !selectedRegion || regionNorm === selectedRegion.trim().toLowerCase();
+        const matchCity =
+          !selectedCity || cityNorm === selectedCity.trim().toLowerCase();
+        const matchCommune =
+          !selectedCommune || communeNorm === selectedCommune.trim().toLowerCase();
+        const matchDistrict =
+          !selectedDistrict || districtNorm === selectedDistrict.trim().toLowerCase();
 
-    console.log("🔍 [WorkerSearchSection] Filtrage:", {
-      total: workers.length,
-      filtered: filtered.length,
-      filters: {
-        keyword,
-        selectedJob,
-        selectedDistrict,
-        selectedRegion,
-        selectedCity,
-        selectedCommune,
-      },
-    });
+        // ✅ filtre rayon si “autour de moi”
+        const matchRadius =
+          !useMyPosition ||
+          myLat == null ||
+          myLng == null ||
+          w.distanceKm == null ||
+          w.distanceKm <= radiusKm;
 
-    return filtered;
+        return (
+          matchKeyword &&
+          matchJob &&
+          matchPrice &&
+          matchRating &&
+          matchRegion &&
+          matchCity &&
+          matchCommune &&
+          matchDistrict &&
+          matchRadius
+        );
+      });
+
+    // ✅ tri par distance si “autour de moi” (les inconnus en bas)
+    if (useMyPosition && myLat != null && myLng != null) {
+      list.sort((a, b) => {
+        const da = a.distanceKm;
+        const db = b.distanceKm;
+        if (da == null && db == null) return 0;
+        if (da == null) return 1;
+        if (db == null) return -1;
+        return da - db;
+      });
+    }
+
+    return list;
   }, [
     workers,
     keyword,
@@ -360,36 +452,70 @@ const WorkerSearchSection: React.FC = () => {
     selectedCity,
     selectedCommune,
     selectedDistrict,
+    useMyPosition,
+    radiusKm,
+    myLat,
+    myLng,
   ]);
 
   const resetFilters = () => {
     setKeyword("");
     setSelectedJob("all");
-    setMaxPrice(300000);
+    setMaxPrice(DEFAULT_MAX_PRICE);
     setMinRating(0);
     setSelectedRegion("");
     setSelectedCity("");
     setSelectedCommune("");
     setSelectedDistrict("");
     setViewMode("list");
+
+    setUseMyPosition(false);
+    setRadiusKm(DEFAULT_RADIUS_KM);
+    setMyLat(null);
+    setMyLng(null);
+    setGeoError(null);
   };
 
-  const formatCurrency = (value: number, currency: string) => {
-    if (currency === "GNF") {
-      return `${value.toLocaleString("fr-FR")} GNF`;
+  const requestMyPosition = () => {
+    setGeoError(null);
+    setUseMyPosition(true);
+
+    if (!navigator.geolocation) {
+      setGeoError(
+        language === "fr"
+          ? "La géolocalisation n'est pas supportée par ce navigateur."
+          : "Geolocation is not supported by this browser."
+      );
+      return;
     }
-    return `${value} ${currency}`;
+
+    setGeoLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setMyLat(pos.coords.latitude);
+        setMyLng(pos.coords.longitude);
+        setGeoLocating(false);
+      },
+      (err) => {
+        console.error("geolocation error", err);
+        setGeoLocating(false);
+
+        setGeoError(
+          language === "fr"
+            ? "Impossible de récupérer votre position. Autorisez la localisation dans votre navigateur."
+            : "Unable to retrieve your location. Please allow location access in your browser."
+        );
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    );
   };
 
   const text = {
-    title:
-      language === "fr"
-        ? "Trouvez votre professionnel"
-        : "Find your professional",
+    title: language === "fr" ? "Trouvez votre professionnel" : "Find your professional",
     subtitle:
       language === "fr"
-        ? "Filtrez par métier, zone géographique et tarif pour trouver l’ouvrier le plus proche."
-        : "Filter by trade, location and rate to find the closest professional.",
+        ? "Filtrez par métier, zone géographique, tarif et distance pour trouver l’ouvrier le plus proche."
+        : "Filter by trade, area, rate and distance to find the closest professional.",
     filters: language === "fr" ? "Filtres" : "Filters",
     keywordLabel: language === "fr" ? "Métier ou nom" : "Trade or name",
     searchPlaceholder:
@@ -398,22 +524,17 @@ const WorkerSearchSection: React.FC = () => {
         : "Plumber, electrician, John...",
     job: language === "fr" ? "Métier" : "Job",
     allJobs: language === "fr" ? "Tous les métiers" : "All trades",
-    priceLabel:
-      language === "fr" ? "Tarif horaire max" : "Max hourly rate",
-    ratingLabel:
-      language === "fr" ? "Note minimum" : "Minimum rating",
+    priceLabel: language === "fr" ? "Tarif horaire max" : "Max hourly rate",
+    ratingLabel: language === "fr" ? "Note minimum" : "Minimum rating",
     region: language === "fr" ? "Région" : "Region",
     city: language === "fr" ? "Ville" : "City",
     commune: language === "fr" ? "Commune" : "Commune",
     district: language === "fr" ? "Quartier" : "District",
     allRegions: language === "fr" ? "Toutes les régions" : "All regions",
     allCities: language === "fr" ? "Toutes les villes" : "All cities",
-    allCommunes:
-      language === "fr" ? "Toutes les communes" : "All communes",
-    allDistricts:
-      language === "fr" ? "Tous les quartiers" : "All districts",
-    reset:
-      language === "fr" ? "Réinitialiser les filtres" : "Reset filters",
+    allCommunes: language === "fr" ? "Toutes les communes" : "All communes",
+    allDistricts: language === "fr" ? "Tous les quartiers" : "All districts",
+    reset: language === "fr" ? "Réinitialiser" : "Reset",
     noResults:
       language === "fr"
         ? "Aucun professionnel ne correspond à ces critères pour le moment."
@@ -423,21 +544,34 @@ const WorkerSearchSection: React.FC = () => {
         ? "Aucun professionnel n’est encore disponible."
         : "No professionals are available yet.",
     contact: language === "fr" ? "Contacter" : "Contact",
-    perHour: language === "fr" ? "/h" : "/h",
-    years:
-      language === "fr"
-        ? "ans d'expérience"
-        : "years of experience",
+    perHour: "/h",
+    years: language === "fr" ? "ans d'expérience" : "years of experience",
     viewMode: language === "fr" ? "Affichage" : "View",
     viewList: language === "fr" ? "Liste" : "List",
     viewGrid: language === "fr" ? "Mosaïque" : "Grid",
     resultCount: (count: number) =>
       language === "fr"
-        ? `${count} résultat${count > 1 ? "s" : ""} trouvé${
-            count > 1 ? "s" : ""
-          }`
+        ? `${count} résultat${count > 1 ? "s" : ""} trouvé${count > 1 ? "s" : ""}`
         : `${count} result${count > 1 ? "s" : ""} found`,
+    aroundMe: language === "fr" ? "Autour de moi" : "Near me",
+    useMyPos: language === "fr" ? "Utiliser ma position" : "Use my location",
+    radius: language === "fr" ? "Rayon" : "Radius",
+    km: "km",
+    distance: language === "fr" ? "Distance" : "Distance",
+    geoHint:
+      language === "fr"
+        ? "Activez “Autour de moi” pour trier et filtrer par distance (nécessite latitude/longitude côté ouvrier)."
+        : "Enable “Near me” to sort/filter by distance (requires worker latitude/longitude).",
+    missingWorkerGeo:
+      language === "fr"
+        ? "Certains profils n'ont pas encore de position GPS."
+        : "Some profiles do not have GPS coordinates yet.",
   };
+
+  const hasAnyGeoWorkers = useMemo(
+    () => workers.some((w) => w.latitude != null && w.longitude != null),
+    [workers]
+  );
 
   return (
     <section className="w-full pt-4 pb-12 sm:pt-6 sm:pb-16 lg:pt-8 lg:pb-20 bg-white">
@@ -454,18 +588,31 @@ const WorkerSearchSection: React.FC = () => {
             <p className="text-gray-600 mt-1.5 sm:mt-2 text-sm sm:text-base">
               {text.subtitle}
             </p>
-            <div className="mt-2 flex items-center gap-1 text-[11px] sm:text-xs text-gray-500">
-              <Search className="w-3 h-3" />
-              {loading ? (
-                <span>
-                  {language === "fr"
-                    ? "Chargement des résultats..."
-                    : "Loading results..."}
-                </span>
-              ) : (
-                <span>{text.resultCount(filteredWorkers.length)}</span>
-              )}
+
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] sm:text-xs text-gray-500">
+              <span className="inline-flex items-center gap-1">
+                <Search className="w-3 h-3" />
+                {loading ? (
+                  <span>
+                    {language === "fr" ? "Chargement..." : "Loading..."}
+                  </span>
+                ) : (
+                  <span>{text.resultCount(filteredWorkers.length)}</span>
+                )}
+              </span>
+
+              <span className="inline-flex items-center gap-1">
+                <Info className="w-3 h-3" />
+                <span>{text.geoHint}</span>
+              </span>
             </div>
+
+            {useMyPosition && !hasAnyGeoWorkers && (
+              <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-flex items-center gap-2">
+                <Info className="w-4 h-4" />
+                {text.missingWorkerGeo}
+              </div>
+            )}
           </div>
 
           {/* Boutons LISTE / MOSAÏQUE */}
@@ -509,6 +656,75 @@ const WorkerSearchSection: React.FC = () => {
             <h3 className="text-base font-semibold text-pro-gray mb-4">
               {text.filters}
             </h3>
+
+            {/* ✅ Autour de moi */}
+            <div className="mb-5 rounded-xl border border-gray-200 bg-white p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-pro-gray">
+                    {text.aroundMe}
+                  </div>
+                  <div className="text-[11px] text-gray-500">
+                    {language === "fr"
+                      ? "Trier/filtrer par distance"
+                      : "Sort/filter by distance"}
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={useMyPosition ? "default" : "outline"}
+                  className={
+                    useMyPosition
+                      ? "bg-pro-blue hover:bg-blue-700"
+                      : "border-gray-300"
+                  }
+                  onClick={() => {
+                    if (!useMyPosition) requestMyPosition();
+                    else setUseMyPosition(false);
+                  }}
+                >
+                  <LocateFixed className="w-4 h-4 mr-2" />
+                  {geoLocating
+                    ? language === "fr"
+                      ? "Localisation..."
+                      : "Locating..."
+                    : text.useMyPos}
+                </Button>
+              </div>
+
+              {geoError && (
+                <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                  {geoError}
+                </div>
+              )}
+
+              {useMyPosition && (
+                <div className="mt-3">
+                  <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
+                    <span>{text.radius}</span>
+                    <span className="text-[11px] text-gray-500">
+                      {radiusKm} {text.km}
+                    </span>
+                  </div>
+                  <Slider
+                    defaultValue={[radiusKm]}
+                    min={1}
+                    max={100}
+                    step={1}
+                    onValueChange={(v) => setRadiusKm(v[0])}
+                  />
+                  {(myLat == null || myLng == null) && (
+                    <div className="mt-2 text-[11px] text-gray-500">
+                      {language === "fr"
+                        ? "Activez la localisation pour calculer les distances."
+                        : "Enable location to compute distances."}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Mot clé */}
             <div className="mb-4">
@@ -635,7 +851,7 @@ const WorkerSearchSection: React.FC = () => {
               <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                 <span>{text.priceLabel}</span>
                 <span className="text-[11px] text-gray-500">
-                  {maxPrice >= 300000
+                  {maxPrice >= DEFAULT_MAX_PRICE
                     ? language === "fr"
                       ? "Aucune limite"
                       : "No limit"
@@ -645,7 +861,7 @@ const WorkerSearchSection: React.FC = () => {
               <Slider
                 defaultValue={[maxPrice]}
                 min={50000}
-                max={300000}
+                max={DEFAULT_MAX_PRICE}
                 step={10000}
                 onValueChange={(v) => setMaxPrice(v[0])}
               />
@@ -656,7 +872,7 @@ const WorkerSearchSection: React.FC = () => {
               <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                 <span>{text.ratingLabel}</span>
                 <span className="text-[11px] text-gray-500">
-                  {minRating === 0 ? "Toutes" : minRating.toFixed(1)}
+                  {minRating === 0 ? (language === "fr" ? "Toutes" : "Any") : minRating.toFixed(1)}
                 </span>
               </div>
               <Slider
@@ -668,14 +884,17 @@ const WorkerSearchSection: React.FC = () => {
               />
             </div>
 
-            <Button
-              className="w-full border-gray-300 text-sm"
-              variant="outline"
-              type="button"
-              onClick={resetFilters}
-            >
-              {text.reset}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 border-gray-300 text-sm"
+                variant="outline"
+                type="button"
+                onClick={resetFilters}
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                {text.reset}
+              </Button>
+            </div>
           </aside>
 
           {/* Résultats */}
@@ -692,58 +911,144 @@ const WorkerSearchSection: React.FC = () => {
               </div>
             )}
 
-            {!error &&
-              !loading &&
-              workers.length > 0 &&
-              filteredWorkers.length === 0 && (
-                <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
-                  {text.noResults}
-                </div>
-              )}
+            {!error && !loading && workers.length > 0 && filteredWorkers.length === 0 && (
+              <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
+                {text.noResults}
+              </div>
+            )}
 
             {loading && filteredWorkers.length === 0 && (
               <div className="border border-gray-100 rounded-xl p-6 text-sm text-gray-500">
-                {language === "fr"
-                  ? "Chargement des professionnels..."
-                  : "Loading professionals..."}
+                {language === "fr" ? "Chargement des professionnels..." : "Loading professionals..."}
               </div>
             )}
 
             {/* VUE LISTE */}
             {viewMode === "list" && filteredWorkers.length > 0 && (
               <div className="space-y-3 sm:space-y-4">
-                {filteredWorkers.map((w) => (
-                  <div
-                    key={w.id}
-                    className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4"
-                  >
-                    <div className="flex-shrink-0">
-                      <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">
-                        {w.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
+                {filteredWorkers.map((w) => {
+                  const initials = w.name
+                    .split(" ")
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((n) => n[0]?.toUpperCase())
+                    .join("");
+
+                  return (
+                    <div
+                      key={w.id}
+                      className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4"
+                    >
+                      <div className="flex-shrink-0">
+                        <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">
+                          {initials || "OP"}
+                        </div>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold text-pro-gray text-base sm:text-lg truncate">
+                            {w.name}
+                          </h3>
+                          {w.job && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-pro-blue border border-blue-100">
+                              {w.job}
+                            </span>
+                          )}
+
+                          {useMyPosition && myLat != null && myLng != null && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">
+                              {text.distance}:{" "}
+                              <span className="font-semibold ml-1">
+                                {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
+                              </span>
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3 mt-1 text-xs sm:text-sm text-gray-600">
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3" />
+                            {[w.region, w.city, w.commune, w.district].filter(Boolean).join(" • ")}
+                          </span>
+
+                          <span className="flex items-center gap-1">
+                            <Star className="w-3 h-3 text-yellow-400" />
+                            {w.rating.toFixed(1)} ({w.ratingCount})
+                          </span>
+
+                          <span>
+                            {w.experienceYears} {text.years}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Prix + CTA */}
+                      <div className="w-full sm:w-auto flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 text-right">
+                        <div className="text-pro-blue font-bold text-base sm:text-lg">
+                          {formatCurrency(w.hourlyRate, w.currency)}
+                          <span className="text-xs sm:text-sm text-gray-600 ml-1">
+                            {text.perHour}
+                          </span>
+                        </div>
+
+                        <Link to={`/ouvrier/${w.id}`}>
+                          <Button
+                            size="sm"
+                            className="bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm"
+                          >
+                            {text.contact}
+                          </Button>
+                        </Link>
                       </div>
                     </div>
+                  );
+                })}
+              </div>
+            )}
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-pro-gray text-base sm:text-lg truncate">
-                          {w.name}
-                        </h3>
-                        {w.job && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-pro-blue border border-blue-100">
-                            {w.job}
-                          </span>
-                        )}
+            {/* VUE MOSAÏQUE */}
+            {viewMode === "grid" && filteredWorkers.length > 0 && (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {filteredWorkers.map((w) => {
+                  const initials = w.name
+                    .split(" ")
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((n) => n[0]?.toUpperCase())
+                    .join("");
+
+                  return (
+                    <div
+                      key={w.id}
+                      className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-pro-blue text-white flex items-center justify-center text-sm font-semibold">
+                          {initials || "OP"}
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-semibold text-sm text-pro-gray truncate">
+                            {w.name}
+                          </h3>
+                          {w.job && (
+                            <div className="text-xs text-pro-blue mt-0.5">{w.job}</div>
+                          )}
+                          {useMyPosition && myLat != null && myLng != null && (
+                            <div className="text-[11px] text-slate-600 mt-1">
+                              {text.distance}:{" "}
+                              <span className="font-semibold">
+                                {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-3 mt-1 text-xs sm:text-sm text-gray-600">
+                      <div className="text-xs text-gray-600 space-y-1">
                         <span className="flex items-center gap-1">
                           <MapPin className="w-3 h-3" />
-                          {[w.region, w.city, w.commune, w.district]
-                            .filter(Boolean)
-                            .join(" • ")}
+                          {[w.region, w.city, w.commune, w.district].filter(Boolean).join(" • ")}
                         </span>
                         <span className="flex items-center gap-1">
                           <Star className="w-3 h-3 text-yellow-400" />
@@ -753,91 +1058,26 @@ const WorkerSearchSection: React.FC = () => {
                           {w.experienceYears} {text.years}
                         </span>
                       </div>
-                    </div>
 
-                    {/* Prix + CTA */}
-                    <div className="w-full sm:w-auto flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 text-right">
-                      <div className="text-pro-blue font-bold text-base sm:text-lg">
-                        {formatCurrency(w.hourlyRate, w.currency)}
-                        <span className="text-xs sm:text-sm text-gray-600 ml-1">
-                          {text.perHour}
-                        </span>
-                      </div>
-                      <Link to={`/ouvrier/${w.id}`}>
-                        <Button
-                          size="sm"
-                          className="bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm"
-                        >
-                          {text.contact}
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* VUE MOSAÏQUE */}
-            {viewMode === "grid" && filteredWorkers.length > 0 && (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {filteredWorkers.map((w) => (
-                  <div
-                    key={w.id}
-                    className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-pro-blue text-white flex items-center justify-center text-sm font-semibold">
-                        {w.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="font-semibold text-sm text-pro-gray truncate">
-                          {w.name}
-                        </h3>
-                        {w.job && (
-                          <div className="text-xs text-pro-blue mt-0.5">
-                            {w.job}
-                          </div>
-                        )}
+                      <div className="mt-2 flex items-center justify-between">
+                        <div className="text-sm font-bold text-pro-blue">
+                          {formatCurrency(w.hourlyRate, w.currency)}
+                          <span className="ml-1 text-[11px] text-gray-600">
+                            {text.perHour}
+                          </span>
+                        </div>
+                        <Link to={`/ouvrier/${w.id}`}>
+                          <Button
+                            size="sm"
+                            className="bg-pro-blue hover:bg-blue-700 text-[11px]"
+                          >
+                            {text.contact}
+                          </Button>
+                        </Link>
                       </div>
                     </div>
-
-                    <div className="text-xs text-gray-600 space-y-1">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        {[w.region, w.city, w.commune, w.district]
-                          .filter(Boolean)
-                          .join(" • ")}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Star className="w-3 h-3 text-yellow-400" />
-                        {w.rating.toFixed(1)} ({w.ratingCount})
-                      </span>
-                      <span>
-                        {w.experienceYears} {text.years}
-                      </span>
-                    </div>
-
-                    <div className="mt-2 flex items-center justify-between">
-                      <div className="text-sm font-bold text-pro-blue">
-                        {formatCurrency(w.hourlyRate, w.currency)}
-                        <span className="ml-1 text-[11px] text-gray-600">
-                          {text.perHour}
-                        </span>
-                      </div>
-                      <Link to={`/ouvrier/${w.id}`}>
-                        <Button
-                          size="sm"
-                          className="bg-pro-blue hover:bg-blue-700 text-[11px]"
-                        >
-                          {text.contact}
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
