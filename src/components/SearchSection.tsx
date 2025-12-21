@@ -7,37 +7,41 @@ import { calculateDistance, formatDistance } from "@/lib/geoUtils";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import {
   Star,
   MapPin,
   Search,
   LayoutList,
   LayoutGrid,
-  Navigation,
+  LocateFixed,
   Loader2,
+  Navigation,
+  RotateCcw,
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
+
+const DEFAULT_MAX_PRICE = 300000;
+const DEFAULT_RADIUS_KM = 10;
 
 const SearchSection: React.FC = () => {
   const { language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
   const { workers, loading, error, search } = useWorkerSearch();
 
-  // On lit les paramètres de l'URL
+  // URL params
   const urlService =
     searchParams.get("service") ?? searchParams.get("keyword") ?? "";
   const urlDistrict =
     searchParams.get("quartier") ?? searchParams.get("district") ?? "";
 
-  // ✅ Filtres UI
+  // UI filters
   const [keyword, setKeyword] = useState<string>(urlService);
   const [selectedDistrict, setSelectedDistrict] = useState<string>(urlDistrict);
-  const [maxPrice, setMaxPrice] = useState<number>(300000);
+  const [maxPrice, setMaxPrice] = useState<number>(DEFAULT_MAX_PRICE);
   const [minRating, setMinRating] = useState<number>(0);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
-  // ✅ Géolocalisation
+  // Geolocation (clean UX)
   const {
     latitude,
     longitude,
@@ -47,96 +51,129 @@ const SearchSection: React.FC = () => {
     clearLocation,
     hasLocation,
   } = useGeolocation();
-  
-  const [useGeoFilter, setUseGeoFilter] = useState<boolean>(false);
-  const [radiusKm, setRadiusKm] = useState<number>(10);
 
-  // Synchroniser les états locaux avec l'URL
+  const [useMyPosition, setUseMyPosition] = useState<boolean>(false);
+  const [radiusKm, setRadiusKm] = useState<number>(DEFAULT_RADIUS_KM);
+
+  const hasMyCoords = hasLocation && latitude != null && longitude != null;
+
+  // Sync local states from URL (only keyword/district)
   useEffect(() => {
-    const service = searchParams.get("service") ?? searchParams.get("keyword") ?? "";
-    const district = searchParams.get("quartier") ?? searchParams.get("district") ?? "";
-    
+    const service =
+      searchParams.get("service") ?? searchParams.get("keyword") ?? "";
+    const district =
+      searchParams.get("quartier") ?? searchParams.get("district") ?? "";
     setKeyword(service);
     setSelectedDistrict(district);
   }, [searchParams]);
 
-  // Charger les données quand l'URL change
+  // Fetch workers when URL changes (service/district)
   useEffect(() => {
-    const service = searchParams.get("service") ?? searchParams.get("keyword") ?? "";
-    const district = searchParams.get("quartier") ?? searchParams.get("district") ?? "";
-    
-    console.log("🔎 [SearchSection] useEffect détecté changement searchParams");
-    console.log("🔎 [SearchSection] Paramètres extraits:", { 
-      service, 
-      district,
-      serviceTrimmed: service.trim(),
-      districtTrimmed: district.trim()
-    });
-    
+    const service =
+      searchParams.get("service") ?? searchParams.get("keyword") ?? "";
+    const district =
+      searchParams.get("quartier") ?? searchParams.get("district") ?? "";
     search(service, district, language);
   }, [language, searchParams, search]);
 
-  // Fonction pour déclencher la recherche depuis le bouton
-  const handleSearchClick = () => {
-    console.log("🔘 Clic recherche avec:", { keyword, selectedDistrict });
-    
-    const params: Record<string, string> = {};
-    if (keyword.trim()) params.service = keyword.trim();
-    if (selectedDistrict.trim()) params.quartier = selectedDistrict.trim();
-
-    setSearchParams(params, { replace: false });
-
-    setTimeout(() => {
-      document.getElementById("results")?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
-  };
-
-  // Options quartiers (pour le dropdown)
+  // District options from loaded workers
   const districts = useMemo(
     () =>
       Array.from(
         new Set(
-          workers
-            .map((w) => w.district)
-            .filter((d) => d && d.trim().length > 0)
+          (workers ?? [])
+            .map((w: any) => w.district)
+            .filter((d: string) => d && d.trim().length > 0)
         )
       ),
     [workers]
   );
 
-  // ✅ Calcul des distances et filtrage
-  const workersWithDistance = useMemo(() => {
-    if (!hasLocation || !latitude || !longitude) {
-      return workers.map(w => ({ ...w, distance: null }));
+  // Trigger search ONLY on button click
+  const handleSearchClick = () => {
+    const params: Record<string, string> = {};
+    if (keyword.trim()) params.service = keyword.trim();
+    if (selectedDistrict.trim()) params.quartier = selectedDistrict.trim();
+
+    // keep near params only if coords exist
+    if (useMyPosition && hasMyCoords) {
+      params.near = "1";
+      if (radiusKm !== DEFAULT_RADIUS_KM) params.radiusKm = String(radiusKm);
+      params.lat = String(latitude);
+      params.lng = String(longitude);
     }
 
-    return workers.map((w) => {
+    setSearchParams(params, { replace: false });
+
+    // scroll to results after state/url update
+    window.setTimeout(() => {
+      document.getElementById("results")?.scrollIntoView({ behavior: "smooth" });
+    }, 120);
+  };
+
+  const requestMyPosition = () => {
+    // Important: we only enable the "near me" mode if coords are obtained
+    setUseMyPosition(false);
+    clearLocation();
+
+    getLocation();
+    // We will show radius only if hasMyCoords becomes true
+    // If user refuses, geoError will show, and no radius will appear.
+  };
+
+  // When coords appear, enable near mode automatically
+  useEffect(() => {
+    if (hasMyCoords) {
+      setUseMyPosition(true);
+    }
+  }, [hasMyCoords]);
+
+  const resetFilters = () => {
+    setKeyword("");
+    setSelectedDistrict("");
+    setMaxPrice(DEFAULT_MAX_PRICE);
+    setMinRating(0);
+    setViewMode("list");
+
+    setUseMyPosition(false);
+    setRadiusKm(DEFAULT_RADIUS_KM);
+    clearLocation();
+
+    setSearchParams({}, { replace: false });
+  };
+
+  // Add distance on client side
+  const workersWithDistance = useMemo(() => {
+    if (!useMyPosition || !hasMyCoords) {
+      return (workers ?? []).map((w: any) => ({ ...w, distance: null }));
+    }
+
+    return (workers ?? []).map((w: any) => {
       if (w.lat && w.lng) {
         const distance = calculateDistance(latitude, longitude, w.lat, w.lng);
         return { ...w, distance };
       }
       return { ...w, distance: null };
     });
-  }, [workers, latitude, longitude, hasLocation]);
+  }, [workers, useMyPosition, hasMyCoords, latitude, longitude]);
 
-  // ✅ Filtrage côté client: prix, note, géolocalisation
+  // Filter client-side: price, rating, and radius (only if coords exist)
   const filteredWorkers = useMemo(() => {
-    let filtered = workersWithDistance.filter((w) => {
-      const matchPrice = w.hourlyRate <= maxPrice;
-      const matchRating = w.rating >= minRating;
-      
-      // Filtre géographique si activé
-      if (useGeoFilter && hasLocation) {
-        if (w.distance === null) return false; // Exclure les ouvriers sans coordonnées
+    let filtered = workersWithDistance.filter((w: any) => {
+      const matchPrice = (w.hourlyRate ?? 0) <= maxPrice;
+      const matchRating = (w.rating ?? 0) >= minRating;
+
+      if (useMyPosition && hasMyCoords) {
+        if (w.distance === null) return false;
         return matchPrice && matchRating && w.distance <= radiusKm;
       }
-      
+
       return matchPrice && matchRating;
     });
 
-    // Trier par distance si géolocalisation activée
-    if (useGeoFilter && hasLocation) {
-      filtered = filtered.sort((a, b) => {
+    // Sort by distance only if active + coords
+    if (useMyPosition && hasMyCoords) {
+      filtered = filtered.sort((a: any, b: any) => {
         if (a.distance === null) return 1;
         if (b.distance === null) return -1;
         return a.distance - b.distance;
@@ -144,41 +181,15 @@ const SearchSection: React.FC = () => {
     }
 
     return filtered;
-  }, [workersWithDistance, maxPrice, minRating, useGeoFilter, hasLocation, radiusKm]);
-
-  const resetFilters = () => {
-    setKeyword("");
-    setSelectedDistrict("");
-    setMaxPrice(300000);
-    setMinRating(0);
-    setUseGeoFilter(false);
-    setRadiusKm(10);
-    clearLocation();
-    setSearchParams({}, { replace: false });
-  };
-
-  // Activer/désactiver le filtre géographique
-  const handleGeoToggle = (checked: boolean) => {
-    setUseGeoFilter(checked);
-    if (checked && !hasLocation) {
-      getLocation();
-    } else if (!checked) {
-      clearLocation();
-    }
-  };
+  }, [workersWithDistance, maxPrice, minRating, useMyPosition, hasMyCoords, radiusKm]);
 
   const formatCurrency = (value: number, currency: string) => {
-    if (currency === "GNF") {
-      return `${value.toLocaleString("fr-FR")} GNF`;
-    }
+    if (currency === "GNF") return `${value.toLocaleString("fr-FR")} GNF`;
     return `${value} ${currency}`;
   };
 
   const text = {
-    title:
-      language === "fr"
-        ? "Trouvez votre professionnel"
-        : "Find your professional",
+    title: language === "fr" ? "Trouvez votre professionnel" : "Find your professional",
     subtitle:
       language === "fr"
         ? "Filtrez par métier, quartier et tarif pour trouver l'ouvrier le plus proche."
@@ -189,29 +200,18 @@ const SearchSection: React.FC = () => {
       language === "fr"
         ? "Plombier, électricien, Mamadou..."
         : "Plumber, electrician, John...",
-    job: language === "fr" ? "Métier" : "Job",
-    allJobs: language === "fr" ? "Tous les métiers" : "All trades",
     district: language === "fr" ? "Quartier" : "District",
-    allDistricts:
-      language === "fr" ? "Tous les quartiers" : "All districts",
-    priceLabel:
-      language === "fr" ? "Tarif horaire max" : "Max hourly rate",
+    allDistricts: language === "fr" ? "Tous les quartiers" : "All districts",
+    priceLabel: language === "fr" ? "Tarif horaire max" : "Max hourly rate",
     ratingLabel: language === "fr" ? "Note minimum" : "Minimum rating",
-    geoLabel: language === "fr" ? "Recherche par proximité" : "Search by proximity",
-    geoRadius: language === "fr" ? "Rayon de recherche" : "Search radius",
-    geoEnable: language === "fr" ? "Activer" : "Enable",
-    geoLoading: language === "fr" ? "Obtention de votre position..." : "Getting your location...",
-    geoError: language === "fr" ? "Erreur de géolocalisation" : "Geolocation error",
-    noCoordinates: language === "fr" ? "Sans position GPS" : "No GPS location",
-    reset: language === "fr" ? "Réinitialiser les filtres" : "Reset filters",
+    reset: language === "fr" ? "Réinitialiser" : "Reset",
     noResults:
       language === "fr"
         ? "Aucun professionnel ne correspond à ces critères pour le moment."
         : "No professional matches your criteria yet.",
     contact: language === "fr" ? "Contacter" : "Contact",
     perHour: "/h",
-    years:
-      language === "fr" ? "ans d'expérience" : "years of experience",
+    years: language === "fr" ? "ans d'expérience" : "years of experience",
     viewMode: language === "fr" ? "Affichage" : "View",
     viewList: language === "fr" ? "Liste" : "List",
     viewGrid: language === "fr" ? "Mosaïque" : "Grid",
@@ -219,15 +219,16 @@ const SearchSection: React.FC = () => {
       language === "fr"
         ? `${count} résultat${count > 1 ? "s" : ""} trouvé${count > 1 ? "s" : ""}`
         : `${count} result${count > 1 ? "s" : ""} found`,
-    topSearchTitle:
-      language === "fr" ? "Rechercher un ouvrier" : "Search a worker",
+    topSearchTitle: language === "fr" ? "Rechercher un ouvrier" : "Search a worker",
     topSearchBtn: language === "fr" ? "Rechercher" : "Search",
+    useMyPos: language === "fr" ? "Utiliser ma position" : "Use my location",
+    radius: language === "fr" ? "Rayon" : "Radius",
   };
 
   return (
     <section id="search" className="w-full py-12 sm:py-16 lg:py-20 bg-white">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* ZONE DE RECHERCHE HAUT */}
+        {/* TOP SEARCH (Hero Card) */}
         <div className="mb-6 sm:mb-8">
           <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-3 sm:p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -237,16 +238,15 @@ const SearchSection: React.FC = () => {
               </h3>
             </div>
 
+            {/* IMPORTANT: no auto navigation / no scroll on input click */}
             <form
-              onSubmit={(e) => e.preventDefault()}
-              className="
-                grid grid-cols-1 gap-3
-                sm:grid-cols-2
-                lg:grid-cols-4
-                items-end
-              "
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSearchClick();
+              }}
+              className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 items-end"
             >
-              {/* Métier */}
+              {/* Trade/keyword */}
               <div className="lg:col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   {text.keywordLabel}
@@ -259,7 +259,7 @@ const SearchSection: React.FC = () => {
                 />
               </div>
 
-              {/* Quartier */}
+              {/* District */}
               <div className="lg:col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   {text.district}
@@ -279,9 +279,8 @@ const SearchSection: React.FC = () => {
               </div>
 
               <Button
-                type="button"
+                type="submit"
                 className="lg:col-span-4 w-full bg-pro-blue hover:bg-blue-700"
-                onClick={handleSearchClick}
               >
                 {text.topSearchBtn}
               </Button>
@@ -289,7 +288,7 @@ const SearchSection: React.FC = () => {
           </div>
         </div>
 
-        {/* En-tête */}
+        {/* Header */}
         <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-6 sm:mb-8 border-b border-gray-200 pb-4">
           <div>
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
@@ -302,11 +301,7 @@ const SearchSection: React.FC = () => {
             <div className="mt-2 flex items-center gap-1 text-[11px] sm:text-xs text-gray-500">
               <Search className="w-3 h-3" />
               {loading ? (
-                <span>
-                  {language === "fr"
-                    ? "Chargement des résultats..."
-                    : "Loading results..."}
-                </span>
+                <span>{language === "fr" ? "Chargement..." : "Loading..."}</span>
               ) : (
                 <span>{text.resultCount(filteredWorkers.length)}</span>
               )}
@@ -355,7 +350,7 @@ const SearchSection: React.FC = () => {
               {text.filters}
             </h3>
 
-            {/* Mot clé / Métier */}
+            {/* Keyword */}
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.keywordLabel}
@@ -368,7 +363,63 @@ const SearchSection: React.FC = () => {
               />
             </div>
 
-            {/* Quartier */}
+            {/* ✅ Use my position (clean, no extra text unless coords exist) */}
+            <div className="mb-5">
+              <Button
+                type="button"
+                size="sm"
+                className="w-full bg-pro-blue hover:bg-blue-700"
+                onClick={() => {
+                  // Toggle OFF if already enabled
+                  if (useMyPosition || hasMyCoords) {
+                    setUseMyPosition(false);
+                    setRadiusKm(DEFAULT_RADIUS_KM);
+                    clearLocation();
+                    return;
+                  }
+                  requestMyPosition();
+                }}
+                disabled={geoLoading}
+              >
+                {geoLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {language === "fr" ? "Localisation..." : "Locating..."}
+                  </>
+                ) : (
+                  <>
+                    <LocateFixed className="w-4 h-4 mr-2" />
+                    {text.useMyPos}
+                  </>
+                )}
+              </Button>
+
+              {/* Error only (no radius) */}
+              {geoError && !hasMyCoords && (
+                <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                  {geoError}
+                </div>
+              )}
+
+              {/* Radius ONLY when coords exist */}
+              {useMyPosition && hasMyCoords && (
+                <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
+                  <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
+                    <span>{text.radius}</span>
+                    <span className="text-[11px] text-gray-500">{radiusKm} km</span>
+                  </div>
+                  <Slider
+                    value={[radiusKm]}
+                    min={1}
+                    max={50}
+                    step={1}
+                    onValueChange={(v) => setRadiusKm(v[0])}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* District */}
             <div className="mb-6">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.district}
@@ -387,12 +438,12 @@ const SearchSection: React.FC = () => {
               </select>
             </div>
 
-            {/* Prix max */}
+            {/* Price */}
             <div className="mb-6">
               <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                 <span>{text.priceLabel}</span>
                 <span className="text-[11px] text-gray-500">
-                  {maxPrice >= 300000
+                  {maxPrice >= DEFAULT_MAX_PRICE
                     ? language === "fr"
                       ? "Aucune limite"
                       : "No limit"
@@ -402,18 +453,22 @@ const SearchSection: React.FC = () => {
               <Slider
                 value={[maxPrice]}
                 min={50000}
-                max={300000}
+                max={DEFAULT_MAX_PRICE}
                 step={10000}
                 onValueChange={(v) => setMaxPrice(v[0])}
               />
             </div>
 
-            {/* Note min */}
+            {/* Rating */}
             <div className="mb-6">
               <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                 <span>{text.ratingLabel}</span>
                 <span className="text-[11px] text-gray-500">
-                  {minRating === 0 ? "Toutes" : minRating.toFixed(1)}
+                  {minRating === 0
+                    ? language === "fr"
+                      ? "Toutes"
+                      : "Any"
+                    : minRating.toFixed(1)}
                 </span>
               </div>
               <Slider
@@ -425,65 +480,20 @@ const SearchSection: React.FC = () => {
               />
             </div>
 
-            {/* Géolocalisation */}
-            <div className="mb-6 pb-6 border-b border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Navigation className="w-4 h-4 text-pro-blue" />
-                  <label className="text-xs font-medium text-gray-600">
-                    {text.geoLabel}
-                  </label>
-                </div>
-                <Switch
-                  checked={useGeoFilter}
-                  onCheckedChange={handleGeoToggle}
-                  disabled={geoLoading}
-                />
-              </div>
-
-              {geoLoading && (
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  <span>{text.geoLoading}</span>
-                </div>
-              )}
-
-              {geoError && useGeoFilter && (
-                <div className="text-xs text-red-600 bg-red-50 rounded p-2">
-                  {geoError}
-                </div>
-              )}
-
-              {useGeoFilter && hasLocation && (
-                <div className="mt-3">
-                  <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
-                    <span>{text.geoRadius}</span>
-                    <span className="text-[11px] text-gray-500">
-                      {radiusKm} km
-                    </span>
-                  </div>
-                  <Slider
-                    value={[radiusKm]}
-                    min={1}
-                    max={50}
-                    step={1}
-                    onValueChange={(v) => setRadiusKm(v[0])}
-                  />
-                </div>
-              )}
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 border-gray-300 text-sm"
+                variant="outline"
+                type="button"
+                onClick={resetFilters}
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                {text.reset}
+              </Button>
             </div>
-
-            <Button
-              className="w-full border-gray-300 text-sm"
-              variant="outline"
-              type="button"
-              onClick={resetFilters}
-            >
-              {text.reset}
-            </Button>
           </aside>
 
-          {/* Résultats */}
+          {/* Results */}
           <div id="results" className="lg:col-span-3">
             {error && (
               <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">
@@ -506,7 +516,7 @@ const SearchSection: React.FC = () => {
             )}
 
             {/* LIST */}
-            {viewMode === "list" && (
+            {viewMode === "list" && filteredWorkers.length > 0 && (
               <div className="space-y-3 sm:space-y-4">
                 {filteredWorkers.map((w: any) => (
                   <div
@@ -515,10 +525,12 @@ const SearchSection: React.FC = () => {
                   >
                     <div className="flex-shrink-0">
                       <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">
-                        {w.name
+                        {(w.name ?? "OP")
                           .split(" ")
-                          .map((n: string) => n[0])
-                          .join("")}
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((n: string) => n[0]?.toUpperCase())
+                          .join("") || "OP"}
                       </div>
                     </div>
 
@@ -532,37 +544,35 @@ const SearchSection: React.FC = () => {
                             {w.job}
                           </span>
                         )}
+
+                        {useMyPosition && hasMyCoords && w.distance != null && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">
+                            <Navigation className="w-3 h-3" />
+                            {formatDistance(w.distance, language)}
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex flex-wrap items-center gap-3 mt-1 text-xs sm:text-sm text-gray-600">
                         <span className="flex items-center gap-1">
                           <MapPin className="w-3 h-3" />
-                          {[w.city, w.commune, w.district]
-                            .filter(Boolean)
-                            .join(" • ")}
+                          {[w.city, w.commune, w.district].filter(Boolean).join(" • ")}
                         </span>
-
-                        {w.distance !== null && useGeoFilter && (
-                          <span className="flex items-center gap-1 text-pro-blue font-medium">
-                            <Navigation className="w-3 h-3" />
-                            {formatDistance(w.distance, language)}
-                          </span>
-                        )}
 
                         <span className="flex items-center gap-1">
                           <Star className="w-3 h-3 text-yellow-400" />
-                          {w.rating.toFixed(1)} ({w.ratingCount})
+                          {(w.rating ?? 0).toFixed(1)} ({w.ratingCount ?? 0})
                         </span>
 
                         <span>
-                          {w.experienceYears} {text.years}
+                          {w.experienceYears ?? 0} {text.years}
                         </span>
                       </div>
                     </div>
 
                     <div className="w-full sm:w-auto flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 text-right">
                       <div className="text-pro-blue font-bold text-base sm:text-lg">
-                        {formatCurrency(w.hourlyRate, w.currency)}
+                        {formatCurrency(w.hourlyRate ?? 0, w.currency ?? "GNF")}
                         <span className="text-xs sm:text-sm text-gray-600 ml-1">
                           {text.perHour}
                         </span>
@@ -580,7 +590,7 @@ const SearchSection: React.FC = () => {
             )}
 
             {/* GRID */}
-            {viewMode === "grid" && (
+            {viewMode === "grid" && filteredWorkers.length > 0 && (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {filteredWorkers.map((w: any) => (
                   <div
@@ -589,18 +599,26 @@ const SearchSection: React.FC = () => {
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-pro-blue text-white flex items-center justify-center text-sm font-semibold">
-                        {w.name
+                        {(w.name ?? "OP")
                           .split(" ")
-                          .map((n: string) => n[0])
-                          .join("")}
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((n: string) => n[0]?.toUpperCase())
+                          .join("") || "OP"}
                       </div>
                       <div className="min-w-0">
                         <h3 className="font-semibold text-sm text-pro-gray truncate">
                           {w.name}
                         </h3>
                         {w.job && (
-                          <div className="text-xs text-pro-blue mt-0.5">
-                            {w.job}
+                          <div className="text-xs text-pro-blue mt-0.5">{w.job}</div>
+                        )}
+                        {useMyPosition && hasMyCoords && w.distance != null && (
+                          <div className="text-[11px] text-slate-600 mt-1 inline-flex items-center gap-1">
+                            <Navigation className="w-3 h-3" />
+                            <span className="font-semibold">
+                              {formatDistance(w.distance, language)}
+                            </span>
                           </div>
                         )}
                       </div>
@@ -609,31 +627,20 @@ const SearchSection: React.FC = () => {
                     <div className="text-xs text-gray-600 space-y-1">
                       <span className="flex items-center gap-1">
                         <MapPin className="w-3 h-3" />
-                        {[w.city, w.commune, w.district]
-                          .filter(Boolean)
-                          .join(" • ")}
+                        {[w.city, w.commune, w.district].filter(Boolean).join(" • ")}
                       </span>
-
-                      {w.distance !== null && useGeoFilter && (
-                        <span className="flex items-center gap-1 text-pro-blue font-medium">
-                          <Navigation className="w-3 h-3" />
-                          {formatDistance(w.distance, language)}
-                        </span>
-                      )}
-
                       <span className="flex items-center gap-1">
                         <Star className="w-3 h-3 text-yellow-400" />
-                        {w.rating.toFixed(1)} ({w.ratingCount})
+                        {(w.rating ?? 0).toFixed(1)} ({w.ratingCount ?? 0})
                       </span>
-
                       <span>
-                        {w.experienceYears} {text.years}
+                        {w.experienceYears ?? 0} {text.years}
                       </span>
                     </div>
 
                     <div className="mt-2 flex items-center justify-between">
                       <div className="text-sm font-bold text-pro-blue">
-                        {formatCurrency(w.hourlyRate, w.currency)}
+                        {formatCurrency(w.hourlyRate ?? 0, w.currency ?? "GNF")}
                         <span className="ml-1 text-[11px] text-gray-600">
                           {text.perHour}
                         </span>
