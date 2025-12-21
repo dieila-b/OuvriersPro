@@ -28,7 +28,6 @@ const HeroSection = () => {
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
 
-  // ✅ Charger options
   useEffect(() => {
     const loadOptions = async () => {
       setLoadingOptions(true);
@@ -59,6 +58,7 @@ const HeroSection = () => {
       } else {
         console.error("Hero options error:", error);
       }
+
       setLoadingOptions(false);
     };
 
@@ -77,7 +77,6 @@ const HeroSection = () => {
     return districtOptions.filter((d) => d.toLowerCase().includes(q)).slice(0, 8);
   }, [district, districtOptions]);
 
-  // ✅ fermer dropdown clic extérieur + ESC
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
       if (jobsBoxRef.current && !jobsBoxRef.current.contains(e.target as Node)) {
@@ -87,20 +86,8 @@ const HeroSection = () => {
         setOpenDistricts(false);
       }
     };
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpenJobs(false);
-        setOpenDistricts(false);
-      }
-    };
-
     document.addEventListener("mousedown", onClickOutside);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onClickOutside);
-      document.removeEventListener("keydown", onKeyDown);
-    };
+    return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
   const handleGeoLocate = () => {
@@ -155,144 +142,136 @@ const HeroSection = () => {
     });
   };
 
-  /**
-   * ✅ IMPORTANT RESPONSIVE:
-   * - On évite les grands paddings en desktop qui créent du “vide” entre Hero et Features.
-   * - On limite la hauteur minimale (pas de min-h-screen).
-   * - On garantit des blocs qui ne débordent jamais (w-full, max-w, gap adaptés).
-   */
   return (
     <section className="w-full bg-gradient-to-br from-pro-blue to-blue-600 text-white">
-      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 lg:py-12">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 leading-tight tracking-tight">
-            {t("home.title")}
-          </h1>
+      {/* ✅ hauteur + padding vraiment responsive (évite le Hero “trop haut” sur desktop) */}
+      <div className="w-full min-h-[calc(72vh-64px)] sm:min-h-[calc(70vh-64px)] lg:min-h-[calc(65vh-64px)] flex items-center">
+        <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 lg:py-14">
+          <div className="max-w-4xl mx-auto text-center">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-5 leading-tight tracking-tight">
+              {t("home.title")}
+            </h1>
 
-          <p className="text-sm sm:text-base md:text-xl lg:text-2xl mb-5 sm:mb-6 text-blue-100">
-            {t("home.subtitle")}
-          </p>
+            <p className="text-sm sm:text-base md:text-xl lg:text-2xl mb-6 sm:mb-7 text-blue-100">
+              {t("home.subtitle")}
+            </p>
 
-          {/* Card responsive */}
-          <div className="bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl max-w-3xl mx-auto">
-            {/* ✅ Mobile: 1 colonne / sm+: 2 colonnes */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 items-stretch">
-              {/* Métier */}
-              <div ref={jobsBoxRef} className="relative text-left">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <Input
-                  placeholder={t("home.search.placeholder") || "Métier / service"}
-                  value={searchTerm}
-                  onFocus={() => setOpenJobs(true)}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setOpenJobs(true);
-                  }}
-                  className="pl-10 pr-8 h-12 text-gray-900 text-sm sm:text-base w-full"
-                />
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <div className="bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl max-w-3xl mx-auto">
+              <div className="grid grid-cols-1 gap-2 sm:gap-3 sm:grid-cols-2 items-stretch">
+                {/* Métier */}
+                <div ref={jobsBoxRef} className="relative text-left">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <Input
+                    placeholder={t("home.search.placeholder") || "Métier / service"}
+                    value={searchTerm}
+                    onFocus={() => setOpenJobs(true)}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setOpenJobs(true);
+                    }}
+                    className="pl-10 pr-8 h-12 text-gray-900 text-sm sm:text-base w-full"
+                  />
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
 
-                {openJobs && (filteredJobs.length > 0 || loadingOptions) && (
-                  <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-                    {loadingOptions && (
-                      <div className="px-3 py-2 text-xs text-gray-500">
-                        {language === "fr" ? "Chargement..." : "Loading..."}
-                      </div>
-                    )}
-                    {!loadingOptions &&
-                      filteredJobs.map((j) => (
-                        <button
-                          key={j}
-                          type="button"
-                          onClick={() => {
-                            setSearchTerm(j);
-                            setOpenJobs(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          {j}
-                        </button>
-                      ))}
+                  {openJobs && (filteredJobs.length > 0 || loadingOptions) && (
+                    <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                      {loadingOptions && (
+                        <div className="px-3 py-2 text-xs text-gray-500">
+                          {language === "fr" ? "Chargement..." : "Loading..."}
+                        </div>
+                      )}
+                      {!loadingOptions &&
+                        filteredJobs.map((j) => (
+                          <button
+                            key={j}
+                            type="button"
+                            onClick={() => {
+                              setSearchTerm(j);
+                              setOpenJobs(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          >
+                            {j}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Quartier + Geo */}
+                <div ref={districtsBoxRef} className="relative text-left">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <Input
+                    placeholder={t("home.quartier.placeholder") || "Quartier"}
+                    value={district}
+                    onFocus={() => setOpenDistricts(true)}
+                    onChange={(e) => {
+                      setDistrict(e.target.value);
+                      setGeo(null);
+                      setOpenDistricts(true);
+                    }}
+                    className="pl-10 pr-14 h-12 text-gray-900 text-sm sm:text-base w-full"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={handleGeoLocate}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-gray-200 px-2 py-1 text-gray-600 hover:bg-gray-50"
+                    aria-label={language === "fr" ? "Utiliser ma position" : "Use my location"}
+                    title={language === "fr" ? "Utiliser ma position" : "Use my location"}
+                  >
+                    <LocateFixed className={`w-4 h-4 ${geoLoading ? "animate-pulse" : ""}`} />
+                  </button>
+
+                  {openDistricts && (filteredDistricts.length > 0 || loadingOptions) && (
+                    <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                      {loadingOptions && (
+                        <div className="px-3 py-2 text-xs text-gray-500">
+                          {language === "fr" ? "Chargement..." : "Loading..."}
+                        </div>
+                      )}
+                      {!loadingOptions &&
+                        filteredDistricts.map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => {
+                              setDistrict(d);
+                              setGeo(null);
+                              setOpenDistricts(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          >
+                            {d}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+
+                {geoError && (
+                  <div className="sm:col-span-2 text-xs text-red-600 text-left px-1">
+                    {geoError}
                   </div>
                 )}
-              </div>
 
-              {/* Quartier + Geo */}
-              <div ref={districtsBoxRef} className="relative text-left">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <Input
-                  placeholder={t("home.quartier.placeholder") || "Quartier"}
-                  value={district}
-                  onFocus={() => setOpenDistricts(true)}
-                  onChange={(e) => {
-                    setDistrict(e.target.value);
-                    setGeo(null);
-                    setOpenDistricts(true);
-                  }}
-                  className="pl-10 pr-14 h-12 text-gray-900 text-sm sm:text-base w-full"
-                />
-
-                <button
+                <Button
                   type="button"
-                  onClick={handleGeoLocate}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-gray-200 px-2 py-1 text-gray-600 hover:bg-gray-50"
-                  aria-label={language === "fr" ? "Utiliser ma position" : "Use my location"}
-                  title={language === "fr" ? "Utiliser ma position" : "Use my location"}
+                  onClick={handleSearch}
+                  className="sm:col-span-2 w-full bg-pro-blue hover:bg-blue-700 h-12 text-sm sm:text-base"
                 >
-                  <LocateFixed className={`w-4 h-4 ${geoLoading ? "animate-pulse" : ""}`} />
-                </button>
-
-                {openDistricts && (filteredDistricts.length > 0 || loadingOptions) && (
-                  <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-                    {loadingOptions && (
-                      <div className="px-3 py-2 text-xs text-gray-500">
-                        {language === "fr" ? "Chargement..." : "Loading..."}
-                      </div>
-                    )}
-                    {!loadingOptions &&
-                      filteredDistricts.map((d) => (
-                        <button
-                          key={d}
-                          type="button"
-                          onClick={() => {
-                            setDistrict(d);
-                            setGeo(null);
-                            setOpenDistricts(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          {d}
-                        </button>
-                      ))}
-                  </div>
-                )}
+                  {t("home.search.button") || "Rechercher"}
+                </Button>
               </div>
 
-              {/* Erreur geo */}
-              {geoError && (
-                <div className="sm:col-span-2 text-xs text-red-600 text-left px-1">
-                  {geoError}
+              {geo && (
+                <div className="mt-2 text-left text-[11px] sm:text-xs text-gray-500 px-1">
+                  {language === "fr"
+                    ? "Position détectée : le tri par distance sera activé."
+                    : "Location detected: distance sorting will be enabled."}
                 </div>
               )}
-
-              {/* Bouton (pleine largeur) */}
-              <Button
-                type="button"
-                onClick={handleSearch}
-                className="sm:col-span-2 w-full bg-pro-blue hover:bg-blue-700 h-12 text-sm sm:text-base"
-              >
-                {t("home.search.button") || "Rechercher"}
-              </Button>
             </div>
-
-            {/* Indicateur geo (compact) */}
-            {geo && (
-              <div className="mt-2 text-left text-[11px] sm:text-xs text-gray-500 px-1">
-                {language === "fr"
-                  ? "Position détectée : le tri par distance sera activé."
-                  : "Location detected: distance sorting will be enabled."}
-              </div>
-            )}
           </div>
         </div>
       </div>
