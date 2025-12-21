@@ -11,30 +11,24 @@ const HeroSection = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
 
-  // ---- valeurs saisies
-  const [searchTerm, setSearchTerm] = useState(""); // Métier
-  const [district, setDistrict] = useState(""); // Quartier (texte)
+  const [searchTerm, setSearchTerm] = useState("");
+  const [district, setDistrict] = useState("");
   const [geo, setGeo] = useState<{ lat: number; lng: number } | null>(null);
 
-  // ---- listes globales (provenant des workers approuvés)
   const [jobOptions, setJobOptions] = useState<string[]>([]);
   const [districtOptions, setDistrictOptions] = useState<string[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
 
-  // ---- dropdown open/close
   const [openJobs, setOpenJobs] = useState(false);
   const [openDistricts, setOpenDistricts] = useState(false);
 
   const jobsBoxRef = useRef<HTMLDivElement>(null);
   const districtsBoxRef = useRef<HTMLDivElement>(null);
 
-  // ---- géoloc UI états
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
 
-  // -------------------------
-  // Charger métiers + quartiers depuis Supabase
-  // -------------------------
+  // ✅ Charger options (light)
   useEffect(() => {
     const loadOptions = async () => {
       setLoadingOptions(true);
@@ -47,16 +41,16 @@ const HeroSection = () => {
         const jobs = Array.from(
           new Set(
             data
-              .map((w) => (w.profession ?? "").trim())
-              .filter((v) => v.length > 0)
+              .map((w: any) => (w.profession ?? "").trim())
+              .filter((v: string) => v.length > 0)
           )
         ).sort((a, b) => a.localeCompare(b, "fr"));
 
         const districts = Array.from(
           new Set(
             data
-              .map((w) => (w.district ?? "").trim())
-              .filter((v) => v.length > 0)
+              .map((w: any) => (w.district ?? "").trim())
+              .filter((v: string) => v.length > 0)
           )
         ).sort((a, b) => a.localeCompare(b, "fr"));
 
@@ -65,31 +59,25 @@ const HeroSection = () => {
       } else {
         console.error("Hero options error:", error);
       }
-
       setLoadingOptions(false);
     };
 
     loadOptions();
   }, []);
 
-  // -------------------------
-  // Suggestions filtrées (après 3 lettres)
-  // -------------------------
   const filteredJobs = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
-    if (q.length < 3) return [];
+    if (q.length < 2) return []; // ✅ plus permissif sur mobile
     return jobOptions.filter((j) => j.toLowerCase().includes(q)).slice(0, 8);
   }, [searchTerm, jobOptions]);
 
   const filteredDistricts = useMemo(() => {
     const q = district.trim().toLowerCase();
-    if (q.length < 3) return [];
+    if (q.length < 2) return [];
     return districtOptions.filter((d) => d.toLowerCase().includes(q)).slice(0, 8);
   }, [district, districtOptions]);
 
-  // -------------------------
-  // Fermer dropdown si clic extérieur
-  // -------------------------
+  // ✅ fermer dropdown clic extérieur
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
       if (jobsBoxRef.current && !jobsBoxRef.current.contains(e.target as Node)) {
@@ -106,9 +94,6 @@ const HeroSection = () => {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  // -------------------------
-  // Géolocalisation
-  // -------------------------
   const handleGeoLocate = () => {
     setGeoError(null);
     setGeoLoading(true);
@@ -125,14 +110,14 @@ const HeroSection = () => {
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setGeo({ lat, lng });
+        setGeo({ lat: pos.coords.latitude, lng: pos.coords.longitude });
 
-        // Si l’utilisateur ne connaît pas le quartier
-        setDistrict(language === "fr" ? "Autour de moi" : "Near me");
+        // ✅ on garde le champ "Quartier" propre, mais on sait qu'on a geo
+        // (le filtre "autour de moi" sera géré côté page recherche)
+        if (!district.trim()) {
+          setDistrict("");
+        }
         setOpenDistricts(false);
-
         setGeoLoading(false);
       },
       (err) => {
@@ -144,43 +129,36 @@ const HeroSection = () => {
         );
         setGeoLoading(false);
       },
-      { enableHighAccuracy: true, timeout: 8000 }
+      { enableHighAccuracy: true, timeout: 9000, maximumAge: 0 }
     );
   };
 
-  // -------------------------
-  // Lancer la recherche -> rediriger vers /rechercher
-  // -------------------------
+  // ✅ recherche -> /rechercher (params propres)
   const handleSearch = () => {
     const job = searchTerm.trim();
     const qDistrict = district.trim();
 
     const params = new URLSearchParams();
-
-    if (job) {
-      params.set("keyword", job);
-    }
-    if (qDistrict) {
-      params.set("district", qDistrict);
-    }
+    if (job) params.set("keyword", job);
+    if (qDistrict) params.set("district", qDistrict);
     if (geo) {
       params.set("lat", String(geo.lat));
       params.set("lng", String(geo.lng));
+      params.set("near", "1"); // ✅ utile pour activer automatiquement le tri par distance
     }
-
-    const search = params.toString();
 
     navigate({
       pathname: "/rechercher",
-      search: search ? `?${search}` : "",
+      search: params.toString() ? `?${params.toString()}` : "",
     });
   };
 
   return (
     <section className="w-full bg-gradient-to-br from-pro-blue to-blue-600 text-white">
-      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 md:py-20 lg:py-24 text-center">
-        <div className="max-w-4xl mx-auto animate-fade-in">
-          <h1 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6 leading-tight tracking-tight">
+      {/* ✅ padding responsive + évite débordement */}
+      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 md:py-20 lg:py-24">
+        <div className="max-w-4xl mx-auto text-center">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6 leading-tight tracking-tight">
             {t("home.title")}
           </h1>
 
@@ -188,11 +166,12 @@ const HeroSection = () => {
             {t("home.subtitle")}
           </p>
 
-          {/* Search Form (Métier + Quartier avec suggestions + géoloc) */}
+          {/* ✅ Card responsive */}
           <div className="bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl max-w-3xl mx-auto">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 md:gap-4">
-              {/* ---- Métier combobox */}
-              <div ref={jobsBoxRef} className="relative text-left">
+            {/* ✅ Grid: 1 col mobile, 2 col sm, 4 col lg */}
+            <div className="grid grid-cols-1 gap-2 sm:gap-3 md:gap-4 sm:grid-cols-2 lg:grid-cols-4 items-stretch">
+              {/* Métier */}
+              <div ref={jobsBoxRef} className="relative text-left sm:col-span-2 lg:col-span-2">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
                   placeholder={t("home.search.placeholder") || "Métier / service"}
@@ -202,7 +181,7 @@ const HeroSection = () => {
                     setSearchTerm(e.target.value);
                     setOpenJobs(true);
                   }}
-                  className="pl-10 pr-8 py-3 text-gray-900 text-sm sm:text-base w-full"
+                  className="pl-10 pr-8 h-12 text-gray-900 text-sm sm:text-base w-full"
                 />
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
 
@@ -210,7 +189,7 @@ const HeroSection = () => {
                   <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
                     {loadingOptions && (
                       <div className="px-3 py-2 text-xs text-gray-500">
-                        Chargement...
+                        {language === "fr" ? "Chargement..." : "Loading..."}
                       </div>
                     )}
                     {!loadingOptions &&
@@ -231,8 +210,11 @@ const HeroSection = () => {
                 )}
               </div>
 
-              {/* ---- Quartier combobox + géoloc bouton */}
-              <div ref={districtsBoxRef} className="relative text-left">
+              {/* Quartier + Geo */}
+              <div
+                ref={districtsBoxRef}
+                className="relative text-left sm:col-span-2 lg:col-span-2"
+              >
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
                   placeholder={t("home.quartier.placeholder") || "Quartier"}
@@ -240,71 +222,73 @@ const HeroSection = () => {
                   onFocus={() => setOpenDistricts(true)}
                   onChange={(e) => {
                     setDistrict(e.target.value);
-                    setGeo(null); // si l’utilisateur retape, on annule géoloc
+                    setGeo(null);
                     setOpenDistricts(true);
                   }}
-                  className="pl-10 pr-14 py-3 text-gray-900 text-sm sm:text-base w-full"
+                  className="pl-10 pr-14 h-12 text-gray-900 text-sm sm:text-base w-full"
                 />
 
-                {/* bouton géoloc */}
                 <button
                   type="button"
                   onClick={handleGeoLocate}
                   className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-gray-200 px-2 py-1 text-gray-600 hover:bg-gray-50"
-                  aria-label="Utiliser ma position"
-                  title={
-                    language === "fr" ? "Utiliser ma position" : "Use my location"
-                  }
+                  aria-label={language === "fr" ? "Utiliser ma position" : "Use my location"}
+                  title={language === "fr" ? "Utiliser ma position" : "Use my location"}
                 >
-                  <LocateFixed
-                    className={`w-4 h-4 ${
-                      geoLoading ? "animate-pulse" : ""
-                    }`}
-                  />
+                  <LocateFixed className={`w-4 h-4 ${geoLoading ? "animate-pulse" : ""}`} />
                 </button>
 
-                {openDistricts &&
-                  (filteredDistricts.length > 0 || loadingOptions) && (
-                    <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-                      {loadingOptions && (
-                        <div className="px-3 py-2 text-xs text-gray-500">
-                          Chargement...
-                        </div>
-                      )}
-                      {!loadingOptions &&
-                        filteredDistricts.map((d) => (
-                          <button
-                            key={d}
-                            type="button"
-                            onClick={() => {
-                              setDistrict(d);
-                              setGeo(null);
-                              setOpenDistricts(false);
-                            }}
-                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                          >
-                            {d}
-                          </button>
-                        ))}
-                    </div>
-                  )}
+                {openDistricts && (filteredDistricts.length > 0 || loadingOptions) && (
+                  <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                    {loadingOptions && (
+                      <div className="px-3 py-2 text-xs text-gray-500">
+                        {language === "fr" ? "Chargement..." : "Loading..."}
+                      </div>
+                    )}
+                    {!loadingOptions &&
+                      filteredDistricts.map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => {
+                            setDistrict(d);
+                            setGeo(null);
+                            setOpenDistricts(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          {d}
+                        </button>
+                      ))}
+                  </div>
+                )}
               </div>
 
-              {/* message erreur géoloc si besoin */}
+              {/* Erreur geo */}
               {geoError && (
-                <div className="sm:col-span-2 text-xs text-red-600 text-left px-1">
+                <div className="sm:col-span-2 lg:col-span-4 text-xs text-red-600 text-left px-1">
                   {geoError}
                 </div>
               )}
 
-              {/* ---- Bouton */}
+              {/* Bouton */}
               <Button
+                type="button"
                 onClick={handleSearch}
-                className="sm:col-span-2 w-full bg-pro-blue hover:bg-blue-700 px-6 md:px-8 py-3 text-sm sm:text-base"
+                className="sm:col-span-2 lg:col-span-4 w-full bg-pro-blue hover:bg-blue-700 h-12 text-sm sm:text-base"
               >
                 {t("home.search.button") || "Rechercher"}
               </Button>
             </div>
+
+            {/* ✅ hint “position active” propre, sans casser la mise en page */}
+            {geo && (
+              <div className="mt-2 text-left text-[11px] sm:text-xs text-gray-500 px-1">
+                {language === "fr"
+                  ? "Position détectée : le tri par distance sera activé."
+                  : "Location detected: distance sorting will be enabled."}
+              </div>
+            )}
           </div>
         </div>
       </div>
