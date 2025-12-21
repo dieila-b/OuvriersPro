@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   Star,
   MapPin,
@@ -36,7 +37,7 @@ type DbWorker = {
   computed_rating_count: number | null;
   status: string | null;
 
-  // ✅ Geo (si la vue les expose)
+  // ✅ Geo
   latitude?: number | null;
   longitude?: number | null;
 };
@@ -56,11 +57,9 @@ interface WorkerCard {
   rating: number;
   ratingCount: number;
 
-  // ✅ Geo
   latitude: number | null;
   longitude: number | null;
 
-  // ✅ Distance calculée (km) si position client dispo
   distanceKm: number | null;
 }
 
@@ -71,7 +70,7 @@ const toRad = (deg: number) => (deg * Math.PI) / 180;
 
 // Haversine (km)
 const haversineKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-  const R = 6371; // km
+  const R = 6371;
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
   const a =
@@ -86,10 +85,10 @@ const formatKm = (km: number, language: string) => {
   if (!Number.isFinite(km)) return "—";
   if (km < 1) {
     const meters = Math.round(km * 1000);
-    return language === "fr" ? `${meters} m` : `${meters} m`;
+    return `${meters} m`;
   }
   const rounded = Math.round(km * 10) / 10;
-  return language === "fr" ? `${rounded} km` : `${rounded} km`;
+  return `${rounded} km`;
 };
 
 const WorkerSearchSection: React.FC = () => {
@@ -97,12 +96,12 @@ const WorkerSearchSection: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [initializedFromUrl, setInitializedFromUrl] = useState(false);
 
-  // Données
+  // Data
   const [workers, setWorkers] = useState<WorkerCard[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Filtres
+  // Filters
   const [keyword, setKeyword] = useState("");
   const [selectedJob, setSelectedJob] = useState<string>("all");
   const [maxPrice, setMaxPrice] = useState<number>(DEFAULT_MAX_PRICE);
@@ -113,10 +112,14 @@ const WorkerSearchSection: React.FC = () => {
   const [selectedCommune, setSelectedCommune] = useState<string>("");
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
 
-  // Vue liste / mosaïque
+  // View
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
-  // ✅ Recherche “autour de moi”
+  // ✅ Near me (UX demandé)
+  // - par défaut: on ne montre que le bouton “Utiliser ma position”
+  // - après clic: on affiche “Rayon + Activez la localisation...” ou l’erreur.
+  const [nearUiExpanded, setNearUiExpanded] = useState(false);
+
   const [useMyPosition, setUseMyPosition] = useState(false);
   const [radiusKm, setRadiusKm] = useState<number>(DEFAULT_RADIUS_KM);
   const [myLat, setMyLat] = useState<number | null>(null);
@@ -124,18 +127,13 @@ const WorkerSearchSection: React.FC = () => {
   const [geoLocating, setGeoLocating] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
 
-  // 1) Chargement Supabase
+  // 1) Load from Supabase
   useEffect(() => {
     const fetchWorkers = async () => {
       setLoading(true);
       setError(null);
 
       try {
-        /**
-         * ⚠️ Important:
-         * Votre vue op_ouvriers_with_ratings doit idéalement exposer latitude/longitude.
-         * Si ce n’est pas le cas, ajoutez-les dans la vue.
-         */
         const { data, error } = await supabase
           .from("op_ouvriers_with_ratings")
           .select(
@@ -168,10 +166,8 @@ const WorkerSearchSection: React.FC = () => {
         const rows = (data ?? []) as DbWorker[];
 
         const mapped: WorkerCard[] = rows.map((w) => {
-          const effectiveRating =
-            w.computed_average_rating ?? w.average_rating ?? 0;
-          const effectiveCount =
-            w.computed_rating_count ?? w.rating_count ?? 0;
+          const effectiveRating = w.computed_average_rating ?? w.average_rating ?? 0;
+          const effectiveCount = w.computed_rating_count ?? w.rating_count ?? 0;
 
           const lat = typeof w.latitude === "number" ? w.latitude : null;
           const lng = typeof w.longitude === "number" ? w.longitude : null;
@@ -179,8 +175,8 @@ const WorkerSearchSection: React.FC = () => {
           return {
             id: w.id,
             name:
-              ((w.first_name || "") +
-                (w.last_name ? ` ${w.last_name}` : "")).trim() || "Ouvrier",
+              ((w.first_name || "") + (w.last_name ? ` ${w.last_name}` : "")).trim() ||
+              (language === "fr" ? "Ouvrier" : "Worker"),
             job: w.profession ?? "",
             country: w.country ?? "",
             region: w.region ?? "",
@@ -215,7 +211,7 @@ const WorkerSearchSection: React.FC = () => {
     fetchWorkers();
   }, [language]);
 
-  // 2) Sync filtres depuis URL
+  // 2) Sync filters from URL
   useEffect(() => {
     const spKeyword = searchParams.get("keyword") ?? "";
     const spJob = searchParams.get("job") ?? "all";
@@ -227,7 +223,7 @@ const WorkerSearchSection: React.FC = () => {
     const spMinRating = Number(searchParams.get("minRating") ?? "0");
     const spView = (searchParams.get("view") as "list" | "grid") ?? "list";
 
-    // ✅ autour de moi
+    // ✅ near me
     const spNear = searchParams.get("near") === "1";
     const spRadius = Number(searchParams.get("radiusKm") ?? String(DEFAULT_RADIUS_KM));
     const spLat = searchParams.get("lat");
@@ -251,10 +247,13 @@ const WorkerSearchSection: React.FC = () => {
     setMyLat(Number.isFinite(latNum as number) ? (latNum as number) : null);
     setMyLng(Number.isFinite(lngNum as number) ? (lngNum as number) : null);
 
+    // ✅ si near=1 dans l'URL, on peut ouvrir l'UI du bloc (sinon bouton seul)
+    setNearUiExpanded(spNear);
+
     if (!initializedFromUrl) setInitializedFromUrl(true);
   }, [searchParams, initializedFromUrl]);
 
-  // 3) Sync URL depuis filtres
+  // 3) Sync URL from filters
   useEffect(() => {
     if (!initializedFromUrl) return;
 
@@ -271,7 +270,7 @@ const WorkerSearchSection: React.FC = () => {
     if (minRating !== 0) next.minRating = String(minRating);
     if (viewMode !== "list") next.view = viewMode;
 
-    // ✅ autour de moi
+    // ✅ around me
     if (useMyPosition) next.near = "1";
     if (useMyPosition && radiusKm !== DEFAULT_RADIUS_KM) next.radiusKm = String(radiusKm);
     if (useMyPosition && myLat != null && myLng != null) {
@@ -298,7 +297,7 @@ const WorkerSearchSection: React.FC = () => {
     setSearchParams,
   ]);
 
-  // Listes dynamiques
+  // Lists
   const jobs = useMemo(
     () =>
       Array.from(
@@ -375,7 +374,7 @@ const WorkerSearchSection: React.FC = () => {
     return haversineKm(myLat, myLng, w.latitude, w.longitude);
   };
 
-  // Application des filtres + distance + tri
+  // Filter + distance + sort
   const filteredWorkers = useMemo(() => {
     const list = workers
       .map((w) => {
@@ -386,9 +385,7 @@ const WorkerSearchSection: React.FC = () => {
         const kw = keyword.trim().toLowerCase();
 
         const matchKeyword =
-          !kw ||
-          w.name.toLowerCase().includes(kw) ||
-          w.job.toLowerCase().includes(kw);
+          !kw || w.name.toLowerCase().includes(kw) || w.job.toLowerCase().includes(kw);
 
         const matchJob = selectedJob === "all" || w.job === selectedJob;
         const matchPrice = w.hourlyRate <= maxPrice;
@@ -399,22 +396,17 @@ const WorkerSearchSection: React.FC = () => {
         const communeNorm = w.commune?.trim().toLowerCase() || "";
         const districtNorm = w.district?.trim().toLowerCase() || "";
 
-        const matchRegion =
-          !selectedRegion || regionNorm === selectedRegion.trim().toLowerCase();
-        const matchCity =
-          !selectedCity || cityNorm === selectedCity.trim().toLowerCase();
+        const matchRegion = !selectedRegion || regionNorm === selectedRegion.trim().toLowerCase();
+        const matchCity = !selectedCity || cityNorm === selectedCity.trim().toLowerCase();
         const matchCommune =
           !selectedCommune || communeNorm === selectedCommune.trim().toLowerCase();
         const matchDistrict =
           !selectedDistrict || districtNorm === selectedDistrict.trim().toLowerCase();
 
-        // ✅ filtre rayon si “autour de moi”
+        // ✅ radius filter only when we actually have a position
+        const radiusActive = useMyPosition && myLat != null && myLng != null;
         const matchRadius =
-          !useMyPosition ||
-          myLat == null ||
-          myLng == null ||
-          w.distanceKm == null ||
-          w.distanceKm <= radiusKm;
+          !radiusActive || w.distanceKm == null || w.distanceKm <= radiusKm;
 
         return (
           matchKeyword &&
@@ -429,7 +421,7 @@ const WorkerSearchSection: React.FC = () => {
         );
       });
 
-    // ✅ tri par distance si “autour de moi” (les inconnus en bas)
+    // ✅ sort by distance when position is available
     if (useMyPosition && myLat != null && myLng != null) {
       list.sort((a, b) => {
         const da = a.distanceKm;
@@ -469,6 +461,7 @@ const WorkerSearchSection: React.FC = () => {
     setSelectedDistrict("");
     setViewMode("list");
 
+    setNearUiExpanded(false);
     setUseMyPosition(false);
     setRadiusKm(DEFAULT_RADIUS_KM);
     setMyLat(null);
@@ -476,7 +469,9 @@ const WorkerSearchSection: React.FC = () => {
     setGeoError(null);
   };
 
+  // ✅ Requested UX: show only button by default, expand on click
   const requestMyPosition = () => {
+    setNearUiExpanded(true);
     setGeoError(null);
     setUseMyPosition(true);
 
@@ -499,6 +494,8 @@ const WorkerSearchSection: React.FC = () => {
       (err) => {
         console.error("geolocation error", err);
         setGeoLocating(false);
+        setMyLat(null);
+        setMyLng(null);
 
         setGeoError(
           language === "fr"
@@ -560,12 +557,16 @@ const WorkerSearchSection: React.FC = () => {
     distance: language === "fr" ? "Distance" : "Distance",
     geoHint:
       language === "fr"
-        ? "Activez “Autour de moi” pour trier et filtrer par distance (nécessite latitude/longitude côté ouvrier)."
-        : "Enable “Near me” to sort/filter by distance (requires worker latitude/longitude).",
+        ? "Cliquez sur “Utiliser ma position” pour afficher le rayon et calculer les distances."
+        : "Click “Use my location” to show radius and calculate distances.",
     missingWorkerGeo:
       language === "fr"
         ? "Certains profils n'ont pas encore de position GPS."
         : "Some profiles do not have GPS coordinates yet.",
+    enableLoc:
+      language === "fr"
+        ? "Activez la localisation pour calculer les distances."
+        : "Enable location to compute distances.",
   };
 
   const hasAnyGeoWorkers = useMemo(
@@ -576,7 +577,7 @@ const WorkerSearchSection: React.FC = () => {
   return (
     <section className="w-full pt-4 pb-12 sm:pt-6 sm:pb-16 lg:pt-8 lg:pb-20 bg-white">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* EN-TÊTE GLOBAL */}
+        {/* HEADER */}
         <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-6 sm:mb-8 border-b border-gray-200 pb-4">
           <div>
             <h2
@@ -593,9 +594,7 @@ const WorkerSearchSection: React.FC = () => {
               <span className="inline-flex items-center gap-1">
                 <Search className="w-3 h-3" />
                 {loading ? (
-                  <span>
-                    {language === "fr" ? "Chargement..." : "Loading..."}
-                  </span>
+                  <span>{language === "fr" ? "Chargement..." : "Loading..."}</span>
                 ) : (
                   <span>{text.resultCount(filteredWorkers.length)}</span>
                 )}
@@ -615,7 +614,7 @@ const WorkerSearchSection: React.FC = () => {
             )}
           </div>
 
-          {/* Boutons LISTE / MOSAÏQUE */}
+          {/* VIEW MODE */}
           <div className="flex items-center gap-2 sm:gap-3">
             <span className="text-[10px] sm:text-[11px] text-gray-500 uppercase tracking-wide">
               {text.viewMode}
@@ -649,84 +648,79 @@ const WorkerSearchSection: React.FC = () => {
           </div>
         </div>
 
-        {/* Grille filtres + résultats */}
+        {/* Filters + results */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8 items-start">
-          {/* Filtres */}
+          {/* Filters */}
           <aside className="lg:col-span-1 bg-gray-50 rounded-xl p-4 sm:p-5 border border-gray-200">
-            <h3 className="text-base font-semibold text-pro-gray mb-4">
-              {text.filters}
-            </h3>
+            <h3 className="text-base font-semibold text-pro-gray mb-4">{text.filters}</h3>
 
-            {/* ✅ Autour de moi */}
-            <div className="mb-5 rounded-xl border border-gray-200 bg-white p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-pro-gray">
-                    {text.aroundMe}
-                  </div>
-                  <div className="text-[11px] text-gray-500">
-                    {language === "fr"
-                      ? "Trier/filtrer par distance"
-                      : "Sort/filter by distance"}
-                  </div>
-                </div>
+            {/* ✅ AUTOUR DE MOI (UX rangé) */}
+            <div className="mb-5">
+              {/* Toujours visible: bouton seul */}
+              <Button
+                type="button"
+                size="sm"
+                className="w-full rounded-xl bg-pro-blue hover:bg-blue-700 flex items-center justify-center gap-2"
+                onClick={requestMyPosition}
+                disabled={geoLocating}
+              >
+                <LocateFixed className="w-4 h-4" />
+                {geoLocating
+                  ? language === "fr"
+                    ? "Localisation..."
+                    : "Locating..."
+                  : text.useMyPos}
+              </Button>
 
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={useMyPosition ? "default" : "outline"}
-                  className={
-                    useMyPosition
-                      ? "bg-pro-blue hover:bg-blue-700"
-                      : "border-gray-300"
-                  }
-                  onClick={() => {
-                    if (!useMyPosition) requestMyPosition();
-                    else setUseMyPosition(false);
-                  }}
-                >
-                  <LocateFixed className="w-4 h-4 mr-2" />
-                  {geoLocating
-                    ? language === "fr"
-                      ? "Localisation..."
-                      : "Locating..."
-                    : text.useMyPos}
-                </Button>
-              </div>
+              {/* Visible uniquement après clic */}
+              {nearUiExpanded && (
+                <Card className="mt-3 p-4 rounded-2xl border border-gray-200 bg-white">
+                  {geoError && (
+                    <div className="mb-3 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                      {geoError}
+                    </div>
+                  )}
 
-              {geoError && (
-                <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                  {geoError}
-                </div>
-              )}
-
-              {useMyPosition && (
-                <div className="mt-3">
-                  <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
+                  <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-2">
                     <span>{text.radius}</span>
                     <span className="text-[11px] text-gray-500">
                       {radiusKm} {text.km}
                     </span>
                   </div>
+
                   <Slider
-                    defaultValue={[radiusKm]}
+                    value={[radiusKm]}
                     min={1}
                     max={100}
                     step={1}
                     onValueChange={(v) => setRadiusKm(v[0])}
                   />
+
                   {(myLat == null || myLng == null) && (
-                    <div className="mt-2 text-[11px] text-gray-500">
-                      {language === "fr"
-                        ? "Activez la localisation pour calculer les distances."
-                        : "Enable location to compute distances."}
-                    </div>
+                    <div className="mt-2 text-[11px] text-gray-500">{text.enableLoc}</div>
                   )}
-                </div>
+
+                  {/* Optionnel: petit bouton pour désactiver */}
+                  <div className="mt-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full border-gray-300"
+                      onClick={() => {
+                        setUseMyPosition(false);
+                        setMyLat(null);
+                        setMyLng(null);
+                      }}
+                    >
+                      {language === "fr" ? "Désactiver" : "Disable"}
+                    </Button>
+                  </div>
+                </Card>
               )}
             </div>
 
-            {/* Mot clé */}
+            {/* Keyword */}
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.keywordLabel}
@@ -739,7 +733,7 @@ const WorkerSearchSection: React.FC = () => {
               />
             </div>
 
-            {/* Métier */}
+            {/* Job */}
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.job}
@@ -758,7 +752,7 @@ const WorkerSearchSection: React.FC = () => {
               </select>
             </div>
 
-            {/* Région */}
+            {/* Region */}
             <div className="mb-3">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.region}
@@ -782,7 +776,7 @@ const WorkerSearchSection: React.FC = () => {
               </select>
             </div>
 
-            {/* Ville */}
+            {/* City */}
             <div className="mb-3">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.city}
@@ -827,7 +821,7 @@ const WorkerSearchSection: React.FC = () => {
               </select>
             </div>
 
-            {/* Quartier */}
+            {/* District */}
             <div className="mb-6">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.district}
@@ -846,7 +840,7 @@ const WorkerSearchSection: React.FC = () => {
               </select>
             </div>
 
-            {/* Prix max */}
+            {/* Max price */}
             <div className="mb-6">
               <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                 <span>{text.priceLabel}</span>
@@ -859,7 +853,7 @@ const WorkerSearchSection: React.FC = () => {
                 </span>
               </div>
               <Slider
-                defaultValue={[maxPrice]}
+                value={[maxPrice]}
                 min={50000}
                 max={DEFAULT_MAX_PRICE}
                 step={10000}
@@ -867,16 +861,20 @@ const WorkerSearchSection: React.FC = () => {
               />
             </div>
 
-            {/* Note minimum */}
+            {/* Min rating */}
             <div className="mb-6">
               <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                 <span>{text.ratingLabel}</span>
                 <span className="text-[11px] text-gray-500">
-                  {minRating === 0 ? (language === "fr" ? "Toutes" : "Any") : minRating.toFixed(1)}
+                  {minRating === 0
+                    ? language === "fr"
+                      ? "Toutes"
+                      : "Any"
+                    : minRating.toFixed(1)}
                 </span>
               </div>
               <Slider
-                defaultValue={[minRating]}
+                value={[minRating]}
                 min={0}
                 max={5}
                 step={0.5}
@@ -897,7 +895,7 @@ const WorkerSearchSection: React.FC = () => {
             </div>
           </aside>
 
-          {/* Résultats */}
+          {/* Results */}
           <div className="lg:col-span-3">
             {error && (
               <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">
@@ -919,11 +917,13 @@ const WorkerSearchSection: React.FC = () => {
 
             {loading && filteredWorkers.length === 0 && (
               <div className="border border-gray-100 rounded-xl p-6 text-sm text-gray-500">
-                {language === "fr" ? "Chargement des professionnels..." : "Loading professionals..."}
+                {language === "fr"
+                  ? "Chargement des professionnels..."
+                  : "Loading professionals..."}
               </div>
             )}
 
-            {/* VUE LISTE */}
+            {/* LIST VIEW */}
             {viewMode === "list" && filteredWorkers.length > 0 && (
               <div className="space-y-3 sm:space-y-4">
                 {filteredWorkers.map((w) => {
@@ -950,6 +950,7 @@ const WorkerSearchSection: React.FC = () => {
                           <h3 className="font-semibold text-pro-gray text-base sm:text-lg truncate">
                             {w.name}
                           </h3>
+
                           {w.job && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-pro-blue border border-blue-100">
                               {w.job}
@@ -969,7 +970,9 @@ const WorkerSearchSection: React.FC = () => {
                         <div className="flex flex-wrap items-center gap-3 mt-1 text-xs sm:text-sm text-gray-600">
                           <span className="flex items-center gap-1">
                             <MapPin className="w-3 h-3" />
-                            {[w.region, w.city, w.commune, w.district].filter(Boolean).join(" • ")}
+                            {[w.region, w.city, w.commune, w.district]
+                              .filter(Boolean)
+                              .join(" • ")}
                           </span>
 
                           <span className="flex items-center gap-1">
@@ -983,7 +986,7 @@ const WorkerSearchSection: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Prix + CTA */}
+                      {/* Price + CTA */}
                       <div className="w-full sm:w-auto flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 text-right">
                         <div className="text-pro-blue font-bold text-base sm:text-lg">
                           {formatCurrency(w.hourlyRate, w.currency)}
@@ -993,10 +996,7 @@ const WorkerSearchSection: React.FC = () => {
                         </div>
 
                         <Link to={`/ouvrier/${w.id}`}>
-                          <Button
-                            size="sm"
-                            className="bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm"
-                          >
+                          <Button size="sm" className="bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm">
                             {text.contact}
                           </Button>
                         </Link>
@@ -1007,7 +1007,7 @@ const WorkerSearchSection: React.FC = () => {
               </div>
             )}
 
-            {/* VUE MOSAÏQUE */}
+            {/* GRID VIEW */}
             {viewMode === "grid" && filteredWorkers.length > 0 && (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {filteredWorkers.map((w) => {
@@ -1028,12 +1028,8 @@ const WorkerSearchSection: React.FC = () => {
                           {initials || "OP"}
                         </div>
                         <div className="min-w-0">
-                          <h3 className="font-semibold text-sm text-pro-gray truncate">
-                            {w.name}
-                          </h3>
-                          {w.job && (
-                            <div className="text-xs text-pro-blue mt-0.5">{w.job}</div>
-                          )}
+                          <h3 className="font-semibold text-sm text-pro-gray truncate">{w.name}</h3>
+                          {w.job && <div className="text-xs text-pro-blue mt-0.5">{w.job}</div>}
                           {useMyPosition && myLat != null && myLng != null && (
                             <div className="text-[11px] text-slate-600 mt-1">
                               {text.distance}:{" "}
@@ -1048,7 +1044,9 @@ const WorkerSearchSection: React.FC = () => {
                       <div className="text-xs text-gray-600 space-y-1">
                         <span className="flex items-center gap-1">
                           <MapPin className="w-3 h-3" />
-                          {[w.region, w.city, w.commune, w.district].filter(Boolean).join(" • ")}
+                          {[w.region, w.city, w.commune, w.district]
+                            .filter(Boolean)
+                            .join(" • ")}
                         </span>
                         <span className="flex items-center gap-1">
                           <Star className="w-3 h-3 text-yellow-400" />
@@ -1062,15 +1060,10 @@ const WorkerSearchSection: React.FC = () => {
                       <div className="mt-2 flex items-center justify-between">
                         <div className="text-sm font-bold text-pro-blue">
                           {formatCurrency(w.hourlyRate, w.currency)}
-                          <span className="ml-1 text-[11px] text-gray-600">
-                            {text.perHour}
-                          </span>
+                          <span className="ml-1 text-[11px] text-gray-600">{text.perHour}</span>
                         </div>
                         <Link to={`/ouvrier/${w.id}`}>
-                          <Button
-                            size="sm"
-                            className="bg-pro-blue hover:bg-blue-700 text-[11px]"
-                          >
+                          <Button size="sm" className="bg-pro-blue hover:bg-blue-700 text-[11px]">
                             {text.contact}
                           </Button>
                         </Link>
