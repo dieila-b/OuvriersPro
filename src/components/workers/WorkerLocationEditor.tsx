@@ -1,4 +1,4 @@
-// src/components/worker/WorkerLocationEditor.tsx
+// src/components/workers/WorkerLocationEditor.tsx
 import React, { useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -14,7 +14,7 @@ type Props = {
   onSaved?: (coords: { latitude: number; longitude: number }) => void;
 };
 
-const WorkerLocationEditor: React.FC<Props> = ({
+export const WorkerLocationEditor: React.FC<Props> = ({
   workerId,
   initialLat,
   initialLng,
@@ -104,14 +104,14 @@ const WorkerLocationEditor: React.FC<Props> = ({
         console.error("geolocation error", err);
         setLocating(false);
 
-        // 1 = PERMISSION_DENIED
         if (err?.code === 1) setError(t.geolocDenied);
-        else
+        else {
           setError(
             language === "fr"
               ? "Impossible de récupérer votre position."
               : "Unable to retrieve your location."
           );
+        }
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
