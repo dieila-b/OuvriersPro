@@ -11,48 +11,50 @@ import Footer from "@/components/Footer";
 const Index = () => {
   const location = useLocation();
 
-  const getHeaderOffset = () => {
+  // 🎯 Scroll automatique vers la section forfaits quand on arrive sur /#subscription
+  useEffect(() => {
+    if (window.location.hash === "#subscription") {
+      const timeout = setTimeout(() => {
+        const el = document.getElementById("subscription");
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          const EXTRA_OFFSET = 520;
+          const y = rect.top + window.scrollY + EXTRA_OFFSET;
+
+          window.scrollTo({ top: y, behavior: "smooth" });
+        }
+      }, 150);
+
+      return () => clearTimeout(timeout);
+    }
+  }, []);
+
+  // ✅ Scroll précis vers la section "search"
+  const scrollToSearchSection = () => {
+    const section = document.getElementById("search");
+    if (!section) return;
+
     const headerEl = document.querySelector("header") as HTMLElement | null;
-    return headerEl?.offsetHeight ?? 72;
-  };
+    const headerHeight = headerEl?.offsetHeight ?? 72;
 
-  const scrollToId = (id: string) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-
-    const headerOffset = getHeaderOffset();
-    const top = el.getBoundingClientRect().top + window.scrollY;
-    const y = Math.max(top - headerOffset - 8, 0);
+    const sectionTop = section.getBoundingClientRect().top + window.scrollY;
+    const EXTRA = 1;
+    const y = Math.max(sectionTop - headerHeight - EXTRA, 0);
 
     window.scrollTo({ top: y, behavior: "smooth" });
   };
 
-  // ✅ Si URL contient un hash (#subscription, #faq, #contact, etc.), on scrolle proprement
-  useEffect(() => {
-    const hash = window.location.hash?.replace("#", "");
-    if (!hash) return;
-
-    const timeout = setTimeout(() => {
-      scrollToId(hash);
-    }, 80);
-
-    return () => clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // 🔍 Quand on arrive sur /search ou /rechercher, on scrolle vers la section "search"
   useEffect(() => {
     const { pathname } = location;
 
     if (pathname === "/search" || pathname === "/rechercher") {
       const timeout = setTimeout(() => {
-        scrollToId("search");
-      }, 80);
+        scrollToSearchSection();
+      }, 50);
 
       return () => clearTimeout(timeout);
     }
 
-    // Si on revient sur la home "/", on remonte en haut
     if (pathname === "/") {
       window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
     }
@@ -63,21 +65,18 @@ const Index = () => {
       <Header />
 
       <main className="w-full flex-1">
-        {/* HERO */}
         <HeroSection />
 
-        {/* FEATURES (ne pas rajouter de py ici : FeaturesSection gère déjà ses paddings) */}
+        {/* ✅ IMPORTANT: pas de wrapper py-* ici (sinon double padding) */}
         <FeaturesSection />
 
-        {/* RECHERCHE OUVRIERS */}
         <section
           id="search"
-          className="w-full bg-white py-10 sm:py-14 lg:py-16 scroll-mt-24"
+          className="w-full bg-white pt-0 pb-10 sm:pb-14 lg:pb-16 scroll-mt-24"
         >
           <WorkerSearchSection />
         </section>
 
-        {/* ABONNEMENTS / FORFAITS */}
         <section
           id="subscription"
           className="w-full bg-gradient-to-br from-gray-50 to-gray-100 py-10 sm:py-14 lg:py-16 scroll-mt-20"
