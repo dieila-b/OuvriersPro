@@ -34,16 +34,15 @@ const FeaturesSection = () => {
   ];
 
   return (
-    <section className="w-full bg-pro-light py-10 sm:py-12 lg:py-14">
+    // ✅ padding resserré (supprime le “grand vide” au-dessus du titre)
+    <section className="w-full bg-pro-light py-6 sm:py-8 lg:py-10">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Titre */}
-        <div className="text-center mb-8 sm:mb-10 lg:mb-12">
+        <div className="text-center mb-6 sm:mb-8">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
             {t("home.features.title")}
           </h2>
         </div>
 
-        {/* Cartes features */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 w-full">
           {features.map((f, index) => (
             <div
@@ -68,8 +67,7 @@ const FeaturesSection = () => {
           ))}
         </div>
 
-        {/* Statistiques */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 lg:gap-10 mt-10 sm:mt-12 lg:mt-14 w-full">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 mt-8 sm:mt-10 w-full">
           {stats.map((s, index) => (
             <div
               key={index}
