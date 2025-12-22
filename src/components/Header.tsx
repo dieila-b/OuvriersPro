@@ -20,12 +20,10 @@ const Header = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // ✅ fermeture menu mobile quand on change de route
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname, location.search, location.hash]);
 
-  // ✅ lock scroll quand menu mobile ouvert
   useEffect(() => {
     if (!mobileOpen) {
       document.body.style.overflow = "";
@@ -49,7 +47,6 @@ const Header = () => {
     return "/espace-client";
   }, [user, isAdmin, isWorker]);
 
-  // ✅ scroll précis (uniquement quand on est déjà sur "/")
   const scrollToSection = (id: string) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -62,19 +59,13 @@ const Header = () => {
   };
 
   const handleSearchClick = () => {
-    if (location.pathname === "/") {
-      scrollToSection("search");
-    } else {
-      navigate("/#search");
-    }
+    if (location.pathname === "/") scrollToSection("search");
+    else navigate("/#search");
   };
 
   const handleNavClickSection = (sectionId: string) => {
-    if (location.pathname === "/") {
-      scrollToSection(sectionId);
-    } else {
-      navigate(`/#${sectionId}`);
-    }
+    if (location.pathname === "/") scrollToSection(sectionId);
+    else navigate(`/#${sectionId}`);
   };
 
   const NavLinkButton = ({
@@ -94,9 +85,9 @@ const Header = () => {
   );
 
   return (
-    <header className="sticky top-0 z-[80] bg-white/95 backdrop-blur border-b border-gray-200">
+    // ✅ z-40 (standard) + sticky stable
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-200">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* ✅ hauteur responsive (réduit le “gros header” sur certains écrans) */}
         <div className="h-14 sm:h-16 flex items-center justify-between gap-3">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 min-w-0">
@@ -147,27 +138,17 @@ const Header = () => {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center gap-1"
-                >
+                <Button variant="outline" size="sm" className="flex items-center gap-1">
                   <Languages className="w-4 h-4" />
                   <span className="uppercase">{language}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white">
-                <DropdownMenuItem
-                  onClick={() => setLanguage("fr")}
-                  className="cursor-pointer"
-                >
-                  🇫🇷 Français
+                <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
+                  Français
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setLanguage("en")}
-                  className="cursor-pointer"
-                >
-                  🇬🇧 English
+                <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
+                  English
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -177,27 +158,17 @@ const Header = () => {
           <div className="md:hidden flex items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center gap-1"
-                >
+                <Button variant="outline" size="sm" className="flex items-center gap-1">
                   <Languages className="w-4 h-4" />
                   <span className="uppercase">{language}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white">
-                <DropdownMenuItem
-                  onClick={() => setLanguage("fr")}
-                  className="cursor-pointer"
-                >
-                  🇫🇷 Français
+                <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
+                  Français
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setLanguage("en")}
-                  className="cursor-pointer"
-                >
-                  🇬🇧 English
+                <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
+                  English
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -214,28 +185,23 @@ const Header = () => {
         </div>
       </div>
 
-      {/* ✅ Mobile overlay + panel */}
+      {/* ✅ Overlay menu mobile au-dessus du header : z-50 (standard) */}
       {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-[120]">
-          {/* overlay */}
+        <div className="md:hidden fixed inset-0 z-50">
           <button
             type="button"
             className="absolute inset-0 bg-black/35"
             aria-label="Fermer le menu"
             onClick={() => setMobileOpen(false)}
           />
-          {/* panel */}
+
           <div className="absolute top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-lg">
             <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-pro-gray">
                   {language === "fr" ? "Menu" : "Menu"}
                 </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setMobileOpen(false)}
-                >
+                <Button variant="outline" size="sm" onClick={() => setMobileOpen(false)}>
                   <X className="w-4 h-4" />
                 </Button>
               </div>
