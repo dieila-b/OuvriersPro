@@ -11,53 +11,44 @@ import Footer from "@/components/Footer";
 const Index = () => {
   const location = useLocation();
 
-  // 🎯 Scroll automatique vers la section forfaits quand on arrive sur /#subscription
+  // ✅ scroll vers subscription si hash présent
   useEffect(() => {
     if (window.location.hash === "#subscription") {
       const timeout = setTimeout(() => {
         const el = document.getElementById("subscription");
-        if (el) {
-          const rect = el.getBoundingClientRect();
-          const EXTRA_OFFSET = 520;
-          const y = rect.top + window.scrollY + EXTRA_OFFSET;
+        if (!el) return;
 
-          window.scrollTo({
-            top: y,
-            behavior: "smooth",
-          });
-        }
+        const headerEl = document.querySelector("header") as HTMLElement | null;
+        const headerHeight = headerEl?.offsetHeight ?? 64;
+
+        const y =
+          el.getBoundingClientRect().top + window.scrollY - headerHeight - 10;
+
+        window.scrollTo({ top: Math.max(y, 0), behavior: "smooth" });
       }, 150);
 
       return () => clearTimeout(timeout);
     }
   }, []);
 
-  // ✅ Fonction utilitaire : scroll précis vers la section "search"
   const scrollToSearchSection = () => {
     const section = document.getElementById("search");
     if (!section) return;
 
     const headerEl = document.querySelector("header") as HTMLElement | null;
-    const headerHeight = headerEl?.offsetHeight ?? 72;
+    const headerHeight = headerEl?.offsetHeight ?? 64;
 
-    const sectionTop = section.getBoundingClientRect().top + window.scrollY;
-    const EXTRA = 1;
-    const y = Math.max(sectionTop - headerHeight - EXTRA, 0);
+    const y =
+      section.getBoundingClientRect().top + window.scrollY - headerHeight - 10;
 
-    window.scrollTo({
-      top: y,
-      behavior: "smooth",
-    });
+    window.scrollTo({ top: Math.max(y, 0), behavior: "smooth" });
   };
 
   useEffect(() => {
     const { pathname } = location;
 
     if (pathname === "/search" || pathname === "/rechercher") {
-      const timeout = setTimeout(() => {
-        scrollToSearchSection();
-      }, 50);
-
+      const timeout = setTimeout(scrollToSearchSection, 50);
       return () => clearTimeout(timeout);
     }
 
@@ -74,24 +65,18 @@ const Index = () => {
         {/* HERO */}
         <HeroSection />
 
-        {/* ✅ IMPORTANT : on enlève le wrapper bg-white + py-* qui créait le “vide” */}
+        {/* ✅ IMPORTANT: plus de wrapper <section> avec py-xx autour
+            car chaque composant a déjà son propre <section> */}
         <FeaturesSection />
 
-        {/* RECHERCHE */}
-        <section
-          id="search"
-          className="w-full bg-white pt-0 pb-10 sm:pb-14 lg:pb-16 scroll-mt-24"
-        >
+        {/* ✅ Wrapper neutre seulement pour l’ID + scroll */}
+        <div id="search" className="scroll-mt-24">
           <WorkerSearchSection />
-        </section>
+        </div>
 
-        {/* ABONNEMENTS */}
-        <section
-          id="subscription"
-          className="w-full bg-gradient-to-br from-gray-50 to-gray-100 py-10 sm:py-14 lg:py-16 scroll-mt-20"
-        >
+        <div id="subscription" className="scroll-mt-24">
           <SubscriptionSection />
-        </section>
+        </div>
       </main>
 
       <Footer />
