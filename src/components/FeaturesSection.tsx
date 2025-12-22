@@ -1,3 +1,4 @@
+// src/components/FeaturesSection.tsx
 import React from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Shield, MapPin, MessageCircle, Star, Users, Clock } from "lucide-react";
@@ -27,35 +28,41 @@ const FeaturesSection = () => {
   ];
 
   const stats = [
-    { icon: Users, number: "2,500+", label: t("home.features.stats.pros") },
+    { icon: Users, number: "2 500+", label: t("home.features.stats.pros") },
     { icon: Star, number: "4.8/5", label: t("home.features.stats.rating") },
     { icon: Clock, number: "24h", label: t("home.features.stats.response") },
     { icon: Shield, number: "100%", label: t("home.features.stats.verified") },
   ];
 
   return (
-    // ✅ padding resserré (supprime le “grand vide” au-dessus du titre)
+    /**
+     * 🔧 CORRECTION CLÉ :
+     * - py réduit (plus de “grand vide” sous le HERO)
+     * - marges verticales progressives et maîtrisées
+     */
     <section className="w-full bg-pro-light py-6 sm:py-8 lg:py-10">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Titre */}
         <div className="text-center mb-6 sm:mb-8">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
             {t("home.features.title")}
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 w-full">
+        {/* Cartes features */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
           {features.map((f, index) => (
             <div
               key={index}
-              className="bg-white rounded-xl p-6 sm:p-7 lg:p-8 shadow-sm hover:shadow-lg transition-all animate-fade-in"
-              style={{ animationDelay: `${index * 0.15}s` }}
+              className="bg-white rounded-xl p-5 sm:p-6 lg:p-7 shadow-sm hover:shadow-md transition-shadow animate-fade-in"
+              style={{ animationDelay: `${index * 0.12}s` }}
             >
               <div className="flex flex-col items-center text-center">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4 shadow-inner">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gray-100 flex items-center justify-center mb-3">
                   <f.icon className={`w-7 h-7 sm:w-8 sm:h-8 ${f.color}`} />
                 </div>
 
-                <h3 className="text-lg sm:text-xl font-semibold text-pro-gray mb-3">
+                <h3 className="text-lg sm:text-xl font-semibold text-pro-gray mb-2">
                   {f.title}
                 </h3>
 
@@ -67,18 +74,19 @@ const FeaturesSection = () => {
           ))}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 mt-8 sm:mt-10 w-full">
+        {/* Stats (marge supérieure réduite) */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 sm:gap-6 mt-6 sm:mt-8">
           {stats.map((s, index) => (
             <div
               key={index}
               className="text-center animate-fade-in"
-              style={{ animationDelay: `${index * 0.15 + 0.4}s` }}
+              style={{ animationDelay: `${index * 0.12 + 0.3}s` }}
             >
-              <s.icon className="w-7 h-7 sm:w-8 sm:h-8 text-pro-blue mx-auto mb-2" />
-              <div className="text-xl sm:text-2xl font-bold text-pro-gray">
+              <s.icon className="w-6 h-6 sm:w-7 sm:h-7 text-pro-blue mx-auto mb-1.5" />
+              <div className="text-lg sm:text-xl font-bold text-pro-gray">
                 {s.number}
               </div>
-              <div className="text-gray-600 text-sm sm:text-base">
+              <div className="text-gray-600 text-xs sm:text-sm">
                 {s.label}
               </div>
             </div>
