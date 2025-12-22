@@ -49,20 +49,19 @@ const Header = () => {
     return "/espace-client";
   }, [user, isAdmin, isWorker]);
 
-  // ✅ scroll précis (utilise la hauteur réelle du header sticky)
+  // ✅ scroll précis (uniquement quand on est déjà sur "/")
   const scrollToSection = (id: string) => {
     const el = document.getElementById(id);
     if (!el) return;
 
     const headerEl = document.querySelector("header") as HTMLElement | null;
-    const headerHeight = headerEl?.offsetHeight ?? 72;
+    const headerHeight = headerEl?.offsetHeight ?? 64;
 
-    const y = el.getBoundingClientRect().top + window.scrollY - headerHeight - 8;
+    const y = el.getBoundingClientRect().top + window.scrollY - headerHeight - 10;
     window.scrollTo({ top: Math.max(y, 0), behavior: "smooth" });
   };
 
   const handleSearchClick = () => {
-    // ✅ recherche = section "search" sur la home, pas /search
     if (location.pathname === "/") {
       scrollToSection("search");
     } else {
@@ -95,9 +94,10 @@ const Header = () => {
   );
 
   return (
-    <header className="bg-white/95 backdrop-blur border-b border-gray-200 sticky top-0 z-50">
+    <header className="sticky top-0 z-[80] bg-white/95 backdrop-blur border-b border-gray-200">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="h-16 flex items-center justify-between gap-3">
+        {/* ✅ hauteur responsive (réduit le “gros header” sur certains écrans) */}
+        <div className="h-14 sm:h-16 flex items-center justify-between gap-3">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 min-w-0">
             <div className="w-10 h-10 bg-pro-blue rounded-lg flex items-center justify-center flex-shrink-0">
@@ -110,9 +110,15 @@ const Header = () => {
 
           {/* Navigation Desktop */}
           <nav className="hidden md:flex items-center gap-6">
-            <NavLinkButton onClick={handleSearchClick}>{t("nav.search")}</NavLinkButton>
-            <NavLinkButton onClick={() => handleNavClickSection("faq")}>{t("nav.faq")}</NavLinkButton>
-            <NavLinkButton onClick={() => handleNavClickSection("contact")}>{t("nav.contact")}</NavLinkButton>
+            <NavLinkButton onClick={handleSearchClick}>
+              {t("nav.search")}
+            </NavLinkButton>
+            <NavLinkButton onClick={() => handleNavClickSection("faq")}>
+              {t("nav.faq")}
+            </NavLinkButton>
+            <NavLinkButton onClick={() => handleNavClickSection("contact")}>
+              {t("nav.contact")}
+            </NavLinkButton>
           </nav>
 
           {/* Actions Desktop */}
@@ -133,22 +139,34 @@ const Header = () => {
               >
                 <User className="w-4 h-4" />
                 <span className="hidden lg:inline">{accountLabel}</span>
-                <span className="lg:hidden">{language === "fr" ? "Compte" : "Account"}</span>
+                <span className="lg:hidden">
+                  {language === "fr" ? "Compte" : "Account"}
+                </span>
               </Button>
             </Link>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-1"
+                >
                   <Languages className="w-4 h-4" />
                   <span className="uppercase">{language}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white">
-                <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
+                <DropdownMenuItem
+                  onClick={() => setLanguage("fr")}
+                  className="cursor-pointer"
+                >
                   🇫🇷 Français
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
+                <DropdownMenuItem
+                  onClick={() => setLanguage("en")}
+                  className="cursor-pointer"
+                >
                   🇬🇧 English
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -159,16 +177,26 @@ const Header = () => {
           <div className="md:hidden flex items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-1"
+                >
                   <Languages className="w-4 h-4" />
                   <span className="uppercase">{language}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white">
-                <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
+                <DropdownMenuItem
+                  onClick={() => setLanguage("fr")}
+                  className="cursor-pointer"
+                >
                   🇫🇷 Français
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
+                <DropdownMenuItem
+                  onClick={() => setLanguage("en")}
+                  className="cursor-pointer"
+                >
                   🇬🇧 English
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -186,9 +214,9 @@ const Header = () => {
         </div>
       </div>
 
-      {/* ✅ Mobile overlay + panel (évite les scrolls/bugs et rend propre sur tous écrans) */}
+      {/* ✅ Mobile overlay + panel */}
       {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-[60]">
+        <div className="md:hidden fixed inset-0 z-[120]">
           {/* overlay */}
           <button
             type="button"
@@ -203,7 +231,11 @@ const Header = () => {
                 <span className="text-sm font-semibold text-pro-gray">
                   {language === "fr" ? "Menu" : "Menu"}
                 </span>
-                <Button variant="outline" size="sm" onClick={() => setMobileOpen(false)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setMobileOpen(false)}
+                >
                   <X className="w-4 h-4" />
                 </Button>
               </div>
