@@ -32,6 +32,7 @@ const HeroSection = () => {
   useEffect(() => {
     const loadOptions = async () => {
       setLoadingOptions(true);
+
       const { data, error } = await supabase
         .from("op_ouvriers")
         .select("profession, district, status")
@@ -59,6 +60,7 @@ const HeroSection = () => {
       } else {
         console.error("Hero options error:", error);
       }
+
       setLoadingOptions(false);
     };
 
@@ -96,6 +98,18 @@ const HeroSection = () => {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
+  // ✅ fermer dropdown au clavier (ESC)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpenJobs(false);
+        setOpenDistricts(false);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const handleGeoLocate = () => {
     setGeoError(null);
     setGeoLoading(true);
@@ -114,9 +128,7 @@ const HeroSection = () => {
       (pos) => {
         setGeo({ lat: pos.coords.latitude, lng: pos.coords.longitude });
 
-        if (!district.trim()) {
-          setDistrict("");
-        }
+        // si on veut forcer l'utilisateur à garder le quartier vide, on laisse tel quel
         setOpenDistricts(false);
         setGeoLoading(false);
       },
@@ -153,27 +165,37 @@ const HeroSection = () => {
   };
 
   return (
-    <section className="w-full bg-gradient-to-br from-pro-blue to-blue-600 text-white">
-      {/* ✅ IMPORTANT : on réduit le padding vertical (source du “vide”) */}
-      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 lg:py-14">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 sm:mb-5 leading-tight tracking-tight">
+    <section className="w-full text-white bg-gradient-to-br from-pro-blue to-blue-600">
+      {/* ✅ responsive réel :
+          - min-w-0 pour éviter largeur imposée (source fréquente du “pas responsive”)
+          - padding adaptatif + pas de hauteur forcée
+      */}
+      <div className="w-full min-w-0 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 lg:py-12">
+        <div className="w-full min-w-0 max-w-4xl mx-auto text-center">
+          {/* ✅ typo scalable + wrap garanti */}
+          <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
             {t("home.title")}
           </h1>
 
-          <p className="text-sm sm:text-base md:text-xl mb-6 sm:mb-7 text-blue-100">
+          <p className="mt-3 sm:mt-4 text-sm sm:text-base md:text-xl text-blue-100 break-words">
             {t("home.subtitle")}
           </p>
 
-          <div className="bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl max-w-3xl mx-auto">
-            {/* ✅ Grille responsive + évite débordements */}
-            <div className="grid grid-cols-1 gap-2 sm:gap-3 sm:grid-cols-2 lg:grid-cols-4 items-stretch">
+          {/* ✅ bloc recherche : largeur fluide, pas de débordements */}
+          <div className="mt-6 sm:mt-7 bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl w-full max-w-3xl mx-auto text-gray-900">
+            {/* ✅ grid vraiment responsive :
+                - mobile : 1 colonne
+                - sm : 2 colonnes
+                - lg : 4 colonnes (2 + 2)
+                - min-w-0 sur enfants pour éviter overflow
+            */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 items-stretch min-w-0">
               {/* Métier */}
               <div
                 ref={jobsBoxRef}
-                className="relative text-left sm:col-span-2 lg:col-span-2"
+                className="relative min-w-0 text-left sm:col-span-2 lg:col-span-2"
               >
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
                   placeholder={t("home.search.placeholder") || "Métier / service"}
                   value={searchTerm}
@@ -182,12 +204,12 @@ const HeroSection = () => {
                     setSearchTerm(e.target.value);
                     setOpenJobs(true);
                   }}
-                  className="pl-10 pr-8 h-12 text-gray-900 text-sm sm:text-base w-full"
+                  className="w-full min-w-0 h-11 sm:h-12 pl-10 pr-9 text-sm sm:text-base text-gray-900"
                 />
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
 
                 {openJobs && (filteredJobs.length > 0 || loadingOptions) && (
-                  <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                  <div className="absolute z-50 mt-1 w-full min-w-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
                     {loadingOptions && (
                       <div className="px-3 py-2 text-xs text-gray-500">
                         {language === "fr" ? "Chargement..." : "Loading..."}
@@ -214,9 +236,9 @@ const HeroSection = () => {
               {/* Quartier + Geo */}
               <div
                 ref={districtsBoxRef}
-                className="relative text-left sm:col-span-2 lg:col-span-2"
+                className="relative min-w-0 text-left sm:col-span-2 lg:col-span-2"
               >
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
                   placeholder={t("home.quartier.placeholder") || "Quartier"}
                   value={district}
@@ -226,44 +248,47 @@ const HeroSection = () => {
                     setGeo(null);
                     setOpenDistricts(true);
                   }}
-                  className="pl-10 pr-14 h-12 text-gray-900 text-sm sm:text-base w-full"
+                  className="w-full min-w-0 h-11 sm:h-12 pl-10 pr-14 text-sm sm:text-base text-gray-900"
                 />
 
                 <button
                   type="button"
                   onClick={handleGeoLocate}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-gray-200 px-2 py-1 text-gray-600 hover:bg-gray-50"
-                  aria-label={language === "fr" ? "Utiliser ma position" : "Use my location"}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center rounded-md border border-gray-200 bg-white px-2 py-1 text-gray-600 hover:bg-gray-50"
+                  aria-label={
+                    language === "fr" ? "Utiliser ma position" : "Use my location"
+                  }
                   title={language === "fr" ? "Utiliser ma position" : "Use my location"}
                 >
-                  <LocateFixed className={`w-4 h-4 ${geoLoading ? "animate-pulse" : ""}`} />
+                  <LocateFixed
+                    className={`w-4 h-4 ${geoLoading ? "animate-pulse" : ""}`}
+                  />
                 </button>
 
-                {openDistricts &&
-                  (filteredDistricts.length > 0 || loadingOptions) && (
-                    <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-                      {loadingOptions && (
-                        <div className="px-3 py-2 text-xs text-gray-500">
-                          {language === "fr" ? "Chargement..." : "Loading..."}
-                        </div>
-                      )}
-                      {!loadingOptions &&
-                        filteredDistricts.map((d) => (
-                          <button
-                            key={d}
-                            type="button"
-                            onClick={() => {
-                              setDistrict(d);
-                              setGeo(null);
-                              setOpenDistricts(false);
-                            }}
-                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                          >
-                            {d}
-                          </button>
-                        ))}
-                    </div>
-                  )}
+                {openDistricts && (filteredDistricts.length > 0 || loadingOptions) && (
+                  <div className="absolute z-50 mt-1 w-full min-w-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                    {loadingOptions && (
+                      <div className="px-3 py-2 text-xs text-gray-500">
+                        {language === "fr" ? "Chargement..." : "Loading..."}
+                      </div>
+                    )}
+                    {!loadingOptions &&
+                      filteredDistricts.map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => {
+                            setDistrict(d);
+                            setGeo(null);
+                            setOpenDistricts(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          {d}
+                        </button>
+                      ))}
+                  </div>
+                )}
               </div>
 
               {geoError && (
@@ -272,10 +297,11 @@ const HeroSection = () => {
                 </div>
               )}
 
+              {/* ✅ bouton : pleine largeur sur toutes tailles */}
               <Button
                 type="button"
                 onClick={handleSearch}
-                className="sm:col-span-2 lg:col-span-4 w-full bg-pro-blue hover:bg-blue-700 h-12 text-sm sm:text-base"
+                className="sm:col-span-2 lg:col-span-4 w-full h-11 sm:h-12 bg-pro-blue hover:bg-blue-700 text-sm sm:text-base"
               >
                 {t("home.search.button") || "Rechercher"}
               </Button>
