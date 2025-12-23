@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
 
-    <!-- ✅ Responsive -->
+    <!-- ✅ Responsive (indispensable) -->
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
@@ -18,14 +18,17 @@
     <meta name="theme-color" content="#1765ff" />
 
     <!-- SEO -->
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index,follow" />
     <link rel="canonical" href="https://ouvrierspro.netlify.app/" />
 
-    <!-- Favicons (si tu ajoutes les fichiers dans /public) -->
-    <link rel="icon" href="/favicon.ico" />
+    <!-- Favicons (place les fichiers dans /public) -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     <!-- Open Graph -->
+    <meta property="og:locale" content="fr_FR" />
+    <meta property="og:site_name" content="OuvriersPro" />
     <meta property="og:title" content="OuvriersPro — Trouvez le bon ouvrier" />
     <meta
       property="og:description"
@@ -37,14 +40,11 @@
       property="og:image"
       content="https://lovable.dev/opengraph-image-p98pqg.png"
     />
+    <meta property="og:image:alt" content="OuvriersPro" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@ouvrierspro" />
-    <meta
-      name="twitter:title"
-      content="OuvriersPro — Trouvez le bon ouvrier"
-    />
+    <meta name="twitter:title" content="OuvriersPro — Trouvez le bon ouvrier" />
     <meta
       name="twitter:description"
       content="Trouvez rapidement un professionnel qualifié près de chez vous."
