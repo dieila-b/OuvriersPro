@@ -43,7 +43,7 @@ const queryClient = new QueryClient();
 /**
  * ✅ Scroll manager:
  * - gère /#anchor proprement avec header sticky
- * - évite le comportement “je clique et ça remonte au mauvais endroit”
+ * - utilise un offset robuste sur tous écrans
  */
 function ScrollManager() {
   const location = useLocation();
@@ -52,19 +52,23 @@ function ScrollManager() {
     const hash = location.hash?.replace("#", "");
     if (!hash) return;
 
-    // attendre le rendu
-    const t = setTimeout(() => {
+    const t = window.setTimeout(() => {
       const el = document.getElementById(hash);
       if (!el) return;
 
       const headerEl = document.querySelector("header") as HTMLElement | null;
       const headerHeight = headerEl?.offsetHeight ?? 72;
 
-      const y = el.getBoundingClientRect().top + window.scrollY - headerHeight - 8;
+      const y =
+        el.getBoundingClientRect().top +
+        window.scrollY -
+        headerHeight -
+        8;
+
       window.scrollTo({ top: Math.max(y, 0), behavior: "smooth" });
     }, 50);
 
-    return () => clearTimeout(t);
+    return () => window.clearTimeout(t);
   }, [location.pathname, location.hash]);
 
   return null;
@@ -105,7 +109,6 @@ const AppRoutes = () => (
           </PrivateRoute>
         }
       />
-
       <Route
         path="/mon-profil"
         element={
@@ -114,7 +117,6 @@ const AppRoutes = () => (
           </PrivateRoute>
         }
       />
-
       <Route
         path="/mes-demandes"
         element={
@@ -123,7 +125,6 @@ const AppRoutes = () => (
           </PrivateRoute>
         }
       />
-
       <Route
         path="/mes-echanges"
         element={
@@ -132,7 +133,6 @@ const AppRoutes = () => (
           </PrivateRoute>
         }
       />
-
       <Route
         path="/mes-avis"
         element={
@@ -141,7 +141,6 @@ const AppRoutes = () => (
           </PrivateRoute>
         }
       />
-
       <Route
         path="/mes-favoris"
         element={
@@ -160,7 +159,6 @@ const AppRoutes = () => (
           </PrivateRoute>
         }
       />
-
       <Route
         path="/espace-ouvrier/messages"
         element={
@@ -169,7 +167,6 @@ const AppRoutes = () => (
           </PrivateRoute>
         }
       />
-
       <Route
         path="/espace-ouvrier/avis"
         element={
@@ -178,7 +175,6 @@ const AppRoutes = () => (
           </PrivateRoute>
         }
       />
-
       <Route
         path="/clients/:clientId/contact"
         element={
@@ -197,7 +193,6 @@ const AppRoutes = () => (
           </PrivateRoute>
         }
       />
-
       <Route
         path="/admin/ouvrier-contacts"
         element={
@@ -206,7 +201,6 @@ const AppRoutes = () => (
           </PrivateRoute>
         }
       />
-
       <Route
         path="/admin/ouvriers"
         element={
@@ -226,15 +220,17 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <LanguageProvider>
-        <Toaster />
-        <Sonner />
+        <BrowserRouter>
+          <Toaster />
+          <Sonner />
 
-        {/* ✅ Le wrapper global évite les scrolls horizontaux sur tout le site */}
-        <div className="min-h-screen w-full overflow-x-hidden bg-white">
-          <BrowserRouter>
+          {/* ✅ dvh = vrai “viewport height” sur mobile
+              ✅ min-w-0 sur le wrapper = empêche les enfants flex de forcer une largeur fixe
+              ✅ overflow-x-clip = évite le scroll horizontal sans masquer les layouts */}
+          <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
             <AppRoutes />
-          </BrowserRouter>
-        </div>
+          </div>
+        </BrowserRouter>
       </LanguageProvider>
     </TooltipProvider>
   </QueryClientProvider>
