@@ -11,70 +11,70 @@ import Footer from "@/components/Footer";
 const Index = () => {
   const location = useLocation();
 
-  // ✅ scroll vers subscription si hash présent
-  useEffect(() => {
-    if (window.location.hash === "#subscription") {
-      const timeout = setTimeout(() => {
-        const el = document.getElementById("subscription");
-        if (!el) return;
-
-        const headerEl = document.querySelector("header") as HTMLElement | null;
-        const headerHeight = headerEl?.offsetHeight ?? 64;
-
-        const y =
-          el.getBoundingClientRect().top + window.scrollY - headerHeight - 10;
-
-        window.scrollTo({ top: Math.max(y, 0), behavior: "smooth" });
-      }, 150);
-
-      return () => clearTimeout(timeout);
-    }
-  }, []);
-
-  const scrollToSearchSection = () => {
-    const section = document.getElementById("search");
-    if (!section) return;
+  // ✅ utilitaire scroll (offset header sticky)
+  const scrollToId = (id: string) => {
+    const el = document.getElementById(id);
+    if (!el) return;
 
     const headerEl = document.querySelector("header") as HTMLElement | null;
     const headerHeight = headerEl?.offsetHeight ?? 64;
 
     const y =
-      section.getBoundingClientRect().top + window.scrollY - headerHeight - 10;
+      el.getBoundingClientRect().top +
+      window.scrollY -
+      headerHeight -
+      10;
 
     window.scrollTo({ top: Math.max(y, 0), behavior: "smooth" });
   };
 
+  // ✅ si hash présent (ex: /#subscription)
+  useEffect(() => {
+    if (!window.location.hash) return;
+    const id = window.location.hash.replace("#", "");
+    const timeout = window.setTimeout(() => scrollToId(id), 120);
+    return () => window.clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ✅ routes /search et /rechercher => scroll vers section search
   useEffect(() => {
     const { pathname } = location;
 
     if (pathname === "/search" || pathname === "/rechercher") {
-      const timeout = setTimeout(scrollToSearchSection, 50);
-      return () => clearTimeout(timeout);
+      const timeout = window.setTimeout(() => scrollToId("search"), 60);
+      return () => window.clearTimeout(timeout);
     }
 
+    // ✅ retour home : remet en haut (sans animation)
     if (pathname === "/") {
-      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+      window.scrollTo({ top: 0, behavior: "auto" });
     }
-  }, [location]);
+  }, [location.pathname]); // volontairement minimal
 
   return (
-    <div className="min-h-screen w-full bg-white overflow-x-hidden flex flex-col">
+    // ✅ min-w-0 + overflow-x-clip = clé pour éviter “non responsive” sur certains layouts flex
+    <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white flex flex-col">
       <Header />
 
-      <main className="w-full flex-1">
-        {/* HERO */}
+      {/* ✅ min-w-0 sur main aussi : évite les “largeurs imposées” par des enfants */}
+      <main className="w-full flex-1 min-w-0">
         <HeroSection />
 
-        {/* ✅ IMPORTANT: plus de wrapper <section> avec py-xx autour
-            car chaque composant a déjà son propre <section> */}
         <FeaturesSection />
 
-        {/* ✅ Wrapper neutre seulement pour l’ID + scroll */}
-        <div id="search" className="scroll-mt-24">
+        {/* ✅ Les ancres doivent être sur un bloc “neutre” (pas de padding parasite) */}
+        <div
+          id="search"
+          className="w-full scroll-mt-20 sm:scroll-mt-24"
+        >
           <WorkerSearchSection />
         </div>
 
-        <div id="subscription" className="scroll-mt-24">
+        <div
+          id="subscription"
+          className="w-full scroll-mt-20 sm:scroll-mt-24"
+        >
           <SubscriptionSection />
         </div>
       </main>
