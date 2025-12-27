@@ -1,20 +1,18 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type Placement = "home_feed" | string;
-
-type CampaignRow = {
+type AdCampaign = {
   id: string;
   title: string;
-  status: string;
+  link_url: string | null;
   placement: string;
   start_at: string | null;
   end_at: string | null;
-  link_url: string | null;
-  priority?: number | null;
+  status: "draft" | "published" | "paused" | "ended";
+  created_at?: string;
 };
 
-type AssetRow = {
+type AdAsset = {
   id: string;
   campaign_id: string;
   media_type: "image" | "video";
@@ -24,172 +22,144 @@ type AssetRow = {
 };
 
 type Props = {
-  placement?: Placement;
+  placement: string; // ex: "home_feed"
   className?: string;
-  expiresInSeconds?: number; // durée URL signée
+  expiresIn?: number; // secondes (URL signée)
 };
 
-export default function AdSlot({
-  placement = "home_feed",
-  className = "",
-  expiresInSeconds = 300,
-}: Props) {
-  const [loading, setLoading] = useState(true);
-  const [campaign, setCampaign] = useState<CampaignRow | null>(null);
-  const [asset, setAsset] = useState<AssetRow | null>(null);
+const AdSlot: React.FC<Props> = ({ placement, className, expiresIn = 300 }) => {
+  const [loading, setLoading] = useState(false);
+  const [campaign, setCampaign] = useState<AdCampaign | null>(null);
+  const [asset, setAsset] = useState<AdAsset | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const now = useMemo(() => new Date(), []);
+  const nowIso = useMemo(() => new Date().toISOString(), []);
 
   useEffect(() => {
-    let mounted = true;
+    let cancelled = false;
 
-    const load = async () => {
+    const run = async () => {
       setLoading(true);
       setError(null);
-      setCampaign(null);
-      setAsset(null);
-      setSignedUrl(null);
 
-      // 1) Campagnes publiées par placement
-      // (RLS filtre déjà status/date si tu l’as mis; on ajoute un minimum côté front)
-      const { data: campaigns, error: cErr } = await supabase
-        .from("ads_campaigns")
-        .select("id,title,status,placement,start_at,end_at,link_url,priority")
-        .eq("placement", placement)
-        .eq("status", "published")
-        .order("priority", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(10);
+      try {
+        // 1) Campagnes publiées (sans priority)
+        const { data: campaigns, error: cErr } = await supabase
+          .from("ads_campaigns")
+          .select("id,title,link_url,placement,start_at,end_at,status,created_at")
+          .eq("placement", placement)
+          .eq("status", "published")
+          .order("created_at", { ascending: false })
+          .limit(1);
 
-      if (!mounted) return;
+        if (cErr) throw cErr;
 
-      if (cErr) {
-        setError(cErr.message);
-        setLoading(false);
-        return;
+        const c = campaigns?.[0] ?? null;
+
+        // Fenêtre de visibilité (si start_at/end_at sont utilisés)
+        const isInWindow =
+          !c ||
+          ((c.start_at ? c.start_at <= nowIso : true) &&
+            (c.end_at ? c.end_at >= nowIso : true));
+
+        if (!c || !isInWindow) {
+          if (!cancelled) {
+            setCampaign(null);
+            setAsset(null);
+            setSignedUrl(null);
+          }
+          return;
+        }
+
+        // 2) Asset le plus récent
+        const { data: assets, error: aErr } = await supabase
+          .from("ads_assets")
+          .select("id,campaign_id,media_type,storage_path,mime_type,size_bytes,created_at")
+          .eq("campaign_id", c.id)
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (aErr) throw aErr;
+
+        const a = assets?.[0] ?? null;
+        if (!a) {
+          if (!cancelled) {
+            setCampaign(c);
+            setAsset(null);
+            setSignedUrl(null);
+          }
+          return;
+        }
+
+        // 3) URL signée (bucket private)
+        const { data: signed, error: sErr } = await supabase.storage
+          .from("ads-media")
+          .createSignedUrl(a.storage_path, expiresIn);
+
+        if (sErr) throw sErr;
+
+        if (!cancelled) {
+          setCampaign(c);
+          setAsset(a);
+          setSignedUrl(signed?.signedUrl ?? null);
+        }
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message ?? "Unknown ads error");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-
-      const visible = (campaigns ?? []).filter((c: CampaignRow) => {
-        const startOk = !c.start_at || new Date(c.start_at) <= now;
-        const endOk = !c.end_at || new Date(c.end_at) >= now;
-        return startOk && endOk;
-      });
-
-      if (!visible.length) {
-        setLoading(false);
-        return;
-      }
-
-      // 2) Choisir une campagne (ici: première après tri)
-      const chosen = visible[0];
-      setCampaign(chosen);
-
-      // 3) Charger l’asset lié (video/image)
-      const { data: assets, error: aErr } = await supabase
-        .from("ads_assets")
-        .select("id,campaign_id,media_type,storage_path,mime_type,size_bytes")
-        .eq("campaign_id", chosen.id)
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      if (!mounted) return;
-
-      if (aErr) {
-        setError(aErr.message);
-        setLoading(false);
-        return;
-      }
-
-      const a = assets?.[0] ?? null;
-      if (!a) {
-        setLoading(false);
-        return;
-      }
-      setAsset(a);
-
-      // 4) URL signée (bucket privé)
-      const { data: signed, error: sErr } = await supabase.storage
-        .from("ads-media")
-        .createSignedUrl(a.storage_path, expiresInSeconds);
-
-      if (!mounted) return;
-
-      if (sErr) {
-        setError(sErr.message);
-        setLoading(false);
-        return;
-      }
-
-      setSignedUrl(signed?.signedUrl ?? null);
-      setLoading(false);
     };
 
-    load();
+    run();
 
     return () => {
-      mounted = false;
+      cancelled = true;
     };
-  }, [placement, expiresInSeconds, now]);
+  }, [placement, expiresIn, nowIso]);
 
-  if (loading) {
-    return (
-      <div className={`w-full ${className}`}>
-        <div className="w-full rounded-xl bg-gray-100 animate-pulse h-40" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={`w-full ${className}`}>
-        <div className="text-sm text-red-600">Ads error: {error}</div>
-      </div>
-    );
-  }
-
+  if (loading) return null;
+  if (error) return <div className="text-xs text-red-600">Ads error: {error}</div>;
   if (!campaign || !asset || !signedUrl) return null;
 
-  const content =
-    asset.media_type === "video" ? (
-      <video
-        src={signedUrl}
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="metadata"
-        className="w-full h-full object-cover"
-      />
-    ) : (
+  const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    if (campaign.link_url) {
+      return (
+        <a href={campaign.link_url} target="_blank" rel="noreferrer" className={className}>
+          {children}
+        </a>
+      );
+    }
+    return <div className={className}>{children}</div>;
+  };
+
+  // 4) Render vidéo / image
+  if (asset.media_type === "video") {
+    return (
+      <Wrapper>
+        <video
+          src={signedUrl}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          className="w-full rounded-xl shadow-sm"
+        />
+      </Wrapper>
+    );
+  }
+
+  return (
+    <Wrapper>
       <img
         src={signedUrl}
         alt={campaign.title}
-        className="w-full h-full object-cover"
+        className="w-full rounded-xl shadow-sm"
         loading="lazy"
       />
-    );
-
-  // Si lien: rendre cliquable
-  return (
-    <div className={`w-full ${className}`}>
-      <div className="relative w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="aspect-[16/5] sm:aspect-[16/4] md:aspect-[16/3]">
-          {campaign.link_url ? (
-            <a
-              href={campaign.link_url}
-              target="_blank"
-              rel="noreferrer"
-              className="block w-full h-full"
-            >
-              {content}
-            </a>
-          ) : (
-            content
-          )}
-        </div>
-      </div>
-    </div>
+    </Wrapper>
   );
-}
+};
+
+export default AdSlot;
