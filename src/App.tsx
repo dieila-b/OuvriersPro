@@ -20,6 +20,7 @@ import MonCompte from "./pages/MonCompte";
 import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
 import AdminOuvrierInscriptions from "./pages/AdminOuvrierInscriptions";
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminAds from "./pages/AdminAds"; // ✅ AJOUT: gestion pubs
 
 // Espace ouvrier connecté
 import WorkerDashboard from "./pages/WorkerDashboard";
@@ -60,10 +61,7 @@ function ScrollManager() {
       const headerHeight = headerEl?.offsetHeight ?? 72;
 
       const y =
-        el.getBoundingClientRect().top +
-        window.scrollY -
-        headerHeight -
-        8;
+        el.getBoundingClientRect().top + window.scrollY - headerHeight - 8;
 
       window.scrollTo({ top: Math.max(y, 0), behavior: "smooth" });
     }, 50);
@@ -206,6 +204,16 @@ const AppRoutes = () => (
         element={
           <PrivateRoute allowedRoles={["admin"]}>
             <AdminOuvrierInscriptions />
+          </PrivateRoute>
+        }
+      />
+
+      {/* ✅ Publicités (Admin) */}
+      <Route
+        path="/admin/publicites"
+        element={
+          <PrivateRoute allowedRoles={["admin"]}>
+            <AdminAds />
           </PrivateRoute>
         }
       />
