@@ -26,18 +26,22 @@ type Props = {
   placement: string;
   className?: string;
   expiresIn?: number;
+  variant?: "banner" | "card"; // ✅ option de rendu
 };
 
 const BUCKET = "ads-media";
 
-const AdSlot: React.FC<Props> = ({ placement, className, expiresIn = 300 }) => {
+const AdSlot: React.FC<Props> = ({
+  placement,
+  className,
+  expiresIn = 300,
+  variant = "banner",
+}) => {
   const [loading, setLoading] = useState(false);
   const [campaign, setCampaign] = useState<AdCampaign | null>(null);
   const [asset, setAsset] = useState<AdAsset | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  // évite une valeur figée qui pourrait bloquer les fenêtres start/end
   const nowIso = useMemo(() => new Date().toISOString(), [placement]);
 
   useEffect(() => {
@@ -51,10 +55,8 @@ const AdSlot: React.FC<Props> = ({ placement, className, expiresIn = 300 }) => {
 
     const run = async () => {
       setLoading(true);
-      setError(null);
 
       try {
-        // 1) Dernière campagne publiée pour ce placement
         const { data: campaigns, error: cErr } = await supabase
           .from("ads_campaigns")
           .select("id,title,link_url,placement,start_at,end_at,status,created_at")
@@ -77,7 +79,6 @@ const AdSlot: React.FC<Props> = ({ placement, className, expiresIn = 300 }) => {
           return;
         }
 
-        // 2) Dernier asset de cette campagne
         const { data: assets, error: aErr } = await supabase
           .from("ads_assets")
           .select("id,campaign_id,media_type,storage_path,mime_type,size_bytes,created_at")
@@ -97,12 +98,10 @@ const AdSlot: React.FC<Props> = ({ placement, className, expiresIn = 300 }) => {
           return;
         }
 
-        // 3) URL signée via Storage (Option A)
         const { data: signed, error: sErr } = await supabase.storage
           .from(BUCKET)
           .createSignedUrl(a.storage_path, expiresIn);
 
-        // si le fichier n'existe plus côté storage, on masque la pub au lieu d'afficher une erreur
         if (sErr) {
           if (!cancelled) reset();
           return;
@@ -113,43 +112,55 @@ const AdSlot: React.FC<Props> = ({ placement, className, expiresIn = 300 }) => {
           setAsset(a);
           setSignedUrl(signed?.signedUrl ?? null);
         }
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? "Unknown ads error");
+      } catch {
+        // ✅ pas d'erreur visible sur la home: on masque juste
+        if (!cancelled) reset();
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
 
     run();
-
     return () => {
       cancelled = true;
     };
   }, [placement, expiresIn, nowIso]);
 
   if (loading) return null;
-
-  // pour la home: on ne montre pas d'erreur, on masque juste
-  if (error) return null;
-
   if (!campaign || !asset || !signedUrl) return null;
 
+  // ✅ contraintes d’affichage
+  const slotClass =
+    variant === "banner"
+      ? "w-full overflow-hidden rounded-2xl shadow-sm border border-slate-100 bg-white aspect-[16/5] max-h-[160px] sm:max-h-[200px] md:max-h-[240px]"
+      : "w-full overflow-hidden rounded-2xl shadow-sm border border-slate-100 bg-white aspect-video";
+
   const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const merged = `${slotClass} ${className ?? ""}`.trim();
+
     if (campaign.link_url) {
       return (
         <a
           href={campaign.link_url}
           target="_blank"
           rel="noreferrer"
-          className={className}
+          className={merged}
+          aria-label={campaign.title}
+          title={campaign.title}
         >
           {children}
         </a>
       );
     }
-    return <div className={className}>{children}</div>;
+
+    return (
+      <div className={merged} aria-label={campaign.title} title={campaign.title}>
+        {children}
+      </div>
+    );
   };
 
+  // ✅ média “cover” pour ne pas exploser en hauteur
   if (asset.media_type === "video") {
     return (
       <Wrapper>
@@ -160,7 +171,7 @@ const AdSlot: React.FC<Props> = ({ placement, className, expiresIn = 300 }) => {
           loop
           playsInline
           preload="metadata"
-          className="w-full rounded-xl shadow-sm"
+          className="h-full w-full object-cover"
         />
       </Wrapper>
     );
@@ -171,7 +182,7 @@ const AdSlot: React.FC<Props> = ({ placement, className, expiresIn = 300 }) => {
       <img
         src={signedUrl}
         alt={campaign.title}
-        className="w-full rounded-xl shadow-sm"
+        className="h-full w-full object-cover"
         loading="lazy"
       />
     </Wrapper>
