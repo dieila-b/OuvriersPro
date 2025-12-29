@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Search, MapPin, ChevronDown, LocateFixed } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import AdSlot from "@/components/AdSlot";
 
 const HeroSection = () => {
   const { t, language } = useLanguage();
@@ -76,9 +77,7 @@ const HeroSection = () => {
   const filteredDistricts = useMemo(() => {
     const q = district.trim().toLowerCase();
     if (q.length < 2) return [];
-    return districtOptions
-      .filter((d) => d.toLowerCase().includes(q))
-      .slice(0, 8);
+    return districtOptions.filter((d) => d.toLowerCase().includes(q)).slice(0, 8);
   }, [district, districtOptions]);
 
   // ✅ fermer dropdown clic extérieur
@@ -87,10 +86,7 @@ const HeroSection = () => {
       if (jobsBoxRef.current && !jobsBoxRef.current.contains(e.target as Node)) {
         setOpenJobs(false);
       }
-      if (
-        districtsBoxRef.current &&
-        !districtsBoxRef.current.contains(e.target as Node)
-      ) {
+      if (districtsBoxRef.current && !districtsBoxRef.current.contains(e.target as Node)) {
         setOpenDistricts(false);
       }
     };
@@ -127,8 +123,6 @@ const HeroSection = () => {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setGeo({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-
-        // si on veut forcer l'utilisateur à garder le quartier vide, on laisse tel quel
         setOpenDistricts(false);
         setGeoLoading(false);
       },
@@ -165,14 +159,10 @@ const HeroSection = () => {
   };
 
   return (
-    <section className="w-full text-white bg-gradient-to-br from-pro-blue to-blue-600">
-      {/* ✅ responsive réel :
-          - min-w-0 pour éviter largeur imposée (source fréquente du “pas responsive”)
-          - padding adaptatif + pas de hauteur forcée
-      */}
+    <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden">
       <div className="w-full min-w-0 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 lg:py-12">
+        {/* ✅ Zone centrée : titre + recherche */}
         <div className="w-full min-w-0 max-w-4xl mx-auto text-center">
-          {/* ✅ typo scalable + wrap garanti */}
           <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
             {t("home.title")}
           </h1>
@@ -181,14 +171,7 @@ const HeroSection = () => {
             {t("home.subtitle")}
           </p>
 
-          {/* ✅ bloc recherche : largeur fluide, pas de débordements */}
           <div className="mt-6 sm:mt-7 bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl w-full max-w-3xl mx-auto text-gray-900">
-            {/* ✅ grid vraiment responsive :
-                - mobile : 1 colonne
-                - sm : 2 colonnes
-                - lg : 4 colonnes (2 + 2)
-                - min-w-0 sur enfants pour éviter overflow
-            */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 items-stretch min-w-0">
               {/* Métier */}
               <div
@@ -255,14 +238,10 @@ const HeroSection = () => {
                   type="button"
                   onClick={handleGeoLocate}
                   className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center rounded-md border border-gray-200 bg-white px-2 py-1 text-gray-600 hover:bg-gray-50"
-                  aria-label={
-                    language === "fr" ? "Utiliser ma position" : "Use my location"
-                  }
+                  aria-label={language === "fr" ? "Utiliser ma position" : "Use my location"}
                   title={language === "fr" ? "Utiliser ma position" : "Use my location"}
                 >
-                  <LocateFixed
-                    className={`w-4 h-4 ${geoLoading ? "animate-pulse" : ""}`}
-                  />
+                  <LocateFixed className={`w-4 h-4 ${geoLoading ? "animate-pulse" : ""}`} />
                 </button>
 
                 {openDistricts && (filteredDistricts.length > 0 || loadingOptions) && (
@@ -297,7 +276,6 @@ const HeroSection = () => {
                 </div>
               )}
 
-              {/* ✅ bouton : pleine largeur sur toutes tailles */}
               <Button
                 type="button"
                 onClick={handleSearch}
@@ -315,6 +293,16 @@ const HeroSection = () => {
               </div>
             )}
           </div>
+        </div>
+
+        {/* ✅ Zone pub pleine largeur dans le conteneur */}
+        <div className="mt-6 sm:mt-8 w-full min-w-0">
+          <AdSlot
+            placement="home_feed"
+            // Si ton AdSlot supporte "height", garde, sinon supprime la ligne
+            // height="lg"
+            className="w-full"
+          />
         </div>
       </div>
     </section>
