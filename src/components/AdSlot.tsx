@@ -29,16 +29,17 @@ type Slide = {
 };
 
 type Props = {
-  placement: string;          // ex: "home_feed"
+  placement: string; // ex: "home_feed"
   className?: string;
-  expiresIn?: number;         // secondes URL signée
-  intervalMs?: number;        // auto-défile
-  limit?: number;             // nb max de pubs
+  expiresIn?: number; // signed url seconds
+  intervalMs?: number; // autoplay interval
+  limit?: number; // max campaigns to consider
   variant?: "banner" | "card";
   pauseOnHover?: boolean;
   showLabel?: boolean;
   showControls?: boolean;
   showProgress?: boolean;
+  compact?: boolean; // reduce height further
 };
 
 const BUCKET = "ads-media";
@@ -48,33 +49,55 @@ const AdSlot: React.FC<Props> = ({
   className,
   expiresIn = 300,
   intervalMs = 6500,
-  limit = 6,
+  limit = 8,
   variant = "banner",
   pauseOnHover = true,
   showLabel = true,
   showControls = true,
   showProgress = true,
+  compact = true,
 }) => {
   const [slides, setSlides] = useState<Slide[]>([]);
   const [index, setIndex] = useState(0);
   const [isHover, setIsHover] = useState(false);
-  const [animKey, setAnimKey] = useState(0); // relance fade/zoom à chaque slide
+
+  // direction for premium slide transition
+  const [dir, setDir] = useState<1 | -1>(1);
 
   const timerRef = useRef<number | null>(null);
   const progressRef = useRef<HTMLDivElement | null>(null);
 
-  const nowIso = useMemo(() => new Date().toISOString(), [placement]);
+  // touch/swipe
+  const touchStartX = useRef<number | null>(null);
+  const touchDeltaX = useRef<number>(0);
 
-  const slotClass =
-    variant === "banner"
-      ? "relative w-full overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.10)] aspect-[16/5] max-h-[150px] sm:max-h-[190px] md:max-h-[230px]"
-      : "relative w-full overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.10)] aspect-video";
+  const nowIso = useMemo(() => new Date().toISOString(), [placement]);
 
   const inWindow = (c: AdCampaign) =>
     (c.start_at ? c.start_at <= nowIso : true) &&
     (c.end_at ? c.end_at >= nowIso : true);
 
-  // ---- Load slides (campagnes publiées + dernier asset + URL signée) ----
+  const baseSlot =
+    "relative w-full overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.14)]";
+
+  const slotRatio =
+    variant === "banner"
+      ? compact
+        ? "aspect-[21/5] max-h-[140px] sm:max-h-[170px] md:max-h-[200px]"
+        : "aspect-[16/5] max-h-[160px] sm:max-h-[200px] md:max-h-[240px]"
+      : "aspect-video";
+
+  const mergedClass = `${baseSlot} ${slotRatio} ${className ?? ""}`.trim();
+
+  const resetProgress = () => {
+    if (!progressRef.current) return;
+    progressRef.current.style.animation = "none";
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    progressRef.current.offsetHeight;
+    progressRef.current.style.animation = "";
+  };
+
+  // Load slides: published campaigns (placement) + last asset + signed url
   useEffect(() => {
     let cancelled = false;
 
@@ -90,23 +113,21 @@ const AdSlot: React.FC<Props> = ({
 
         if (cErr) throw cErr;
 
-        const validCampaigns = (campaigns as AdCampaign[] | null)?.filter(inWindow) ?? [];
-        if (validCampaigns.length === 0) {
+        const valid = (campaigns as AdCampaign[] | null)?.filter(inWindow) ?? [];
+        if (valid.length === 0) {
           if (!cancelled) setSlides([]);
           return;
         }
 
         const built: Slide[] = [];
 
-        for (const c of validCampaigns) {
-          const { data: assets, error: aErr } = await supabase
+        for (const c of valid) {
+          const { data: assets } = await supabase
             .from("ads_assets")
             .select("id,campaign_id,media_type,storage_path,mime_type,size_bytes,created_at")
             .eq("campaign_id", c.id)
             .order("created_at", { ascending: false })
             .limit(1);
-
-          if (aErr) continue;
 
           const a = (assets?.[0] as AdAsset) ?? null;
           if (!a?.storage_path) continue;
@@ -123,7 +144,8 @@ const AdSlot: React.FC<Props> = ({
         if (!cancelled) {
           setSlides(built);
           setIndex(0);
-          setAnimKey((k) => k + 1);
+          setDir(1);
+          resetProgress();
         }
       } catch {
         if (!cancelled) setSlides([]);
@@ -136,17 +158,7 @@ const AdSlot: React.FC<Props> = ({
     };
   }, [placement, expiresIn, limit, nowIso]);
 
-  // ---- Progress bar reset helper ----
-  const resetProgress = () => {
-    if (!progressRef.current) return;
-    // force reflow pour relancer l'animation
-    progressRef.current.style.animation = "none";
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    progressRef.current.offsetHeight;
-    progressRef.current.style.animation = "";
-  };
-
-  // ---- Auto-play ----
+  // Autoplay
   useEffect(() => {
     if (slides.length <= 1) return;
 
@@ -158,11 +170,8 @@ const AdSlot: React.FC<Props> = ({
     resetProgress();
 
     timerRef.current = window.setInterval(() => {
-      setIndex((i) => {
-        const next = (i + 1) % slides.length;
-        return next;
-      });
-      setAnimKey((k) => k + 1);
+      setDir(1);
+      setIndex((i) => (i + 1) % slides.length);
       resetProgress();
     }, Math.max(2000, intervalMs));
 
@@ -171,34 +180,88 @@ const AdSlot: React.FC<Props> = ({
     };
   }, [slides.length, intervalMs, isHover, pauseOnHover]);
 
-  // ---- Safety if slides shrink ----
+  // Keyboard nav
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goPrev();
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        goNext();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slides.length]);
+
+  // Keep index safe if slides change
   useEffect(() => {
     if (index >= slides.length) setIndex(0);
   }, [index, slides.length]);
 
+  const goPrev = () => {
+    if (slides.length <= 1) return;
+    setDir(-1);
+    setIndex((i) => (i - 1 + slides.length) % slides.length);
+    resetProgress();
+  };
+
+  const goNext = () => {
+    if (slides.length <= 1) return;
+    setDir(1);
+    setIndex((i) => (i + 1) % slides.length);
+    resetProgress();
+  };
+
+  // Swipe handlers
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (slides.length <= 1) return;
+    touchStartX.current = e.touches[0]?.clientX ?? null;
+    touchDeltaX.current = 0;
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (slides.length <= 1) return;
+    if (touchStartX.current == null) return;
+    const x = e.touches[0]?.clientX ?? 0;
+    touchDeltaX.current = x - touchStartX.current;
+  };
+
+  const onTouchEnd = () => {
+    if (slides.length <= 1) return;
+    const dx = touchDeltaX.current;
+    touchStartX.current = null;
+    touchDeltaX.current = 0;
+
+    // threshold
+    if (Math.abs(dx) < 40) return;
+    if (dx > 0) goPrev();
+    else goNext();
+  };
+
   if (slides.length === 0) return null;
 
   const current = slides[index];
-
-  const mergedClass = `${slotClass} ${className ?? ""}`.trim();
 
   const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const commonProps = {
       className: mergedClass,
       onMouseEnter: () => setIsHover(true),
       onMouseLeave: () => setIsHover(false),
-      "aria-label": current.campaign.title,
+      onTouchStart,
+      onTouchMove,
+      onTouchEnd,
       title: current.campaign.title,
+      "aria-label": current.campaign.title,
     } as const;
 
     if (current.campaign.link_url) {
       return (
-        <a
-          href={current.campaign.link_url}
-          target="_blank"
-          rel="noreferrer"
-          {...commonProps}
-        >
+        <a href={current.campaign.link_url} target="_blank" rel="noreferrer" {...commonProps}>
           {children}
         </a>
       );
@@ -206,28 +269,26 @@ const AdSlot: React.FC<Props> = ({
     return <div {...commonProps}>{children}</div>;
   };
 
-  const goPrev = () => {
-    setIndex((i) => (i - 1 + slides.length) % slides.length);
-    setAnimKey((k) => k + 1);
-    resetProgress();
-  };
-  const goNext = () => {
-    setIndex((i) => (i + 1) % slides.length);
-    setAnimKey((k) => k + 1);
-    resetProgress();
-  };
+  // Premium slide transition uses two layers:
+  // - base "current" media with slide+blur animation
+  // - glass overlay + content + controls
+  const slideAnim =
+    dir === 1
+      ? "animate-[adSlideInRight_700ms_cubic-bezier(0.22,1,0.36,1)_forwards]"
+      : "animate-[adSlideInLeft_700ms_cubic-bezier(0.22,1,0.36,1)_forwards]";
 
   return (
     <Wrapper>
-      {/* Background gradient + subtle pattern */}
+      {/* Premium background */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-br from-slate-900/10 via-sky-900/5 to-indigo-900/10" />
-        <div className="absolute -left-24 -top-24 h-56 w-56 rounded-full bg-sky-500/10 blur-2xl" />
-        <div className="absolute -right-24 -bottom-24 h-56 w-56 rounded-full bg-indigo-500/10 blur-2xl" />
+        <div className="absolute -left-28 -top-28 h-60 w-60 rounded-full bg-sky-500/14 blur-3xl" />
+        <div className="absolute -right-28 -bottom-28 h-60 w-60 rounded-full bg-indigo-500/14 blur-3xl" />
+        <div className="absolute inset-0 opacity-[0.06] [background-image:radial-gradient(circle_at_1px_1px,rgba(15,23,42,1)_1px,transparent_0)] [background-size:18px_18px]" />
       </div>
 
-      {/* Media layer (fade + slight zoom) */}
-      <div key={animKey} className="absolute inset-0">
+      {/* Media */}
+      <div className={`absolute inset-0 ${slideAnim}`}>
         {current.asset.media_type === "video" ? (
           <video
             src={current.signedUrl}
@@ -236,32 +297,42 @@ const AdSlot: React.FC<Props> = ({
             loop
             playsInline
             preload="metadata"
-            className="h-full w-full object-cover opacity-0 animate-[adFadeIn_700ms_ease-out_forwards] will-change-transform"
+            className="h-full w-full object-cover will-change-transform animate-[adKenBurns_10s_ease-in-out_infinite_alternate]"
           />
         ) : (
           <img
             src={current.signedUrl}
             alt={current.campaign.title}
-            className="h-full w-full object-cover opacity-0 animate-[adFadeIn_700ms_ease-out_forwards] will-change-transform"
             loading="lazy"
+            className="h-full w-full object-cover will-change-transform animate-[adKenBurns_10s_ease-in-out_infinite_alternate]"
           />
         )}
 
-        {/* Soft overlay for readability */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/30 via-slate-900/5 to-transparent pointer-events-none" />
+        {/* Premium overlay for readability */}
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/45 via-slate-950/10 to-transparent" />
+        <div className="absolute inset-0 bg-[radial-gradient(900px_circle_at_15%_20%,rgba(255,255,255,0.18),transparent_55%)]" />
       </div>
 
-      {/* Top label */}
-      {showLabel && (
-        <div className="absolute left-3 top-3 sm:left-4 sm:top-4">
-          <span className="inline-flex items-center gap-2 rounded-full bg-white/85 backdrop-blur border border-white/50 px-3 py-1 text-[10px] font-semibold tracking-wide text-slate-800 shadow-sm">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+      {/* Glass top bar */}
+      <div className="absolute left-3 right-3 top-3 sm:left-4 sm:right-4 sm:top-4 flex items-center justify-between gap-3">
+        {showLabel ? (
+          <div className="inline-flex items-center gap-2 rounded-full bg-white/78 backdrop-blur border border-white/50 px-3 py-1 text-[10px] font-semibold text-slate-800 shadow-sm">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.20)]" />
             Sponsorisé
-          </span>
-        </div>
-      )}
+          </div>
+        ) : (
+          <div />
+        )}
 
-      {/* Title (optional, subtle) */}
+        {/* subtle CTA */}
+        {current.campaign.link_url ? (
+          <div className="hidden sm:inline-flex items-center rounded-full bg-black/25 backdrop-blur px-3 py-1 text-[10px] font-semibold text-white border border-white/15">
+            Ouvrir
+          </div>
+        ) : null}
+      </div>
+
+      {/* Bottom content (title + dots) */}
       <div className="absolute left-3 right-3 bottom-3 sm:left-4 sm:right-4 sm:bottom-4">
         <div className="flex items-end justify-between gap-3">
           <div className="min-w-0">
@@ -270,7 +341,6 @@ const AdSlot: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* Dots */}
           {slides.length > 1 && (
             <div className="flex items-center gap-1.5">
               {slides.map((_, i) => (
@@ -280,14 +350,12 @@ const AdSlot: React.FC<Props> = ({
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    setDir(i > index ? 1 : -1);
                     setIndex(i);
-                    setAnimKey((k) => k + 1);
                     resetProgress();
                   }}
                   className={`h-1.5 rounded-full transition-all ${
-                    i === index
-                      ? "w-6 bg-white"
-                      : "w-2.5 bg-white/60 hover:bg-white/85"
+                    i === index ? "w-7 bg-white" : "w-2.5 bg-white/60 hover:bg-white/85"
                   }`}
                   aria-label={`Go to ad ${i + 1}`}
                 />
@@ -307,7 +375,7 @@ const AdSlot: React.FC<Props> = ({
               e.stopPropagation();
               goPrev();
             }}
-            className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/85 backdrop-blur border border-white/50 shadow-sm px-2.5 py-1.5 text-[11px] text-slate-800 hover:bg-white"
+            className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 backdrop-blur border border-white/45 shadow-sm px-2.5 py-1.5 text-[11px] text-slate-900 hover:bg-white"
             aria-label="Previous ad"
           >
             ◀
@@ -320,7 +388,7 @@ const AdSlot: React.FC<Props> = ({
               e.stopPropagation();
               goNext();
             }}
-            className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/85 backdrop-blur border border-white/50 shadow-sm px-2.5 py-1.5 text-[11px] text-slate-800 hover:bg-white"
+            className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 backdrop-blur border border-white/45 shadow-sm px-2.5 py-1.5 text-[11px] text-slate-900 hover:bg-white"
             aria-label="Next ad"
           >
             ▶
@@ -328,7 +396,7 @@ const AdSlot: React.FC<Props> = ({
         </>
       )}
 
-      {/* Progress bar */}
+      {/* Progress */}
       {showProgress && slides.length > 1 && !(pauseOnHover && isHover) && (
         <div className="absolute left-0 right-0 bottom-0 h-[3px] bg-white/20">
           <div
@@ -341,7 +409,7 @@ const AdSlot: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Pause indicator when hover */}
+      {/* Pause indicator */}
       {pauseOnHover && isHover && slides.length > 1 && (
         <div className="absolute right-3 top-3 sm:right-4 sm:top-4">
           <span className="inline-flex items-center rounded-full bg-black/35 backdrop-blur px-3 py-1 text-[10px] font-semibold text-white border border-white/15">
@@ -350,16 +418,28 @@ const AdSlot: React.FC<Props> = ({
         </div>
       )}
 
-      {/* CSS keyframes (inline, no config Tailwind needed) */}
+      {/* Keyframes */}
       <style>
         {`
-          @keyframes adFadeIn {
-            0%   { opacity: 0; transform: scale(1.02); }
-            100% { opacity: 1; transform: scale(1.00); }
-          }
           @keyframes adProgress {
             0%   { width: 0%; }
             100% { width: 100%; }
+          }
+
+          /* Slide in with slight blur (premium feel) */
+          @keyframes adSlideInRight {
+            0%   { opacity: 0; transform: translateX(18px) scale(1.01); filter: blur(6px); }
+            100% { opacity: 1; transform: translateX(0) scale(1.00); filter: blur(0px); }
+          }
+          @keyframes adSlideInLeft {
+            0%   { opacity: 0; transform: translateX(-18px) scale(1.01); filter: blur(6px); }
+            100% { opacity: 1; transform: translateX(0) scale(1.00); filter: blur(0px); }
+          }
+
+          /* Ken Burns subtle zoom */
+          @keyframes adKenBurns {
+            0%   { transform: scale(1.02); }
+            100% { transform: scale(1.07); }
           }
         `}
       </style>
