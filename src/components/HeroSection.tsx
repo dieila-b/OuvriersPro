@@ -29,7 +29,6 @@ const HeroSection = () => {
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
 
-  // ✅ Charger options (light)
   useEffect(() => {
     const loadOptions = async () => {
       setLoadingOptions(true);
@@ -80,7 +79,6 @@ const HeroSection = () => {
     return districtOptions.filter((d) => d.toLowerCase().includes(q)).slice(0, 8);
   }, [district, districtOptions]);
 
-  // ✅ fermer dropdown clic extérieur
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
       if (jobsBoxRef.current && !jobsBoxRef.current.contains(e.target as Node)) {
@@ -94,7 +92,6 @@ const HeroSection = () => {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  // ✅ fermer dropdown au clavier (ESC)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -160,8 +157,8 @@ const HeroSection = () => {
 
   return (
     <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden">
-      <div className="w-full min-w-0 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 lg:py-12">
-        {/* ✅ Zone centrée : titre + recherche */}
+      {/* ✅ Contenu centré */}
+      <div className="w-full min-w-0 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
         <div className="w-full min-w-0 max-w-4xl mx-auto text-center">
           <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
             {t("home.title")}
@@ -173,7 +170,6 @@ const HeroSection = () => {
 
           <div className="mt-6 sm:mt-7 bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl w-full max-w-3xl mx-auto text-gray-900">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 items-stretch min-w-0">
-              {/* Métier */}
               <div
                 ref={jobsBoxRef}
                 className="relative min-w-0 text-left sm:col-span-2 lg:col-span-2"
@@ -216,7 +212,6 @@ const HeroSection = () => {
                 )}
               </div>
 
-              {/* Quartier + Geo */}
               <div
                 ref={districtsBoxRef}
                 className="relative min-w-0 text-left sm:col-span-2 lg:col-span-2"
@@ -294,16 +289,15 @@ const HeroSection = () => {
             )}
           </div>
         </div>
+      </div>
 
-        {/* ✅ Zone pub pleine largeur dans le conteneur */}
-        <div className="mt-6 sm:mt-8 w-full min-w-0">
-          <AdSlot
-            placement="home_feed"
-            // Si ton AdSlot supporte "height", garde, sinon supprime la ligne
-            // height="lg"
-            className="w-full"
-          />
-        </div>
+      {/* ✅ Pub bord à bord écran */}
+      <div className="w-full px-0 pb-8 sm:pb-10 lg:pb-12 -mt-2 sm:-mt-4">
+        <AdSlot
+          placement="home_feed"
+          // height="lg"
+          className="w-full"
+        />
       </div>
     </section>
   );
