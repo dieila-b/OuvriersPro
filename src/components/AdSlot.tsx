@@ -34,8 +34,11 @@ type Props = {
   expiresIn?: number;         // secondes URL signée
   intervalMs?: number;        // auto-défile
   limit?: number;             // nb max de pubs
-  variant?: "banner" | "card"; // format
+  variant?: "banner" | "card";
   pauseOnHover?: boolean;
+  showLabel?: boolean;
+  showControls?: boolean;
+  showProgress?: boolean;
 };
 
 const BUCKET = "ads-media";
@@ -44,34 +47,39 @@ const AdSlot: React.FC<Props> = ({
   placement,
   className,
   expiresIn = 300,
-  intervalMs = 5000,
+  intervalMs = 6500,
   limit = 6,
   variant = "banner",
   pauseOnHover = true,
+  showLabel = true,
+  showControls = true,
+  showProgress = true,
 }) => {
   const [slides, setSlides] = useState<Slide[]>([]);
   const [index, setIndex] = useState(0);
   const [isHover, setIsHover] = useState(false);
+  const [animKey, setAnimKey] = useState(0); // relance fade/zoom à chaque slide
+
+  const timerRef = useRef<number | null>(null);
+  const progressRef = useRef<HTMLDivElement | null>(null);
 
   const nowIso = useMemo(() => new Date().toISOString(), [placement]);
-  const timerRef = useRef<number | null>(null);
 
   const slotClass =
     variant === "banner"
-      ? "w-full overflow-hidden rounded-2xl shadow-sm border border-slate-100 bg-white aspect-[16/5] max-h-[160px] sm:max-h-[200px] md:max-h-[240px]"
-      : "w-full overflow-hidden rounded-2xl shadow-sm border border-slate-100 bg-white aspect-video";
+      ? "relative w-full overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.10)] aspect-[16/5] max-h-[150px] sm:max-h-[190px] md:max-h-[230px]"
+      : "relative w-full overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.10)] aspect-video";
 
   const inWindow = (c: AdCampaign) =>
     (c.start_at ? c.start_at <= nowIso : true) &&
     (c.end_at ? c.end_at >= nowIso : true);
 
-  // 1) Load slides: campagnes publiées + asset récent + signedUrl
+  // ---- Load slides (campagnes publiées + dernier asset + URL signée) ----
   useEffect(() => {
     let cancelled = false;
 
     const run = async () => {
       try {
-        // campagnes
         const { data: campaigns, error: cErr } = await supabase
           .from("ads_campaigns")
           .select("id,title,link_url,placement,start_at,end_at,status,created_at")
@@ -88,7 +96,6 @@ const AdSlot: React.FC<Props> = ({
           return;
         }
 
-        // pour chaque campagne: dernier asset + signedUrl
         const built: Slide[] = [];
 
         for (const c of validCampaigns) {
@@ -100,6 +107,7 @@ const AdSlot: React.FC<Props> = ({
             .limit(1);
 
           if (aErr) continue;
+
           const a = (assets?.[0] as AdAsset) ?? null;
           if (!a?.storage_path) continue;
 
@@ -115,6 +123,7 @@ const AdSlot: React.FC<Props> = ({
         if (!cancelled) {
           setSlides(built);
           setIndex(0);
+          setAnimKey((k) => k + 1);
         }
       } catch {
         if (!cancelled) setSlides([]);
@@ -122,30 +131,47 @@ const AdSlot: React.FC<Props> = ({
     };
 
     run();
-
     return () => {
       cancelled = true;
     };
   }, [placement, expiresIn, limit, nowIso]);
 
-  // 2) Auto-play
+  // ---- Progress bar reset helper ----
+  const resetProgress = () => {
+    if (!progressRef.current) return;
+    // force reflow pour relancer l'animation
+    progressRef.current.style.animation = "none";
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    progressRef.current.offsetHeight;
+    progressRef.current.style.animation = "";
+  };
+
+  // ---- Auto-play ----
   useEffect(() => {
     if (slides.length <= 1) return;
 
     if (timerRef.current) window.clearInterval(timerRef.current);
 
-    if (pauseOnHover && isHover) return;
+    const shouldPause = pauseOnHover && isHover;
+    if (shouldPause) return;
+
+    resetProgress();
 
     timerRef.current = window.setInterval(() => {
-      setIndex((i) => (i + 1) % slides.length);
-    }, Math.max(1500, intervalMs));
+      setIndex((i) => {
+        const next = (i + 1) % slides.length;
+        return next;
+      });
+      setAnimKey((k) => k + 1);
+      resetProgress();
+    }, Math.max(2000, intervalMs));
 
     return () => {
       if (timerRef.current) window.clearInterval(timerRef.current);
     };
   }, [slides.length, intervalMs, isHover, pauseOnHover]);
 
-  // 3) Sécurité index si slides changent
+  // ---- Safety if slides shrink ----
   useEffect(() => {
     if (index >= slides.length) setIndex(0);
   }, [index, slides.length]);
@@ -154,8 +180,16 @@ const AdSlot: React.FC<Props> = ({
 
   const current = slides[index];
 
+  const mergedClass = `${slotClass} ${className ?? ""}`.trim();
+
   const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const merged = `${slotClass} ${className ?? ""}`.trim();
+    const commonProps = {
+      className: mergedClass,
+      onMouseEnter: () => setIsHover(true),
+      onMouseLeave: () => setIsHover(false),
+      "aria-label": current.campaign.title,
+      title: current.campaign.title,
+    } as const;
 
     if (current.campaign.link_url) {
       return (
@@ -163,66 +197,108 @@ const AdSlot: React.FC<Props> = ({
           href={current.campaign.link_url}
           target="_blank"
           rel="noreferrer"
-          className={merged}
-          aria-label={current.campaign.title}
-          title={current.campaign.title}
-          onMouseEnter={() => setIsHover(true)}
-          onMouseLeave={() => setIsHover(false)}
+          {...commonProps}
         >
           {children}
         </a>
       );
     }
-
-    return (
-      <div
-        className={merged}
-        aria-label={current.campaign.title}
-        title={current.campaign.title}
-        onMouseEnter={() => setIsHover(true)}
-        onMouseLeave={() => setIsHover(false)}
-      >
-        {children}
-      </div>
-    );
+    return <div {...commonProps}>{children}</div>;
   };
 
-  const goPrev = () => setIndex((i) => (i - 1 + slides.length) % slides.length);
-  const goNext = () => setIndex((i) => (i + 1) % slides.length);
+  const goPrev = () => {
+    setIndex((i) => (i - 1 + slides.length) % slides.length);
+    setAnimKey((k) => k + 1);
+    resetProgress();
+  };
+  const goNext = () => {
+    setIndex((i) => (i + 1) % slides.length);
+    setAnimKey((k) => k + 1);
+    resetProgress();
+  };
 
   return (
     <Wrapper>
-      {/* Track (animation slide) */}
-      <div
-        className="h-full w-full flex transition-transform duration-700 ease-out"
-        style={{ transform: `translateX(-${index * 100}%)` }}
-      >
-        {slides.map((s) => (
-          <div key={s.campaign.id} className="h-full w-full flex-shrink-0">
-            {s.asset.media_type === "video" ? (
-              <video
-                src={s.signedUrl}
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="metadata"
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <img
-                src={s.signedUrl}
-                alt={s.campaign.title}
-                className="h-full w-full object-cover"
-                loading="lazy"
-              />
-            )}
-          </div>
-        ))}
+      {/* Background gradient + subtle pattern */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/10 via-sky-900/5 to-indigo-900/10" />
+        <div className="absolute -left-24 -top-24 h-56 w-56 rounded-full bg-sky-500/10 blur-2xl" />
+        <div className="absolute -right-24 -bottom-24 h-56 w-56 rounded-full bg-indigo-500/10 blur-2xl" />
       </div>
 
-      {/* Controls (optionnels, discrets) */}
-      {slides.length > 1 && (
+      {/* Media layer (fade + slight zoom) */}
+      <div key={animKey} className="absolute inset-0">
+        {current.asset.media_type === "video" ? (
+          <video
+            src={current.signedUrl}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            className="h-full w-full object-cover opacity-0 animate-[adFadeIn_700ms_ease-out_forwards] will-change-transform"
+          />
+        ) : (
+          <img
+            src={current.signedUrl}
+            alt={current.campaign.title}
+            className="h-full w-full object-cover opacity-0 animate-[adFadeIn_700ms_ease-out_forwards] will-change-transform"
+            loading="lazy"
+          />
+        )}
+
+        {/* Soft overlay for readability */}
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/30 via-slate-900/5 to-transparent pointer-events-none" />
+      </div>
+
+      {/* Top label */}
+      {showLabel && (
+        <div className="absolute left-3 top-3 sm:left-4 sm:top-4">
+          <span className="inline-flex items-center gap-2 rounded-full bg-white/85 backdrop-blur border border-white/50 px-3 py-1 text-[10px] font-semibold tracking-wide text-slate-800 shadow-sm">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            Sponsorisé
+          </span>
+        </div>
+      )}
+
+      {/* Title (optional, subtle) */}
+      <div className="absolute left-3 right-3 bottom-3 sm:left-4 sm:right-4 sm:bottom-4">
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] sm:text-xs font-semibold text-white drop-shadow">
+              {current.campaign.title}
+            </div>
+          </div>
+
+          {/* Dots */}
+          {slides.length > 1 && (
+            <div className="flex items-center gap-1.5">
+              {slides.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIndex(i);
+                    setAnimKey((k) => k + 1);
+                    resetProgress();
+                  }}
+                  className={`h-1.5 rounded-full transition-all ${
+                    i === index
+                      ? "w-6 bg-white"
+                      : "w-2.5 bg-white/60 hover:bg-white/85"
+                  }`}
+                  aria-label={`Go to ad ${i + 1}`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Controls */}
+      {showControls && slides.length > 1 && (
         <>
           <button
             type="button"
@@ -231,7 +307,7 @@ const AdSlot: React.FC<Props> = ({
               e.stopPropagation();
               goPrev();
             }}
-            className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 backdrop-blur border border-white/60 shadow-sm px-2 py-1 text-xs text-slate-700 hover:bg-white"
+            className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/85 backdrop-blur border border-white/50 shadow-sm px-2.5 py-1.5 text-[11px] text-slate-800 hover:bg-white"
             aria-label="Previous ad"
           >
             ◀
@@ -244,32 +320,49 @@ const AdSlot: React.FC<Props> = ({
               e.stopPropagation();
               goNext();
             }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 backdrop-blur border border-white/60 shadow-sm px-2 py-1 text-xs text-slate-700 hover:bg-white"
+            className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/85 backdrop-blur border border-white/50 shadow-sm px-2.5 py-1.5 text-[11px] text-slate-800 hover:bg-white"
             aria-label="Next ad"
           >
             ▶
           </button>
-
-          {/* Dots */}
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-            {slides.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIndex(i);
-                }}
-                className={`h-1.5 rounded-full transition-all ${
-                  i === index ? "w-6 bg-white" : "w-2.5 bg-white/60 hover:bg-white/80"
-                }`}
-                aria-label={`Go to ad ${i + 1}`}
-              />
-            ))}
-          </div>
         </>
       )}
+
+      {/* Progress bar */}
+      {showProgress && slides.length > 1 && !(pauseOnHover && isHover) && (
+        <div className="absolute left-0 right-0 bottom-0 h-[3px] bg-white/20">
+          <div
+            ref={progressRef}
+            className="h-full bg-white/90"
+            style={{
+              animation: `adProgress ${Math.max(2000, intervalMs)}ms linear infinite`,
+            }}
+          />
+        </div>
+      )}
+
+      {/* Pause indicator when hover */}
+      {pauseOnHover && isHover && slides.length > 1 && (
+        <div className="absolute right-3 top-3 sm:right-4 sm:top-4">
+          <span className="inline-flex items-center rounded-full bg-black/35 backdrop-blur px-3 py-1 text-[10px] font-semibold text-white border border-white/15">
+            Pause
+          </span>
+        </div>
+      )}
+
+      {/* CSS keyframes (inline, no config Tailwind needed) */}
+      <style>
+        {`
+          @keyframes adFadeIn {
+            0%   { opacity: 0; transform: scale(1.02); }
+            100% { opacity: 1; transform: scale(1.00); }
+          }
+          @keyframes adProgress {
+            0%   { width: 0%; }
+            100% { width: 100%; }
+          }
+        `}
+      </style>
     </Wrapper>
   );
 };
