@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type AdCampaign = {
@@ -9,7 +9,7 @@ type AdCampaign = {
   start_at: string | null;
   end_at: string | null;
   status: "draft" | "published" | "paused" | "ended";
-  created_at?: string | null;
+  created_at?: string;
 };
 
 type AdAsset = {
@@ -17,32 +17,28 @@ type AdAsset = {
   campaign_id: string;
   media_type: "image" | "video";
   storage_path: string;
-  mime_type: string | null;
-  size_bytes: number | null;
-  created_at?: string | null;
+  mime_type?: string | null;
+  size_bytes?: number | null;
+  created_at?: string;
 };
 
 type Props = {
-  placement: string; // ex: "home_feed"
+  placement: string;
   className?: string;
-  expiresIn?: number; // secondes (URL signée)
+  expiresIn?: number;
 };
 
-/**
- * AdSlot (Option B) — génère l'URL signée via Edge Function (server-side),
- * ce qui permet de garder le bucket ads-media en PRIVATE + policies admin-only.
- *
- * Prérequis:
- * - Edge Function: "get-ad-signed-url"
- *   Body attendu: { bucket: "ads-media", path: "<storage_path>", expiresIn: number }
- *   Réponse attendue: { signedUrl: string }
- */
+const BUCKET = "ads-media";
+
 const AdSlot: React.FC<Props> = ({ placement, className, expiresIn = 300 }) => {
   const [loading, setLoading] = useState(false);
   const [campaign, setCampaign] = useState<AdCampaign | null>(null);
   const [asset, setAsset] = useState<AdAsset | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // évite une valeur figée qui pourrait bloquer les fenêtres start/end
+  const nowIso = useMemo(() => new Date().toISOString(), [placement]);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,30 +54,30 @@ const AdSlot: React.FC<Props> = ({ placement, className, expiresIn = 300 }) => {
       setError(null);
 
       try {
-        const nowIso = new Date().toISOString();
-
-        // 1) Campagnes "published" visibles maintenant sur un placement
+        // 1) Dernière campagne publiée pour ce placement
         const { data: campaigns, error: cErr } = await supabase
           .from("ads_campaigns")
           .select("id,title,link_url,placement,start_at,end_at,status,created_at")
           .eq("placement", placement)
           .eq("status", "published")
-          // start_at: null OR <= now
-          .or(`start_at.is.null,start_at.lte.${nowIso}`)
-          // end_at: null OR >= now
-          .or(`end_at.is.null,end_at.gte.${nowIso}`)
           .order("created_at", { ascending: false })
           .limit(1);
 
         if (cErr) throw cErr;
 
-        const c = (campaigns?.[0] as AdCampaign | undefined) ?? null;
-        if (!c) {
+        const c = (campaigns?.[0] as AdCampaign) ?? null;
+
+        const inWindow =
+          !!c &&
+          (c.start_at ? c.start_at <= nowIso : true) &&
+          (c.end_at ? c.end_at >= nowIso : true);
+
+        if (!c || !inWindow) {
           if (!cancelled) reset();
           return;
         }
 
-        // 2) Asset le plus récent de la campagne
+        // 2) Dernier asset de cette campagne
         const { data: assets, error: aErr } = await supabase
           .from("ads_assets")
           .select("id,campaign_id,media_type,storage_path,mime_type,size_bytes,created_at")
@@ -91,8 +87,8 @@ const AdSlot: React.FC<Props> = ({ placement, className, expiresIn = 300 }) => {
 
         if (aErr) throw aErr;
 
-        const a = (assets?.[0] as AdAsset | undefined) ?? null;
-        if (!a) {
+        const a = (assets?.[0] as AdAsset) ?? null;
+        if (!a?.storage_path) {
           if (!cancelled) {
             setCampaign(c);
             setAsset(null);
@@ -101,38 +97,24 @@ const AdSlot: React.FC<Props> = ({ placement, className, expiresIn = 300 }) => {
           return;
         }
 
-        // 3) URL signée via Edge Function (PUBLIC SAFE)
-        //    -> Ne dépend PAS des policies SELECT côté public sur storage.objects.
-        const { data: fnData, error: fnErr } = await supabase.functions.invoke(
-          "get-ad-signed-url",
-          {
-            body: {
-              bucket: "ads-media",
-              path: a.storage_path,
-              expiresIn,
-            },
-          }
-        );
+        // 3) URL signée via Storage (Option A)
+        const { data: signed, error: sErr } = await supabase.storage
+          .from(BUCKET)
+          .createSignedUrl(a.storage_path, expiresIn);
 
-        if (fnErr) throw fnErr;
-
-        const url = (fnData as any)?.signedUrl as string | undefined;
-        if (!url) {
-          throw new Error("Signed URL not returned by function");
+        // si le fichier n'existe plus côté storage, on masque la pub au lieu d'afficher une erreur
+        if (sErr) {
+          if (!cancelled) reset();
+          return;
         }
 
         if (!cancelled) {
           setCampaign(c);
           setAsset(a);
-          setSignedUrl(url);
+          setSignedUrl(signed?.signedUrl ?? null);
         }
       } catch (e: any) {
-        if (!cancelled) {
-          // Astuce: si tu vois encore "Object not found", vérifie aussi la casse du chemin:
-          // DB: videos/...  != Storage: Videos/...
-          setError(e?.message ?? "Unknown ads error");
-          reset();
-        }
+        if (!cancelled) setError(e?.message ?? "Unknown ads error");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -143,10 +125,13 @@ const AdSlot: React.FC<Props> = ({ placement, className, expiresIn = 300 }) => {
     return () => {
       cancelled = true;
     };
-  }, [placement, expiresIn]);
+  }, [placement, expiresIn, nowIso]);
 
   if (loading) return null;
-  if (error) return <div className="text-xs text-red-600">Ads error: {error}</div>;
+
+  // pour la home: on ne montre pas d'erreur, on masque juste
+  if (error) return null;
+
   if (!campaign || !asset || !signedUrl) return null;
 
   const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -165,7 +150,6 @@ const AdSlot: React.FC<Props> = ({ placement, className, expiresIn = 300 }) => {
     return <div className={className}>{children}</div>;
   };
 
-  // Render vidéo / image
   if (asset.media_type === "video") {
     return (
       <Wrapper>
