@@ -33,16 +33,25 @@ type Props = {
   className?: string;
   expiresIn?: number; // signed url seconds
   intervalMs?: number; // autoplay interval
-  limit?: number; // max campaigns to consider
-  variant?: "banner" | "card";
+  limit?: number; // max campaigns
   pauseOnHover?: boolean;
-  showLabel?: boolean;
+
+  // Full-width Apple/Spotify-like options
+  height?: "sm" | "md" | "lg";
   showControls?: boolean;
+  showDots?: boolean;
   showProgress?: boolean;
-  compact?: boolean; // reduce height further
+  showLabel?: boolean;
+  showCta?: boolean;
 };
 
 const BUCKET = "ads-media";
+
+const HEIGHT_MAP: Record<NonNullable<Props["height"]>, string> = {
+  sm: "min-h-[160px] sm:min-h-[200px] md:min-h-[240px]",
+  md: "min-h-[190px] sm:min-h-[240px] md:min-h-[300px]",
+  lg: "min-h-[230px] sm:min-h-[300px] md:min-h-[380px]",
+};
 
 const AdSlot: React.FC<Props> = ({
   placement,
@@ -50,24 +59,24 @@ const AdSlot: React.FC<Props> = ({
   expiresIn = 300,
   intervalMs = 6500,
   limit = 8,
-  variant = "banner",
   pauseOnHover = true,
-  showLabel = true,
+
+  height = "md",
   showControls = true,
+  showDots = true,
   showProgress = true,
-  compact = true,
+  showLabel = true,
+  showCta = true,
 }) => {
   const [slides, setSlides] = useState<Slide[]>([]);
   const [index, setIndex] = useState(0);
-  const [isHover, setIsHover] = useState(false);
-
-  // direction for premium slide transition
   const [dir, setDir] = useState<1 | -1>(1);
+  const [isHover, setIsHover] = useState(false);
 
   const timerRef = useRef<number | null>(null);
   const progressRef = useRef<HTMLDivElement | null>(null);
 
-  // touch/swipe
+  // swipe
   const touchStartX = useRef<number | null>(null);
   const touchDeltaX = useRef<number>(0);
 
@@ -77,18 +86,6 @@ const AdSlot: React.FC<Props> = ({
     (c.start_at ? c.start_at <= nowIso : true) &&
     (c.end_at ? c.end_at >= nowIso : true);
 
-  const baseSlot =
-    "relative w-full overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.14)]";
-
-  const slotRatio =
-    variant === "banner"
-      ? compact
-        ? "aspect-[21/5] max-h-[140px] sm:max-h-[170px] md:max-h-[200px]"
-        : "aspect-[16/5] max-h-[160px] sm:max-h-[200px] md:max-h-[240px]"
-      : "aspect-video";
-
-  const mergedClass = `${baseSlot} ${slotRatio} ${className ?? ""}`.trim();
-
   const resetProgress = () => {
     if (!progressRef.current) return;
     progressRef.current.style.animation = "none";
@@ -97,7 +94,7 @@ const AdSlot: React.FC<Props> = ({
     progressRef.current.style.animation = "";
   };
 
-  // Load slides: published campaigns (placement) + last asset + signed url
+  // Load slides: published campaigns + last asset + signed url
   useEffect(() => {
     let cancelled = false;
 
@@ -173,7 +170,7 @@ const AdSlot: React.FC<Props> = ({
       setDir(1);
       setIndex((i) => (i + 1) % slides.length);
       resetProgress();
-    }, Math.max(2000, intervalMs));
+    }, Math.max(2500, intervalMs));
 
     return () => {
       if (timerRef.current) window.clearInterval(timerRef.current);
@@ -198,7 +195,6 @@ const AdSlot: React.FC<Props> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slides.length]);
 
-  // Keep index safe if slides change
   useEffect(() => {
     if (index >= slides.length) setIndex(0);
   }, [index, slides.length]);
@@ -217,28 +213,24 @@ const AdSlot: React.FC<Props> = ({
     resetProgress();
   };
 
-  // Swipe handlers
+  // Swipe
   const onTouchStart = (e: React.TouchEvent) => {
     if (slides.length <= 1) return;
     touchStartX.current = e.touches[0]?.clientX ?? null;
     touchDeltaX.current = 0;
   };
-
   const onTouchMove = (e: React.TouchEvent) => {
     if (slides.length <= 1) return;
     if (touchStartX.current == null) return;
     const x = e.touches[0]?.clientX ?? 0;
     touchDeltaX.current = x - touchStartX.current;
   };
-
   const onTouchEnd = () => {
     if (slides.length <= 1) return;
     const dx = touchDeltaX.current;
     touchStartX.current = null;
     touchDeltaX.current = 0;
-
-    // threshold
-    if (Math.abs(dx) < 40) return;
+    if (Math.abs(dx) < 45) return;
     if (dx > 0) goPrev();
     else goNext();
   };
@@ -247,9 +239,20 @@ const AdSlot: React.FC<Props> = ({
 
   const current = slides[index];
 
+  const slideAnim =
+    dir === 1
+      ? "animate-[adSlideInRight_650ms_cubic-bezier(0.22,1,0.36,1)_forwards]"
+      : "animate-[adSlideInLeft_650ms_cubic-bezier(0.22,1,0.36,1)_forwards]";
+
+  const shell =
+    "relative w-full overflow-hidden rounded-[28px] border border-white/20 bg-slate-950 shadow-[0_30px_90px_rgba(2,6,23,0.35)]";
+
+  // Full-width style container
+  const containerClass = `${shell} ${HEIGHT_MAP[height]} ${className ?? ""}`.trim();
+
   const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const commonProps = {
-      className: mergedClass,
+      className: containerClass,
       onMouseEnter: () => setIsHover(true),
       onMouseLeave: () => setIsHover(false),
       onTouchStart,
@@ -269,177 +272,175 @@ const AdSlot: React.FC<Props> = ({
     return <div {...commonProps}>{children}</div>;
   };
 
-  // Premium slide transition uses two layers:
-  // - base "current" media with slide+blur animation
-  // - glass overlay + content + controls
-  const slideAnim =
-    dir === 1
-      ? "animate-[adSlideInRight_700ms_cubic-bezier(0.22,1,0.36,1)_forwards]"
-      : "animate-[adSlideInLeft_700ms_cubic-bezier(0.22,1,0.36,1)_forwards]";
+  const Media = ({ url, type }: { url: string; type: "image" | "video" }) => {
+    if (type === "video") {
+      return (
+        <video
+          src={url}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          className="h-full w-full object-cover"
+        />
+      );
+    }
+    return <img src={url} alt={current.campaign.title} loading="lazy" className="h-full w-full object-cover" />;
+  };
 
   return (
     <Wrapper>
-      {/* Premium background */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/10 via-sky-900/5 to-indigo-900/10" />
-        <div className="absolute -left-28 -top-28 h-60 w-60 rounded-full bg-sky-500/14 blur-3xl" />
-        <div className="absolute -right-28 -bottom-28 h-60 w-60 rounded-full bg-indigo-500/14 blur-3xl" />
-        <div className="absolute inset-0 opacity-[0.06] [background-image:radial-gradient(circle_at_1px_1px,rgba(15,23,42,1)_1px,transparent_0)] [background-size:18px_18px]" />
+      {/* Background: blurred version of the same ad (Spotify/Apple vibe) */}
+      <div className="absolute inset-0">
+        <div className="absolute inset-0 scale-110 blur-3xl opacity-70">
+          <Media url={current.signedUrl} type={current.asset.media_type} />
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-950/55 to-slate-950/85" />
+        <div className="absolute inset-0 bg-[radial-gradient(1000px_circle_at_20%_10%,rgba(255,255,255,0.12),transparent_55%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(900px_circle_at_80%_30%,rgba(56,189,248,0.12),transparent_55%)]" />
       </div>
 
-      {/* Media */}
-      <div className={`absolute inset-0 ${slideAnim}`}>
-        {current.asset.media_type === "video" ? (
-          <video
-            src={current.signedUrl}
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            className="h-full w-full object-cover will-change-transform animate-[adKenBurns_10s_ease-in-out_infinite_alternate]"
-          />
-        ) : (
-          <img
-            src={current.signedUrl}
-            alt={current.campaign.title}
-            loading="lazy"
-            className="h-full w-full object-cover will-change-transform animate-[adKenBurns_10s_ease-in-out_infinite_alternate]"
-          />
-        )}
-
-        {/* Premium overlay for readability */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/45 via-slate-950/10 to-transparent" />
-        <div className="absolute inset-0 bg-[radial-gradient(900px_circle_at_15%_20%,rgba(255,255,255,0.18),transparent_55%)]" />
-      </div>
-
-      {/* Glass top bar */}
-      <div className="absolute left-3 right-3 top-3 sm:left-4 sm:right-4 sm:top-4 flex items-center justify-between gap-3">
-        {showLabel ? (
-          <div className="inline-flex items-center gap-2 rounded-full bg-white/78 backdrop-blur border border-white/50 px-3 py-1 text-[10px] font-semibold text-slate-800 shadow-sm">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.20)]" />
-            Sponsorisé
+      {/* Foreground: centered "hero" card */}
+      <div className="absolute inset-0 flex items-center justify-center px-3 sm:px-6">
+        <div
+          className={[
+            "relative w-full max-w-5xl overflow-hidden rounded-[26px]",
+            "border border-white/18 bg-white/10 backdrop-blur-xl",
+            "shadow-[0_28px_90px_rgba(0,0,0,0.45)]",
+            "h-[82%] sm:h-[84%]",
+          ].join(" ")}
+        >
+          {/* media layer */}
+          <div className={`absolute inset-0 ${slideAnim}`}>
+            <Media url={current.signedUrl} type={current.asset.media_type} />
+            {/* readability overlays */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/15 to-black/10" />
+            <div className="absolute inset-0 bg-[radial-gradient(900px_circle_at_15%_20%,rgba(255,255,255,0.18),transparent_60%)]" />
           </div>
-        ) : (
-          <div />
-        )}
 
-        {/* subtle CTA */}
-        {current.campaign.link_url ? (
-          <div className="hidden sm:inline-flex items-center rounded-full bg-black/25 backdrop-blur px-3 py-1 text-[10px] font-semibold text-white border border-white/15">
-            Ouvrir
+          {/* Top bar */}
+          <div className="absolute left-3 right-3 top-3 sm:left-5 sm:right-5 sm:top-5 flex items-center justify-between gap-3">
+            {showLabel ? (
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/85 backdrop-blur border border-white/45 px-3 py-1 text-[10px] font-semibold text-slate-900">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.20)]" />
+                Sponsorisé
+              </div>
+            ) : (
+              <div />
+            )}
+
+            {showCta && current.campaign.link_url ? (
+              <div className="inline-flex items-center rounded-full bg-white/15 backdrop-blur px-3 py-1 text-[10px] font-semibold text-white border border-white/20">
+                Ouvrir
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
 
-      {/* Bottom content (title + dots) */}
-      <div className="absolute left-3 right-3 bottom-3 sm:left-4 sm:right-4 sm:bottom-4">
-        <div className="flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[11px] sm:text-xs font-semibold text-white drop-shadow">
-              {current.campaign.title}
+          {/* Bottom content */}
+          <div className="absolute left-3 right-3 bottom-3 sm:left-5 sm:right-5 sm:bottom-5">
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-white text-sm sm:text-base font-semibold drop-shadow">
+                  {current.campaign.title}
+                </div>
+              </div>
+
+              {showDots && slides.length > 1 && (
+                <div className="flex items-center gap-1.5">
+                  {slides.map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDir(i > index ? 1 : -1);
+                        setIndex(i);
+                        resetProgress();
+                      }}
+                      className={`h-1.5 rounded-full transition-all ${
+                        i === index ? "w-8 bg-white" : "w-2.5 bg-white/55 hover:bg-white/80"
+                      }`}
+                      aria-label={`Go to ad ${i + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {slides.length > 1 && (
-            <div className="flex items-center gap-1.5">
-              {slides.map((_, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setDir(i > index ? 1 : -1);
-                    setIndex(i);
-                    resetProgress();
-                  }}
-                  className={`h-1.5 rounded-full transition-all ${
-                    i === index ? "w-7 bg-white" : "w-2.5 bg-white/60 hover:bg-white/85"
-                  }`}
-                  aria-label={`Go to ad ${i + 1}`}
-                />
-              ))}
+          {/* Controls */}
+          {showControls && slides.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  goPrev();
+                }}
+                className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/80 backdrop-blur border border-white/45 shadow-sm px-3 py-2 text-xs text-slate-900 hover:bg-white"
+                aria-label="Previous ad"
+              >
+                ◀
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  goNext();
+                }}
+                className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/80 backdrop-blur border border-white/45 shadow-sm px-3 py-2 text-xs text-slate-900 hover:bg-white"
+                aria-label="Next ad"
+              >
+                ▶
+              </button>
+            </>
+          )}
+
+          {/* Progress */}
+          {showProgress && slides.length > 1 && !(pauseOnHover && isHover) && (
+            <div className="absolute left-0 right-0 bottom-0 h-[3px] bg-white/20">
+              <div
+                ref={progressRef}
+                className="h-full bg-white/90"
+                style={{
+                  animation: `adProgress ${Math.max(2500, intervalMs)}ms linear infinite`,
+                }}
+              />
+            </div>
+          )}
+
+          {/* Pause indicator */}
+          {pauseOnHover && isHover && slides.length > 1 && (
+            <div className="absolute right-3 top-3 sm:right-5 sm:top-5">
+              <span className="inline-flex items-center rounded-full bg-black/40 backdrop-blur px-3 py-1 text-[10px] font-semibold text-white border border-white/15">
+                Pause
+              </span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Controls */}
-      {showControls && slides.length > 1 && (
-        <>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              goPrev();
-            }}
-            className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 backdrop-blur border border-white/45 shadow-sm px-2.5 py-1.5 text-[11px] text-slate-900 hover:bg-white"
-            aria-label="Previous ad"
-          >
-            ◀
-          </button>
-
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              goNext();
-            }}
-            className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 backdrop-blur border border-white/45 shadow-sm px-2.5 py-1.5 text-[11px] text-slate-900 hover:bg-white"
-            aria-label="Next ad"
-          >
-            ▶
-          </button>
-        </>
-      )}
-
-      {/* Progress */}
-      {showProgress && slides.length > 1 && !(pauseOnHover && isHover) && (
-        <div className="absolute left-0 right-0 bottom-0 h-[3px] bg-white/20">
-          <div
-            ref={progressRef}
-            className="h-full bg-white/90"
-            style={{
-              animation: `adProgress ${Math.max(2000, intervalMs)}ms linear infinite`,
-            }}
-          />
-        </div>
-      )}
-
-      {/* Pause indicator */}
-      {pauseOnHover && isHover && slides.length > 1 && (
-        <div className="absolute right-3 top-3 sm:right-4 sm:top-4">
-          <span className="inline-flex items-center rounded-full bg-black/35 backdrop-blur px-3 py-1 text-[10px] font-semibold text-white border border-white/15">
-            Pause
-          </span>
-        </div>
-      )}
-
       {/* Keyframes */}
       <style>
         {`
           @keyframes adProgress {
-            0%   { width: 0%; }
+            0% { width: 0%; }
             100% { width: 100%; }
           }
 
-          /* Slide in with slight blur (premium feel) */
+          /* Slide in with a premium blur/translate */
           @keyframes adSlideInRight {
             0%   { opacity: 0; transform: translateX(18px) scale(1.01); filter: blur(6px); }
-            100% { opacity: 1; transform: translateX(0) scale(1.00); filter: blur(0px); }
+            100% { opacity: 1; transform: translateX(0) scale(1); filter: blur(0px); }
           }
           @keyframes adSlideInLeft {
             0%   { opacity: 0; transform: translateX(-18px) scale(1.01); filter: blur(6px); }
-            100% { opacity: 1; transform: translateX(0) scale(1.00); filter: blur(0px); }
-          }
-
-          /* Ken Burns subtle zoom */
-          @keyframes adKenBurns {
-            0%   { transform: scale(1.02); }
-            100% { transform: scale(1.07); }
+            100% { opacity: 1; transform: translateX(0) scale(1); filter: blur(0px); }
           }
         `}
       </style>
