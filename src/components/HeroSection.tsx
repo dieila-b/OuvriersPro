@@ -3,10 +3,9 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, MapPin, ChevronDown, LocateFixed, Sparkles } from "lucide-react";
+import { Search, MapPin, ChevronDown, LocateFixed } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
-import AdSlot from "@/components/AdSlot";
 
 const HeroSection = () => {
   const { t, language } = useLanguage();
@@ -128,6 +127,8 @@ const HeroSection = () => {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setGeo({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+
+        // si on veut forcer l'utilisateur à garder le quartier vide, on laisse tel quel
         setOpenDistricts(false);
         setGeoLoading(false);
       },
@@ -164,22 +165,15 @@ const HeroSection = () => {
   };
 
   return (
-    <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden">
-      {/* ✨ Premium subtle highlights */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
-        <div className="absolute -bottom-28 -right-28 h-80 w-80 rounded-full bg-sky-200/10 blur-3xl" />
-        <div className="absolute inset-0 bg-[radial-gradient(1000px_circle_at_50%_-20%,rgba(255,255,255,0.16),transparent_60%)]" />
-      </div>
-
-      <div className="relative w-full min-w-0 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 lg:py-12">
+    <section className="w-full text-white bg-gradient-to-br from-pro-blue to-blue-600">
+      {/* ✅ responsive réel :
+          - min-w-0 pour éviter largeur imposée (source fréquente du “pas responsive”)
+          - padding adaptatif + pas de hauteur forcée
+      */}
+      <div className="w-full min-w-0 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 lg:py-12">
         <div className="w-full min-w-0 max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/15 px-3 py-1 text-[11px] font-semibold text-white/90">
-            <Sparkles className="h-4 w-4" />
-            {language === "fr" ? "Trouvez un pro rapidement" : "Find a pro quickly"}
-          </div>
-
-          <h1 className="mx-auto mt-3 text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
+          {/* ✅ typo scalable + wrap garanti */}
+          <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
             {t("home.title")}
           </h1>
 
@@ -187,8 +181,14 @@ const HeroSection = () => {
             {t("home.subtitle")}
           </p>
 
-          {/* ✅ bloc recherche */}
+          {/* ✅ bloc recherche : largeur fluide, pas de débordements */}
           <div className="mt-6 sm:mt-7 bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl w-full max-w-3xl mx-auto text-gray-900">
+            {/* ✅ grid vraiment responsive :
+                - mobile : 1 colonne
+                - sm : 2 colonnes
+                - lg : 4 colonnes (2 + 2)
+                - min-w-0 sur enfants pour éviter overflow
+            */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 items-stretch min-w-0">
               {/* Métier */}
               <div
@@ -258,11 +258,11 @@ const HeroSection = () => {
                   aria-label={
                     language === "fr" ? "Utiliser ma position" : "Use my location"
                   }
-                  title={
-                    language === "fr" ? "Utiliser ma position" : "Use my location"
-                  }
+                  title={language === "fr" ? "Utiliser ma position" : "Use my location"}
                 >
-                  <LocateFixed className={`w-4 h-4 ${geoLoading ? "animate-pulse" : ""}`} />
+                  <LocateFixed
+                    className={`w-4 h-4 ${geoLoading ? "animate-pulse" : ""}`}
+                  />
                 </button>
 
                 {openDistricts && (filteredDistricts.length > 0 || loadingOptions) && (
@@ -297,6 +297,7 @@ const HeroSection = () => {
                 </div>
               )}
 
+              {/* ✅ bouton : pleine largeur sur toutes tailles */}
               <Button
                 type="button"
                 onClick={handleSearch}
@@ -313,22 +314,6 @@ const HeroSection = () => {
                   : "Location detected: distance sorting will be enabled."}
               </div>
             )}
-          </div>
-
-          {/* ✅ Ads premium stacked cards – full width sous la recherche */}
-          <div className="mt-6 sm:mt-8 w-full max-w-6xl mx-auto">
-            <AdSlot
-              placement="home_feed"
-              height="lg"
-              stackSize={3}
-              autoplay
-              intervalMs={6500}
-              showDots
-              showControls
-              showCta
-              ctaLabel={language === "fr" ? "Découvrir" : "Learn more"}
-              className="w-full"
-            />
           </div>
         </div>
       </div>
