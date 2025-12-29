@@ -29,20 +29,24 @@ type Slide = {
 };
 
 type Props = {
-  placement: string; // ex: "home_feed"
+  placement: string;
   className?: string;
+
   expiresIn?: number; // signed url seconds
-  intervalMs?: number; // autoplay interval
-  limit?: number; // max campaigns
+  intervalMs?: number;
+  limit?: number;
   pauseOnHover?: boolean;
 
-  // Full-width Apple/Spotify-like options
   height?: "sm" | "md" | "lg";
   showControls?: boolean;
   showDots?: boolean;
   showProgress?: boolean;
   showLabel?: boolean;
   showCta?: boolean;
+
+  // Parallax (premium)
+  parallax?: boolean;
+  parallaxStrength?: number; // px, ex 18
 };
 
 const BUCKET = "ads-media";
@@ -56,6 +60,7 @@ const HEIGHT_MAP: Record<NonNullable<Props["height"]>, string> = {
 const AdSlot: React.FC<Props> = ({
   placement,
   className,
+
   expiresIn = 300,
   intervalMs = 6500,
   limit = 8,
@@ -67,6 +72,9 @@ const AdSlot: React.FC<Props> = ({
   showProgress = true,
   showLabel = true,
   showCta = true,
+
+  parallax = true,
+  parallaxStrength = 18,
 }) => {
   const [slides, setSlides] = useState<Slide[]>([]);
   const [index, setIndex] = useState(0);
@@ -75,6 +83,11 @@ const AdSlot: React.FC<Props> = ({
 
   const timerRef = useRef<number | null>(null);
   const progressRef = useRef<HTMLDivElement | null>(null);
+
+  // Parallax refs/state
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const [parallaxY, setParallaxY] = useState(0);
+  const rafRef = useRef<number | null>(null);
 
   // swipe
   const touchStartX = useRef<number | null>(null);
@@ -235,6 +248,45 @@ const AdSlot: React.FC<Props> = ({
     else goNext();
   };
 
+  // Parallax: compute offset based on component position in viewport
+  useEffect(() => {
+    if (!parallax) return;
+
+    const update = () => {
+      if (!shellRef.current) return;
+      const rect = shellRef.current.getBoundingClientRect();
+      const vh = window.innerHeight || 1;
+
+      // normalized center distance [-1..1]
+      const center = rect.top + rect.height / 2;
+      const n = (center - vh / 2) / (vh / 2);
+      const clamped = Math.max(-1, Math.min(1, n));
+
+      // invert for nicer movement
+      const y = -clamped * parallaxStrength;
+      setParallaxY(y);
+    };
+
+    const onScroll = () => {
+      if (rafRef.current) return;
+      rafRef.current = window.requestAnimationFrame(() => {
+        rafRef.current = null;
+        update();
+      });
+    };
+
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (rafRef.current) window.cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    };
+  }, [parallax, parallaxStrength]);
+
   if (slides.length === 0) return null;
 
   const current = slides[index];
@@ -247,7 +299,6 @@ const AdSlot: React.FC<Props> = ({
   const shell =
     "relative w-full overflow-hidden rounded-[28px] border border-white/20 bg-slate-950 shadow-[0_30px_90px_rgba(2,6,23,0.35)]";
 
-  // Full-width style container
   const containerClass = `${shell} ${HEIGHT_MAP[height]} ${className ?? ""}`.trim();
 
   const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -260,16 +311,21 @@ const AdSlot: React.FC<Props> = ({
       onTouchEnd,
       title: current.campaign.title,
       "aria-label": current.campaign.title,
+      ref: shellRef,
     } as const;
 
     if (current.campaign.link_url) {
       return (
-        <a href={current.campaign.link_url} target="_blank" rel="noreferrer" {...commonProps}>
+        <a href={current.campaign.link_url} target="_blank" rel="noreferrer" {...commonProps as any}>
           {children}
         </a>
       );
     }
-    return <div {...commonProps}>{children}</div>;
+    return (
+      <div {...commonProps as any}>
+        {children}
+      </div>
+    );
   };
 
   const Media = ({ url, type }: { url: string; type: "image" | "video" }) => {
@@ -291,17 +347,21 @@ const AdSlot: React.FC<Props> = ({
 
   return (
     <Wrapper>
-      {/* Background: blurred version of the same ad (Spotify/Apple vibe) */}
+      {/* Background: blurred media + parallax translateY */}
       <div className="absolute inset-0">
-        <div className="absolute inset-0 scale-110 blur-3xl opacity-70">
+        <div
+          className="absolute inset-0 scale-110 blur-3xl opacity-70 will-change-transform"
+          style={{ transform: `translate3d(0, ${parallax ? parallaxY : 0}px, 0) scale(1.1)` }}
+        >
           <Media url={current.signedUrl} type={current.asset.media_type} />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-950/55 to-slate-950/85" />
+
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/88 via-slate-950/55 to-slate-950/88" />
         <div className="absolute inset-0 bg-[radial-gradient(1000px_circle_at_20%_10%,rgba(255,255,255,0.12),transparent_55%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(900px_circle_at_80%_30%,rgba(56,189,248,0.12),transparent_55%)]" />
       </div>
 
-      {/* Foreground: centered "hero" card */}
+      {/* Foreground: center hero card */}
       <div className="absolute inset-0 flex items-center justify-center px-3 sm:px-6">
         <div
           className={[
@@ -311,15 +371,14 @@ const AdSlot: React.FC<Props> = ({
             "h-[82%] sm:h-[84%]",
           ].join(" ")}
         >
-          {/* media layer */}
+          {/* media */}
           <div className={`absolute inset-0 ${slideAnim}`}>
             <Media url={current.signedUrl} type={current.asset.media_type} />
-            {/* readability overlays */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/15 to-black/10" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-black/10" />
             <div className="absolute inset-0 bg-[radial-gradient(900px_circle_at_15%_20%,rgba(255,255,255,0.18),transparent_60%)]" />
           </div>
 
-          {/* Top bar */}
+          {/* Top chips */}
           <div className="absolute left-3 right-3 top-3 sm:left-5 sm:right-5 sm:top-5 flex items-center justify-between gap-3">
             {showLabel ? (
               <div className="inline-flex items-center gap-2 rounded-full bg-white/85 backdrop-blur border border-white/45 px-3 py-1 text-[10px] font-semibold text-slate-900">
@@ -337,7 +396,7 @@ const AdSlot: React.FC<Props> = ({
             ) : null}
           </div>
 
-          {/* Bottom content */}
+          {/* Bottom line */}
           <div className="absolute left-3 right-3 bottom-3 sm:left-5 sm:right-5 sm:bottom-5">
             <div className="flex items-end justify-between gap-3">
               <div className="min-w-0">
@@ -414,7 +473,7 @@ const AdSlot: React.FC<Props> = ({
             </div>
           )}
 
-          {/* Pause indicator */}
+          {/* Pause label */}
           {pauseOnHover && isHover && slides.length > 1 && (
             <div className="absolute right-3 top-3 sm:right-5 sm:top-5">
               <span className="inline-flex items-center rounded-full bg-black/40 backdrop-blur px-3 py-1 text-[10px] font-semibold text-white border border-white/15">
@@ -425,15 +484,12 @@ const AdSlot: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Keyframes */}
       <style>
         {`
           @keyframes adProgress {
             0% { width: 0%; }
             100% { width: 100%; }
           }
-
-          /* Slide in with a premium blur/translate */
           @keyframes adSlideInRight {
             0%   { opacity: 0; transform: translateX(18px) scale(1.01); filter: blur(6px); }
             100% { opacity: 1; transform: translateX(0) scale(1); filter: blur(0px); }
