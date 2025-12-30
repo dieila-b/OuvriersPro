@@ -14,6 +14,8 @@ type Campaign = {
   start_at: string | null;
   end_at: string | null;
   link_url: string | null;
+  // ✅ optionnel: durée d’affichage (si la colonne existe)
+  display_seconds?: number | null;
   created_at: string;
 };
 
@@ -26,6 +28,7 @@ type Asset = {
 };
 
 const DEFAULT_PLACEMENT = "home_feed";
+const DEFAULT_DISPLAY_SECONDS = 8;
 
 function extFromName(name: string) {
   const i = name.lastIndexOf(".");
@@ -41,38 +44,48 @@ function guessMediaType(file: File): MediaType | null {
   return null;
 }
 
-// datetime-local helpers
-function isoToLocalInput(iso: string | null) {
+function toIsoOrNull(localValue: string) {
+  return localValue ? new Date(localValue).toISOString() : null;
+}
+
+function toLocalInputValue(iso: string | null) {
   if (!iso) return "";
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  const mm = pad(d.getMonth() + 1);
-  const dd = pad(d.getDate());
-  const hh = pad(d.getHours());
-  const min = pad(d.getMinutes());
-  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
-}
-function localInputToIso(val: string) {
-  if (!val) return null;
-  const d = new Date(val);
-  return d.toISOString();
+  // datetime-local => YYYY-MM-DDTHH:mm
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
 }
 
-type EditDraft = {
-  id: string;
-  title: string;
-  placement: string;
-  link_url: string;
-  start_at: string; // datetime-local
-  end_at: string; // datetime-local
-  status: CampaignStatus;
-};
+function safeInt(val: string, fallback: number) {
+  const n = Number(val);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(1, Math.floor(n));
+}
+
+function statusLabel(s: CampaignStatus) {
+  switch (s) {
+    case "published":
+      return "Publié";
+    case "paused":
+      return "En pause";
+    case "ended":
+      return "Terminé";
+    default:
+      return "Brouillon";
+  }
+}
+
+function statusBadgeClasses(s: CampaignStatus) {
+  if (s === "published") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (s === "paused") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (s === "ended") return "border-gray-200 bg-gray-50 text-gray-600";
+  return "border-blue-200 bg-blue-50 text-blue-700";
+}
 
 export default function AdminAds() {
   const [loading, setLoading] = useState(false);
-  const [savingId, setSavingId] = useState<string | null>(null);
-
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [assetsByCampaign, setAssetsByCampaign] = useState<Record<string, Asset[]>>({});
   const [error, setError] = useState<string | null>(null);
@@ -81,23 +94,45 @@ export default function AdminAds() {
   const [title, setTitle] = useState("");
   const [placement, setPlacement] = useState(DEFAULT_PLACEMENT);
   const [linkUrl, setLinkUrl] = useState("");
-  const [startAt, setStartAt] = useState(""); // ISO local
-  const [endAt, setEndAt] = useState(""); // ISO local
+  const [startAt, setStartAt] = useState(""); // local
+  const [endAt, setEndAt] = useState(""); // local
+  const [displaySeconds, setDisplaySeconds] = useState(String(DEFAULT_DISPLAY_SECONDS));
 
-  // Edit state
+  // Edit mode
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
+  const [eTitle, setETitle] = useState("");
+  const [ePlacement, setEPlacement] = useState(DEFAULT_PLACEMENT);
+  const [eLinkUrl, setELinkUrl] = useState("");
+  const [eStartAt, setEStartAt] = useState("");
+  const [eEndAt, setEEndAt] = useState("");
+  const [eDisplaySeconds, setEDisplaySeconds] = useState(String(DEFAULT_DISPLAY_SECONDS));
 
   const refresh = async () => {
     setLoading(true);
     setError(null);
+
     try {
-      const { data: c, error: cErr } = await supabase
+      // ✅ On essaie de récupérer display_seconds (si la colonne existe)
+      // Si elle n'existe pas, on retombe sur une query sans cette colonne.
+      let c: any[] | null = null;
+
+      const tryWithDisplay = await supabase
         .from("ads_campaigns")
-        .select("id,title,status,placement,start_at,end_at,link_url,created_at")
+        .select("id,title,status,placement,start_at,end_at,link_url,display_seconds,created_at")
         .order("created_at", { ascending: false });
 
-      if (cErr) throw cErr;
+      if (tryWithDisplay.error) {
+        const tryWithoutDisplay = await supabase
+          .from("ads_campaigns")
+          .select("id,title,status,placement,start_at,end_at,link_url,created_at")
+          .order("created_at", { ascending: false });
+
+        if (tryWithoutDisplay.error) throw tryWithoutDisplay.error;
+        c = tryWithoutDisplay.data ?? [];
+      } else {
+        c = tryWithDisplay.data ?? [];
+      }
+
       const campaignsData = (c ?? []) as Campaign[];
       setCampaigns(campaignsData);
 
@@ -132,28 +167,45 @@ export default function AdminAds() {
     refresh();
   }, []);
 
+  const resetCreate = () => {
+    setTitle("");
+    setPlacement(DEFAULT_PLACEMENT);
+    setLinkUrl("");
+    setStartAt("");
+    setEndAt("");
+    setDisplaySeconds(String(DEFAULT_DISPLAY_SECONDS));
+  };
+
   const createCampaign = async () => {
     setLoading(true);
     setError(null);
+
     try {
       if (!title.trim()) throw new Error("Titre requis");
 
-      const payload: any = {
+      const payloadBase: any = {
         title: title.trim(),
         placement: placement.trim() || DEFAULT_PLACEMENT,
         status: "draft" as CampaignStatus,
         link_url: linkUrl.trim() ? linkUrl.trim() : null,
-        start_at: startAt ? new Date(startAt).toISOString() : null,
-        end_at: endAt ? new Date(endAt).toISOString() : null,
+        start_at: toIsoOrNull(startAt),
+        end_at: toIsoOrNull(endAt),
       };
 
-      const { error: insErr } = await supabase.from("ads_campaigns").insert(payload);
-      if (insErr) throw insErr;
+      // ✅ Optionnel: display_seconds (si la colonne existe)
+      const payloadWithDisplay = {
+        ...payloadBase,
+        display_seconds: safeInt(displaySeconds, DEFAULT_DISPLAY_SECONDS),
+      };
 
-      setTitle("");
-      setLinkUrl("");
-      setStartAt("");
-      setEndAt("");
+      const ins1 = await supabase.from("ads_campaigns").insert(payloadWithDisplay);
+      if (ins1.error) {
+        // fallback sans display_seconds si colonne absente
+        const ins2 = await supabase.from("ads_campaigns").insert(payloadBase);
+        if (ins2.error) throw ins2.error;
+      }
+
+      resetCreate();
       await refresh();
     } catch (e: any) {
       setError(e?.message ?? "Erreur création campagne");
@@ -163,8 +215,9 @@ export default function AdminAds() {
   };
 
   const updateStatus = async (id: string, status: CampaignStatus) => {
-    setSavingId(id);
+    setLoading(true);
     setError(null);
+
     try {
       const { error } = await supabase.from("ads_campaigns").update({ status }).eq("id", id);
       if (error) throw error;
@@ -172,23 +225,25 @@ export default function AdminAds() {
     } catch (e: any) {
       setError(e?.message ?? "Erreur changement statut");
     } finally {
-      setSavingId(null);
+      setLoading(false);
     }
   };
 
   const deleteCampaign = async (id: string) => {
-    setSavingId(id);
+    setLoading(true);
     setError(null);
+
     try {
       const { error } = await supabase.from("ads_campaigns").delete().eq("id", id);
       if (error) throw error;
 
-      // Best effort: supprimer aussi les fichiers du bucket
+      // best-effort: supprimer fichiers
       const toRemove: string[] = [];
       for (const folder of ["images", "videos"]) {
         const { data: listData, error: listErr } = await supabase.storage
           .from("ads-media")
           .list(`${folder}/${id}`, { limit: 100 });
+
         if (!listErr && listData?.length) {
           listData.forEach((f) => toRemove.push(`${folder}/${id}/${f.name}`));
         }
@@ -197,23 +252,18 @@ export default function AdminAds() {
         await supabase.storage.from("ads-media").remove(toRemove);
       }
 
-      // Si on supprimait la campagne en cours d'édition
-      if (editingId === id) {
-        setEditingId(null);
-        setEditDraft(null);
-      }
-
       await refresh();
     } catch (e: any) {
       setError(e?.message ?? "Erreur suppression");
     } finally {
-      setSavingId(null);
+      setLoading(false);
     }
   };
 
   const uploadAsset = async (campaignId: string, file: File) => {
-    setSavingId(campaignId);
+    setLoading(true);
     setError(null);
+
     try {
       const mediaType = guessMediaType(file);
       if (!mediaType) throw new Error("Format non supporté (image ou vidéo uniquement).");
@@ -222,12 +272,10 @@ export default function AdminAds() {
       const safeName = file.name.replace(/\s+/g, "_");
       const storagePath = `${folder}/${campaignId}/${safeName}`;
 
-      const { error: upErr } = await supabase.storage
-        .from("ads-media")
-        .upload(storagePath, file, {
-          upsert: true,
-          contentType: file.type || undefined,
-        });
+      const { error: upErr } = await supabase.storage.from("ads-media").upload(storagePath, file, {
+        upsert: true,
+        contentType: file.type || undefined,
+      });
       if (upErr) throw upErr;
 
       const { error: dbErr } = await supabase.from("ads_assets").insert({
@@ -243,63 +291,71 @@ export default function AdminAds() {
     } catch (e: any) {
       setError(e?.message ?? "Erreur upload");
     } finally {
-      setSavingId(null);
+      setLoading(false);
     }
   };
 
-  const startEdit = (c: Campaign) => {
-    setError(null);
+  const openEdit = (c: Campaign) => {
     setEditingId(c.id);
-    setEditDraft({
-      id: c.id,
-      title: c.title ?? "",
-      placement: c.placement ?? DEFAULT_PLACEMENT,
-      link_url: c.link_url ?? "",
-      start_at: isoToLocalInput(c.start_at),
-      end_at: isoToLocalInput(c.end_at),
-      status: c.status ?? "draft",
-    });
+    setETitle(c.title ?? "");
+    setEPlacement(c.placement ?? DEFAULT_PLACEMENT);
+    setELinkUrl(c.link_url ?? "");
+    setEStartAt(toLocalInputValue(c.start_at));
+    setEEndAt(toLocalInputValue(c.end_at));
+    setEDisplaySeconds(String(c.display_seconds ?? DEFAULT_DISPLAY_SECONDS));
   };
 
   const cancelEdit = () => {
     setEditingId(null);
-    setEditDraft(null);
-    setError(null);
+    setETitle("");
+    setEPlacement(DEFAULT_PLACEMENT);
+    setELinkUrl("");
+    setEStartAt("");
+    setEEndAt("");
+    setEDisplaySeconds(String(DEFAULT_DISPLAY_SECONDS));
   };
 
-  const editWindowError = useMemo(() => {
-    if (!editDraft) return false;
-    if (!editDraft.start_at || !editDraft.end_at) return false;
-    return new Date(editDraft.end_at).getTime() < new Date(editDraft.start_at).getTime();
-  }, [editDraft]);
-
-  const saveEdit = async () => {
-    if (!editDraft) return;
-    if (editWindowError) return;
-
-    setSavingId(editDraft.id);
+  const saveEdit = async (id: string) => {
+    setLoading(true);
     setError(null);
+
     try {
-      const payload = {
-        title: editDraft.title.trim(),
-        placement: editDraft.placement.trim() || DEFAULT_PLACEMENT,
-        link_url: editDraft.link_url.trim() ? editDraft.link_url.trim() : null,
-        start_at: localInputToIso(editDraft.start_at),
-        end_at: localInputToIso(editDraft.end_at),
-        status: editDraft.status,
+      if (!eTitle.trim()) throw new Error("Titre requis");
+
+      const base: any = {
+        title: eTitle.trim(),
+        placement: ePlacement.trim() || DEFAULT_PLACEMENT,
+        link_url: eLinkUrl.trim() ? eLinkUrl.trim() : null,
+        start_at: toIsoOrNull(eStartAt),
+        end_at: toIsoOrNull(eEndAt),
       };
 
-      const { error } = await supabase.from("ads_campaigns").update(payload).eq("id", editDraft.id);
-      if (error) throw error;
+      const withDisplay = {
+        ...base,
+        display_seconds: safeInt(eDisplaySeconds, DEFAULT_DISPLAY_SECONDS),
+      };
 
-      setEditingId(null);
-      setEditDraft(null);
+      const up1 = await supabase.from("ads_campaigns").update(withDisplay).eq("id", id);
+      if (up1.error) {
+        // fallback sans display_seconds
+        const up2 = await supabase.from("ads_campaigns").update(base).eq("id", id);
+        if (up2.error) throw up2.error;
+      }
+
       await refresh();
+      cancelEdit();
     } catch (e: any) {
-      setError(e?.message ?? "Erreur mise à jour campagne");
+      setError(e?.message ?? "Erreur mise à jour");
     } finally {
-      setSavingId(null);
+      setLoading(false);
     }
+  };
+
+  const now = useMemo(() => Date.now(), []);
+  const formatWindow = (c: Campaign) => {
+    const s = c.start_at ? new Date(c.start_at).toLocaleString() : "—";
+    const e = c.end_at ? new Date(c.end_at).toLocaleString() : "—";
+    return `${s} → ${e}`;
   };
 
   return (
@@ -307,20 +363,31 @@ export default function AdminAds() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-pro-gray">Publicités</h1>
-          <p className="text-sm text-gray-600">Créer, uploader et publier des spots (image / vidéo).</p>
+          <p className="text-sm text-gray-600">
+            Créer, uploader et publier des spots (image / vidéo), avec durée d’affichage.
+          </p>
         </div>
         <Button onClick={refresh} variant="outline" disabled={loading}>
           Rafraîchir
         </Button>
       </div>
 
-      {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
+      {error && (
+        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       {/* Create Campaign */}
-      <div className="mt-6 bg-white border rounded-xl p-4 sm:p-5">
-        <h2 className="font-semibold text-pro-gray">Créer une campagne</h2>
+      <div className="mt-6 bg-white border rounded-2xl p-4 sm:p-6 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-semibold text-pro-gray">Créer une campagne</h2>
+          <div className="text-xs text-gray-500">
+            Statut initial : <span className="font-medium">Brouillon</span>
+          </div>
+        </div>
 
-        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-gray-600">Titre</label>
             <Input
@@ -341,7 +408,11 @@ export default function AdminAds() {
 
           <div className="md:col-span-2">
             <label className="text-xs text-gray-600">Lien (optionnel)</label>
-            <Input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://..." />
+            <Input
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              placeholder="https://..."
+            />
           </div>
 
           <div>
@@ -353,189 +424,209 @@ export default function AdminAds() {
             <label className="text-xs text-gray-600">Fin (optionnel)</label>
             <Input type="datetime-local" value={endAt} onChange={(e) => setEndAt(e.target.value)} />
           </div>
+
+          <div className="md:col-span-2">
+            <label className="text-xs text-gray-600">Durée d’affichage (secondes)</label>
+            <Input
+              type="number"
+              min={1}
+              value={displaySeconds}
+              onChange={(e) => setDisplaySeconds(e.target.value)}
+              placeholder="Ex: 8"
+            />
+            <div className="mt-1 text-[11px] text-gray-500">
+              Cette valeur sera utilisée par le carrousel d’affichage (si `AdSlot` la lit).
+            </div>
+          </div>
         </div>
 
-        <div className="mt-4">
+        <div className="mt-5 flex flex-wrap gap-2">
           <Button onClick={createCampaign} disabled={loading}>
-            Créer (Draft)
+            Créer (Brouillon)
+          </Button>
+          <Button
+            variant="outline"
+            onClick={resetCreate}
+            disabled={loading}
+          >
+            Réinitialiser
           </Button>
         </div>
       </div>
 
       {/* Campaign list */}
       <div className="mt-6 space-y-4">
-        {campaigns.length === 0 && <div className="text-sm text-gray-600">Aucune campagne pour le moment.</div>}
+        {campaigns.length === 0 && (
+          <div className="text-sm text-gray-600">Aucune campagne pour le moment.</div>
+        )}
 
         {campaigns.map((c) => {
           const assets = assetsByCampaign[c.id] ?? [];
           const latest = assets[0];
           const isEditing = editingId === c.id;
-          const busy = savingId === c.id;
 
           return (
-            <div key={c.id} className="bg-white border rounded-xl p-4 sm:p-5">
-              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+            <div key={c.id} className="bg-white border rounded-2xl p-4 sm:p-6 shadow-sm">
+              {/* Header */}
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="font-semibold text-pro-gray truncate">{c.title}</div>
-                    <span className="text-xs px-2 py-0.5 rounded-full border">{c.status}</span>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{c.placement}</span>
+                    <div className="text-lg font-semibold text-pro-gray truncate">{c.title}</div>
+
+                    <span
+                      className={[
+                        "text-xs px-2 py-0.5 rounded-full border",
+                        statusBadgeClasses(c.status),
+                      ].join(" ")}
+                    >
+                      {statusLabel(c.status)}
+                    </span>
+
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                      {c.placement}
+                    </span>
                   </div>
 
                   <div className="mt-1 text-xs text-gray-600 break-all">ID: {c.id}</div>
 
-                  <div className="mt-2 text-xs text-gray-600">
-                    Fenêtre:{" "}
-                    <span className="font-medium">{c.start_at ? new Date(c.start_at).toLocaleString() : "—"}</span>{" "}
-                    →{" "}
-                    <span className="font-medium">{c.end_at ? new Date(c.end_at).toLocaleString() : "—"}</span>
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-700">
+                    <div className="rounded-lg border bg-gray-50 px-3 py-2">
+                      <div className="text-[11px] text-gray-500">Fenêtre</div>
+                      <div className="font-medium">{formatWindow(c)}</div>
+                    </div>
+
+                    <div className="rounded-lg border bg-gray-50 px-3 py-2">
+                      <div className="text-[11px] text-gray-500">Durée</div>
+                      <div className="font-medium">
+                        {(c.display_seconds ?? DEFAULT_DISPLAY_SECONDS)}s
+                      </div>
+                    </div>
                   </div>
 
                   {c.link_url && (
-                    <div className="mt-1 text-xs text-gray-600 break-all">Lien: {c.link_url}</div>
+                    <div className="mt-2 text-xs text-gray-600 break-all">
+                      Lien: <span className="font-medium">{c.link_url}</span>
+                    </div>
                   )}
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {!isEditing && (
-                    <Button variant="outline" disabled={loading || busy} onClick={() => startEdit(c)}>
-                      Éditer
-                    </Button>
-                  )}
+                {/* Actions */}
+                <div className="flex flex-wrap gap-2 lg:justify-end">
+                  {!isEditing ? (
+                    <>
+                      <Button variant="outline" disabled={loading} onClick={() => openEdit(c)}>
+                        Éditer
+                      </Button>
 
-                  {c.status !== "published" && !isEditing && (
-                    <Button disabled={loading || busy} onClick={() => updateStatus(c.id, "published")}>
-                      Publier
-                    </Button>
-                  )}
+                      {c.status !== "published" && (
+                        <Button disabled={loading} onClick={() => updateStatus(c.id, "published")}>
+                          Publier
+                        </Button>
+                      )}
 
-                  {c.status === "published" && !isEditing && (
-                    <Button disabled={loading || busy} variant="outline" onClick={() => updateStatus(c.id, "paused")}>
-                      Pause
-                    </Button>
-                  )}
+                      {c.status === "published" && (
+                        <Button
+                          disabled={loading}
+                          variant="outline"
+                          onClick={() => updateStatus(c.id, "paused")}
+                        >
+                          Pause
+                        </Button>
+                      )}
 
-                  {!isEditing && (
-                    <Button disabled={loading || busy} variant="destructive" onClick={() => deleteCampaign(c.id)}>
-                      Supprimer
-                    </Button>
+                      {c.status === "paused" && (
+                        <Button
+                          disabled={loading}
+                          onClick={() => updateStatus(c.id, "published")}
+                        >
+                          Reprendre
+                        </Button>
+                      )}
+
+                      <Button disabled={loading} variant="destructive" onClick={() => deleteCampaign(c.id)}>
+                        Supprimer
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button disabled={loading} onClick={() => saveEdit(c.id)}>
+                        Enregistrer
+                      </Button>
+                      <Button disabled={loading} variant="outline" onClick={cancelEdit}>
+                        Annuler
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
 
-              {/* EDIT PANEL */}
-              {isEditing && editDraft && (
-                <div className="mt-4 border rounded-xl bg-gray-50 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="font-semibold text-pro-gray">Éditer la campagne</div>
-                    <div className="flex gap-2">
-                      <Button
-                        className="bg-pro-blue hover:bg-blue-700"
-                        disabled={busy || editWindowError}
-                        onClick={saveEdit}
-                      >
-                        {busy ? "Enregistrement..." : "Enregistrer"}
-                      </Button>
-                      <Button variant="outline" disabled={busy} onClick={cancelEdit}>
-                        Annuler
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Edit form */}
+              {isEditing && (
+                <div className="mt-5 rounded-xl border bg-gray-50 p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-gray-600">Titre</label>
-                      <Input
-                        value={editDraft.title}
-                        onChange={(e) => setEditDraft((s) => (s ? { ...s, title: e.target.value } : s))}
-                      />
+                      <Input value={eTitle} onChange={(e) => setETitle(e.target.value)} />
                     </div>
 
                     <div>
                       <label className="text-xs text-gray-600">Placement</label>
-                      <Input
-                        value={editDraft.placement}
-                        onChange={(e) => setEditDraft((s) => (s ? { ...s, placement: e.target.value } : s))}
-                      />
+                      <Input value={ePlacement} onChange={(e) => setEPlacement(e.target.value)} />
                     </div>
 
                     <div className="md:col-span-2">
                       <label className="text-xs text-gray-600">Lien (optionnel)</label>
-                      <Input
-                        value={editDraft.link_url}
-                        onChange={(e) => setEditDraft((s) => (s ? { ...s, link_url: e.target.value } : s))}
-                        placeholder="https://..."
-                      />
+                      <Input value={eLinkUrl} onChange={(e) => setELinkUrl(e.target.value)} placeholder="https://..." />
                     </div>
 
                     <div>
-                      <label className="text-xs text-gray-600">Début</label>
-                      <Input
-                        type="datetime-local"
-                        value={editDraft.start_at}
-                        onChange={(e) => setEditDraft((s) => (s ? { ...s, start_at: e.target.value } : s))}
-                      />
+                      <label className="text-xs text-gray-600">Début (optionnel)</label>
+                      <Input type="datetime-local" value={eStartAt} onChange={(e) => setEStartAt(e.target.value)} />
                     </div>
 
                     <div>
-                      <label className="text-xs text-gray-600">Fin</label>
+                      <label className="text-xs text-gray-600">Fin (optionnel)</label>
+                      <Input type="datetime-local" value={eEndAt} onChange={(e) => setEEndAt(e.target.value)} />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="text-xs text-gray-600">Durée d’affichage (secondes)</label>
                       <Input
-                        type="datetime-local"
-                        value={editDraft.end_at}
-                        onChange={(e) => setEditDraft((s) => (s ? { ...s, end_at: e.target.value } : s))}
+                        type="number"
+                        min={1}
+                        value={eDisplaySeconds}
+                        onChange={(e) => setEDisplaySeconds(e.target.value)}
                       />
-                      {editWindowError && (
-                        <div className="mt-1 text-xs text-red-600">
-                          La date de fin doit être après la date de début.
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-gray-600">Statut</label>
-                      <select
-                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white"
-                        value={editDraft.status}
-                        onChange={(e) =>
-                          setEditDraft((s) => (s ? { ...s, status: e.target.value as CampaignStatus } : s))
-                        }
-                      >
-                        <option value="draft">draft</option>
-                        <option value="published">published</option>
-                        <option value="paused">paused</option>
-                        <option value="ended">ended</option>
-                      </select>
-                      <div className="mt-1 text-[11px] text-gray-500">
-                        Pour prolonger un spot : modifie “Fin” puis garde “published”.
-                      </div>
-                    </div>
-
-                    <div className="text-[11px] text-gray-500 self-end">
-                      Conseillé : si tu changes les dates, clique “Enregistrer” puis “Publier” si nécessaire.
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Upload Asset */}
-              <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                <div className="text-sm text-gray-700">
-                  Média actuel:{" "}
-                  {latest ? (
-                    <span className="font-medium">
-                      {latest.media_type} — {latest.storage_path}
-                    </span>
-                  ) : (
-                    <span className="text-gray-500">Aucun</span>
-                  )}
+              {/* Media */}
+              <div className="mt-5 flex flex-col md:flex-row md:items-center gap-4">
+                <div className="min-w-0">
+                  <div className="text-sm text-gray-700">
+                    Média actuel:{" "}
+                    {latest ? (
+                      <span className="font-medium break-all">
+                        {latest.media_type} — {latest.storage_path}
+                      </span>
+                    ) : (
+                      <span className="text-gray-500">Aucun</span>
+                    )}
+                  </div>
+
+                  <div className="mt-1 text-[11px] text-gray-500">
+                    Astuce : pour une lecture vidéo fiable, re-uploade la vidéo si elle a été ajoutée avant que le
+                    Content-Type ne soit correctement défini.
+                  </div>
                 </div>
 
-                <div className="sm:ml-auto">
+                <div className="md:ml-auto">
                   <label className="text-xs text-gray-600 block mb-1">Uploader un média (image/vidéo)</label>
                   <input
                     type="file"
                     accept="image/*,video/*"
-                    disabled={busy}
                     onChange={(e) => {
                       const f = e.target.files?.[0];
                       if (!f) return;
