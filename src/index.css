@@ -87,34 +87,52 @@
 }
 
 @layer base {
-  * {
+  /* ✅ Base (Tailwind + Layout safe) */
+  *,
+  *::before,
+  *::after {
     @apply border-border;
-    box-sizing: border-box; /* ✅ important pour le responsive */
+    box-sizing: border-box;
+    min-width: 0; /* ✅ CRITIQUE: empêche flex/grid de forcer des largeurs au zoom */
+  }
+
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow-x: clip; /* ✅ mieux que hidden (évite le scroll fantôme au zoom) */
   }
 
   body {
     @apply bg-background text-foreground;
-    overflow-x: hidden; /* ✅ évite les débordements horizontaux */
+    text-rendering: optimizeLegibility;
+    -webkit-text-size-adjust: 100%;
   }
-}
 
-/* ✅ baseline responsive global */
-html,
-body,
-#root {
-  width: 100%;
-  max-width: 100%;
-  min-height: 100%;
-  margin: 0;
-  padding: 0;
-  overflow-x: hidden; /* ✅ double sécurité */
-}
+  #root {
+    width: 100%;
+    max-width: 100%;
+    min-height: 100%;
+    overflow-x: clip; /* ✅ double sécurité */
+  }
 
-/* ✅ images/medias toujours fluides */
-img,
-video,
-canvas,
-svg {
-  max-width: 100%;
-  height: auto;
+  /* ✅ Les éléments médias ne doivent JAMAIS déborder */
+  img,
+  video,
+  canvas,
+  svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* ✅ Form controls peuvent causer du débordement si min-width auto */
+  input,
+  select,
+  textarea,
+  button {
+    min-width: 0;
+  }
 }
