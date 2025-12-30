@@ -157,10 +157,10 @@ const HeroSection = () => {
 
   return (
     <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden">
-      {/* ✅ FULL WIDTH (même logique que spot) */}
-      <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 py-8 sm:py-10 min-w-0">
-        {/* ✅ on garde un centrage visuel, mais sans max-w bloquant */}
-        <div className="w-full text-center min-w-0">
+      {/* ✅ FULL WIDTH wrapper (comme le spot) */}
+      <div className="w-full px-4 sm:px-6 lg:px-10 py-8 sm:py-10">
+        {/* ✅ Texte reste lisible (max), mais la barre de recherche sera full width */}
+        <div className="w-full max-w-5xl mx-auto text-center">
           <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
             {t("home.title")}
           </h1>
@@ -168,11 +168,17 @@ const HeroSection = () => {
           <p className="mt-3 sm:mt-4 text-sm sm:text-base md:text-xl text-blue-100 break-words">
             {t("home.subtitle")}
           </p>
+        </div>
 
-          {/* ✅ formulaire responsive : largeur fluide mais plafonnée raisonnablement */}
-          <div className="mt-6 sm:mt-7 bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl w-full max-w-[980px] mx-auto text-gray-900">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 items-stretch min-w-0">
-              <div ref={jobsBoxRef} className="relative min-w-0 text-left sm:col-span-2 lg:col-span-2">
+        {/* ✅ BARRE RECHERCHE = pleine largeur */}
+        <div className="mt-6 sm:mt-7 w-full">
+          <div className="w-full bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl text-gray-900">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-3 items-stretch min-w-0">
+              {/* Job */}
+              <div
+                ref={jobsBoxRef}
+                className="relative min-w-0 text-left lg:col-span-6"
+              >
                 <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
                   placeholder={t("home.search.placeholder") || "Métier / service"}
@@ -211,7 +217,11 @@ const HeroSection = () => {
                 )}
               </div>
 
-              <div ref={districtsBoxRef} className="relative min-w-0 text-left sm:col-span-2 lg:col-span-2">
+              {/* District */}
+              <div
+                ref={districtsBoxRef}
+                className="relative min-w-0 text-left lg:col-span-6"
+              >
                 <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
                   placeholder={t("home.quartier.placeholder") || "Quartier"}
@@ -262,15 +272,16 @@ const HeroSection = () => {
               </div>
 
               {geoError && (
-                <div className="sm:col-span-2 lg:col-span-4 text-xs text-red-600 text-left px-1">
+                <div className="lg:col-span-12 text-xs text-red-600 text-left px-1">
                   {geoError}
                 </div>
               )}
 
+              {/* Button row full width */}
               <Button
                 type="button"
                 onClick={handleSearch}
-                className="sm:col-span-2 lg:col-span-4 w-full h-11 sm:h-12 bg-pro-blue hover:bg-blue-700 text-sm sm:text-base"
+                className="lg:col-span-12 w-full h-11 sm:h-12 bg-pro-blue hover:bg-blue-700 text-sm sm:text-base"
               >
                 {t("home.search.button") || "Rechercher"}
               </Button>
@@ -287,7 +298,7 @@ const HeroSection = () => {
         </div>
       </div>
 
-      {/* ✅ Spot full width */}
+      {/* ✅ Pub bord à bord écran */}
       <div className="w-full px-0 pb-8 sm:pb-10 lg:pb-12 -mt-2 sm:-mt-4">
         <AdSlot placement="home_feed" className="w-full" />
       </div>
