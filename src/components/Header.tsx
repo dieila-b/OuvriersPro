@@ -24,6 +24,7 @@ const Header = () => {
     setMobileOpen(false);
   }, [location.pathname, location.search, location.hash]);
 
+  // ✅ lock scroll only when mobile menu open
   useEffect(() => {
     if (!mobileOpen) {
       document.body.style.overflow = "";
@@ -78,19 +79,25 @@ const Header = () => {
     <button
       type="button"
       onClick={onClick}
-      className="text-sm font-medium text-pro-gray hover:text-pro-blue transition-colors"
+      // ✅ min-w-0 + no fixed widths => avoids zoom overflow
+      className="min-w-0 text-sm font-medium text-pro-gray hover:text-pro-blue transition-colors whitespace-nowrap"
     >
       {children}
     </button>
   );
 
   return (
-    // ✅ z-40 (standard) + sticky stable
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-200">
+    /**
+     * ✅ FIX RESPONSIVE (zoom-safe):
+     * - No w-screen / 100vw anywhere
+     * - w-full + max-w-full + overflow-x-clip to prevent top-only overflow at certain zoom levels
+     * - min-w-0 on flex containers to prevent children forcing width
+     */
+    <header className="sticky top-0 z-40 w-full max-w-full min-w-0 overflow-x-clip bg-white/95 backdrop-blur border-b border-gray-200">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="h-14 sm:h-16 flex items-center justify-between gap-3">
+        <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 min-w-0">
+          <Link to="/" className="min-w-0 flex items-center gap-2">
             <div className="w-10 h-10 bg-pro-blue rounded-lg flex items-center justify-center flex-shrink-0">
               <span className="text-white font-bold text-lg">OP</span>
             </div>
@@ -100,10 +107,8 @@ const Header = () => {
           </Link>
 
           {/* Navigation Desktop */}
-          <nav className="hidden md:flex items-center gap-6">
-            <NavLinkButton onClick={handleSearchClick}>
-              {t("nav.search")}
-            </NavLinkButton>
+          <nav className="hidden md:flex min-w-0 items-center gap-6">
+            <NavLinkButton onClick={handleSearchClick}>{t("nav.search")}</NavLinkButton>
             <NavLinkButton onClick={() => handleNavClickSection("faq")}>
               {t("nav.faq")}
             </NavLinkButton>
@@ -113,20 +118,20 @@ const Header = () => {
           </nav>
 
           {/* Actions Desktop */}
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden md:flex min-w-0 items-center gap-3">
             {isAdmin && (
               <Link
                 to="/admin/dashboard"
-                className="inline-flex items-center rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                className="inline-flex items-center rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors whitespace-nowrap"
               >
                 Admin
               </Link>
             )}
 
-            <Link to={accountPath}>
+            <Link to={accountPath} className="min-w-0">
               <Button
                 size="sm"
-                className="bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center gap-2"
+                className="bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center gap-2 whitespace-nowrap"
               >
                 <User className="w-4 h-4" />
                 <span className="hidden lg:inline">{accountLabel}</span>
@@ -138,16 +143,26 @@ const Header = () => {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-1 whitespace-nowrap"
+                >
                   <Languages className="w-4 h-4" />
                   <span className="uppercase">{language}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white">
-                <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
+                <DropdownMenuItem
+                  onClick={() => setLanguage("fr")}
+                  className="cursor-pointer"
+                >
                   Français
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
+                <DropdownMenuItem
+                  onClick={() => setLanguage("en")}
+                  className="cursor-pointer"
+                >
                   English
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -155,19 +170,29 @@ const Header = () => {
           </div>
 
           {/* Mobile actions */}
-          <div className="md:hidden flex items-center gap-2">
+          <div className="md:hidden min-w-0 flex items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-1 whitespace-nowrap"
+                >
                   <Languages className="w-4 h-4" />
                   <span className="uppercase">{language}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white">
-                <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
+                <DropdownMenuItem
+                  onClick={() => setLanguage("fr")}
+                  className="cursor-pointer"
+                >
                   Français
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
+                <DropdownMenuItem
+                  onClick={() => setLanguage("en")}
+                  className="cursor-pointer"
+                >
                   English
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -178,6 +203,7 @@ const Header = () => {
               size="sm"
               onClick={() => setMobileOpen((v) => !v)}
               aria-label="Menu mobile"
+              className="whitespace-nowrap"
             >
               {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
             </Button>
@@ -185,7 +211,7 @@ const Header = () => {
         </div>
       </div>
 
-      {/* ✅ Overlay menu mobile au-dessus du header : z-50 (standard) */}
+      {/* ✅ Overlay menu mobile au-dessus du header : z-50 */}
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50">
           <button
@@ -195,9 +221,10 @@ const Header = () => {
             onClick={() => setMobileOpen(false)}
           />
 
-          <div className="absolute top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-lg">
+          {/* ✅ Important: w-full, max-w-full, overflow-x-clip (zoom-safe) */}
+          <div className="absolute top-0 left-0 right-0 w-full max-w-full overflow-x-clip bg-white border-b border-gray-200 shadow-lg">
             <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3 min-w-0">
                 <span className="text-sm font-semibold text-pro-gray">
                   {language === "fr" ? "Menu" : "Menu"}
                 </span>
@@ -206,17 +233,17 @@ const Header = () => {
                 </Button>
               </div>
 
-              <div className="mt-3 flex flex-col gap-1">
+              <div className="mt-3 flex flex-col gap-1 min-w-0">
                 <button
                   type="button"
                   onClick={() => {
                     handleSearchClick();
                     setMobileOpen(false);
                   }}
-                  className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
+                  className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue min-w-0"
                 >
-                  <SearchIcon className="w-4 h-4" />
-                  {t("nav.search")}
+                  <SearchIcon className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">{t("nav.search")}</span>
                 </button>
 
                 <button
@@ -225,9 +252,9 @@ const Header = () => {
                     handleNavClickSection("faq");
                     setMobileOpen(false);
                   }}
-                  className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
+                  className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue min-w-0"
                 >
-                  {t("nav.faq")}
+                  <span className="truncate">{t("nav.faq")}</span>
                 </button>
 
                 <button
@@ -236,25 +263,25 @@ const Header = () => {
                     handleNavClickSection("contact");
                     setMobileOpen(false);
                   }}
-                  className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
+                  className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue min-w-0"
                 >
-                  {t("nav.contact")}
+                  <span className="truncate">{t("nav.contact")}</span>
                 </button>
 
                 {isAdmin && (
                   <Link
                     to="/admin/dashboard"
                     onClick={() => setMobileOpen(false)}
-                    className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue"
+                    className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue min-w-0"
                   >
-                    <User className="w-4 h-4" />
-                    Admin
+                    <User className="w-4 h-4 flex-shrink-0" />
+                    <span className="truncate">Admin</span>
                   </Link>
                 )}
 
                 <div className="pt-2">
                   <Link to={accountPath} onClick={() => setMobileOpen(false)}>
-                    <Button className="w-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center justify-center gap-2">
+                    <Button className="w-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center justify-center gap-2 whitespace-nowrap">
                       <User className="w-4 h-4" />
                       {accountLabel}
                     </Button>
