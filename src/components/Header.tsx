@@ -24,7 +24,6 @@ const Header = () => {
     setMobileOpen(false);
   }, [location.pathname, location.search, location.hash]);
 
-  // ✅ lock scroll only when mobile menu open
   useEffect(() => {
     if (!mobileOpen) {
       document.body.style.overflow = "";
@@ -79,7 +78,6 @@ const Header = () => {
     <button
       type="button"
       onClick={onClick}
-      // ✅ min-w-0 + no fixed widths => avoids zoom overflow
       className="min-w-0 text-sm font-medium text-pro-gray hover:text-pro-blue transition-colors whitespace-nowrap"
     >
       {children}
@@ -87,14 +85,10 @@ const Header = () => {
   );
 
   return (
-    /**
-     * ✅ FIX RESPONSIVE (zoom-safe):
-     * - No w-screen / 100vw anywhere
-     * - w-full + max-w-full + overflow-x-clip to prevent top-only overflow at certain zoom levels
-     * - min-w-0 on flex containers to prevent children forcing width
-     */
-    <header className="sticky top-0 z-40 w-full max-w-full min-w-0 overflow-x-clip bg-white/95 backdrop-blur border-b border-gray-200">
-      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-40 w-full max-w-full bg-white/95 backdrop-blur border-b border-gray-200">
+      {/* ✅ FULL WIDTH wrapper (pas de max-w ici) */}
+      <div className="w-full px-4 sm:px-6 lg:px-10">
+        {/* ✅ on garde un layout stable, mais sans “boîte” */}
         <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3">
           {/* Logo */}
           <Link to="/" className="min-w-0 flex items-center gap-2">
@@ -153,16 +147,10 @@ const Header = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white">
-                <DropdownMenuItem
-                  onClick={() => setLanguage("fr")}
-                  className="cursor-pointer"
-                >
+                <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
                   Français
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setLanguage("en")}
-                  className="cursor-pointer"
-                >
+                <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
                   English
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -183,16 +171,10 @@ const Header = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white">
-                <DropdownMenuItem
-                  onClick={() => setLanguage("fr")}
-                  className="cursor-pointer"
-                >
+                <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
                   Français
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setLanguage("en")}
-                  className="cursor-pointer"
-                >
+                <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
                   English
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -211,7 +193,6 @@ const Header = () => {
         </div>
       </div>
 
-      {/* ✅ Overlay menu mobile au-dessus du header : z-50 */}
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50">
           <button
@@ -221,9 +202,8 @@ const Header = () => {
             onClick={() => setMobileOpen(false)}
           />
 
-          {/* ✅ Important: w-full, max-w-full, overflow-x-clip (zoom-safe) */}
-          <div className="absolute top-0 left-0 right-0 w-full max-w-full overflow-x-clip bg-white border-b border-gray-200 shadow-lg">
-            <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-3">
+          <div className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg">
+            <div className="w-full px-4 sm:px-6 py-3">
               <div className="flex items-center justify-between gap-3 min-w-0">
                 <span className="text-sm font-semibold text-pro-gray">
                   {language === "fr" ? "Menu" : "Menu"}
