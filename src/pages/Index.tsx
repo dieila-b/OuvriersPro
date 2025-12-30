@@ -7,7 +7,6 @@ import FeaturesSection from "@/components/FeaturesSection";
 import WorkerSearchSection from "@/components/WorkerSearchSection";
 import SubscriptionSection from "@/components/SubscriptionSection";
 import Footer from "@/components/Footer";
-import AdSlot from "@/components/AdSlot";
 
 const Index = () => {
   const location = useLocation();
@@ -57,12 +56,7 @@ const Index = () => {
       <main className="w-full flex-1 min-w-0">
         <HeroSection />
 
-        {/* ✅ Slot pub sous le hero (responsive) */}
-        <div className="w-full">
-          <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 sm:-mt-8">
-            <AdSlot placement="home_feed" />
-          </div>
-        </div>
+        {/* ✅ (Supprimé) Slot pub ici -> on garde uniquement la pub dans HeroSection */}
 
         <FeaturesSection />
 
