@@ -36,20 +36,20 @@ const FeaturesSection = () => {
 
   return (
     <section className="w-full bg-pro-light py-8 sm:py-10 lg:py-12">
-      {/* ✅ même “niveau responsive” que le spot: container large + padding cohérent */}
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-w-0">
+      {/* ✅ largeur “au niveau du spot” : plus large que 7xl + padding fluide */}
+      <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div className="text-center mb-6 sm:mb-8">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
             {t("home.features.title")}
           </h2>
         </div>
 
-        {/* ✅ grilles fluides + min-w-0 pour éviter overflow */}
+        {/* ✅ cartes plus “respirantes” sur desktop */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 min-w-0">
           {features.map((f, index) => (
             <div
               key={index}
-              className="min-w-0 bg-white rounded-2xl p-5 sm:p-6 lg:p-7 shadow-sm hover:shadow-md transition-shadow animate-fade-in"
+              className="min-w-0 bg-white rounded-2xl p-5 sm:p-6 lg:p-8 shadow-sm hover:shadow-md transition-shadow animate-fade-in"
               style={{ animationDelay: `${index * 0.12}s` }}
             >
               <div className="flex flex-col items-center text-center">
@@ -69,8 +69,8 @@ const FeaturesSection = () => {
           ))}
         </div>
 
-        {/* ✅ stats: wrap propre sur petits écrans */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 sm:gap-6 mt-7 sm:mt-9 min-w-0">
+        {/* ✅ stats bien réparties sur grands écrans */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 sm:gap-6 lg:gap-8 mt-7 sm:mt-9 min-w-0">
           {stats.map((s, index) => (
             <div
               key={index}
