@@ -84,7 +84,10 @@ const HeroSection = () => {
       if (jobsBoxRef.current && !jobsBoxRef.current.contains(e.target as Node)) {
         setOpenJobs(false);
       }
-      if (districtsBoxRef.current && !districtsBoxRef.current.contains(e.target as Node)) {
+      if (
+        districtsBoxRef.current &&
+        !districtsBoxRef.current.contains(e.target as Node)
+      ) {
         setOpenDistricts(false);
       }
     };
@@ -175,10 +178,7 @@ const HeroSection = () => {
           <div className="w-full bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl text-gray-900">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-3 items-stretch min-w-0">
               {/* Job */}
-              <div
-                ref={jobsBoxRef}
-                className="relative min-w-0 text-left lg:col-span-6"
-              >
+              <div ref={jobsBoxRef} className="relative min-w-0 text-left lg:col-span-6">
                 <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
                   placeholder={t("home.search.placeholder") || "Métier / service"}
