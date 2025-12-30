@@ -36,15 +36,14 @@ const FeaturesSection = () => {
 
   return (
     <section className="w-full bg-pro-light py-8 sm:py-10 lg:py-12">
-      {/* ✅ largeur “au niveau du spot” : plus large que 7xl + padding fluide */}
-      <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
+      {/* ✅ plus de max-w : même logique que le spot */}
+      <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div className="text-center mb-6 sm:mb-8">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
             {t("home.features.title")}
           </h2>
         </div>
 
-        {/* ✅ cartes plus “respirantes” sur desktop */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 min-w-0">
           {features.map((f, index) => (
             <div
@@ -69,7 +68,6 @@ const FeaturesSection = () => {
           ))}
         </div>
 
-        {/* ✅ stats bien réparties sur grands écrans */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-5 sm:gap-6 lg:gap-8 mt-7 sm:mt-9 min-w-0">
           {stats.map((s, index) => (
             <div
