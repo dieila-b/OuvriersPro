@@ -27,18 +27,8 @@ const SubscriptionSection = () => {
       isFree: true,
       features:
         language === "fr"
-          ? [
-              "1 métier affiché",
-              "Profil simplifié",
-              "Nombre de contacts limité",
-              "Pas de mise en avant",
-            ]
-          : [
-              "1 listed trade",
-              "Simplified profile",
-              "Limited number of contacts",
-              "No highlight in search results",
-            ],
+          ? ["1 métier affiché", "Profil simplifié", "Nombre de contacts limité", "Pas de mise en avant"]
+          : ["1 listed trade", "Simplified profile", "Limited number of contacts", "No highlight in search results"],
     },
     {
       code: "MONTHLY",
@@ -77,8 +67,8 @@ const SubscriptionSection = () => {
       id="subscription"
       className="w-full py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-gray-50 to-gray-100"
     >
-      {/* ✅ on remplace container par un wrapper responsive contrôlé */}
-      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* ✅ container large (comme le spot) + min-w-0 */}
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-w-0">
         <div className="text-center mb-10 sm:mb-12 lg:mb-16">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray mb-3 sm:mb-4">
             {t("subscription.title")}
@@ -89,11 +79,11 @@ const SubscriptionSection = () => {
         </div>
 
         {/* Plans */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 max-w-6xl mx-auto min-w-0">
           {plans.map((plan, index) => (
             <Card
               key={index}
-              className={`relative overflow-hidden transition-transform md:hover:scale-105 ${
+              className={`relative overflow-hidden transition-transform md:hover:scale-[1.02] ${
                 plan.popular ? "ring-2 ring-pro-blue shadow-xl" : "shadow-lg"
               }`}
             >
@@ -101,14 +91,12 @@ const SubscriptionSection = () => {
                 <div className="absolute top-0 left-0 right-0 bg-pro-blue text-white text-center py-2">
                   <Badge className="bg-white text-pro-blue">
                     <Star className="w-3 h-3 mr-1" />
-                    Populaire
+                    {language === "fr" ? "Populaire" : "Popular"}
                   </Badge>
                 </div>
               )}
 
-              <CardHeader
-                className={`text-center ${plan.popular ? "pt-12" : "pt-6"}`}
-              >
+              <CardHeader className={`text-center ${plan.popular ? "pt-12" : "pt-6"}`}>
                 <CardTitle className="text-xl sm:text-2xl font-bold text-pro-gray">
                   {plan.name}
                 </CardTitle>
@@ -118,16 +106,11 @@ const SubscriptionSection = () => {
                     {formatPrice(plan.price)}{" "}
                     <span className="text-xl sm:text-2xl">FG</span>
                   </span>
-                  <span className="text-gray-600 text-sm sm:text-base">
-                    /{plan.period}
-                  </span>
+                  <span className="text-gray-600 text-sm sm:text-base">/{plan.period}</span>
                 </div>
 
                 {plan.savings && (
-                  <Badge
-                    variant="secondary"
-                    className="mt-2 bg-green-100 text-green-700"
-                  >
+                  <Badge variant="secondary" className="mt-2 bg-green-100 text-green-700">
                     {plan.savings}
                   </Badge>
                 )}
@@ -138,9 +121,7 @@ const SubscriptionSection = () => {
                   {plan.features.map((feature, featureIndex) => (
                     <li key={featureIndex} className="flex items-center">
                       <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
-                      <span className="text-gray-700 text-sm sm:text-base">
-                        {feature}
-                      </span>
+                      <span className="text-gray-700 text-sm sm:text-base">{feature}</span>
                     </li>
                   ))}
                 </ul>
@@ -165,34 +146,35 @@ const SubscriptionSection = () => {
         </div>
 
         {/* Avantages additionnels */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mt-10 sm:mt-14 lg:mt-16 max-w-4xl mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mt-10 sm:mt-14 lg:mt-16 max-w-6xl mx-auto">
           {[
             {
               icon: User,
-              title: "Profil vérifié",
-              description: "Badge de confiance sur votre profil",
+              title: language === "fr" ? "Profil vérifié" : "Verified profile",
+              description:
+                language === "fr" ? "Badge de confiance sur votre profil" : "Trust badge on your profile",
             },
             {
               icon: BarChart3,
-              title: "Analytics détaillés",
-              description: "Suivez vos performances et optimisez",
+              title: language === "fr" ? "Analytics détaillés" : "Detailed analytics",
+              description:
+                language === "fr" ? "Suivez vos performances et optimisez" : "Track your performance and optimize",
             },
             {
               icon: Headphones,
-              title: "Support dédié",
-              description: "Assistance prioritaire 7j/7",
+              title: language === "fr" ? "Support dédié" : "Dedicated support",
+              description:
+                language === "fr" ? "Assistance prioritaire 7j/7" : "Priority support 7 days a week",
             },
           ].map((benefit, index) => (
-            <div key={index} className="text-center">
+            <div key={index} className="text-center min-w-0">
               <div className="w-12 h-12 bg-pro-blue/10 rounded-lg flex items-center justify-center mx-auto mb-4">
                 <benefit.icon className="w-6 h-6 text-pro-blue" />
               </div>
               <h3 className="font-semibold text-pro-gray mb-2 text-sm sm:text-base">
                 {benefit.title}
               </h3>
-              <p className="text-gray-600 text-xs sm:text-sm">
-                {benefit.description}
-              </p>
+              <p className="text-gray-600 text-xs sm:text-sm">{benefit.description}</p>
             </div>
           ))}
         </div>
