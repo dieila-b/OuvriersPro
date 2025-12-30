@@ -11,7 +11,6 @@ import Footer from "@/components/Footer";
 const Index = () => {
   const location = useLocation();
 
-  // ✅ utilitaire scroll (offset header sticky) + fallback si header non trouvé
   const scrollToId = (id: string) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -23,7 +22,6 @@ const Index = () => {
     window.scrollTo({ top: Math.max(y, 0), behavior: "smooth" });
   };
 
-  // ✅ si hash présent (ex: /#subscription)
   useEffect(() => {
     if (!window.location.hash) return;
     const id = window.location.hash.replace("#", "");
@@ -32,7 +30,6 @@ const Index = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ routes /search et /rechercher => scroll vers section search
   useEffect(() => {
     const { pathname } = location;
 
@@ -41,26 +38,20 @@ const Index = () => {
       return () => window.clearTimeout(timeout);
     }
 
-    // ✅ retour home : remet en haut (sans animation)
     if (pathname === "/") {
       window.scrollTo({ top: 0, behavior: "auto" });
     }
-  }, [location.pathname]); // volontairement minimal
+  }, [location.pathname]);
 
   return (
-    // ✅ min-w-0 + overflow-x-clip = clé pour éviter les débordements horizontaux (faux "non responsive")
-    <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white flex flex-col">
+    <div className="min-h-dvh w-full min-w-0 overflow-x-hidden bg-white flex flex-col">
       <Header />
 
-      {/* ✅ min-w-0 sur main aussi : évite les “largeurs imposées” par des enfants */}
       <main className="w-full flex-1 min-w-0">
         <HeroSection />
 
-        {/* ✅ (Supprimé) Slot pub ici -> on garde uniquement la pub dans HeroSection */}
-
         <FeaturesSection />
 
-        {/* ✅ Ancres sur bloc neutre : pas de padding parasite */}
         <div id="search" className="w-full scroll-mt-20 sm:scroll-mt-24">
           <WorkerSearchSection />
         </div>
