@@ -29,15 +29,15 @@ type AdItem = {
   campaign: AdCampaign;
   asset: AdAsset;
   signedUrl: string | null;
-  signedAtMs: number; // timestamp de génération (pour renouvellement)
+  signedAtMs: number;
 };
 
 type Props = {
-  placement: string; // ex: "home_feed"
+  placement: string;
   className?: string;
   expiresIn?: number; // secondes (URL signée)
-  rotateEveryMs?: number; // rotation spot
-  refreshEveryMs?: number; // refresh liste campagnes/assets
+  rotateEveryMs?: number;
+  refreshEveryMs?: number;
 };
 
 function isCampaignActiveNow(c: AdCampaign, nowMs: number) {
@@ -58,16 +58,18 @@ export default function AdSlot({
   const [index, setIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  // évite setState après unmount
   const aliveRef = useRef(true);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Pour fallback propre si la vidéo ne peut pas jouer
+  const [videoFailed, setVideoFailed] = useState(false);
+
   useEffect(() => {
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
     };
   }, []);
-
-  const nowMs = useMemo(() => Date.now(), []); // stable, juste pour init; on calcule "now" dans les fonctions
 
   const buildSignedUrl = useCallback(
     async (storagePath: string) => {
@@ -88,7 +90,6 @@ export default function AdSlot({
     try {
       const now = Date.now();
 
-      // 1) Toutes les campagnes publiées du placement (sans limiter à 1)
       const { data: campaignsRaw, error: cErr } = await supabase
         .from("ads_campaigns")
         .select("id,title,link_url,placement,start_at,end_at,status,created_at")
@@ -105,11 +106,11 @@ export default function AdSlot({
         if (aliveRef.current) {
           setItems([]);
           setIndex(0);
+          setVideoFailed(false);
         }
         return;
       }
 
-      // 2) Assets pour ces campagnes
       const ids = campaigns.map((c) => c.id);
       const { data: assetsRaw, error: aErr } = await supabase
         .from("ads_assets")
@@ -121,7 +122,7 @@ export default function AdSlot({
 
       const assetsAll = (assetsRaw ?? []) as AdAsset[];
 
-      // On prend 1 asset "latest" par campagne (comportement attendu dans ton admin)
+      // 1 asset le plus récent par campagne
       const latestByCampaign: Record<string, AdAsset> = {};
       for (const a of assetsAll) {
         if (!latestByCampaign[a.campaign_id]) latestByCampaign[a.campaign_id] = a;
@@ -139,11 +140,11 @@ export default function AdSlot({
         if (aliveRef.current) {
           setItems([]);
           setIndex(0);
+          setVideoFailed(false);
         }
         return;
       }
 
-      // 3) Générer des signed urls (une par spot) — robuste et simple
       const signed = await Promise.all(
         pairs.map(async (p) => {
           const url = await buildSignedUrl(p.asset.storage_path);
@@ -156,59 +157,48 @@ export default function AdSlot({
         })
       );
 
-      // 4) Mise à jour state
       if (aliveRef.current) {
         setItems(signed);
-        setIndex((prev) => {
-          // garde index valide même si la liste change
-          if (signed.length === 0) return 0;
-          return Math.min(prev, signed.length - 1);
-        });
+        setIndex((prev) => (signed.length ? Math.min(prev, signed.length - 1) : 0));
+        setVideoFailed(false);
       }
     } catch (e: any) {
       if (aliveRef.current) {
         setItems([]);
         setIndex(0);
         setError(e?.message ?? "Unknown ads error");
+        setVideoFailed(false);
       }
     } finally {
       if (aliveRef.current) setLoading(false);
     }
   }, [placement, buildSignedUrl]);
 
-  // initial + refresh périodique (pour capter nouvelles pubs / changements statut)
   useEffect(() => {
     refresh();
     const t = window.setInterval(refresh, refreshEveryMs);
     return () => window.clearInterval(t);
   }, [refresh, refreshEveryMs]);
 
-  // rotation automatique
   useEffect(() => {
     if (items.length <= 1) return;
-
     const t = window.setInterval(() => {
       setIndex((i) => (i + 1) % items.length);
     }, rotateEveryMs);
-
     return () => window.clearInterval(t);
   }, [items.length, rotateEveryMs]);
 
-  // régénération URL si expirée (ou proche expiration) quand on change d’item
+  // Renouvellement URL si proche expiration
   useEffect(() => {
     if (!items.length) return;
-
     const current = items[index];
     if (!current) return;
 
-    // renouvelle à 80% du TTL pour éviter flash “URL expirée”
     const ttlMs = expiresIn * 1000;
     const renewAt = current.signedAtMs + Math.floor(ttlMs * 0.8);
-
     if (Date.now() < renewAt) return;
 
     let cancelled = false;
-
     (async () => {
       try {
         const url = await buildSignedUrl(current.asset.storage_path);
@@ -216,24 +206,53 @@ export default function AdSlot({
 
         setItems((prev) =>
           prev.map((it, i) =>
-            i === index
-              ? { ...it, signedUrl: url, signedAtMs: Date.now() }
-              : it
+            i === index ? { ...it, signedUrl: url, signedAtMs: Date.now() } : it
           )
         );
       } catch {
-        // on ignore: le refresh périodique rattrapera
+        // best effort
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [index, items, expiresIn, buildSignedUrl, nowMs]);
+  }, [index, items, expiresIn, buildSignedUrl]);
+
+  // ✅ Force play() à chaque changement de spot vidéo
+  useEffect(() => {
+    if (!items.length) return;
+    const current = items[index];
+    if (!current) return;
+
+    setVideoFailed(false);
+
+    if (current.asset.media_type !== "video") return;
+
+    const v = videoRef.current;
+    if (!v) return;
+
+    // important: muted BEFORE play
+    v.muted = true;
+
+    const tryPlay = async () => {
+      try {
+        const p = v.play();
+        if (p && typeof (p as any).then === "function") await p;
+      } catch {
+        // Autoplay peut être bloqué => on garde le fallback (ou l'utilisateur peut cliquer)
+      }
+    };
+
+    // on retente après un micro délai (souvent nécessaire quand src vient d’être set)
+    const id = window.setTimeout(() => {
+      void tryPlay();
+    }, 50);
+
+    return () => window.clearTimeout(id);
+  }, [index, items]);
 
   if (loading && items.length === 0) return null;
-
-  // Si tu préfères zéro bruit en prod, mets `return null;` ici au lieu d'afficher l'erreur
   if (error) return <div className="text-xs text-red-600">Ads error: {error}</div>;
   if (!items.length) return null;
 
@@ -257,11 +276,11 @@ export default function AdSlot({
     return <div className={className}>{children}</div>;
   };
 
-  // ✅ Bannière 16:5, hauteur plafonnée
   const frameClass =
     "relative w-full overflow-hidden rounded-2xl border border-white/15 bg-white/5 shadow-[0_24px_70px_rgba(0,0,0,0.22)]";
-
   const mediaClass = "absolute inset-0 h-full w-full object-cover";
+
+  const isVideo = current.asset.media_type === "video";
 
   return (
     <Wrapper>
@@ -272,16 +291,36 @@ export default function AdSlot({
           "max-h-[180px] sm:max-h-[220px] md:max-h-[260px] lg:max-h-[320px]",
         ].join(" ")}
       >
-        {current.asset.media_type === "video" ? (
+        {isVideo && !videoFailed ? (
           <video
-            key={current.asset.id}
+            ref={videoRef}
+            key={current.asset.id} // force re-mount à chaque asset
             src={current.signedUrl}
             autoPlay
             muted
             loop
             playsInline
-            preload="metadata"
+            preload="auto"
             className={mediaClass}
+            onCanPlay={() => {
+              // retente play quand le navigateur dit "ok"
+              const v = videoRef.current;
+              if (v) {
+                v.muted = true;
+                void v.play().catch(() => {});
+              }
+            }}
+            onLoadedData={() => {
+              const v = videoRef.current;
+              if (v) {
+                v.muted = true;
+                void v.play().catch(() => {});
+              }
+            }}
+            onError={() => {
+              // fallback : si la vidéo est servie avec un header / mime problématique, on évite de rester "figé"
+              setVideoFailed(true);
+            }}
           />
         ) : (
           <img
