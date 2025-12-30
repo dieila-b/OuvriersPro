@@ -90,7 +90,6 @@ const WorkerSearchSection: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Filters
   const [keyword, setKeyword] = useState("");
   const [selectedJob, setSelectedJob] = useState<string>("all");
   const [maxPrice, setMaxPrice] = useState<number>(DEFAULT_MAX_PRICE);
@@ -103,7 +102,6 @@ const WorkerSearchSection: React.FC = () => {
 
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
-  // Geolocation
   const [useMyPosition, setUseMyPosition] = useState(false);
   const [radiusKm, setRadiusKm] = useState<number>(DEFAULT_RADIUS_KM);
   const [myLat, setMyLat] = useState<number | null>(null);
@@ -196,7 +194,6 @@ const WorkerSearchSection: React.FC = () => {
     fetchWorkers();
   }, [language]);
 
-  // Init from URL
   useEffect(() => {
     const spKeyword = searchParams.get("keyword") ?? "";
     const spJob = searchParams.get("job") ?? "all";
@@ -235,7 +232,6 @@ const WorkerSearchSection: React.FC = () => {
     if (!initializedFromUrl) setInitializedFromUrl(true);
   }, [searchParams, initializedFromUrl]);
 
-  // Sync URL
   useEffect(() => {
     if (!initializedFromUrl) return;
 
@@ -279,7 +275,6 @@ const WorkerSearchSection: React.FC = () => {
     setSearchParams,
   ]);
 
-  // Dynamic lists
   const jobs = useMemo(
     () =>
       Array.from(new Set(workers.map((w) => w.job).filter((j) => j && j.trim().length > 0))),
@@ -466,9 +461,11 @@ const WorkerSearchSection: React.FC = () => {
       (err) => {
         console.error("geolocation error", err);
         setGeoLocating(false);
+
         setUseMyPosition(false);
         setMyLat(null);
         setMyLng(null);
+
         setGeoError(
           language === "fr"
             ? "Impossible de récupérer votre position. Autorisez la localisation dans votre navigateur."
@@ -537,9 +534,8 @@ const WorkerSearchSection: React.FC = () => {
 
   return (
     <section className="w-full pt-6 pb-12 sm:pt-8 sm:pb-16 lg:pt-10 lg:pb-20 bg-white">
-      {/* ✅ largeur alignée au spot : max-w-screen-2xl + padding fluide */}
-      <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
-        {/* HEADER */}
+      {/* ✅ plus de max-w : même “full width” que le spot */}
+      <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-6 sm:mb-8 border-b border-gray-200 pb-4 min-w-0">
           <div className="min-w-0">
             <h2 className="mt-0 text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
@@ -575,7 +571,6 @@ const WorkerSearchSection: React.FC = () => {
             )}
           </div>
 
-          {/* VIEW TOGGLE */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <span className="text-[10px] sm:text-[11px] text-gray-500 uppercase tracking-wide">
               {text.viewMode}
@@ -609,9 +604,7 @@ const WorkerSearchSection: React.FC = () => {
           </div>
         </div>
 
-        {/* ✅ grid plus “pro” sur desktop : sidebar confortable + contenu large */}
         <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-6 lg:gap-8 items-start min-w-0">
-          {/* FILTERS */}
           <aside className="min-w-0 bg-gray-50 rounded-2xl p-4 sm:p-5 border border-gray-200">
             <h3 className="text-base font-semibold text-pro-gray mb-4">
               {text.filters}
@@ -679,7 +672,6 @@ const WorkerSearchSection: React.FC = () => {
               )}
             </div>
 
-            {/* selects */}
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.job}
@@ -782,7 +774,6 @@ const WorkerSearchSection: React.FC = () => {
               </select>
             </div>
 
-            {/* sliders */}
             <div className="mb-6">
               <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                 <span>{text.priceLabel}</span>
@@ -834,7 +825,6 @@ const WorkerSearchSection: React.FC = () => {
             </Button>
           </aside>
 
-          {/* RESULTS */}
           <div className="min-w-0">
             {error && (
               <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">
@@ -856,13 +846,10 @@ const WorkerSearchSection: React.FC = () => {
 
             {loading && filteredWorkers.length === 0 && (
               <div className="border border-gray-100 rounded-xl p-6 text-sm text-gray-500">
-                {language === "fr"
-                  ? "Chargement des professionnels..."
-                  : "Loading professionals..."}
+                {language === "fr" ? "Chargement des professionnels..." : "Loading professionals..."}
               </div>
             )}
 
-            {/* LIST */}
             {viewMode === "list" && filteredWorkers.length > 0 && (
               <div className="space-y-3 sm:space-y-4 min-w-0">
                 {filteredWorkers.map((w) => {
@@ -900,9 +887,7 @@ const WorkerSearchSection: React.FC = () => {
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">
                               {text.distance}:{" "}
                               <span className="font-semibold ml-1">
-                                {w.distanceKm == null
-                                  ? "—"
-                                  : formatKm(w.distanceKm, language)}
+                                {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
                               </span>
                             </span>
                           )}
@@ -912,9 +897,7 @@ const WorkerSearchSection: React.FC = () => {
                           <span className="flex items-center gap-1 min-w-0">
                             <MapPin className="w-3 h-3 shrink-0" />
                             <span className="truncate">
-                              {[w.region, w.city, w.commune, w.district]
-                                .filter(Boolean)
-                                .join(" • ")}
+                              {[w.region, w.city, w.commune, w.district].filter(Boolean).join(" • ")}
                             </span>
                           </span>
 
@@ -932,16 +915,11 @@ const WorkerSearchSection: React.FC = () => {
                       <div className="w-full sm:w-auto flex sm:flex-col items-start sm:items-end justify-between sm:justify-start gap-2 min-w-0">
                         <div className="text-pro-blue font-bold text-base sm:text-lg">
                           {formatCurrency(w.hourlyRate, w.currency)}
-                          <span className="text-xs sm:text-sm text-gray-600 ml-1">
-                            {text.perHour}
-                          </span>
+                          <span className="text-xs sm:text-sm text-gray-600 ml-1">{text.perHour}</span>
                         </div>
 
                         <Link to={`/ouvrier/${w.id}`} className="w-full sm:w-auto">
-                          <Button
-                            size="sm"
-                            className="w-full sm:w-auto bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm"
-                          >
+                          <Button size="sm" className="w-full sm:w-auto bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm">
                             {text.contact}
                           </Button>
                         </Link>
@@ -952,7 +930,6 @@ const WorkerSearchSection: React.FC = () => {
               </div>
             )}
 
-            {/* GRID */}
             {viewMode === "grid" && filteredWorkers.length > 0 && (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 min-w-0">
                 {filteredWorkers.map((w) => {
@@ -977,17 +954,13 @@ const WorkerSearchSection: React.FC = () => {
                             {w.name}
                           </h3>
                           {w.job && (
-                            <div className="text-xs text-pro-blue mt-0.5 truncate">
-                              {w.job}
-                            </div>
+                            <div className="text-xs text-pro-blue mt-0.5 truncate">{w.job}</div>
                           )}
                           {useMyPosition && hasMyCoords && (
                             <div className="text-[11px] text-slate-600 mt-1">
                               {text.distance}:{" "}
                               <span className="font-semibold">
-                                {w.distanceKm == null
-                                  ? "—"
-                                  : formatKm(w.distanceKm, language)}
+                                {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
                               </span>
                             </div>
                           )}
@@ -998,9 +971,7 @@ const WorkerSearchSection: React.FC = () => {
                         <span className="flex items-center gap-1 min-w-0">
                           <MapPin className="w-3 h-3 shrink-0" />
                           <span className="truncate">
-                            {[w.region, w.city, w.commune, w.district]
-                              .filter(Boolean)
-                              .join(" • ")}
+                            {[w.region, w.city, w.commune, w.district].filter(Boolean).join(" • ")}
                           </span>
                         </span>
                         <span className="flex items-center gap-1">
@@ -1015,15 +986,10 @@ const WorkerSearchSection: React.FC = () => {
                       <div className="mt-2 flex items-center justify-between gap-3">
                         <div className="text-sm font-bold text-pro-blue">
                           {formatCurrency(w.hourlyRate, w.currency)}
-                          <span className="ml-1 text-[11px] text-gray-600">
-                            {text.perHour}
-                          </span>
+                          <span className="ml-1 text-[11px] text-gray-600">{text.perHour}</span>
                         </div>
                         <Link to={`/ouvrier/${w.id}`}>
-                          <Button
-                            size="sm"
-                            className="bg-pro-blue hover:bg-blue-700 text-[11px]"
-                          >
+                          <Button size="sm" className="bg-pro-blue hover:bg-blue-700 text-[11px]">
                             {text.contact}
                           </Button>
                         </Link>
