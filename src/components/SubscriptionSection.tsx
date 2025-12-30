@@ -67,8 +67,8 @@ const SubscriptionSection = () => {
       id="subscription"
       className="w-full py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-gray-50 to-gray-100"
     >
-      {/* ✅ largeur alignée au spot */}
-      <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
+      {/* ✅ full width comme le spot */}
+      <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div className="text-center mb-10 sm:mb-12 lg:mb-16">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray mb-3 sm:mb-4">
             {t("subscription.title")}
@@ -78,7 +78,6 @@ const SubscriptionSection = () => {
           </p>
         </div>
 
-        {/* ✅ supprimer les plafonds internes : plus cohérent avec le spot */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 min-w-0">
           {plans.map((plan, index) => (
             <Card
@@ -103,8 +102,7 @@ const SubscriptionSection = () => {
 
                 <div className="mt-4">
                   <span className="text-3xl sm:text-4xl font-bold text-pro-blue">
-                    {formatPrice(plan.price)}{" "}
-                    <span className="text-xl sm:text-2xl">FG</span>
+                    {formatPrice(plan.price)} <span className="text-xl sm:text-2xl">FG</span>
                   </span>
                   <span className="text-gray-600 text-sm sm:text-base">/{plan.period}</span>
                 </div>
@@ -121,9 +119,7 @@ const SubscriptionSection = () => {
                   {plan.features.map((feature, featureIndex) => (
                     <li key={featureIndex} className="flex items-center">
                       <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
-                      <span className="text-gray-700 text-sm sm:text-base">
-                        {feature}
-                      </span>
+                      <span className="text-gray-700 text-sm sm:text-base">{feature}</span>
                     </li>
                   ))}
                 </ul>
@@ -147,7 +143,6 @@ const SubscriptionSection = () => {
           ))}
         </div>
 
-        {/* Avantages additionnels */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mt-10 sm:mt-14 lg:mt-16 min-w-0">
           {[
             {
@@ -182,9 +177,7 @@ const SubscriptionSection = () => {
               <h3 className="font-semibold text-pro-gray mb-2 text-sm sm:text-base">
                 {benefit.title}
               </h3>
-              <p className="text-gray-600 text-xs sm:text-sm">
-                {benefit.description}
-              </p>
+              <p className="text-gray-600 text-xs sm:text-sm">{benefit.description}</p>
             </div>
           ))}
         </div>
