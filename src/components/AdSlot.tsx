@@ -26,9 +26,9 @@ type AdAsset = {
   created_at?: string;
 };
 
-type AdItemSpot = {
+type AdItemAsset = {
   campaign: AdCampaign;
-  asset: AdAsset | null; // le plus récent du spot
+  asset: AdAsset;
 };
 
 type Props = {
@@ -54,7 +54,6 @@ function safeSeconds(n: any, fallback = DEFAULT_SECONDS) {
 }
 
 async function safeSelectCampaigns(placement: string) {
-  // On tente avec display_seconds, puis fallback sans
   const withDisplay = await supabase
     .from("ads_campaigns")
     .select("id,title,link_url,placement,start_at,end_at,status,display_seconds,created_at")
@@ -83,7 +82,7 @@ export default function AdSlot({
   showSponsorBadge = true,
 }: Props) {
   const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<AdItemSpot[]>([]);
+  const [items, setItems] = useState<AdItemAsset[]>([]);
   const [index, setIndex] = useState(0);
 
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
@@ -93,9 +92,8 @@ export default function AdSlot({
   const timerRef = useRef<number | null>(null);
 
   const current = useMemo(() => items[index] ?? null, [items, index]);
-  const now = useMemo(() => new Date(), [placement]); // recalcul à chaque placement
 
-  // 1) Charger les spots (campagnes) + asset le plus récent
+  // 1) Charger toutes les campagnes actives + tous leurs assets
   useEffect(() => {
     let cancelled = false;
 
@@ -117,7 +115,6 @@ export default function AdSlot({
           return;
         }
 
-        // Récupérer l’asset le plus récent de chaque campagne (1 par campagne)
         const ids = active.map((c) => c.id);
 
         const { data: assets, error: aErr } = await supabase
@@ -128,21 +125,19 @@ export default function AdSlot({
 
         if (aErr) throw aErr;
 
-        const latestByCampaign: Record<string, AdAsset> = {};
-        (assets ?? []).forEach((a: any) => {
-          if (!latestByCampaign[a.campaign_id]) latestByCampaign[a.campaign_id] = a as AdAsset;
-        });
+        const byId: Record<string, AdCampaign> = {};
+        active.forEach((c) => (byId[c.id] = c));
 
-        const spotItems: AdItemSpot[] = active.map((c) => ({
-          campaign: c,
-          asset: latestByCampaign[c.id] ?? null,
-        }));
-
-        // garder seulement ceux qui ont un asset
-        const filtered = spotItems.filter((x) => !!x.asset);
+        const assetItems: AdItemAsset[] = (assets ?? [])
+          .map((a: any) => {
+            const c = byId[a.campaign_id];
+            if (!c) return null;
+            return { campaign: c, asset: a as AdAsset };
+          })
+          .filter(Boolean) as AdItemAsset[];
 
         if (!cancelled) {
-          setItems(filtered);
+          setItems(assetItems);
           setIndex(0);
         }
       } catch (e: any) {
@@ -194,13 +189,12 @@ export default function AdSlot({
     };
   }, [items, index, expiresIn]);
 
-  // 3) Rotation (durée par spot = display_seconds de la campagne)
+  // 3) Rotation (durée = display_seconds de la campagne de l’asset)
   useEffect(() => {
     if (timerRef.current) {
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-
     if (!items.length) return;
 
     const cur = items[index];
@@ -216,16 +210,14 @@ export default function AdSlot({
     };
   }, [items, index, defaultDisplaySeconds]);
 
-  // UI helpers
+  // UI
   const frameClass =
     "relative w-full overflow-hidden rounded-2xl border border-white/15 bg-white/5 shadow-[0_24px_70px_rgba(0,0,0,0.22)]";
-
   const mediaClass = "absolute inset-0 h-full w-full object-cover";
   const skeletonClass =
     "animate-pulse bg-white/10 border border-white/10 rounded-2xl w-full aspect-[16/5] max-h-[180px] sm:max-h-[220px] md:max-h-[260px] lg:max-h-[320px]";
 
   if (error) {
-    // silencieux en prod possible, mais utile en debug
     return (
       <div className="text-xs text-red-200/90 bg-red-500/10 border border-red-300/20 rounded-xl px-3 py-2">
         Ads error: {error}
@@ -234,10 +226,9 @@ export default function AdSlot({
   }
 
   if (loading) return <div className={skeletonClass} />;
-  if (!current || !current.asset || !signedUrl) return null;
+  if (!current || !signedUrl) return null;
 
-  const asset = current.asset;
-  const campaign = current.campaign;
+  const { asset, campaign } = current;
 
   const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (campaign.link_url) {
@@ -266,7 +257,6 @@ export default function AdSlot({
   return (
     <Wrapper>
       <div className={aspectClasses}>
-        {/* Media */}
         {asset.media_type === "video" ? (
           <video
             key={signedAssetId ?? asset.id}
@@ -279,7 +269,6 @@ export default function AdSlot({
             controls={false}
             className={mediaClass}
             onError={() => {
-              // si la lecture échoue, on avance au prochain spot
               setIndex((i) => (items.length ? (i + 1) % items.length : 0));
             }}
           />
@@ -295,10 +284,8 @@ export default function AdSlot({
           />
         )}
 
-        {/* Overlay pro */}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/35 via-black/10 to-black/30" />
 
-        {/* Header chips */}
         <div className="absolute left-3 top-3 flex items-center gap-2">
           {showSponsorBadge && (
             <span className="rounded-full bg-white/90 text-gray-900 text-[11px] px-2 py-1 font-medium shadow-sm">
@@ -310,7 +297,6 @@ export default function AdSlot({
           </span>
         </div>
 
-        {/* Progress / index */}
         {items.length > 1 && (
           <div className="absolute right-3 top-3 rounded-full bg-black/35 text-white text-[11px] px-2 py-1 font-medium backdrop-blur">
             {index + 1}/{items.length}
