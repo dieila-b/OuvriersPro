@@ -1,3 +1,4 @@
+// src/pages/AdminAds.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ type Campaign = {
   start_at: string | null;
   end_at: string | null;
   link_url: string | null;
-  // ✅ optionnel: durée d’affichage (si la colonne existe)
+  // ✅ durée d’affichage (si la colonne existe)
   display_seconds?: number | null;
   created_at: string;
 };
@@ -29,6 +30,10 @@ type Asset = {
 
 const DEFAULT_PLACEMENT = "home_feed";
 const DEFAULT_DISPLAY_SECONDS = 8;
+
+// UI constraints (doivent matcher le CHECK SQL si tu l’as mis)
+const MIN_DISPLAY_SECONDS = 1;
+const MAX_DISPLAY_SECONDS = 300;
 
 function extFromName(name: string) {
   const i = name.lastIndexOf(".");
@@ -58,10 +63,14 @@ function toLocalInputValue(iso: string | null) {
   )}:${pad(d.getMinutes())}`;
 }
 
+function clampInt(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, n));
+}
+
 function safeInt(val: string, fallback: number) {
   const n = Number(val);
   if (!Number.isFinite(n)) return fallback;
-  return Math.max(1, Math.floor(n));
+  return clampInt(Math.floor(n), MIN_DISPLAY_SECONDS, MAX_DISPLAY_SECONDS);
 }
 
 function statusLabel(s: CampaignStatus) {
@@ -82,6 +91,26 @@ function statusBadgeClasses(s: CampaignStatus) {
   if (s === "paused") return "border-amber-200 bg-amber-50 text-amber-700";
   if (s === "ended") return "border-gray-200 bg-gray-50 text-gray-600";
   return "border-blue-200 bg-blue-50 text-blue-700";
+}
+
+function normalizeUrl(url: string) {
+  const u = url.trim();
+  if (!u) return null;
+  // accepte http(s) ou laisse tel quel
+  if (/^https?:\/\//i.test(u)) return u;
+  return `https://${u}`;
+}
+
+function inferMimeFromExt(path: string): string | null {
+  const ext = extFromName(path);
+  if (ext === "mp4") return "video/mp4";
+  if (ext === "webm") return "video/webm";
+  if (ext === "mov") return "video/quicktime";
+  if (ext === "png") return "image/png";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "webp") return "image/webp";
+  if (ext === "gif") return "image/gif";
+  return null;
 }
 
 export default function AdminAds() {
@@ -112,8 +141,9 @@ export default function AdminAds() {
     setError(null);
 
     try {
-      // ✅ On essaie de récupérer display_seconds (si la colonne existe)
-      // Si elle n'existe pas, on retombe sur une query sans cette colonne.
+      // ✅ On essaie d'abord avec display_seconds.
+      // IMPORTANT: si la colonne existe mais que le SELECT est bloqué (RLS), tu auras un error et on fallback => 8s.
+      // Donc, si tu veux que ça marche, il faut que display_seconds soit SELECT-able.
       let c: any[] | null = null;
 
       const tryWithDisplay = await supabase
@@ -165,6 +195,7 @@ export default function AdminAds() {
 
   useEffect(() => {
     refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const resetCreate = () => {
@@ -176,23 +207,32 @@ export default function AdminAds() {
     setDisplaySeconds(String(DEFAULT_DISPLAY_SECONDS));
   };
 
+  const validateWindow = (sLocal: string, eLocal: string) => {
+    if (!sLocal || !eLocal) return;
+    const s = new Date(sLocal).getTime();
+    const e = new Date(eLocal).getTime();
+    if (Number.isFinite(s) && Number.isFinite(e) && e < s) {
+      throw new Error("La date de fin doit être postérieure à la date de début.");
+    }
+  };
+
   const createCampaign = async () => {
     setLoading(true);
     setError(null);
 
     try {
       if (!title.trim()) throw new Error("Titre requis");
+      validateWindow(startAt, endAt);
 
       const payloadBase: any = {
         title: title.trim(),
         placement: placement.trim() || DEFAULT_PLACEMENT,
         status: "draft" as CampaignStatus,
-        link_url: linkUrl.trim() ? linkUrl.trim() : null,
+        link_url: normalizeUrl(linkUrl),
         start_at: toIsoOrNull(startAt),
         end_at: toIsoOrNull(endAt),
       };
 
-      // ✅ Optionnel: display_seconds (si la colonne existe)
       const payloadWithDisplay = {
         ...payloadBase,
         display_seconds: safeInt(displaySeconds, DEFAULT_DISPLAY_SECONDS),
@@ -272,9 +312,12 @@ export default function AdminAds() {
       const safeName = file.name.replace(/\s+/g, "_");
       const storagePath = `${folder}/${campaignId}/${safeName}`;
 
+      // ⚠️ On force contentType si possible (sinon certains navigateurs peuvent mal interpréter la vidéo)
+      const contentType = file.type || inferMimeFromExt(storagePath) || undefined;
+
       const { error: upErr } = await supabase.storage.from("ads-media").upload(storagePath, file, {
         upsert: true,
-        contentType: file.type || undefined,
+        contentType,
       });
       if (upErr) throw upErr;
 
@@ -282,7 +325,7 @@ export default function AdminAds() {
         campaign_id: campaignId,
         media_type: mediaType,
         storage_path: storagePath,
-        mime_type: file.type || null,
+        mime_type: contentType ?? null,
         size_bytes: file.size || null,
       });
       if (dbErr) throw dbErr;
@@ -321,15 +364,17 @@ export default function AdminAds() {
 
     try {
       if (!eTitle.trim()) throw new Error("Titre requis");
+      validateWindow(eStartAt, eEndAt);
 
       const base: any = {
         title: eTitle.trim(),
         placement: ePlacement.trim() || DEFAULT_PLACEMENT,
-        link_url: eLinkUrl.trim() ? eLinkUrl.trim() : null,
+        link_url: normalizeUrl(eLinkUrl),
         start_at: toIsoOrNull(eStartAt),
         end_at: toIsoOrNull(eEndAt),
       };
 
+      // ✅ IMPORTANT : on envoie display_seconds en number.
       const withDisplay = {
         ...base,
         display_seconds: safeInt(eDisplaySeconds, DEFAULT_DISPLAY_SECONDS),
@@ -337,12 +382,18 @@ export default function AdminAds() {
 
       const up1 = await supabase.from("ads_campaigns").update(withDisplay).eq("id", id);
       if (up1.error) {
-        // fallback sans display_seconds
+        // fallback sans display_seconds (si colonne absente)
         const up2 = await supabase.from("ads_campaigns").update(base).eq("id", id);
         if (up2.error) throw up2.error;
       }
 
       await refresh();
+
+      // ✅ si refresh n'a pas ramené la nouvelle valeur display_seconds, c'est RLS/colonne.
+      // On laisse une trace visuelle via setError si besoin.
+      const updated = campaigns.find((x) => x.id === id);
+      // NB: updated ici est l’ancienne liste (avant refresh), donc on ne fait pas de check bloquant.
+
       cancelEdit();
     } catch (e: any) {
       setError(e?.message ?? "Erreur mise à jour");
@@ -351,7 +402,6 @@ export default function AdminAds() {
     }
   };
 
-  const now = useMemo(() => Date.now(), []);
   const formatWindow = (c: Campaign) => {
     const s = c.start_at ? new Date(c.start_at).toLocaleString() : "—";
     const e = c.end_at ? new Date(c.end_at).toLocaleString() : "—";
@@ -365,6 +415,10 @@ export default function AdminAds() {
           <h1 className="text-2xl font-bold text-pro-gray">Publicités</h1>
           <p className="text-sm text-gray-600">
             Créer, uploader et publier des spots (image / vidéo), avec durée d’affichage.
+          </p>
+          <p className="mt-1 text-xs text-gray-500">
+            Note: si la durée reste bloquée à 8s côté site, vérifie que la colonne{" "}
+            <span className="font-mono">display_seconds</span> existe et est lisible (RLS SELECT).
           </p>
         </div>
         <Button onClick={refresh} variant="outline" disabled={loading}>
@@ -408,11 +462,7 @@ export default function AdminAds() {
 
           <div className="md:col-span-2">
             <label className="text-xs text-gray-600">Lien (optionnel)</label>
-            <Input
-              value={linkUrl}
-              onChange={(e) => setLinkUrl(e.target.value)}
-              placeholder="https://..."
-            />
+            <Input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://..." />
           </div>
 
           <div>
@@ -429,13 +479,14 @@ export default function AdminAds() {
             <label className="text-xs text-gray-600">Durée d’affichage (secondes)</label>
             <Input
               type="number"
-              min={1}
+              min={MIN_DISPLAY_SECONDS}
+              max={MAX_DISPLAY_SECONDS}
               value={displaySeconds}
               onChange={(e) => setDisplaySeconds(e.target.value)}
               placeholder="Ex: 8"
             />
             <div className="mt-1 text-[11px] text-gray-500">
-              Cette valeur sera utilisée par le carrousel d’affichage (si `AdSlot` la lit).
+              Valeur recommandée: 6–12s. Min {MIN_DISPLAY_SECONDS}s, max {MAX_DISPLAY_SECONDS}s.
             </div>
           </div>
         </div>
@@ -444,11 +495,7 @@ export default function AdminAds() {
           <Button onClick={createCampaign} disabled={loading}>
             Créer (Brouillon)
           </Button>
-          <Button
-            variant="outline"
-            onClick={resetCreate}
-            disabled={loading}
-          >
+          <Button variant="outline" onClick={resetCreate} disabled={loading}>
             Réinitialiser
           </Button>
         </div>
@@ -467,7 +514,6 @@ export default function AdminAds() {
 
           return (
             <div key={c.id} className="bg-white border rounded-2xl p-4 sm:p-6 shadow-sm">
-              {/* Header */}
               <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -500,6 +546,9 @@ export default function AdminAds() {
                       <div className="font-medium">
                         {(c.display_seconds ?? DEFAULT_DISPLAY_SECONDS)}s
                       </div>
+                      <div className="text-[11px] text-gray-500">
+                        (si ça reste à 8s côté site, vérifier colonne + RLS SELECT)
+                      </div>
                     </div>
                   </div>
 
@@ -510,7 +559,6 @@ export default function AdminAds() {
                   )}
                 </div>
 
-                {/* Actions */}
                 <div className="flex flex-wrap gap-2 lg:justify-end">
                   {!isEditing ? (
                     <>
@@ -535,10 +583,7 @@ export default function AdminAds() {
                       )}
 
                       {c.status === "paused" && (
-                        <Button
-                          disabled={loading}
-                          onClick={() => updateStatus(c.id, "published")}
-                        >
+                        <Button disabled={loading} onClick={() => updateStatus(c.id, "published")}>
                           Reprendre
                         </Button>
                       )}
@@ -560,7 +605,6 @@ export default function AdminAds() {
                 </div>
               </div>
 
-              {/* Edit form */}
               {isEditing && (
                 <div className="mt-5 rounded-xl border bg-gray-50 p-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -593,16 +637,19 @@ export default function AdminAds() {
                       <label className="text-xs text-gray-600">Durée d’affichage (secondes)</label>
                       <Input
                         type="number"
-                        min={1}
+                        min={MIN_DISPLAY_SECONDS}
+                        max={MAX_DISPLAY_SECONDS}
                         value={eDisplaySeconds}
                         onChange={(e) => setEDisplaySeconds(e.target.value)}
                       />
+                      <div className="mt-1 text-[11px] text-gray-500">
+                        Min {MIN_DISPLAY_SECONDS}s, max {MAX_DISPLAY_SECONDS}s.
+                      </div>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Media */}
               <div className="mt-5 flex flex-col md:flex-row md:items-center gap-4">
                 <div className="min-w-0">
                   <div className="text-sm text-gray-700">
@@ -617,8 +664,8 @@ export default function AdminAds() {
                   </div>
 
                   <div className="mt-1 text-[11px] text-gray-500">
-                    Astuce : pour une lecture vidéo fiable, re-uploade la vidéo si elle a été ajoutée avant que le
-                    Content-Type ne soit correctement défini.
+                    Conseil: privilégie MP4 (H.264/AAC). Si une vidéo s’affiche comme une image, re-uploade-la
+                    (Content-Type incorrect côté storage).
                   </div>
                 </div>
 
