@@ -98,7 +98,15 @@ const AppRoutes = () => (
       <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
 
       {/* 👤 Fiche ouvrier */}
-      <Route path="/ouvrier/:id" element={<WorkerDetail />} />
+       <Route
+         path="/ouvrier/:id"
+         element={
+          <PrivateRoute allowedRoles={["user", "worker", "admin"]}>
+           <WorkerDetail />
+          </PrivateRoute>
+        }
+        />
+
 
       {/* 👥 Espace Client */}
       <Route
