@@ -1,5 +1,5 @@
 // src/components/WorkerSearchSection.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
@@ -58,6 +58,14 @@ interface WorkerCard {
   distanceKm: number | null;
 }
 
+type SearchPayload = {
+  keyword?: string;
+  district?: string;
+  lat?: string;
+  lng?: string;
+  near?: string;
+};
+
 const DEFAULT_MAX_PRICE = 300000;
 const DEFAULT_RADIUS_KM = 10;
 
@@ -81,10 +89,22 @@ const formatKm = (km: number, language: string) => {
   return language === "fr" ? `${rounded} km` : `${rounded} km`;
 };
 
+function safeParseJson<T>(value: string | null): T | null {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
+  }
+}
+
 const WorkerSearchSection: React.FC = () => {
   const { language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [initializedFromUrl, setInitializedFromUrl] = useState(false);
+
+  // ✅ Important: on garde une init robuste (URL + sessionStorage + event) sans boucle
+  const initializedRef = useRef(false);
+  const applyingExternalRef = useRef(false);
 
   const [workers, setWorkers] = useState<WorkerCard[]>([]);
   const [loading, setLoading] = useState(false);
@@ -111,6 +131,9 @@ const WorkerSearchSection: React.FC = () => {
 
   const hasMyCoords = myLat != null && myLng != null;
 
+  // ----------------------------
+  // 1) Fetch workers
+  // ----------------------------
   useEffect(() => {
     const fetchWorkers = async () => {
       setLoading(true);
@@ -194,13 +217,16 @@ const WorkerSearchSection: React.FC = () => {
     fetchWorkers();
   }, [language]);
 
-  useEffect(() => {
-    const spKeyword = searchParams.get("keyword") ?? "";
-    const spJob = searchParams.get("job") ?? "all";
-    const spRegion = searchParams.get("region") ?? "";
-    const spCity = searchParams.get("city") ?? "";
-    const spCommune = searchParams.get("commune") ?? "";
-    const spDistrict = searchParams.get("district") ?? "";
+  // ----------------------------
+  // 2) Apply URL params into state (robust, re-applies on external navigation)
+  // ----------------------------
+  const applyFromSearchParams = () => {
+    const spKeyword = (searchParams.get("keyword") ?? "").trim();
+    const spJob = (searchParams.get("job") ?? "all").trim();
+    const spRegion = (searchParams.get("region") ?? "").trim();
+    const spCity = (searchParams.get("city") ?? "").trim();
+    const spCommune = (searchParams.get("commune") ?? "").trim();
+    const spDistrict = (searchParams.get("district") ?? "").trim();
     const spMaxPrice = Number(searchParams.get("maxPrice") ?? String(DEFAULT_MAX_PRICE));
     const spMinRating = Number(searchParams.get("minRating") ?? "0");
     const spView = (searchParams.get("view") as "list" | "grid") ?? "list";
@@ -210,12 +236,15 @@ const WorkerSearchSection: React.FC = () => {
     const spLat = searchParams.get("lat");
     const spLng = searchParams.get("lng");
 
+    applyingExternalRef.current = true;
+
     setKeyword(spKeyword);
-    setSelectedJob(spJob);
+    setSelectedJob(spJob || "all");
     setSelectedRegion(spRegion);
     setSelectedCity(spCity);
     setSelectedCommune(spCommune);
     setSelectedDistrict(spDistrict);
+
     setMaxPrice(Number.isFinite(spMaxPrice) ? spMaxPrice : DEFAULT_MAX_PRICE);
     setMinRating(Number.isFinite(spMinRating) ? spMinRating : 0);
     setViewMode(spView);
@@ -229,11 +258,91 @@ const WorkerSearchSection: React.FC = () => {
     setMyLat(Number.isFinite(latNum as number) ? (latNum as number) : null);
     setMyLng(Number.isFinite(lngNum as number) ? (lngNum as number) : null);
 
-    if (!initializedFromUrl) setInitializedFromUrl(true);
-  }, [searchParams, initializedFromUrl]);
+    // petit delay pour laisser React appliquer les states avant le sync URL
+    window.setTimeout(() => {
+      applyingExternalRef.current = false;
+    }, 0);
+  };
 
+  // Init 1 seule fois (URL puis fallback sessionStorage si URL vide)
   useEffect(() => {
-    if (!initializedFromUrl) return;
+    if (initializedRef.current) return;
+
+    const hasUrlCriteria =
+      !!searchParams.get("keyword") ||
+      !!searchParams.get("district") ||
+      !!searchParams.get("lat") ||
+      !!searchParams.get("lng") ||
+      searchParams.get("near") === "1";
+
+    if (hasUrlCriteria) {
+      applyFromSearchParams();
+      initializedRef.current = true;
+      return;
+    }
+
+    // fallback sessionStorage (Index.tsx)
+    const stored = safeParseJson<SearchPayload>(sessionStorage.getItem("op:last_search"));
+    if (stored && (stored.keyword || stored.district || stored.lat || stored.lng || stored.near)) {
+      const next = new URLSearchParams(searchParams);
+
+      if (stored.keyword) next.set("keyword", stored.keyword);
+      if (stored.district) next.set("district", stored.district);
+      if (stored.near) next.set("near", stored.near);
+      if (stored.lat) next.set("lat", stored.lat);
+      if (stored.lng) next.set("lng", stored.lng);
+
+      setSearchParams(next, { replace: true });
+      // applyFromSearchParams sera appelé par l'effet ci-dessous
+      initializedRef.current = true;
+      return;
+    }
+
+    // pas de critères, on considère initialisé quand même
+    initializedRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Ré-appliquer quand l'URL change (ex: clic Rechercher -> /rechercher?... => params changent)
+  useEffect(() => {
+    if (!initializedRef.current) return;
+    // Si un “push” externe arrive (Hero/Index), on applique
+    applyFromSearchParams();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.toString()]);
+
+  // Support event global op:search (optionnel)
+  useEffect(() => {
+    const onSearch = (evt: any) => {
+      const payload: SearchPayload | undefined = evt?.detail;
+      if (!payload) return;
+
+      const next: Record<string, string> = {};
+      if (payload.keyword) next.keyword = payload.keyword;
+      if (payload.district) next.district = payload.district;
+      if (payload.near) next.near = payload.near;
+      if (payload.lat) next.lat = payload.lat;
+      if (payload.lng) next.lng = payload.lng;
+
+      if (Object.keys(next).length) {
+        applyingExternalRef.current = true;
+        setSearchParams(next, { replace: true });
+        window.setTimeout(() => {
+          applyingExternalRef.current = false;
+        }, 0);
+      }
+    };
+
+    window.addEventListener("op:search", onSearch as EventListener);
+    return () => window.removeEventListener("op:search", onSearch as EventListener);
+  }, [setSearchParams]);
+
+  // ----------------------------
+  // 3) Keep URL in sync when user changes filters (but avoid doing it when applying external params)
+  // ----------------------------
+  useEffect(() => {
+    if (!initializedRef.current) return;
+    if (applyingExternalRef.current) return;
 
     const next: Record<string, string> = {};
 
@@ -257,7 +366,6 @@ const WorkerSearchSection: React.FC = () => {
 
     setSearchParams(next, { replace: true });
   }, [
-    initializedFromUrl,
     keyword,
     selectedJob,
     selectedRegion,
@@ -275,6 +383,9 @@ const WorkerSearchSection: React.FC = () => {
     setSearchParams,
   ]);
 
+  // ----------------------------
+  // Derived options
+  // ----------------------------
   const jobs = useMemo(
     () =>
       Array.from(new Set(workers.map((w) => w.job).filter((j) => j && j.trim().length > 0))),
@@ -504,9 +615,7 @@ const WorkerSearchSection: React.FC = () => {
         ? "Aucun professionnel ne correspond à ces critères pour le moment."
         : "No professional matches your criteria yet.",
     noData:
-      language === "fr"
-        ? "Aucun professionnel n’est encore disponible."
-        : "No professionals are available yet.",
+      language === "fr" ? "Aucun professionnel n’est encore disponible." : "No professionals are available yet.",
     contact: language === "fr" ? "Contacter" : "Contact",
     perHour: "/h",
     years: language === "fr" ? "ans d'expérience" : "years of experience",
@@ -534,7 +643,6 @@ const WorkerSearchSection: React.FC = () => {
 
   return (
     <section className="w-full pt-6 pb-12 sm:pt-8 sm:pb-16 lg:pt-10 lg:pb-20 bg-white">
-      {/* ✅ plus de max-w : même “full width” que le spot */}
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-6 sm:mb-8 border-b border-gray-200 pb-4 min-w-0">
           <div className="min-w-0">
@@ -580,9 +688,7 @@ const WorkerSearchSection: React.FC = () => {
                 type="button"
                 onClick={() => setViewMode("list")}
                 className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
-                  viewMode === "list"
-                    ? "bg-pro-blue text-white"
-                    : "text-gray-600 hover:bg-gray-100"
+                  viewMode === "list" ? "bg-pro-blue text-white" : "text-gray-600 hover:bg-gray-100"
                 }`}
               >
                 <LayoutList className="w-3 h-3" />
@@ -592,9 +698,7 @@ const WorkerSearchSection: React.FC = () => {
                 type="button"
                 onClick={() => setViewMode("grid")}
                 className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
-                  viewMode === "grid"
-                    ? "bg-pro-blue text-white"
-                    : "text-gray-600 hover:bg-gray-100"
+                  viewMode === "grid" ? "bg-pro-blue text-white" : "text-gray-600 hover:bg-gray-100"
                 }`}
               >
                 <LayoutGrid className="w-3 h-3" />
@@ -606,9 +710,7 @@ const WorkerSearchSection: React.FC = () => {
 
         <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-6 lg:gap-8 items-start min-w-0">
           <aside className="min-w-0 bg-gray-50 rounded-2xl p-4 sm:p-5 border border-gray-200">
-            <h3 className="text-base font-semibold text-pro-gray mb-4">
-              {text.filters}
-            </h3>
+            <h3 className="text-base font-semibold text-pro-gray mb-4">{text.filters}</h3>
 
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -673,9 +775,7 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {text.job}
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{text.job}</label>
               <select
                 value={selectedJob}
                 onChange={(e) => setSelectedJob(e.target.value)}
@@ -691,9 +791,7 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {text.region}
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{text.region}</label>
               <select
                 value={selectedRegion}
                 onChange={(e) => {
@@ -714,9 +812,7 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {text.city}
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{text.city}</label>
               <select
                 value={selectedCity}
                 onChange={(e) => {
@@ -736,9 +832,7 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {text.commune}
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{text.commune}</label>
               <select
                 value={selectedCommune}
                 onChange={(e) => {
@@ -757,9 +851,7 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-6">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {text.district}
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{text.district}</label>
               <select
                 value={selectedDistrict}
                 onChange={(e) => setSelectedDistrict(e.target.value)}
@@ -798,11 +890,7 @@ const WorkerSearchSection: React.FC = () => {
               <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                 <span>{text.ratingLabel}</span>
                 <span className="text-[11px] text-gray-500">
-                  {minRating === 0
-                    ? language === "fr"
-                      ? "Toutes"
-                      : "Any"
-                    : minRating.toFixed(1)}
+                  {minRating === 0 ? (language === "fr" ? "Toutes" : "Any") : minRating.toFixed(1)}
                 </span>
               </div>
               <Slider
@@ -919,7 +1007,10 @@ const WorkerSearchSection: React.FC = () => {
                         </div>
 
                         <Link to={`/ouvrier/${w.id}`} className="w-full sm:w-auto">
-                          <Button size="sm" className="w-full sm:w-auto bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm">
+                          <Button
+                            size="sm"
+                            className="w-full sm:w-auto bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm"
+                          >
                             {text.contact}
                           </Button>
                         </Link>
@@ -950,12 +1041,8 @@ const WorkerSearchSection: React.FC = () => {
                           {initials || "OP"}
                         </div>
                         <div className="min-w-0">
-                          <h3 className="font-semibold text-sm text-pro-gray truncate">
-                            {w.name}
-                          </h3>
-                          {w.job && (
-                            <div className="text-xs text-pro-blue mt-0.5 truncate">{w.job}</div>
-                          )}
+                          <h3 className="font-semibold text-sm text-pro-gray truncate">{w.name}</h3>
+                          {w.job && <div className="text-xs text-pro-blue mt-0.5 truncate">{w.job}</div>}
                           {useMyPosition && hasMyCoords && (
                             <div className="text-[11px] text-slate-600 mt-1">
                               {text.distance}:{" "}
