@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 interface GeolocationState {
   latitude: number | null;
@@ -78,6 +78,8 @@ export function useGeolocation() {
 
   return {
     ...state,
+    // Expose loading as geoLocating for backwards compatibility
+    geoLocating: state.loading,
     getLocation,
     clearLocation,
     hasLocation: state.latitude !== null && state.longitude !== null,

@@ -226,6 +226,10 @@ const WorkerSearchSection: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ✅ Geolocation state
+  const [geoLocating, setGeoLocating] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
+
   // ✅ applied = ce qui filtre réellement la liste
   const [applied, setApplied] = useState<Filters>(DEFAULT_FILTERS);
   // ✅ draft = ce que l’utilisateur modifie dans le panneau filtres
