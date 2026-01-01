@@ -25,7 +25,7 @@ import AdminAds from "./pages/AdminAds";
 // Espace ouvrier connecté
 import WorkerDashboard from "./pages/WorkerDashboard";
 import WorkerMessagesPage from "./pages/WorkerMessagesPage";
-import WorkerReviews from "./pages/WorkerReviews";
+import WorkerReviewsPage from "./pages/WorkerReviews";
 
 // Espace Client / Particulier
 import ClientDashboard from "./pages/ClientDashboard";
@@ -171,7 +171,7 @@ const AppRoutes = () => (
         path="/espace-ouvrier/avis"
         element={
           <PrivateRoute allowedRoles={["worker"]}>
-            <WorkerReviews />
+            <WorkerReviewsPage />
           </PrivateRoute>
         }
       />

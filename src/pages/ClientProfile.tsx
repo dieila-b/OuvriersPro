@@ -337,8 +337,9 @@ const ClientProfile: React.FC = () => {
         .from("op_worker_client_review_replies")
         .insert({
           review_id: review.id,
-          client_id: client.id, // ✅ op_clients.id
-          content: text, // ✅ content (PAS message)
+          client_id: client.id,
+          content: text,
+          sender_role: "client",
         })
         .select("id, review_id, client_id, content, created_at")
         .single();

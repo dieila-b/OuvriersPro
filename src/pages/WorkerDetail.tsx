@@ -576,7 +576,7 @@ const WorkerDetail: React.FC = () => {
           rating: newReview.rating ?? null,
           comment: newReview.comment ?? null,
           created_at: newReview.created_at,
-          client_name: newReview.client_name ?? newReview.author_name ?? null,
+          client_name: newReview.author_name ?? null,
         },
         ...prev,
       ]);

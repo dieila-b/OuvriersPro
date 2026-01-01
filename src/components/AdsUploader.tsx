@@ -90,18 +90,9 @@ export default function AdsUploader({ campaignId, onUploaded }: Props) {
       const userId = auth.user?.id;
       if (!userId) return;
 
-      const { data, error } = await supabase
-        .from("ads_advertisers")
-        .select("plan")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      if (!error && data?.plan) {
-        setPlan(data.plan as AdPlan);
-      } else {
-        // si pas inscrit comme annonceur, on reste FREE
-        setPlan("FREE");
-      }
+      // Note: plan column doesn't exist in ads_advertisers table yet
+      // For now, default to FREE plan
+      setPlan("FREE");
     };
 
     loadPlan();

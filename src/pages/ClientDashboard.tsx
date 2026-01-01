@@ -319,7 +319,10 @@ const ClientDashboard: React.FC = () => {
 
       const { data, error } = await supabase
         .from("op_worker_client_review_replies")
-        .insert(payload)
+        .insert({
+          ...payload,
+          sender_role: "client",
+        })
         .select("id, review_id, client_id, content, created_at")
         .single();
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
-type UserRole = "user" | "admin";
+type UserRole = "user" | "admin" | "worker";
 
 interface OpUserProfile {
   id: string;
@@ -84,6 +84,8 @@ export function useAuthProfile() {
   }, []);
 
   const isAdmin = !!profile && profile.role === "admin";
+  const isWorker = !!profile && profile.role === "worker";
+  const isClient = !!profile && profile.role === "user";
 
-  return { user, profile, isAdmin, loading };
+  return { user, profile, isAdmin, isWorker, isClient, loading };
 }
