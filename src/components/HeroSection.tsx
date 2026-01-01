@@ -84,10 +84,7 @@ const HeroSection = () => {
       if (jobsBoxRef.current && !jobsBoxRef.current.contains(e.target as Node)) {
         setOpenJobs(false);
       }
-      if (
-        districtsBoxRef.current &&
-        !districtsBoxRef.current.contains(e.target as Node)
-      ) {
+      if (districtsBoxRef.current && !districtsBoxRef.current.contains(e.target as Node)) {
         setOpenDistricts(false);
       }
     };
@@ -160,9 +157,8 @@ const HeroSection = () => {
 
   return (
     <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden">
-      {/* ✅ FULL WIDTH wrapper (comme le spot) */}
-      <div className="w-full px-4 sm:px-6 lg:px-10 py-8 sm:py-10">
-        {/* ✅ Texte reste lisible (max), mais la barre de recherche sera full width */}
+      {/* ✅ Contenu HERO au-dessus de la pub */}
+      <div className="relative z-10 w-full px-4 sm:px-6 lg:px-10 py-8 sm:py-10">
         <div className="w-full max-w-5xl mx-auto text-center">
           <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
             {t("home.title")}
@@ -175,7 +171,13 @@ const HeroSection = () => {
 
         {/* ✅ BARRE RECHERCHE = pleine largeur */}
         <div className="mt-6 sm:mt-7 w-full">
-          <div className="w-full bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl text-gray-900">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSearch();
+            }}
+            className="w-full bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl text-gray-900 relative z-20"
+          >
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-3 items-stretch min-w-0">
               {/* Job */}
               <div ref={jobsBoxRef} className="relative min-w-0 text-left lg:col-span-6">
@@ -218,10 +220,7 @@ const HeroSection = () => {
               </div>
 
               {/* District */}
-              <div
-                ref={districtsBoxRef}
-                className="relative min-w-0 text-left lg:col-span-6"
-              >
+              <div ref={districtsBoxRef} className="relative min-w-0 text-left lg:col-span-6">
                 <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
                   placeholder={t("home.quartier.placeholder") || "Quartier"}
@@ -277,10 +276,8 @@ const HeroSection = () => {
                 </div>
               )}
 
-              {/* Button row full width */}
               <Button
-                type="button"
-                onClick={handleSearch}
+                type="submit"
                 className="lg:col-span-12 w-full h-11 sm:h-12 bg-pro-blue hover:bg-blue-700 text-sm sm:text-base"
               >
                 {t("home.search.button") || "Rechercher"}
@@ -294,12 +291,12 @@ const HeroSection = () => {
                   : "Location detected: distance sorting will be enabled."}
               </div>
             )}
-          </div>
+          </form>
         </div>
       </div>
 
-      {/* ✅ Pub bord à bord écran */}
-      <div className="w-full px-0 pb-8 sm:pb-10 lg:pb-12 -mt-2 sm:-mt-4">
+      {/* ✅ Pub: plus de margin négatif => ne recouvre plus la zone du bouton */}
+      <div className="relative z-0 w-full px-0 pb-8 sm:pb-10 lg:pb-12 mt-4 sm:mt-6">
         <AdSlot placement="home_feed" className="w-full" />
       </div>
     </section>
