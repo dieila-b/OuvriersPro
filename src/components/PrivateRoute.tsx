@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 
-type Role = "admin" | "worker";
+type Role = "admin" | "worker" | "user";
 
 interface PrivateRouteProps {
   children: React.ReactElement;

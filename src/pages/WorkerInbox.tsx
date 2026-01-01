@@ -224,10 +224,10 @@ const WorkerInbox: React.FC = () => {
         const contact = contactRow as ContactThread;
         setSelectedContact(contact);
 
-        // Charger les messages internes
+        // Charger les messages internes from op_client_worker_messages table
         const { data: msgRows, error: msgError } = await supabase
-          .from("op_ouvrier_contact_messages")
-          .select("id, contact_id, sender_type, content, created_at")
+          .from("op_client_worker_messages")
+          .select("id, contact_id, sender_role, message, created_at")
           .eq("contact_id", contact.id)
           .order("created_at", { ascending: true });
 
@@ -240,7 +240,14 @@ const WorkerInbox: React.FC = () => {
           );
         }
 
-        const msgs = (msgRows || []) as InternalMessage[];
+        // Map the data to InternalMessage format
+        const msgs: InternalMessage[] = (msgRows || []).map((row: any) => ({
+          id: row.id,
+          contact_id: row.contact_id,
+          sender_type: row.sender_role === "worker" ? "worker" : "client",
+          content: row.message,
+          created_at: row.created_at,
+        }));
 
         // On ajoute le message initial du formulaire comme premier message client
         const allMessages: InternalMessage[] = [];
@@ -297,13 +304,15 @@ const WorkerInbox: React.FC = () => {
       }
 
       const { data, error } = await supabase
-        .from("op_ouvrier_contact_messages")
+        .from("op_client_worker_messages")
         .insert({
           contact_id: selectedContact.id,
-          sender_type: "worker",
-          content: internalMessage.trim(),
+          client_id: selectedContact.client_id || "",
+          worker_id: selectedContact.worker_id,
+          sender_role: "worker",
+          message: internalMessage.trim(),
         })
-        .select("id, contact_id, sender_type, content, created_at")
+        .select("id, contact_id, sender_role, message, created_at")
         .maybeSingle();
 
       if (error || !data) {
@@ -315,7 +324,14 @@ const WorkerInbox: React.FC = () => {
         );
       }
 
-      setMessages((prev) => [...prev, data as InternalMessage]);
+      const newMsg: InternalMessage = {
+        id: data.id,
+        contact_id: data.contact_id || "",
+        sender_type: "worker",
+        content: data.message,
+        created_at: data.created_at,
+      };
+      setMessages((prev) => [...prev, newMsg]);
       setInternalMessage("");
 
       toast({

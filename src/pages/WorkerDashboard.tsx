@@ -686,10 +686,9 @@ const WorkerDashboard: React.FC = () => {
                 workerId={profile.id}
                 initialLat={profile.latitude}
                 initialLng={profile.longitude}
-                language={language === "fr" ? "fr" : "en"}
-                onSaved={(lat, lng) => {
-                  setProfile((prev) => (prev ? { ...prev, latitude: lat, longitude: lng } : prev));
-                  setEditProfile((prev) => (prev ? { ...prev, latitude: lat, longitude: lng } : prev));
+                onSaved={(coords) => {
+                  setProfile((prev) => (prev ? { ...prev, latitude: coords.latitude, longitude: coords.longitude } : prev));
+                  setEditProfile((prev) => (prev ? { ...prev, latitude: coords.latitude, longitude: coords.longitude } : prev));
                 }}
               />
 
