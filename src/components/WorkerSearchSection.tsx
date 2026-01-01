@@ -15,6 +15,8 @@ import {
   LocateFixed,
   Info,
   RotateCcw,
+  Check,
+  X,
 } from "lucide-react";
 
 type DbWorker = {
@@ -58,6 +60,25 @@ interface WorkerCard {
   distanceKm: number | null;
 }
 
+type ViewMode = "list" | "grid";
+
+type Filters = {
+  keyword: string;
+  job: string; // "all" | job name
+  region: string;
+  city: string;
+  commune: string;
+  district: string;
+  maxPrice: number;
+  minRating: number;
+  view: ViewMode;
+
+  near: boolean;
+  radiusKm: number;
+  lat: number | null;
+  lng: number | null;
+};
+
 type SearchPayload = {
   keyword?: string;
   district?: string;
@@ -68,6 +89,22 @@ type SearchPayload = {
 
 const DEFAULT_MAX_PRICE = 300000;
 const DEFAULT_RADIUS_KM = 10;
+
+const DEFAULT_FILTERS: Filters = {
+  keyword: "",
+  job: "all",
+  region: "",
+  city: "",
+  commune: "",
+  district: "",
+  maxPrice: DEFAULT_MAX_PRICE,
+  minRating: 0,
+  view: "list",
+  near: false,
+  radiusKm: DEFAULT_RADIUS_KM,
+  lat: null,
+  lng: null,
+};
 
 const toRad = (deg: number) => (deg * Math.PI) / 180;
 
@@ -98,11 +135,90 @@ function safeParseJson<T>(value: string | null): T | null {
   }
 }
 
+function sameFilters(a: Filters, b: Filters) {
+  return (
+    a.keyword === b.keyword &&
+    a.job === b.job &&
+    a.region === b.region &&
+    a.city === b.city &&
+    a.commune === b.commune &&
+    a.district === b.district &&
+    a.maxPrice === b.maxPrice &&
+    a.minRating === b.minRating &&
+    a.view === b.view &&
+    a.near === b.near &&
+    a.radiusKm === b.radiusKm &&
+    a.lat === b.lat &&
+    a.lng === b.lng
+  );
+}
+
+function filtersToParams(f: Filters) {
+  const next: Record<string, string> = {};
+
+  if (f.keyword) next.keyword = f.keyword;
+  if (f.district) next.district = f.district;
+
+  if (f.job !== "all") next.job = f.job;
+  if (f.region) next.region = f.region;
+  if (f.city) next.city = f.city;
+  if (f.commune) next.commune = f.commune;
+
+  if (f.maxPrice !== DEFAULT_MAX_PRICE) next.maxPrice = String(f.maxPrice);
+  if (f.minRating !== 0) next.minRating = String(f.minRating);
+  if (f.view !== "list") next.view = f.view;
+
+  if (f.near) next.near = "1";
+  if (f.near && f.radiusKm !== DEFAULT_RADIUS_KM) next.radiusKm = String(f.radiusKm);
+  if (f.near && f.lat != null && f.lng != null) {
+    next.lat = String(f.lat);
+    next.lng = String(f.lng);
+  }
+
+  return next;
+}
+
+function paramsToFilters(searchParams: URLSearchParams): Filters {
+  const spKeyword = (searchParams.get("keyword") ?? "").trim();
+  const spJob = (searchParams.get("job") ?? "all").trim() || "all";
+  const spRegion = (searchParams.get("region") ?? "").trim();
+  const spCity = (searchParams.get("city") ?? "").trim();
+  const spCommune = (searchParams.get("commune") ?? "").trim();
+  const spDistrict = (searchParams.get("district") ?? "").trim();
+  const spMaxPrice = Number(searchParams.get("maxPrice") ?? String(DEFAULT_MAX_PRICE));
+  const spMinRating = Number(searchParams.get("minRating") ?? "0");
+  const spView = ((searchParams.get("view") as ViewMode) ?? "list") as ViewMode;
+
+  const spNear = searchParams.get("near") === "1";
+  const spRadius = Number(searchParams.get("radiusKm") ?? String(DEFAULT_RADIUS_KM));
+  const spLat = searchParams.get("lat");
+  const spLng = searchParams.get("lng");
+
+  const latNum = spLat != null ? Number(spLat) : null;
+  const lngNum = spLng != null ? Number(spLng) : null;
+
+  return {
+    keyword: spKeyword,
+    job: spJob,
+    region: spRegion,
+    city: spCity,
+    commune: spCommune,
+    district: spDistrict,
+    maxPrice: Number.isFinite(spMaxPrice) ? spMaxPrice : DEFAULT_MAX_PRICE,
+    minRating: Number.isFinite(spMinRating) ? spMinRating : 0,
+    view: spView === "grid" ? "grid" : "list",
+    near: spNear,
+    radiusKm: Number.isFinite(spRadius) ? spRadius : DEFAULT_RADIUS_KM,
+    lat: Number.isFinite(latNum as number) ? (latNum as number) : null,
+    lng: Number.isFinite(lngNum as number) ? (lngNum as number) : null,
+  };
+}
+
 const WorkerSearchSection: React.FC = () => {
   const { language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // ✅ Important: on garde une init robuste (URL + sessionStorage + event) sans boucle
+  // ✅ Init robuste (URL + sessionStorage + event) sans casser l’UX “draft”
   const initializedRef = useRef(false);
   const applyingExternalRef = useRef(false);
 
@@ -110,26 +226,12 @@ const WorkerSearchSection: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [keyword, setKeyword] = useState("");
-  const [selectedJob, setSelectedJob] = useState<string>("all");
-  const [maxPrice, setMaxPrice] = useState<number>(DEFAULT_MAX_PRICE);
-  const [minRating, setMinRating] = useState<number>(0);
+  // ✅ applied = ce qui filtre réellement la liste
+  const [applied, setApplied] = useState<Filters>(DEFAULT_FILTERS);
+  // ✅ draft = ce que l’utilisateur modifie dans le panneau filtres
+  const [draft, setDraft] = useState<Filters>(DEFAULT_FILTERS);
 
-  const [selectedRegion, setSelectedRegion] = useState<string>("");
-  const [selectedCity, setSelectedCity] = useState<string>("");
-  const [selectedCommune, setSelectedCommune] = useState<string>("");
-  const [selectedDistrict, setSelectedDistrict] = useState<string>("");
-
-  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
-
-  const [useMyPosition, setUseMyPosition] = useState(false);
-  const [radiusKm, setRadiusKm] = useState<number>(DEFAULT_RADIUS_KM);
-  const [myLat, setMyLat] = useState<number | null>(null);
-  const [myLng, setMyLng] = useState<number | null>(null);
-  const [geoLocating, setGeoLocating] = useState(false);
-  const [geoError, setGeoError] = useState<string | null>(null);
-
-  const hasMyCoords = myLat != null && myLng != null;
+  const dirty = useMemo(() => !sameFilters(draft, applied), [draft, applied]);
 
   // ----------------------------
   // 1) Fetch workers
@@ -218,53 +320,17 @@ const WorkerSearchSection: React.FC = () => {
   }, [language]);
 
   // ----------------------------
-  // 2) Apply URL params into state (robust, re-applies on external navigation)
+  // 2) Init: URL -> applied+draft
   // ----------------------------
-  const applyFromSearchParams = () => {
-    const spKeyword = (searchParams.get("keyword") ?? "").trim();
-    const spJob = (searchParams.get("job") ?? "all").trim();
-    const spRegion = (searchParams.get("region") ?? "").trim();
-    const spCity = (searchParams.get("city") ?? "").trim();
-    const spCommune = (searchParams.get("commune") ?? "").trim();
-    const spDistrict = (searchParams.get("district") ?? "").trim();
-    const spMaxPrice = Number(searchParams.get("maxPrice") ?? String(DEFAULT_MAX_PRICE));
-    const spMinRating = Number(searchParams.get("minRating") ?? "0");
-    const spView = (searchParams.get("view") as "list" | "grid") ?? "list";
-
-    const spNear = searchParams.get("near") === "1";
-    const spRadius = Number(searchParams.get("radiusKm") ?? String(DEFAULT_RADIUS_KM));
-    const spLat = searchParams.get("lat");
-    const spLng = searchParams.get("lng");
-
+  const applyExternalFilters = (f: Filters) => {
     applyingExternalRef.current = true;
-
-    setKeyword(spKeyword);
-    setSelectedJob(spJob || "all");
-    setSelectedRegion(spRegion);
-    setSelectedCity(spCity);
-    setSelectedCommune(spCommune);
-    setSelectedDistrict(spDistrict);
-
-    setMaxPrice(Number.isFinite(spMaxPrice) ? spMaxPrice : DEFAULT_MAX_PRICE);
-    setMinRating(Number.isFinite(spMinRating) ? spMinRating : 0);
-    setViewMode(spView);
-
-    setUseMyPosition(spNear);
-    setRadiusKm(Number.isFinite(spRadius) ? spRadius : DEFAULT_RADIUS_KM);
-
-    const latNum = spLat != null ? Number(spLat) : null;
-    const lngNum = spLng != null ? Number(spLng) : null;
-
-    setMyLat(Number.isFinite(latNum as number) ? (latNum as number) : null);
-    setMyLng(Number.isFinite(lngNum as number) ? (lngNum as number) : null);
-
-    // petit delay pour laisser React appliquer les states avant le sync URL
+    setApplied(f);
+    setDraft(f);
     window.setTimeout(() => {
       applyingExternalRef.current = false;
     }, 0);
   };
 
-  // Init 1 seule fois (URL puis fallback sessionStorage si URL vide)
   useEffect(() => {
     if (initializedRef.current) return;
 
@@ -273,10 +339,18 @@ const WorkerSearchSection: React.FC = () => {
       !!searchParams.get("district") ||
       !!searchParams.get("lat") ||
       !!searchParams.get("lng") ||
-      searchParams.get("near") === "1";
+      searchParams.get("near") === "1" ||
+      !!searchParams.get("region") ||
+      !!searchParams.get("city") ||
+      !!searchParams.get("commune") ||
+      (searchParams.get("job") ?? "") !== "" ||
+      !!searchParams.get("maxPrice") ||
+      !!searchParams.get("minRating") ||
+      !!searchParams.get("view");
 
     if (hasUrlCriteria) {
-      applyFromSearchParams();
+      const f = paramsToFilters(searchParams);
+      applyExternalFilters(f);
       initializedRef.current = true;
       return;
     }
@@ -293,21 +367,27 @@ const WorkerSearchSection: React.FC = () => {
       if (stored.lng) next.set("lng", stored.lng);
 
       setSearchParams(next, { replace: true });
-      // applyFromSearchParams sera appelé par l'effet ci-dessous
+      // l’effet ci-dessous appliquera
       initializedRef.current = true;
       return;
     }
 
-    // pas de critères, on considère initialisé quand même
+    applyExternalFilters(DEFAULT_FILTERS);
     initializedRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Ré-appliquer quand l'URL change (ex: clic Rechercher -> /rechercher?... => params changent)
+  // Ré-appliquer quand l'URL change (clic Rechercher, navigation, etc.)
   useEffect(() => {
     if (!initializedRef.current) return;
-    // Si un “push” externe arrive (Hero/Index), on applique
-    applyFromSearchParams();
+    if (applyingExternalRef.current) return;
+
+    const f = paramsToFilters(searchParams);
+    // ✅ si l’utilisateur est “dirty”, on n’écrase pas son draft
+    // on ne replace QUE si l’URL change réellement la recherche appliquée
+    if (!sameFilters(f, applied)) {
+      applyExternalFilters(f);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams.toString()]);
 
@@ -325,11 +405,7 @@ const WorkerSearchSection: React.FC = () => {
       if (payload.lng) next.lng = payload.lng;
 
       if (Object.keys(next).length) {
-        applyingExternalRef.current = true;
         setSearchParams(next, { replace: true });
-        window.setTimeout(() => {
-          applyingExternalRef.current = false;
-        }, 0);
       }
     };
 
@@ -338,53 +414,7 @@ const WorkerSearchSection: React.FC = () => {
   }, [setSearchParams]);
 
   // ----------------------------
-  // 3) Keep URL in sync when user changes filters (but avoid doing it when applying external params)
-  // ----------------------------
-  useEffect(() => {
-    if (!initializedRef.current) return;
-    if (applyingExternalRef.current) return;
-
-    const next: Record<string, string> = {};
-
-    if (keyword) next.keyword = keyword;
-    if (selectedDistrict) next.district = selectedDistrict;
-
-    if (selectedJob !== "all") next.job = selectedJob;
-    if (selectedRegion) next.region = selectedRegion;
-    if (selectedCity) next.city = selectedCity;
-    if (selectedCommune) next.commune = selectedCommune;
-    if (maxPrice !== DEFAULT_MAX_PRICE) next.maxPrice = String(maxPrice);
-    if (minRating !== 0) next.minRating = String(minRating);
-    if (viewMode !== "list") next.view = viewMode;
-
-    if (useMyPosition) next.near = "1";
-    if (useMyPosition && radiusKm !== DEFAULT_RADIUS_KM) next.radiusKm = String(radiusKm);
-    if (useMyPosition && hasMyCoords) {
-      next.lat = String(myLat);
-      next.lng = String(myLng);
-    }
-
-    setSearchParams(next, { replace: true });
-  }, [
-    keyword,
-    selectedJob,
-    selectedRegion,
-    selectedCity,
-    selectedCommune,
-    selectedDistrict,
-    maxPrice,
-    minRating,
-    viewMode,
-    useMyPosition,
-    radiusKm,
-    hasMyCoords,
-    myLat,
-    myLng,
-    setSearchParams,
-  ]);
-
-  // ----------------------------
-  // Derived options
+  // 3) Derived options
   // ----------------------------
   const jobs = useMemo(
     () =>
@@ -403,12 +433,12 @@ const WorkerSearchSection: React.FC = () => {
       Array.from(
         new Set(
           workers
-            .filter((w) => !selectedRegion || w.region === selectedRegion)
+            .filter((w) => !draft.region || w.region === draft.region)
             .map((w) => w.city)
             .filter((c) => c && c.trim().length > 0)
         )
       ),
-    [workers, selectedRegion]
+    [workers, draft.region]
   );
 
   const communes = useMemo(
@@ -418,14 +448,14 @@ const WorkerSearchSection: React.FC = () => {
           workers
             .filter(
               (w) =>
-                (!selectedRegion || w.region === selectedRegion) &&
-                (!selectedCity || w.city === selectedCity)
+                (!draft.region || w.region === draft.region) &&
+                (!draft.city || w.city === draft.city)
             )
             .map((w) => w.commune)
             .filter((c) => c && c.trim().length > 0)
         )
       ),
-    [workers, selectedRegion, selectedCity]
+    [workers, draft.region, draft.city]
   );
 
   const districts = useMemo(
@@ -435,15 +465,15 @@ const WorkerSearchSection: React.FC = () => {
           workers
             .filter(
               (w) =>
-                (!selectedRegion || w.region === selectedRegion) &&
-                (!selectedCity || w.city === selectedCity) &&
-                (!selectedCommune || w.commune === selectedCommune)
+                (!draft.region || w.region === draft.region) &&
+                (!draft.city || w.city === draft.city) &&
+                (!draft.commune || w.commune === draft.commune)
             )
             .map((w) => w.district)
             .filter((d) => d && d.trim().length > 0)
         )
       ),
-    [workers, selectedRegion, selectedCity, selectedCommune]
+    [workers, draft.region, draft.city, draft.commune]
   );
 
   const formatCurrency = (value: number, currency: string) => {
@@ -451,39 +481,40 @@ const WorkerSearchSection: React.FC = () => {
     return `${value} ${currency}`;
   };
 
-  const computeDistance = (w: WorkerCard) => {
-    if (!useMyPosition) return null;
-    if (!hasMyCoords) return null;
+  const computeDistance = (w: WorkerCard, f: Filters) => {
+    if (!f.near) return null;
+    if (f.lat == null || f.lng == null) return null;
     if (w.latitude == null || w.longitude == null) return null;
-    return haversineKm(myLat as number, myLng as number, w.latitude, w.longitude);
+    return haversineKm(f.lat, f.lng, w.latitude, w.longitude);
   };
 
+  // ✅ filtration basée sur APPLIED uniquement
   const filteredWorkers = useMemo(() => {
+    const f = applied;
+
     const list = workers
-      .map((w) => ({ ...w, distanceKm: computeDistance(w) }))
+      .map((w) => ({ ...w, distanceKm: computeDistance(w, f) }))
       .filter((w) => {
-        const kw = keyword.trim().toLowerCase();
+        const kw = f.keyword.trim().toLowerCase();
         const matchKeyword =
           !kw || w.name.toLowerCase().includes(kw) || w.job.toLowerCase().includes(kw);
 
-        const matchJob = selectedJob === "all" || w.job === selectedJob;
-        const matchPrice = w.hourlyRate <= maxPrice;
-        const matchRating = w.rating >= minRating;
+        const matchJob = f.job === "all" || w.job === f.job;
+        const matchPrice = w.hourlyRate <= f.maxPrice;
+        const matchRating = w.rating >= f.minRating;
 
         const regionNorm = w.region?.trim().toLowerCase() || "";
         const cityNorm = w.city?.trim().toLowerCase() || "";
         const communeNorm = w.commune?.trim().toLowerCase() || "";
         const districtNorm = w.district?.trim().toLowerCase() || "";
 
-        const matchRegion = !selectedRegion || regionNorm === selectedRegion.trim().toLowerCase();
-        const matchCity = !selectedCity || cityNorm === selectedCity.trim().toLowerCase();
-        const matchCommune =
-          !selectedCommune || communeNorm === selectedCommune.trim().toLowerCase();
-        const matchDistrict =
-          !selectedDistrict || districtNorm === selectedDistrict.trim().toLowerCase();
+        const matchRegion = !f.region || regionNorm === f.region.trim().toLowerCase();
+        const matchCity = !f.city || cityNorm === f.city.trim().toLowerCase();
+        const matchCommune = !f.commune || communeNorm === f.commune.trim().toLowerCase();
+        const matchDistrict = !f.district || districtNorm === f.district.trim().toLowerCase();
 
         const matchRadius =
-          !useMyPosition || !hasMyCoords || w.distanceKm == null || w.distanceKm <= radiusKm;
+          !f.near || f.lat == null || f.lng == null || w.distanceKm == null || w.distanceKm <= f.radiusKm;
 
         return (
           matchKeyword &&
@@ -498,7 +529,7 @@ const WorkerSearchSection: React.FC = () => {
         );
       });
 
-    if (useMyPosition && hasMyCoords) {
+    if (f.near && f.lat != null && f.lng != null) {
       list.sort((a, b) => {
         const da = a.distanceKm;
         const db = b.distanceKm;
@@ -510,38 +541,25 @@ const WorkerSearchSection: React.FC = () => {
     }
 
     return list;
-  }, [
-    workers,
-    keyword,
-    selectedJob,
-    maxPrice,
-    minRating,
-    selectedRegion,
-    selectedCity,
-    selectedCommune,
-    selectedDistrict,
-    useMyPosition,
-    radiusKm,
-    hasMyCoords,
-    myLat,
-    myLng,
-  ]);
+  }, [workers, applied]);
 
-  const resetFilters = () => {
-    setKeyword("");
-    setSelectedJob("all");
-    setMaxPrice(DEFAULT_MAX_PRICE);
-    setMinRating(0);
-    setSelectedRegion("");
-    setSelectedCity("");
-    setSelectedCommune("");
-    setSelectedDistrict("");
-    setViewMode("list");
+  // ----------------------------
+  // 4) Actions: Apply / Reset / Cancel
+  // ----------------------------
+  const applyFilters = () => {
+    setApplied(draft);
+    const next = filtersToParams(draft);
+    setSearchParams(next, { replace: true });
+  };
 
-    setUseMyPosition(false);
-    setRadiusKm(DEFAULT_RADIUS_KM);
-    setMyLat(null);
-    setMyLng(null);
+  const cancelDraft = () => {
+    setDraft(applied);
+  };
+
+  const resetAll = () => {
+    setDraft(DEFAULT_FILTERS);
+    setApplied(DEFAULT_FILTERS);
+    setSearchParams({}, { replace: true });
     setGeoError(null);
   };
 
@@ -549,9 +567,7 @@ const WorkerSearchSection: React.FC = () => {
     setGeoError(null);
 
     if (!navigator.geolocation) {
-      setUseMyPosition(false);
-      setMyLat(null);
-      setMyLng(null);
+      setDraft((prev) => ({ ...prev, near: false, lat: null, lng: null }));
       setGeoError(
         language === "fr"
           ? "La géolocalisation n'est pas supportée par ce navigateur."
@@ -564,18 +580,19 @@ const WorkerSearchSection: React.FC = () => {
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setUseMyPosition(true);
-        setMyLat(pos.coords.latitude);
-        setMyLng(pos.coords.longitude);
+        setDraft((prev) => ({
+          ...prev,
+          near: true,
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        }));
         setGeoLocating(false);
       },
       (err) => {
         console.error("geolocation error", err);
         setGeoLocating(false);
 
-        setUseMyPosition(false);
-        setMyLat(null);
-        setMyLng(null);
+        setDraft((prev) => ({ ...prev, near: false, lat: null, lng: null }));
 
         setGeoError(
           language === "fr"
@@ -591,8 +608,8 @@ const WorkerSearchSection: React.FC = () => {
     title: language === "fr" ? "Trouvez votre professionnel" : "Find your professional",
     subtitle:
       language === "fr"
-        ? "Filtrez par métier, zone géographique, tarif et distance pour trouver l’ouvrier le plus proche."
-        : "Filter by trade, area, rate and distance to find the closest professional.",
+        ? "Modifiez vos filtres, puis cliquez sur Appliquer pour lancer la recherche."
+        : "Adjust filters, then click Apply to run the search.",
     filters: language === "fr" ? "Filtres" : "Filters",
     keywordLabel: language === "fr" ? "Métier ou nom" : "Trade or name",
     searchPlaceholder:
@@ -610,12 +627,16 @@ const WorkerSearchSection: React.FC = () => {
     allCommunes: language === "fr" ? "Toutes les communes" : "All communes",
     allDistricts: language === "fr" ? "Tous les quartiers" : "All districts",
     reset: language === "fr" ? "Réinitialiser" : "Reset",
+    cancel: language === "fr" ? "Annuler" : "Cancel",
+    apply: language === "fr" ? "Appliquer" : "Apply",
     noResults:
       language === "fr"
         ? "Aucun professionnel ne correspond à ces critères pour le moment."
         : "No professional matches your criteria yet.",
     noData:
-      language === "fr" ? "Aucun professionnel n’est encore disponible." : "No professionals are available yet.",
+      language === "fr"
+        ? "Aucun professionnel n’est encore disponible."
+        : "No professionals are available yet.",
     contact: language === "fr" ? "Contacter" : "Contact",
     perHour: "/h",
     years: language === "fr" ? "ans d'expérience" : "years of experience",
@@ -634,12 +655,16 @@ const WorkerSearchSection: React.FC = () => {
       language === "fr"
         ? "Activez la localisation pour trier et filtrer par distance."
         : "Enable location to sort/filter by distance.",
+    pending: language === "fr" ? "Modifs en attente" : "Pending changes",
+    applied: language === "fr" ? "Filtres appliqués" : "Applied filters",
   };
 
   const hasAnyGeoWorkers = useMemo(
     () => workers.some((w) => w.latitude != null && w.longitude != null),
     [workers]
   );
+
+  const appliedHasCoords = applied.lat != null && applied.lng != null;
 
   return (
     <section className="w-full pt-6 pb-12 sm:pt-8 sm:pb-16 lg:pt-10 lg:pb-20 bg-white">
@@ -667,9 +692,29 @@ const WorkerSearchSection: React.FC = () => {
                 <Info className="w-3 h-3" />
                 <span>{text.geoHint}</span>
               </span>
+
+              <span
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
+                  dirty
+                    ? "border-amber-200 bg-amber-50 text-amber-700"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                }`}
+              >
+                {dirty ? (
+                  <>
+                    <Info className="w-3 h-3" />
+                    {text.pending}
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3 h-3" />
+                    {text.applied}
+                  </>
+                )}
+              </span>
             </div>
 
-            {useMyPosition && hasMyCoords && !hasAnyGeoWorkers && (
+            {applied.near && appliedHasCoords && !hasAnyGeoWorkers && (
               <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-flex items-center gap-2">
                 <Info className="w-4 h-4" />
                 {language === "fr"
@@ -686,9 +731,9 @@ const WorkerSearchSection: React.FC = () => {
             <div className="flex border border-gray-300 rounded-lg bg-white overflow-hidden">
               <button
                 type="button"
-                onClick={() => setViewMode("list")}
+                onClick={() => setDraft((p) => ({ ...p, view: "list" }))}
                 className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
-                  viewMode === "list" ? "bg-pro-blue text-white" : "text-gray-600 hover:bg-gray-100"
+                  draft.view === "list" ? "bg-pro-blue text-white" : "text-gray-600 hover:bg-gray-100"
                 }`}
               >
                 <LayoutList className="w-3 h-3" />
@@ -696,9 +741,9 @@ const WorkerSearchSection: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => setViewMode("grid")}
+                onClick={() => setDraft((p) => ({ ...p, view: "grid" }))}
                 className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
-                  viewMode === "grid" ? "bg-pro-blue text-white" : "text-gray-600 hover:bg-gray-100"
+                  draft.view === "grid" ? "bg-pro-blue text-white" : "text-gray-600 hover:bg-gray-100"
                 }`}
               >
                 <LayoutGrid className="w-3 h-3" />
@@ -710,15 +755,42 @@ const WorkerSearchSection: React.FC = () => {
 
         <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-6 lg:gap-8 items-start min-w-0">
           <aside className="min-w-0 bg-gray-50 rounded-2xl p-4 sm:p-5 border border-gray-200">
-            <h3 className="text-base font-semibold text-pro-gray mb-4">{text.filters}</h3>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <h3 className="text-base font-semibold text-pro-gray">{text.filters}</h3>
+
+              {/* ✅ actions sticky/compact */}
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="bg-pro-blue hover:bg-blue-700"
+                  onClick={applyFilters}
+                  disabled={!dirty}
+                >
+                  <Check className="w-4 h-4 mr-2" />
+                  {text.apply}
+                </Button>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={cancelDraft}
+                  disabled={!dirty}
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  {text.cancel}
+                </Button>
+              </div>
+            </div>
 
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {text.keywordLabel}
               </label>
               <Input
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
+                value={draft.keyword}
+                onChange={(e) => setDraft((p) => ({ ...p, keyword: e.target.value }))}
                 placeholder={text.searchPlaceholder}
                 className="text-sm"
               />
@@ -730,10 +802,8 @@ const WorkerSearchSection: React.FC = () => {
                 size="sm"
                 className="w-full bg-pro-blue hover:bg-blue-700"
                 onClick={() => {
-                  if (useMyPosition || hasMyCoords) {
-                    setUseMyPosition(false);
-                    setMyLat(null);
-                    setMyLng(null);
+                  if (draft.near || (draft.lat != null && draft.lng != null)) {
+                    setDraft((p) => ({ ...p, near: false, lat: null, lng: null }));
                     setGeoError(null);
                     return;
                   }
@@ -755,20 +825,20 @@ const WorkerSearchSection: React.FC = () => {
                 </div>
               )}
 
-              {useMyPosition && hasMyCoords && (
+              {draft.near && draft.lat != null && draft.lng != null && (
                 <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
                   <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                     <span>{text.radius}</span>
                     <span className="text-[11px] text-gray-500">
-                      {radiusKm} {text.km}
+                      {draft.radiusKm} {text.km}
                     </span>
                   </div>
                   <Slider
-                    defaultValue={[radiusKm]}
+                    defaultValue={[draft.radiusKm]}
                     min={1}
                     max={100}
                     step={1}
-                    onValueChange={(v) => setRadiusKm(v[0])}
+                    onValueChange={(v) => setDraft((p) => ({ ...p, radiusKm: v[0] }))}
                   />
                 </div>
               )}
@@ -777,8 +847,8 @@ const WorkerSearchSection: React.FC = () => {
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">{text.job}</label>
               <select
-                value={selectedJob}
-                onChange={(e) => setSelectedJob(e.target.value)}
+                value={draft.job}
+                onChange={(e) => setDraft((p) => ({ ...p, job: e.target.value }))}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="all">{text.allJobs}</option>
@@ -793,12 +863,16 @@ const WorkerSearchSection: React.FC = () => {
             <div className="mb-3">
               <label className="block text-xs font-medium text-gray-600 mb-1">{text.region}</label>
               <select
-                value={selectedRegion}
+                value={draft.region}
                 onChange={(e) => {
-                  setSelectedRegion(e.target.value);
-                  setSelectedCity("");
-                  setSelectedCommune("");
-                  setSelectedDistrict("");
+                  const region = e.target.value;
+                  setDraft((p) => ({
+                    ...p,
+                    region,
+                    city: "",
+                    commune: "",
+                    district: "",
+                  }));
                 }}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
@@ -814,11 +888,15 @@ const WorkerSearchSection: React.FC = () => {
             <div className="mb-3">
               <label className="block text-xs font-medium text-gray-600 mb-1">{text.city}</label>
               <select
-                value={selectedCity}
+                value={draft.city}
                 onChange={(e) => {
-                  setSelectedCity(e.target.value);
-                  setSelectedCommune("");
-                  setSelectedDistrict("");
+                  const city = e.target.value;
+                  setDraft((p) => ({
+                    ...p,
+                    city,
+                    commune: "",
+                    district: "",
+                  }));
                 }}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
@@ -834,10 +912,14 @@ const WorkerSearchSection: React.FC = () => {
             <div className="mb-3">
               <label className="block text-xs font-medium text-gray-600 mb-1">{text.commune}</label>
               <select
-                value={selectedCommune}
+                value={draft.commune}
                 onChange={(e) => {
-                  setSelectedCommune(e.target.value);
-                  setSelectedDistrict("");
+                  const commune = e.target.value;
+                  setDraft((p) => ({
+                    ...p,
+                    commune,
+                    district: "",
+                  }));
                 }}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
@@ -853,8 +935,8 @@ const WorkerSearchSection: React.FC = () => {
             <div className="mb-6">
               <label className="block text-xs font-medium text-gray-600 mb-1">{text.district}</label>
               <select
-                value={selectedDistrict}
-                onChange={(e) => setSelectedDistrict(e.target.value)}
+                value={draft.district}
+                onChange={(e) => setDraft((p) => ({ ...p, district: e.target.value }))}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="">{text.allDistricts}</option>
@@ -870,19 +952,19 @@ const WorkerSearchSection: React.FC = () => {
               <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                 <span>{text.priceLabel}</span>
                 <span className="text-[11px] text-gray-500">
-                  {maxPrice >= DEFAULT_MAX_PRICE
+                  {draft.maxPrice >= DEFAULT_MAX_PRICE
                     ? language === "fr"
                       ? "Aucune limite"
                       : "No limit"
-                    : formatCurrency(maxPrice, "GNF")}
+                    : `${draft.maxPrice.toLocaleString("fr-FR")} GNF`}
                 </span>
               </div>
               <Slider
-                defaultValue={[maxPrice]}
+                defaultValue={[draft.maxPrice]}
                 min={50000}
                 max={DEFAULT_MAX_PRICE}
                 step={10000}
-                onValueChange={(v) => setMaxPrice(v[0])}
+                onValueChange={(v) => setDraft((p) => ({ ...p, maxPrice: v[0] }))}
               />
             </div>
 
@@ -890,27 +972,51 @@ const WorkerSearchSection: React.FC = () => {
               <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                 <span>{text.ratingLabel}</span>
                 <span className="text-[11px] text-gray-500">
-                  {minRating === 0 ? (language === "fr" ? "Toutes" : "Any") : minRating.toFixed(1)}
+                  {draft.minRating === 0
+                    ? language === "fr"
+                      ? "Toutes"
+                      : "Any"
+                    : draft.minRating.toFixed(1)}
                 </span>
               </div>
               <Slider
-                defaultValue={[minRating]}
+                defaultValue={[draft.minRating]}
                 min={0}
                 max={5}
                 step={0.5}
-                onValueChange={(v) => setMinRating(v[0])}
+                onValueChange={(v) => setDraft((p) => ({ ...p, minRating: v[0] }))}
               />
             </div>
 
-            <Button
-              className="w-full border-gray-300 text-sm"
-              variant="outline"
-              type="button"
-              onClick={resetFilters}
-            >
-              <RotateCcw className="w-4 h-4 mr-2" />
-              {text.reset}
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                className="w-full border-gray-300 text-sm"
+                variant="outline"
+                type="button"
+                onClick={resetAll}
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                {text.reset}
+              </Button>
+
+              <Button
+                type="button"
+                className="w-full bg-pro-blue hover:bg-blue-700 text-sm"
+                onClick={applyFilters}
+                disabled={!dirty}
+              >
+                <Check className="w-4 h-4 mr-2" />
+                {text.apply}
+              </Button>
+            </div>
+
+            {dirty && (
+              <div className="mt-3 text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                {language === "fr"
+                  ? "Des modifications sont en attente. Cliquez sur “Appliquer” pour lancer la recherche."
+                  : "Pending changes. Click “Apply” to run the search."}
+              </div>
+            )}
           </aside>
 
           <div className="min-w-0">
@@ -938,7 +1044,7 @@ const WorkerSearchSection: React.FC = () => {
               </div>
             )}
 
-            {viewMode === "list" && filteredWorkers.length > 0 && (
+            {applied.view === "list" && filteredWorkers.length > 0 && (
               <div className="space-y-3 sm:space-y-4 min-w-0">
                 {filteredWorkers.map((w) => {
                   const initials = w.name
@@ -971,7 +1077,7 @@ const WorkerSearchSection: React.FC = () => {
                             </span>
                           )}
 
-                          {useMyPosition && hasMyCoords && (
+                          {applied.near && appliedHasCoords && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">
                               {text.distance}:{" "}
                               <span className="font-semibold ml-1">
@@ -1021,7 +1127,7 @@ const WorkerSearchSection: React.FC = () => {
               </div>
             )}
 
-            {viewMode === "grid" && filteredWorkers.length > 0 && (
+            {applied.view === "grid" && filteredWorkers.length > 0 && (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 min-w-0">
                 {filteredWorkers.map((w) => {
                   const initials = w.name
@@ -1043,7 +1149,7 @@ const WorkerSearchSection: React.FC = () => {
                         <div className="min-w-0">
                           <h3 className="font-semibold text-sm text-pro-gray truncate">{w.name}</h3>
                           {w.job && <div className="text-xs text-pro-blue mt-0.5 truncate">{w.job}</div>}
-                          {useMyPosition && hasMyCoords && (
+                          {applied.near && appliedHasCoords && (
                             <div className="text-[11px] text-slate-600 mt-1">
                               {text.distance}:{" "}
                               <span className="font-semibold">
@@ -1084,6 +1190,22 @@ const WorkerSearchSection: React.FC = () => {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {dirty && (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {language === "fr"
+                  ? "Vous avez modifié des filtres mais ils ne sont pas encore appliqués."
+                  : "You changed filters but they are not applied yet."}{" "}
+                <button
+                  type="button"
+                  className="underline font-semibold"
+                  onClick={applyFilters}
+                >
+                  {language === "fr" ? "Appliquer maintenant" : "Apply now"}
+                </button>
+                .
               </div>
             )}
           </div>
