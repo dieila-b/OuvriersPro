@@ -1,5 +1,5 @@
 // src/pages/Login.tsx
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -10,6 +10,18 @@ import { Button } from "@/components/ui/button";
 type LocationState = {
   from?: string;
 };
+
+function safeRedirectPath(raw: string | null) {
+  if (!raw) return null;
+  const v = raw.trim();
+
+  // ✅ sécurité: on n'autorise que les chemins internes
+  if (!v.startsWith("/")) return null;
+  if (v.startsWith("//")) return null;
+  if (v.toLowerCase().startsWith("/http")) return null;
+
+  return v;
+}
 
 const Login: React.FC = () => {
   const { language } = useLanguage();
@@ -22,22 +34,44 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const redirectParam = useMemo(
+    () => safeRedirectPath(searchParams.get("redirect")),
+    [searchParams]
+  );
+
+  // ✅ si déjà connecté, on redirige direct (utile quand on revient sur /login par erreur)
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      if (data.session) {
+        if (redirectParam) {
+          navigate(redirectParam, { replace: true });
+        } else {
+          navigate("/espace-client", { replace: true });
+        }
+      }
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, [navigate, redirectParam]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
-      // 1) Auth Supabase
-      const { data, error: authError } =
-        await supabase.auth.signInWithPassword({
-          email: email.trim().toLowerCase(),
-          password,
-        });
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
 
-      if (authError) {
-        throw authError;
-      }
+      if (authError) throw authError;
 
       const user = data.user;
       if (!user) {
@@ -62,12 +96,9 @@ const Login: React.FC = () => {
         .eq("id", userId)
         .maybeSingle();
 
-      if (profileError) {
-        throw profileError;
-      }
+      if (profileError) throw profileError;
 
       if (!profile) {
-        // ➜ Création automatique d’un profil "user" simple
         const { data: inserted, error: insertError } = await supabase
           .from("op_users")
           .insert({
@@ -79,20 +110,17 @@ const Login: React.FC = () => {
           .select("id, role, full_name")
           .maybeSingle();
 
-        if (insertError) {
-          throw insertError;
-        }
+        if (insertError) throw insertError;
         profile = inserted;
       }
 
       const role = (profile?.role as string) || "user";
 
-      // 3) Calcul de la cible en fonction de l'URL et du rôle
-      const searchParams = new URLSearchParams(location.search);
-      const redirectParam = searchParams.get("redirect");
-
-      // Si un redirect explicite est présent (ex: /login?redirect=/mes-demandes)
-      if (redirectParam) {
+      // ✅ redirect explicite (ex: /login?redirect=/ouvrier/xxx)
+      // IMPORTANT : on évite de rediriger un ouvrier vers /ouvrier/:id (fiche publique)
+      // Mais ici, ton besoin est: client non connecté -> login -> revenir sur la fiche.
+      // Donc on autorise le redirect (pour les clients), et si c'est un admin/worker, on ignore.
+      if (redirectParam && role !== "admin" && role !== "worker" && role !== "ouvrier") {
         navigate(redirectParam, { replace: true });
         return;
       }
@@ -101,17 +129,10 @@ const Login: React.FC = () => {
       if (role === "admin") {
         navigate("/admin/dashboard", { replace: true });
       } else if (role === "worker" || role === "ouvrier") {
-        // les vrais ouvriers validés
         navigate("/espace-ouvrier", { replace: true });
-      } else if (
-        role === "user" ||
-        role === "client" ||
-        role === "particulier"
-      ) {
-        // client / particulier connecté
+      } else if (role === "user" || role === "client" || role === "particulier") {
         navigate("/espace-client", { replace: true });
       } else {
-        // fallback : espace client par défaut
         navigate("/espace-client", { replace: true });
       }
     } catch (err: any) {
@@ -132,17 +153,22 @@ const Login: React.FC = () => {
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader>
           <CardTitle className="text-lg font-semibold text-slate-800">
-            {language === "fr"
-              ? "Connexion à votre espace"
-              : "Sign in to your account"}
+            {language === "fr" ? "Connexion à votre espace" : "Sign in to your account"}
           </CardTitle>
+
+          {redirectParam && (
+            <p className="mt-2 text-sm text-slate-600">
+              {language === "fr"
+                ? "Connectez-vous pour continuer."
+                : "Sign in to continue."}
+            </p>
+          )}
         </CardHeader>
+
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Email
-              </label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
               <Input
                 type="email"
                 required
@@ -162,9 +188,7 @@ const Login: React.FC = () => {
                 minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={
-                  language === "fr" ? "Votre mot de passe" : "Your password"
-                }
+                placeholder={language === "fr" ? "Votre mot de passe" : "Your password"}
               />
             </div>
 
@@ -174,11 +198,7 @@ const Login: React.FC = () => {
               </div>
             )}
 
-            <Button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-pro-blue hover:bg-blue-700"
-            >
+            <Button type="submit" disabled={loading} className="w-full bg-pro-blue hover:bg-blue-700">
               {loading
                 ? language === "fr"
                   ? "Connexion..."
@@ -188,25 +208,18 @@ const Login: React.FC = () => {
                 : "Sign in"}
             </Button>
 
-            {/* Lien "Créer un compte" */}
             <p className="mt-3 text-sm text-center text-slate-600">
               {language === "fr" ? (
                 <>
                   Vous n&apos;avez pas encore de compte ?{" "}
-                  <Link
-                    to="/register"
-                    className="text-pro-blue hover:underline font-medium"
-                  >
+                  <Link to="/register" className="text-pro-blue hover:underline font-medium">
                     Créer un compte
                   </Link>
                 </>
               ) : (
                 <>
                   Don&apos;t have an account yet?{" "}
-                  <Link
-                    to="/register"
-                    className="text-pro-blue hover:underline font-medium"
-                  >
+                  <Link to="/register" className="text-pro-blue hover:underline font-medium">
                     Create an account
                   </Link>
                 </>
