@@ -1,5 +1,5 @@
 // src/components/WorkerSearchSection.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
@@ -221,9 +221,16 @@ const WorkerSearchSection: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // ✅ Fix UX: à chaque arrivée sur cette page, on force le scroll en haut
-  // (pour que "Trouvez votre professionnel" soit collé en haut, sans espace)
-  useEffect(() => {
+  // ✅ Fix UX (espace au-dessus du titre) :
+  // 1) on force le scroll à 0 à l'arrivée sur la page
+  // 2) on compense un éventuel padding-top imposé par le layout parent via un margin-top négatif (voir <section />)
+  useLayoutEffect(() => {
+    try {
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    } catch {
+      // noop
+    }
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, []);
 
@@ -608,7 +615,7 @@ const WorkerSearchSection: React.FC = () => {
     const next = filtersToParams(draft);
     setSearchParams(next, { replace: true });
 
-    // ✅ UX: quand l'utilisateur clique "Appliquer", on remonte en haut de la page résultats
+    // ✅ UX: applique -> haut de page (titre visible immédiatement)
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   };
 
@@ -730,8 +737,10 @@ const WorkerSearchSection: React.FC = () => {
   const appliedHasCoords = applied.lat != null && applied.lng != null;
 
   return (
-    // ✅ pt-0 pour éviter un espace inutile au-dessus du titre
-    <section className="w-full pt-0 pb-12 sm:pb-16 lg:pb-20 bg-white">
+    // ✅ IMPORTANT:
+    // - pt-0: aucun padding interne en haut
+    // - -mt-xx: compense un padding-top/marge imposé(e) par le layout parent (cause la plus fréquente de "l'espace au-dessus")
+    <section className="w-full pt-0 pb-12 sm:pb-16 lg:pb-20 bg-white -mt-10 sm:-mt-12 lg:-mt-14">
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-6 sm:mb-8 border-b border-gray-200 pb-4 min-w-0">
           <div className="min-w-0">
@@ -1179,7 +1188,6 @@ const WorkerSearchSection: React.FC = () => {
                           <span className="text-xs sm:text-sm text-gray-600 ml-1">{text.perHour}</span>
                         </div>
 
-                        {/* ✅ Accès protégé + toast */}
                         <Button
                           size="sm"
                           className="w-full sm:w-auto bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm"
@@ -1249,7 +1257,6 @@ const WorkerSearchSection: React.FC = () => {
                           <span className="ml-1 text-[11px] text-gray-600">{text.perHour}</span>
                         </div>
 
-                        {/* ✅ Accès protégé + toast */}
                         <Button
                           size="sm"
                           className="bg-pro-blue hover:bg-blue-700 text-[11px]"
