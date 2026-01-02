@@ -299,6 +299,51 @@ const WorkerSearchSection: React.FC = () => {
 
   const dirty = useMemo(() => !sameFilters(draft, applied), [draft, applied]);
 
+  // ------------------------------------------------------------------
+  // ✅ Auto-apply UNIQUEMENT pour keyword (>= 2 caractères) + debounce 250ms
+  // - si l'utilisateur repasse sous 2 caractères => on annule l'auto-apply (retour normal)
+  // - les autres filtres gardent "Appliquer"
+  // ------------------------------------------------------------------
+  const keywordTimerRef = useRef<number | null>(null);
+  const lastAutoAppliedKeywordRef = useRef<string>("");
+
+  const applyDraft = (nextDraft: Filters) => {
+    setApplied(nextDraft);
+    const next = filtersToParams(nextDraft);
+    setSearchParams(next, { replace: true });
+    scrollToSectionTop();
+  };
+
+  const clearKeywordTimer = () => {
+    if (keywordTimerRef.current) {
+      window.clearTimeout(keywordTimerRef.current);
+      keywordTimerRef.current = null;
+    }
+  };
+
+  const scheduleKeywordAutoApply = (nextDraft: Filters) => {
+    clearKeywordTimer();
+
+    keywordTimerRef.current = window.setTimeout(() => {
+      const kw = (nextDraft.keyword ?? "").trim();
+      if (kw.length < 2) return;
+
+      // évite de ré-appliquer 20 fois la même valeur
+      if (kw === lastAutoAppliedKeywordRef.current) return;
+
+      lastAutoAppliedKeywordRef.current = kw;
+      applyDraft(nextDraft);
+    }, 250);
+  };
+
+  useEffect(() => {
+    return () => {
+      clearKeywordTimer();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // ------------------------------------------------------------------
+
   // ----------------------------
   // 1) Fetch workers
   // ----------------------------
@@ -392,6 +437,10 @@ const WorkerSearchSection: React.FC = () => {
     applyingExternalRef.current = true;
     setApplied(f);
     setDraft(f);
+
+    // ✅ aligne l'anti double auto-apply sur ce qui vient d'être appliqué
+    lastAutoAppliedKeywordRef.current = (f.keyword ?? "").trim();
+
     window.setTimeout(() => {
       applyingExternalRef.current = false;
     }, 0);
@@ -456,7 +505,6 @@ const WorkerSearchSection: React.FC = () => {
     const f = paramsToFilters(searchParams);
     if (!sameFilters(f, applied)) {
       applyExternalFilters(f);
-      // aligner proprement après application externe
       scrollToSectionTop();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -625,6 +673,10 @@ const WorkerSearchSection: React.FC = () => {
     setApplied(draft);
     const next = filtersToParams(draft);
     setSearchParams(next, { replace: true });
+
+    // ✅ synchroniser l'anti double auto-apply
+    lastAutoAppliedKeywordRef.current = (draft.keyword ?? "").trim();
+
     scrollToSectionTop();
   };
 
@@ -637,6 +689,11 @@ const WorkerSearchSection: React.FC = () => {
     setApplied(DEFAULT_FILTERS);
     setSearchParams({}, { replace: true });
     setGeoError(null);
+
+    // ✅ reset anti-double
+    lastAutoAppliedKeywordRef.current = "";
+    clearKeywordTimer();
+
     scrollToSectionTop();
   };
 
@@ -747,12 +804,9 @@ const WorkerSearchSection: React.FC = () => {
     <section
       ref={sectionRef}
       id="worker-search"
-      // ✅ RETIRE l'espace au-dessus : pt-0 partout + mt-0
-      // ✅ on garde juste un padding bottom
       className="w-full pt-0 pb-10 sm:pb-14 lg:pb-16 bg-white"
     >
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
-        {/* ✅ Retire marges parasites */}
         <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-6 sm:mb-8 border-b border-gray-200 pb-4 min-w-0">
           <div className="min-w-0">
             <h2 className="mt-0 text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
@@ -871,11 +925,31 @@ const WorkerSearchSection: React.FC = () => {
               </div>
             </div>
 
+            {/* ✅ Auto-apply UNIQUEMENT ici (keyword) */}
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">{text.keywordLabel}</label>
               <Input
                 value={draft.keyword}
-                onChange={(e) => setDraft((p) => ({ ...p, keyword: e.target.value }))}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const nextDraft = { ...draft, keyword: value };
+                  setDraft(nextDraft);
+
+                  const trimmed = value.trim();
+
+                  // si < 2 caractères => retour au comportement normal (pas d'auto-apply)
+                  if (trimmed.length < 2) {
+                    clearKeywordTimer();
+                    // on autorise une nouvelle auto-apply plus tard
+                    if (lastAutoAppliedKeywordRef.current === trimmed) {
+                      lastAutoAppliedKeywordRef.current = "";
+                    }
+                    return;
+                  }
+
+                  // >= 2 => auto-apply (debounce 250ms)
+                  scheduleKeywordAutoApply(nextDraft);
+                }}
                 placeholder={text.searchPlaceholder}
                 className="text-sm"
               />
@@ -1074,7 +1148,12 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Button className="w-full border-gray-300 text-sm" variant="outline" type="button" onClick={resetAll}>
+              <Button
+                className="w-full border-gray-300 text-sm"
+                variant="outline"
+                type="button"
+                onClick={resetAll}
+              >
                 <RotateCcw className="w-4 h-4 mr-2" />
                 {text.reset}
               </Button>
@@ -1101,7 +1180,9 @@ const WorkerSearchSection: React.FC = () => {
 
           <div className="min-w-0">
             {error && (
-              <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">{error}</div>
+              <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">
+                {error}
+              </div>
             )}
 
             {!error && !loading && workers.length === 0 && (
@@ -1145,7 +1226,9 @@ const WorkerSearchSection: React.FC = () => {
 
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 min-w-0">
-                          <h3 className="font-semibold text-pro-gray text-base sm:text-lg truncate min-w-0">{w.name}</h3>
+                          <h3 className="font-semibold text-pro-gray text-base sm:text-lg truncate min-w-0">
+                            {w.name}
+                          </h3>
 
                           {w.job && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-pro-blue border border-blue-100">
