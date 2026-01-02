@@ -1,11 +1,12 @@
 // src/components/WorkerSearchSection.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/use-toast";
 import {
   Star,
   MapPin,
@@ -217,6 +218,51 @@ function paramsToFilters(searchParams: URLSearchParams): Filters {
 const WorkerSearchSection: React.FC = () => {
   const { language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  // ✅ session: pour bloquer l’accès au profil ouvrier si non connecté
+  const [session, setSession] = useState<any>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setSession(data.session ?? null);
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession ?? null);
+    });
+
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  const goToWorkerProfile = (workerId: string) => {
+    const target = `/ouvrier/${workerId}`;
+
+    if (!session) {
+      toast({
+        title: language === "fr" ? "Connexion requise" : "Login required",
+        description:
+          language === "fr"
+            ? "Connectez-vous pour voir le profil."
+            : "Sign in to view the profile.",
+      });
+
+      window.setTimeout(() => {
+        navigate(`/login?redirect=${encodeURIComponent(target)}`, { replace: false });
+      }, 650);
+
+      return;
+    }
+
+    navigate(target);
+  };
 
   // ✅ Init robuste (URL + sessionStorage + event) sans casser l’UX “draft”
   const initializedRef = useRef(false);
@@ -371,7 +417,6 @@ const WorkerSearchSection: React.FC = () => {
       if (stored.lng) next.set("lng", stored.lng);
 
       setSearchParams(next, { replace: true });
-      // l’effet ci-dessous appliquera
       initializedRef.current = true;
       return;
     }
@@ -387,8 +432,6 @@ const WorkerSearchSection: React.FC = () => {
     if (applyingExternalRef.current) return;
 
     const f = paramsToFilters(searchParams);
-    // ✅ si l’utilisateur est “dirty”, on n’écrase pas son draft
-    // on ne replace QUE si l’URL change réellement la recherche appliquée
     if (!sameFilters(f, applied)) {
       applyExternalFilters(f);
     }
@@ -518,7 +561,11 @@ const WorkerSearchSection: React.FC = () => {
         const matchDistrict = !f.district || districtNorm === f.district.trim().toLowerCase();
 
         const matchRadius =
-          !f.near || f.lat == null || f.lng == null || w.distanceKm == null || w.distanceKm <= f.radiusKm;
+          !f.near ||
+          f.lat == null ||
+          f.lng == null ||
+          w.distanceKm == null ||
+          w.distanceKm <= f.radiusKm;
 
         return (
           matchKeyword &&
@@ -638,9 +685,7 @@ const WorkerSearchSection: React.FC = () => {
         ? "Aucun professionnel ne correspond à ces critères pour le moment."
         : "No professional matches your criteria yet.",
     noData:
-      language === "fr"
-        ? "Aucun professionnel n’est encore disponible."
-        : "No professionals are available yet.",
+      language === "fr" ? "Aucun professionnel n’est encore disponible." : "No professionals are available yet.",
     contact: language === "fr" ? "Contacter" : "Contact",
     perHour: "/h",
     years: language === "fr" ? "ans d'expérience" : "years of experience",
@@ -762,7 +807,6 @@ const WorkerSearchSection: React.FC = () => {
             <div className="flex items-start justify-between gap-3 mb-4">
               <h3 className="text-base font-semibold text-pro-gray">{text.filters}</h3>
 
-              {/* ✅ actions sticky/compact */}
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
@@ -775,13 +819,7 @@ const WorkerSearchSection: React.FC = () => {
                   {text.apply}
                 </Button>
 
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={cancelDraft}
-                  disabled={!dirty}
-                >
+                <Button type="button" size="sm" variant="outline" onClick={cancelDraft} disabled={!dirty}>
                   <X className="w-4 h-4 mr-2" />
                   {text.cancel}
                 </Button>
@@ -789,9 +827,7 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {text.keywordLabel}
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{text.keywordLabel}</label>
               <Input
                 value={draft.keyword}
                 onChange={(e) => setDraft((p) => ({ ...p, keyword: e.target.value }))}
@@ -993,12 +1029,7 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Button
-                className="w-full border-gray-300 text-sm"
-                variant="outline"
-                type="button"
-                onClick={resetAll}
-              >
+              <Button className="w-full border-gray-300 text-sm" variant="outline" type="button" onClick={resetAll}>
                 <RotateCcw className="w-4 h-4 mr-2" />
                 {text.reset}
               </Button>
@@ -1025,9 +1056,7 @@ const WorkerSearchSection: React.FC = () => {
 
           <div className="min-w-0">
             {error && (
-              <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">
-                {error}
-              </div>
+              <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">{error}</div>
             )}
 
             {!error && !loading && workers.length === 0 && (
@@ -1071,9 +1100,7 @@ const WorkerSearchSection: React.FC = () => {
 
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 min-w-0">
-                          <h3 className="font-semibold text-pro-gray text-base sm:text-lg truncate min-w-0">
-                            {w.name}
-                          </h3>
+                          <h3 className="font-semibold text-pro-gray text-base sm:text-lg truncate min-w-0">{w.name}</h3>
 
                           {w.job && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-pro-blue border border-blue-100">
@@ -1116,14 +1143,14 @@ const WorkerSearchSection: React.FC = () => {
                           <span className="text-xs sm:text-sm text-gray-600 ml-1">{text.perHour}</span>
                         </div>
 
-                        <Link to={`/ouvrier/${w.id}`} className="w-full sm:w-auto">
-                          <Button
-                            size="sm"
-                            className="w-full sm:w-auto bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm"
-                          >
-                            {text.contact}
-                          </Button>
-                        </Link>
+                        {/* ✅ Accès protégé + toast */}
+                        <Button
+                          size="sm"
+                          className="w-full sm:w-auto bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm"
+                          onClick={() => goToWorkerProfile(w.id)}
+                        >
+                          {text.contact}
+                        </Button>
                       </div>
                     </div>
                   );
@@ -1185,11 +1212,15 @@ const WorkerSearchSection: React.FC = () => {
                           {formatCurrency(w.hourlyRate, w.currency)}
                           <span className="ml-1 text-[11px] text-gray-600">{text.perHour}</span>
                         </div>
-                        <Link to={`/ouvrier/${w.id}`}>
-                          <Button size="sm" className="bg-pro-blue hover:bg-blue-700 text-[11px]">
-                            {text.contact}
-                          </Button>
-                        </Link>
+
+                        {/* ✅ Accès protégé + toast */}
+                        <Button
+                          size="sm"
+                          className="bg-pro-blue hover:bg-blue-700 text-[11px]"
+                          onClick={() => goToWorkerProfile(w.id)}
+                        >
+                          {text.contact}
+                        </Button>
                       </div>
                     </div>
                   );
@@ -1202,11 +1233,7 @@ const WorkerSearchSection: React.FC = () => {
                 {language === "fr"
                   ? "Vous avez modifié des filtres mais ils ne sont pas encore appliqués."
                   : "You changed filters but they are not applied yet."}{" "}
-                <button
-                  type="button"
-                  className="underline font-semibold"
-                  onClick={applyFilters}
-                >
+                <button type="button" className="underline font-semibold" onClick={applyFilters}>
                   {language === "fr" ? "Appliquer maintenant" : "Apply now"}
                 </button>
                 .
