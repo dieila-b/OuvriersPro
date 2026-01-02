@@ -15,6 +15,7 @@ import WorkerDetail from "./pages/WorkerDetail";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MonCompte from "./pages/MonCompte";
+import FAQ from "./pages/FAQ"; // ✅ AJOUT
 
 // Back-office Admin
 import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
@@ -85,6 +86,10 @@ const AppRoutes = () => (
       <Route path="/search" element={<Index />} />
       <Route path="/rechercher" element={<Index />} />
 
+      {/* ❓ FAQ */}
+      <Route path="/faq" element={<FAQ />} />
+      <Route path="/aide" element={<FAQ />} />
+
       {/* 🧑‍💼 Mon compte */}
       <Route path="/mon-compte" element={<MonCompte />} />
 
@@ -98,15 +103,14 @@ const AppRoutes = () => (
       <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
 
       {/* 👤 Fiche ouvrier */}
-       <Route
-         path="/ouvrier/:id"
-         element={
+      <Route
+        path="/ouvrier/:id"
+        element={
           <PrivateRoute allowedRoles={["user", "worker", "admin"]}>
-           <WorkerDetail />
+            <WorkerDetail />
           </PrivateRoute>
         }
-        />
-
+      />
 
       {/* 👥 Espace Client */}
       <Route
