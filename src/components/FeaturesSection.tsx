@@ -4,43 +4,77 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Shield, MapPin, MessageCircle, Star, Users, Clock } from "lucide-react";
 
 const FeaturesSection = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+
+  const safeT = (key: string, fallbackFr: string, fallbackEn: string) => {
+    const v = t(key);
+    // Si la traduction n'est pas trouvée, certaines implémentations renvoient la clé.
+    if (!v || v === key) return language === "fr" ? fallbackFr : fallbackEn;
+    return v;
+  };
 
   const features = [
     {
       icon: Shield,
-      title: t("home.features.quality.title"),
-      description: t("home.features.quality.desc"),
+      title: safeT("home.features.quality.title", "Qualité garantie", "Quality guaranteed"),
+      description: safeT(
+        "home.features.quality.desc",
+        "Des professionnels vérifiés et évalués pour des prestations fiables.",
+        "Verified, rated professionals for reliable services."
+      ),
       color: "text-green-600",
     },
     {
       icon: MapPin,
-      title: t("home.features.local.title"),
-      description: t("home.features.local.desc"),
+      title: safeT("home.features.local.title", "Proche de vous", "Near you"),
+      description: safeT(
+        "home.features.local.desc",
+        "Trouvez rapidement un prestataire dans votre zone.",
+        "Quickly find a provider in your area."
+      ),
       color: "text-blue-600",
     },
     {
       icon: MessageCircle,
-      title: t("home.features.contact.title"),
-      description: t("home.features.contact.desc"),
+      title: safeT("home.features.contact.title", "Contact rapide", "Fast contact"),
+      description: safeT(
+        "home.features.contact.desc",
+        "Discutez et réservez en toute simplicité.",
+        "Chat and book easily."
+      ),
       color: "text-purple-600",
     },
   ];
 
   const stats = [
-    { icon: Users, number: "2 500+", label: t("home.features.stats.pros") },
-    { icon: Star, number: "4.8/5", label: t("home.features.stats.rating") },
-    { icon: Clock, number: "24h", label: t("home.features.stats.response") },
-    { icon: Shield, number: "100%", label: t("home.features.stats.verified") },
+    {
+      icon: Users,
+      number: "2 500+",
+      label: safeT("home.features.stats.pros", "Professionnels", "Professionals"),
+    },
+    {
+      icon: Star,
+      number: "4.8/5",
+      label: safeT("home.features.stats.rating", "Note moyenne", "Average rating"),
+    },
+    {
+      icon: Clock,
+      number: "24h",
+      label: safeT("home.features.stats.response", "Temps de réponse", "Response time"),
+    },
+    {
+      icon: Shield,
+      number: "100%",
+      label: safeT("home.features.stats.verified", "Profils vérifiés", "Verified profiles"),
+    },
   ];
 
   return (
     <section className="w-full bg-pro-light py-8 sm:py-10 lg:py-12">
-      {/* ✅ plus de max-w : même logique que le spot */}
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div className="text-center mb-6 sm:mb-8">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
-            {t("home.features.title")}
+            {safeT("home.features.title", "Pourquoi nous choisir", "Why choose us")}
           </h2>
         </div>
 
@@ -76,10 +110,10 @@ const FeaturesSection = () => {
               style={{ animationDelay: `${index * 0.12 + 0.3}s` }}
             >
               <s.icon className="w-6 h-6 sm:w-7 sm:h-7 text-pro-blue mx-auto mb-1.5" />
-              <div className="text-lg sm:text-xl font-bold text-pro-gray">
-                {s.number}
-              </div>
-              <div className="text-gray-600 text-xs sm:text-sm break-words">
+              <div className="text-lg sm:text-xl font-bold text-pro-gray">{s.number}</div>
+
+              {/* ✅ “mettre ça normal” : éviter les retours bizarres, garder propre */}
+              <div className="text-gray-600 text-xs sm:text-sm leading-snug whitespace-normal">
                 {s.label}
               </div>
             </div>
