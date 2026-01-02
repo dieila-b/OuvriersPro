@@ -1,6 +1,6 @@
 // src/components/WorkerSearchSection.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Slider } from "@/components/ui/slider";
@@ -220,6 +220,12 @@ const WorkerSearchSection: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // ✅ Fix UX: à chaque arrivée sur cette page, on force le scroll en haut
+  // (pour que "Trouvez votre professionnel" soit collé en haut, sans espace)
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, []);
 
   // ✅ session: pour bloquer l’accès au profil ouvrier si non connecté
   const [session, setSession] = useState<any>(null);
@@ -601,6 +607,9 @@ const WorkerSearchSection: React.FC = () => {
     setApplied(draft);
     const next = filtersToParams(draft);
     setSearchParams(next, { replace: true });
+
+    // ✅ UX: quand l'utilisateur clique "Appliquer", on remonte en haut de la page résultats
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   };
 
   const cancelDraft = () => {
@@ -612,6 +621,9 @@ const WorkerSearchSection: React.FC = () => {
     setApplied(DEFAULT_FILTERS);
     setSearchParams({}, { replace: true });
     setGeoError(null);
+
+    // ✅ UX: reset -> haut de page
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   };
 
   const requestMyPosition = () => {
@@ -685,7 +697,9 @@ const WorkerSearchSection: React.FC = () => {
         ? "Aucun professionnel ne correspond à ces critères pour le moment."
         : "No professional matches your criteria yet.",
     noData:
-      language === "fr" ? "Aucun professionnel n’est encore disponible." : "No professionals are available yet.",
+      language === "fr"
+        ? "Aucun professionnel n’est encore disponible."
+        : "No professionals are available yet.",
     contact: language === "fr" ? "Contacter" : "Contact",
     perHour: "/h",
     years: language === "fr" ? "ans d'expérience" : "years of experience",
@@ -716,7 +730,8 @@ const WorkerSearchSection: React.FC = () => {
   const appliedHasCoords = applied.lat != null && applied.lng != null;
 
   return (
-    <section className="w-full pt-6 pb-12 sm:pt-8 sm:pb-16 lg:pt-10 lg:pb-20 bg-white">
+    // ✅ pt-0 pour éviter un espace inutile au-dessus du titre
+    <section className="w-full pt-0 pb-12 sm:pb-16 lg:pb-20 bg-white">
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-6 sm:mb-8 border-b border-gray-200 pb-4 min-w-0">
           <div className="min-w-0">
@@ -782,7 +797,9 @@ const WorkerSearchSection: React.FC = () => {
                 type="button"
                 onClick={() => setDraft((p) => ({ ...p, view: "list" }))}
                 className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
-                  draft.view === "list" ? "bg-pro-blue text-white" : "text-gray-600 hover:bg-gray-100"
+                  draft.view === "list"
+                    ? "bg-pro-blue text-white"
+                    : "text-gray-600 hover:bg-gray-100"
                 }`}
               >
                 <LayoutList className="w-3 h-3" />
@@ -792,7 +809,9 @@ const WorkerSearchSection: React.FC = () => {
                 type="button"
                 onClick={() => setDraft((p) => ({ ...p, view: "grid" }))}
                 className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
-                  draft.view === "grid" ? "bg-pro-blue text-white" : "text-gray-600 hover:bg-gray-100"
+                  draft.view === "grid"
+                    ? "bg-pro-blue text-white"
+                    : "text-gray-600 hover:bg-gray-100"
                 }`}
               >
                 <LayoutGrid className="w-3 h-3" />
@@ -819,7 +838,13 @@ const WorkerSearchSection: React.FC = () => {
                   {text.apply}
                 </Button>
 
-                <Button type="button" size="sm" variant="outline" onClick={cancelDraft} disabled={!dirty}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={cancelDraft}
+                  disabled={!dirty}
+                >
                   <X className="w-4 h-4 mr-2" />
                   {text.cancel}
                 </Button>
@@ -827,7 +852,9 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-600 mb-1">{text.keywordLabel}</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {text.keywordLabel}
+              </label>
               <Input
                 value={draft.keyword}
                 onChange={(e) => setDraft((p) => ({ ...p, keyword: e.target.value }))}
@@ -1029,7 +1056,12 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Button className="w-full border-gray-300 text-sm" variant="outline" type="button" onClick={resetAll}>
+              <Button
+                className="w-full border-gray-300 text-sm"
+                variant="outline"
+                type="button"
+                onClick={resetAll}
+              >
                 <RotateCcw className="w-4 h-4 mr-2" />
                 {text.reset}
               </Button>
@@ -1056,7 +1088,9 @@ const WorkerSearchSection: React.FC = () => {
 
           <div className="min-w-0">
             {error && (
-              <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">{error}</div>
+              <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">
+                {error}
+              </div>
             )}
 
             {!error && !loading && workers.length === 0 && (
@@ -1100,7 +1134,9 @@ const WorkerSearchSection: React.FC = () => {
 
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 min-w-0">
-                          <h3 className="font-semibold text-pro-gray text-base sm:text-lg truncate min-w-0">{w.name}</h3>
+                          <h3 className="font-semibold text-pro-gray text-base sm:text-lg truncate min-w-0">
+                            {w.name}
+                          </h3>
 
                           {w.job && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-pro-blue border border-blue-100">
