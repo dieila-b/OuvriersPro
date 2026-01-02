@@ -65,7 +65,7 @@ type ViewMode = "list" | "grid";
 
 type Filters = {
   keyword: string;
-  job: string; // "all" | job name
+  job: string;
   region: string;
   city: string;
   commune: string;
@@ -221,15 +221,19 @@ const WorkerSearchSection: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // ✅ Référence de section pour scroller AU BON ENDROIT (pas en haut de la page)
+  // ✅ Référence de section pour scroller AU BON ENDROIT (alignée sous le header)
   const sectionRef = useRef<HTMLElement | null>(null);
 
   const scrollToSectionTop = () => {
     const el = sectionRef.current;
     if (!el) return;
-    // rAF pour laisser le DOM se stabiliser (important quand la page change / hydrate)
+
+    const headerEl = document.querySelector("header") as HTMLElement | null;
+    const headerH = headerEl?.offsetHeight ?? 72;
+
     requestAnimationFrame(() => {
-      el.scrollIntoView({ block: "start", behavior: "auto" });
+      const y = el.getBoundingClientRect().top + window.scrollY - headerH; // pas de marge = pas d'espace
+      window.scrollTo({ top: Math.max(y, 0), behavior: "auto" });
     });
   };
 
@@ -438,19 +442,9 @@ const WorkerSearchSection: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ Quand on arrive sur cette section (route / navigation), on la met en haut du viewport
+  // ✅ À l’arrivée sur la page recherche, aligner le titre juste sous le header (sans espace)
   useLayoutEffect(() => {
-    // si vous voulez UNIQUEMENT quand il y a des critères, gardez cette condition
-    const hasCriteria =
-      searchParams.toString().length > 0 ||
-      !!sessionStorage.getItem("op:last_search");
-
-    if (hasCriteria) {
-      scrollToSectionTop();
-    } else {
-      // même sans critères, vous pouvez choisir de scroller ici quand même
-      scrollToSectionTop();
-    }
+    scrollToSectionTop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -462,6 +456,8 @@ const WorkerSearchSection: React.FC = () => {
     const f = paramsToFilters(searchParams);
     if (!sameFilters(f, applied)) {
       applyExternalFilters(f);
+      // aligner proprement après application externe
+      scrollToSectionTop();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams.toString()]);
@@ -481,7 +477,6 @@ const WorkerSearchSection: React.FC = () => {
 
       if (Object.keys(next).length) {
         setSearchParams(next, { replace: true });
-        // ✅ après un search event, on remonte sur la section
         scrollToSectionTop();
       }
     };
@@ -565,7 +560,6 @@ const WorkerSearchSection: React.FC = () => {
     return haversineKm(f.lat, f.lng, w.latitude, w.longitude);
   };
 
-  // ✅ filtration basée sur APPLIED uniquement
   const filteredWorkers = useMemo(() => {
     const f = applied;
 
@@ -625,7 +619,7 @@ const WorkerSearchSection: React.FC = () => {
   }, [workers, applied]);
 
   // ----------------------------
-  // 4) Actions: Apply / Reset / Cancel
+  // 4) Actions
   // ----------------------------
   const applyFilters = () => {
     setApplied(draft);
@@ -753,9 +747,12 @@ const WorkerSearchSection: React.FC = () => {
     <section
       ref={sectionRef}
       id="worker-search"
-      className="w-full pt-6 pb-12 sm:pt-8 sm:pb-16 lg:pt-10 lg:pb-20 bg-white scroll-mt-24"
+      // ✅ RETIRE l'espace au-dessus : pt-0 partout + mt-0
+      // ✅ on garde juste un padding bottom
+      className="w-full pt-0 pb-10 sm:pb-14 lg:pb-16 bg-white"
     >
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
+        {/* ✅ Retire marges parasites */}
         <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-6 sm:mb-8 border-b border-gray-200 pb-4 min-w-0">
           <div className="min-w-0">
             <h2 className="mt-0 text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
