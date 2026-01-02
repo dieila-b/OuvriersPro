@@ -1,5 +1,5 @@
 // src/components/WorkerSearchSection.tsx
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
@@ -221,18 +221,17 @@ const WorkerSearchSection: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // ✅ Fix UX (espace au-dessus du titre) :
-  // 1) on force le scroll à 0 à l'arrivée sur la page
-  // 2) on compense un éventuel padding-top imposé par le layout parent via un margin-top négatif (voir <section />)
-  useLayoutEffect(() => {
-    try {
-      document.documentElement.scrollTop = 0;
-      document.body.scrollTop = 0;
-    } catch {
-      // noop
-    }
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-  }, []);
+  // ✅ Référence de section pour scroller AU BON ENDROIT (pas en haut de la page)
+  const sectionRef = useRef<HTMLElement | null>(null);
+
+  const scrollToSectionTop = () => {
+    const el = sectionRef.current;
+    if (!el) return;
+    // rAF pour laisser le DOM se stabiliser (important quand la page change / hydrate)
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ block: "start", behavior: "auto" });
+    });
+  };
 
   // ✅ session: pour bloquer l’accès au profil ouvrier si non connecté
   const [session, setSession] = useState<any>(null);
@@ -439,6 +438,22 @@ const WorkerSearchSection: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ✅ Quand on arrive sur cette section (route / navigation), on la met en haut du viewport
+  useLayoutEffect(() => {
+    // si vous voulez UNIQUEMENT quand il y a des critères, gardez cette condition
+    const hasCriteria =
+      searchParams.toString().length > 0 ||
+      !!sessionStorage.getItem("op:last_search");
+
+    if (hasCriteria) {
+      scrollToSectionTop();
+    } else {
+      // même sans critères, vous pouvez choisir de scroller ici quand même
+      scrollToSectionTop();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Ré-appliquer quand l'URL change (clic Rechercher, navigation, etc.)
   useEffect(() => {
     if (!initializedRef.current) return;
@@ -466,6 +481,8 @@ const WorkerSearchSection: React.FC = () => {
 
       if (Object.keys(next).length) {
         setSearchParams(next, { replace: true });
+        // ✅ après un search event, on remonte sur la section
+        scrollToSectionTop();
       }
     };
 
@@ -614,9 +631,7 @@ const WorkerSearchSection: React.FC = () => {
     setApplied(draft);
     const next = filtersToParams(draft);
     setSearchParams(next, { replace: true });
-
-    // ✅ UX: applique -> haut de page (titre visible immédiatement)
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    scrollToSectionTop();
   };
 
   const cancelDraft = () => {
@@ -628,9 +643,7 @@ const WorkerSearchSection: React.FC = () => {
     setApplied(DEFAULT_FILTERS);
     setSearchParams({}, { replace: true });
     setGeoError(null);
-
-    // ✅ UX: reset -> haut de page
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    scrollToSectionTop();
   };
 
   const requestMyPosition = () => {
@@ -737,10 +750,11 @@ const WorkerSearchSection: React.FC = () => {
   const appliedHasCoords = applied.lat != null && applied.lng != null;
 
   return (
-    // ✅ IMPORTANT:
-    // - pt-0: aucun padding interne en haut
-    // - -mt-xx: compense un padding-top/marge imposé(e) par le layout parent (cause la plus fréquente de "l'espace au-dessus")
-    <section className="w-full pt-0 pb-12 sm:pb-16 lg:pb-20 bg-white -mt-10 sm:-mt-12 lg:-mt-14">
+    <section
+      ref={sectionRef}
+      id="worker-search"
+      className="w-full pt-6 pb-12 sm:pt-8 sm:pb-16 lg:pt-10 lg:pb-20 bg-white scroll-mt-24"
+    >
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-6 sm:mb-8 border-b border-gray-200 pb-4 min-w-0">
           <div className="min-w-0">
@@ -861,9 +875,7 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {text.keywordLabel}
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{text.keywordLabel}</label>
               <Input
                 value={draft.keyword}
                 onChange={(e) => setDraft((p) => ({ ...p, keyword: e.target.value }))}
@@ -1065,12 +1077,7 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Button
-                className="w-full border-gray-300 text-sm"
-                variant="outline"
-                type="button"
-                onClick={resetAll}
-              >
+              <Button className="w-full border-gray-300 text-sm" variant="outline" type="button" onClick={resetAll}>
                 <RotateCcw className="w-4 h-4 mr-2" />
                 {text.reset}
               </Button>
@@ -1097,9 +1104,7 @@ const WorkerSearchSection: React.FC = () => {
 
           <div className="min-w-0">
             {error && (
-              <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">
-                {error}
-              </div>
+              <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">{error}</div>
             )}
 
             {!error && !loading && workers.length === 0 && (
@@ -1143,9 +1148,7 @@ const WorkerSearchSection: React.FC = () => {
 
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 min-w-0">
-                          <h3 className="font-semibold text-pro-gray text-base sm:text-lg truncate min-w-0">
-                            {w.name}
-                          </h3>
+                          <h3 className="font-semibold text-pro-gray text-base sm:text-lg truncate min-w-0">{w.name}</h3>
 
                           {w.job && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-pro-blue border border-blue-100">
