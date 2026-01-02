@@ -19,7 +19,12 @@ type SearchPayload = {
 const Index = () => {
   const location = useLocation();
 
-  const scrollToId = (id: string) => {
+  const isSearchRoute = useMemo(() => {
+    const p = location.pathname;
+    return p === "/search" || p === "/rechercher";
+  }, [location.pathname]);
+
+  const scrollToId = (id: string, behavior: ScrollBehavior = "auto") => {
     const el = document.getElementById(id);
     if (!el) return;
 
@@ -27,7 +32,7 @@ const Index = () => {
     const headerHeight = headerEl?.offsetHeight ?? 72;
 
     const y = el.getBoundingClientRect().top + window.scrollY - headerHeight - 8;
-    window.scrollTo({ top: Math.max(y, 0), behavior: "smooth" });
+    window.scrollTo({ top: Math.max(y, 0), behavior });
   };
 
   const searchPayload: SearchPayload = useMemo(() => {
@@ -49,72 +54,73 @@ const Index = () => {
     return payload;
   }, [location.search]);
 
-  // 1) Gestion des ancres (#search, #subscription, etc.)
+  // 1) Gestion des ancres (#worker-search, #subscription, etc.)
   useEffect(() => {
     if (!location.hash) return;
 
     const id = location.hash.replace("#", "");
-    const timeout = window.setTimeout(() => scrollToId(id), 120);
-    return () => window.clearTimeout(timeout);
+    const t = window.setTimeout(() => scrollToId(id, "smooth"), 80);
+    return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.hash]);
 
-  // 2) Navigation /search ou /rechercher : scroll vers section search + transmission des filtres
+  // 2) /search ou /rechercher : on AFFICHERA directement la section (sans Hero/Features)
+  //    + on transmet les filtres au WorkerSearchSection (sessionStorage + event)
   useEffect(() => {
-    const { pathname } = location;
+    if (!isSearchRoute) return;
 
-    const isSearchRoute = pathname === "/search" || pathname === "/rechercher";
+    const hasAny =
+      !!searchPayload.keyword ||
+      !!searchPayload.district ||
+      !!searchPayload.lat ||
+      !!searchPayload.lng ||
+      !!searchPayload.near;
 
-    if (isSearchRoute) {
-      // ✅ Transmettre les filtres (si présents) à WorkerSearchSection
-      // - via sessionStorage (fallback)
-      // - via event global (optionnel)
-      const hasAny =
-        !!searchPayload.keyword ||
-        !!searchPayload.district ||
-        !!searchPayload.lat ||
-        !!searchPayload.lng ||
-        !!searchPayload.near;
-
-      if (hasAny) {
-        try {
-          sessionStorage.setItem("op:last_search", JSON.stringify(searchPayload));
-        } catch {
-          // ignore
-        }
-
-        try {
-          window.dispatchEvent(
-            new CustomEvent("op:search", {
-              detail: searchPayload,
-            })
-          );
-        } catch {
-          // ignore
-        }
+    if (hasAny) {
+      try {
+        sessionStorage.setItem("op:last_search", JSON.stringify(searchPayload));
+      } catch {
+        // ignore
       }
 
-      // ✅ Toujours scroller vers la zone des résultats
-      const timeout = window.setTimeout(() => scrollToId("search"), 80);
-      return () => window.clearTimeout(timeout);
+      try {
+        window.dispatchEvent(
+          new CustomEvent("op:search", {
+            detail: searchPayload,
+          })
+        );
+      } catch {
+        // ignore
+      }
     }
 
-    // 3) Accueil : remonter en haut
-    if (pathname === "/") {
+    // Comme on masque Hero/Features sur /search, on force l’arrivée propre en haut de la section
+    const t = window.setTimeout(() => scrollToId("worker-search", "auto"), 0);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSearchRoute, searchPayload]);
+
+  // 3) Accueil "/" : remonter en haut
+  useEffect(() => {
+    if (location.pathname === "/") {
       window.scrollTo({ top: 0, behavior: "auto" });
     }
-  }, [location.pathname, searchPayload]);
+  }, [location.pathname]);
 
   return (
     <div className="min-h-dvh w-full min-w-0 overflow-x-hidden bg-white flex flex-col">
       <Header />
 
       <main className="w-full flex-1 min-w-0">
-        <HeroSection />
+        {/* Sur /search (/rechercher) on enlève Hero + Features pour arriver DIRECTEMENT sur la recherche */}
+        {!isSearchRoute && (
+          <>
+            <HeroSection />
+            <FeaturesSection />
+          </>
+        )}
 
-        <FeaturesSection />
-
-        <div id="search" className="w-full scroll-mt-20 sm:scroll-mt-24">
+        <div id="worker-search" className="w-full scroll-mt-20 sm:scroll-mt-24">
           <WorkerSearchSection />
         </div>
 
