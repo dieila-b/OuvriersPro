@@ -20,16 +20,16 @@ const MonCompte: React.FC = () => {
     title: language === "fr" ? "Mon compte" : "My account",
     subtitle:
       language === "fr"
-        ? "Connectez-vous ou créez un compte pour accéder aux détails des ouvriers et gérer vos demandes."
-        : "Log in or create an account to access worker details and manage your requests.",
+        ? "Connectez-vous ou créez un compte pour accéder aux profils des prestataires et gérer vos demandes."
+        : "Log in or create an account to access provider profiles and manage your requests.",
     alreadyHaveAccount:
       language === "fr"
         ? "Vous avez déjà un compte ?"
         : "Already have an account?",
     loginHint:
       language === "fr"
-        ? "Que vous soyez ouvrier, particulier ou entreprise, utilisez le même bouton pour vous connecter."
-        : "Whether you are a worker, individual or company, use the same button to log in.",
+        ? "Que vous soyez prestataire, particulier ou entreprise, utilisez le même bouton pour vous connecter."
+        : "Whether you are a provider, individual or company, use the same button to log in.",
     loginBtn: language === "fr" ? "Se connecter" : "Log in",
     orLabel:
       language === "fr"
@@ -40,23 +40,23 @@ const MonCompte: React.FC = () => {
 
     clientAccountTitle:
       language === "fr"
-        ? "Compte client / ouvrier"
-        : "Client / worker account",
+        ? "Compte client / prestataire"
+        : "Client / provider account",
     clientAccountDesc:
       language === "fr"
-        ? "Un seul compte pour tous : particuliers, entreprises et ouvriers. Créez votre compte OuvriersPro, puis choisissez comment vous utilisez la plateforme : pour chercher un ouvrier ou pour proposer vos services."
-        : "A single account for everyone: individuals, companies and workers. Create your OuvriersPro account, then choose how you use the platform: to find a worker or to offer your services.",
+        ? "Un seul compte pour tous : particuliers, entreprises et prestataires. Créez votre compte ProxiServices, puis choisissez votre usage : rechercher un service ou proposer vos prestations."
+        : "One account for everyone: individuals, companies and providers. Create your ProxiServices account, then choose how you use the platform: find a service or offer your services.",
     createClientBtn:
       language === "fr"
-        ? "Créer mon compte (particulier ou ouvrier)"
-        : "Create my account (client or worker)",
+        ? "Créer mon compte (client ou prestataire)"
+        : "Create my account (client or provider)",
 
     workerInfoTitle:
-      language === "fr" ? "Vous êtes ouvrier / artisan ?" : "Are you a worker?",
+      language === "fr" ? "Vous êtes prestataire ?" : "Are you a provider?",
     workerInfoText:
       language === "fr"
-        ? "Commencez par créer le même compte que les clients. Depuis votre espace, vous pourrez ensuite activer votre profil Ouvrier Pro, choisir votre forfait et être mis en avant auprès des clients."
-        : "Start by creating the same account as clients. From your dashboard, you’ll then be able to activate your Pro worker profile, choose a plan and be highlighted to potential clients.",
+        ? "Commencez par créer le même compte que les clients. Depuis votre espace, vous pourrez ensuite activer votre profil prestataire, choisir votre forfait et gagner en visibilité auprès des clients."
+        : "Start by creating the same account as clients. From your dashboard, you can then activate your provider profile, choose a plan and increase your visibility with clients.",
   };
 
   return (
@@ -67,15 +67,13 @@ const MonCompte: React.FC = () => {
           <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-xs font-medium text-slate-500 shadow-sm border border-slate-100 mb-3">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
             {language === "fr"
-              ? "Espace sécurisé OuvriersPro"
-              : "Secure OuvriersPro space"}
+              ? "Espace sécurisé ProxiServices"
+              : "Secure ProxiServices space"}
           </div>
           <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
             {text.title}
           </h1>
-          <p className="text-sm md:text-base text-slate-600">
-            {text.subtitle}
-          </p>
+          <p className="text-sm md:text-base text-slate-600">{text.subtitle}</p>
         </header>
 
         {/* Bloc connexion existant */}
@@ -134,7 +132,7 @@ const MonCompte: React.FC = () => {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-[2.1fr,1.4fr] items-start">
-            {/* Carte compte Client / Ouvrier */}
+            {/* Carte compte Client / Prestataire */}
             <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 md:p-6 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 rounded-full bg-pro-blue/10 flex items-center justify-center">
@@ -146,8 +144,8 @@ const MonCompte: React.FC = () => {
                   </h3>
                   <p className="text-xs text-slate-500">
                     {language === "fr"
-                      ? "Pour particuliers, entreprises et ouvriers."
-                      : "For clients, companies and workers."}
+                      ? "Pour particuliers, entreprises et prestataires."
+                      : "For clients, companies and providers."}
                   </p>
                 </div>
               </div>
@@ -157,7 +155,7 @@ const MonCompte: React.FC = () => {
               </p>
 
               <div className="grid gap-3 sm:grid-cols-2 mb-6">
-                {/* Colonne "Je cherche un ouvrier" */}
+                {/* Colonne "Je cherche un service" */}
                 <div className="rounded-xl bg-white border border-slate-200/80 p-3.5 hover:border-pro-blue/40 hover:shadow-sm transition">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="h-7 w-7 rounded-full bg-pro-blue/10 flex items-center justify-center">
@@ -165,8 +163,8 @@ const MonCompte: React.FC = () => {
                     </div>
                     <span className="text-[11px] font-semibold uppercase text-slate-600">
                       {language === "fr"
-                        ? "Je cherche un ouvrier"
-                        : "I’m looking for a worker"}
+                        ? "Je cherche un service"
+                        : "I’m looking for a service"}
                     </span>
                   </div>
                   <ul className="space-y-1.5 text-xs text-slate-700">
@@ -174,30 +172,30 @@ const MonCompte: React.FC = () => {
                       <CheckCircle2 className="mt-[2px] w-3.5 h-3.5 text-emerald-500" />
                       <span>
                         {language === "fr"
-                          ? "Recherche et contact direct de tous les ouvriers"
-                          : "Search and contact any worker directly"}
+                          ? "Recherche et contact direct des prestataires"
+                          : "Search and contact providers directly"}
                       </span>
                     </li>
                     <li className="flex items-start gap-1.5">
                       <CheckCircle2 className="mt-[2px] w-3.5 h-3.5 text-emerald-500" />
                       <span>
                         {language === "fr"
-                          ? "Suivi de vos demandes de travaux"
-                          : "Track all your work requests"}
+                          ? "Suivi de vos demandes"
+                          : "Track your requests"}
                       </span>
                     </li>
                     <li className="flex items-start gap-1.5">
                       <CheckCircle2 className="mt-[2px] w-3.5 h-3.5 text-emerald-500" />
                       <span>
                         {language === "fr"
-                          ? "Historique complet de vos échanges"
-                          : "Full history of your conversations"}
+                          ? "Historique de vos échanges"
+                          : "History of your conversations"}
                       </span>
                     </li>
                   </ul>
                 </div>
 
-                {/* Colonne "Je suis ouvrier" */}
+                {/* Colonne "Je suis prestataire" */}
                 <div className="rounded-xl bg-white border border-slate-200/80 p-3.5 hover:border-amber-400/60 hover:shadow-sm transition">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="h-7 w-7 rounded-full bg-amber-50 flex items-center justify-center">
@@ -205,8 +203,8 @@ const MonCompte: React.FC = () => {
                     </div>
                     <span className="text-[11px] font-semibold uppercase text-slate-600">
                       {language === "fr"
-                        ? "Je suis ouvrier / artisan"
-                        : "I’m a worker / craftsman"}
+                        ? "Je suis prestataire"
+                        : "I’m a provider"}
                     </span>
                   </div>
                   <ul className="space-y-1.5 text-xs text-slate-700">
@@ -222,8 +220,8 @@ const MonCompte: React.FC = () => {
                       <CheckCircle2 className="mt-[2px] w-3.5 h-3.5 text-emerald-500" />
                       <span>
                         {language === "fr"
-                          ? "Activation ensuite de votre profil Ouvrier Pro et choix du forfait"
-                          : "Later activate your Pro worker profile and choose a plan"}
+                          ? "Activation de votre profil prestataire et choix du forfait"
+                          : "Activate your provider profile and choose a plan"}
                       </span>
                     </li>
                     <li className="flex items-start gap-1.5">
@@ -252,7 +250,7 @@ const MonCompte: React.FC = () => {
               </Button>
             </div>
 
-            {/* Info pour les ouvriers */}
+            {/* Info pour les prestataires */}
             <div className="rounded-2xl border border-dashed border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5 md:p-6">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center">
