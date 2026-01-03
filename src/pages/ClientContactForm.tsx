@@ -184,8 +184,8 @@ const ClientContactForm: React.FC = () => {
         // Pré-remplir un début de réponse
         const baseReply =
           language === "fr"
-            ? "Bonjour,\n\nJe fais suite à votre demande envoyée via OuvriersPro."
-            : "Hello,\n\nI am following up on your request sent via OuvriersPro.";
+            ? "Bonjour,\n\nJe fais suite à votre demande envoyée via ProxiServices."
+            : "Hello,\n\nI am following up on your request sent via ProxiServices.";
         setReplyText(baseReply);
       } catch (e) {
         console.error(e);
@@ -242,9 +242,8 @@ const ClientContactForm: React.FC = () => {
 
   const emailSubject =
     language === "fr"
-      ? "Réponse à votre demande via OuvriersPro"
-      : "Reply to your request via OuvriersPro";
-
+      ? "Réponse à votre demande via ProxiServices"
+      : "Reply to your request via ProxiServices";
   const emailHref = lastContact.client_email
     ? `mailto:${lastContact.client_email}?subject=${encodeURIComponent(
         emailSubject
