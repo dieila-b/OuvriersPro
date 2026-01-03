@@ -17,7 +17,6 @@ import {
   Info,
   RotateCcw,
   Check,
-  X,
 } from "lucide-react";
 
 type DbWorker = {
@@ -136,24 +135,6 @@ function safeParseJson<T>(value: string | null): T | null {
   }
 }
 
-function sameFilters(a: Filters, b: Filters) {
-  return (
-    a.keyword === b.keyword &&
-    a.job === b.job &&
-    a.region === b.region &&
-    a.city === b.city &&
-    a.commune === b.commune &&
-    a.district === b.district &&
-    a.maxPrice === b.maxPrice &&
-    a.minRating === b.minRating &&
-    a.view === b.view &&
-    a.near === b.near &&
-    a.radiusKm === b.radiusKm &&
-    a.lat === b.lat &&
-    a.lng === b.lng
-  );
-}
-
 function filtersToParams(f: Filters) {
   const next: Record<string, string> = {};
 
@@ -232,7 +213,7 @@ const WorkerSearchSection: React.FC = () => {
     const headerH = headerEl?.offsetHeight ?? 72;
 
     requestAnimationFrame(() => {
-      const y = el.getBoundingClientRect().top + window.scrollY - headerH; // pas de marge = pas d'espace
+      const y = el.getBoundingClientRect().top + window.scrollY - headerH;
       window.scrollTo({ top: Math.max(y, 0), behavior: "auto" });
     });
   };
@@ -265,9 +246,7 @@ const WorkerSearchSection: React.FC = () => {
       toast({
         title: language === "fr" ? "Connexion requise" : "Login required",
         description:
-          language === "fr"
-            ? "Connectez-vous pour voir le profil."
-            : "Sign in to view the profile.",
+          language === "fr" ? "Connectez-vous pour voir le profil." : "Sign in to view the profile.",
       });
 
       window.setTimeout(() => {
@@ -280,7 +259,7 @@ const WorkerSearchSection: React.FC = () => {
     navigate(target);
   };
 
-  // ✅ Init robuste (URL + sessionStorage + event) sans casser l’UX “draft”
+  // ✅ Init robuste (URL + sessionStorage + event)
   const initializedRef = useRef(false);
   const applyingExternalRef = useRef(false);
 
@@ -292,64 +271,54 @@ const WorkerSearchSection: React.FC = () => {
   const [geoLocating, setGeoLocating] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
 
-  // ✅ applied = ce qui filtre réellement la liste
+  // ✅ 1 seul état "applied" (application automatique) – on conserve "draft" uniquement pour l’UI
   const [applied, setApplied] = useState<Filters>(DEFAULT_FILTERS);
-  // ✅ draft = ce que l’utilisateur modifie dans le panneau filtres
   const [draft, setDraft] = useState<Filters>(DEFAULT_FILTERS);
 
-  const dirty = useMemo(() => !sameFilters(draft, applied), [draft, applied]);
-
   // ------------------------------------------------------------------
-  // ✅ Auto-apply UNIQUEMENT pour keyword (>= 2 caractères) + debounce 250ms
-  // IMPORTANT: on N'APPLIQUE PAS les autres filtres en attente (draft),
-  // on applique uniquement keyword sur la base de "applied".
+  // ✅ AUTO-APPLY: dès qu’un filtre change, on applique et on met à jour l’URL,
+  // avec debounce 250ms pour éviter trop de updates.
   // ------------------------------------------------------------------
-  const appliedRef = useRef<Filters>(applied);
-  useEffect(() => {
-    appliedRef.current = applied;
-  }, [applied]);
+  const applyTimerRef = useRef<number | null>(null);
 
-  const keywordTimerRef = useRef<number | null>(null);
-  const lastAutoAppliedKeywordRef = useRef<string>("");
-
-  const clearKeywordTimer = () => {
-    if (keywordTimerRef.current != null) {
-      window.clearTimeout(keywordTimerRef.current);
-      keywordTimerRef.current = null;
+  const clearApplyTimer = () => {
+    if (applyTimerRef.current != null) {
+      window.clearTimeout(applyTimerRef.current);
+      applyTimerRef.current = null;
     }
   };
 
-  const applyFiltersObject = (nextApplied: Filters) => {
-    setApplied(nextApplied);
-    const next = filtersToParams(nextApplied);
-    setSearchParams(next, { replace: true });
-    scrollToSectionTop();
+  const applyFiltersObject = (nextApplied: Filters, opts?: { immediate?: boolean }) => {
+    clearApplyTimer();
+
+    const run = () => {
+      setApplied(nextApplied);
+      const next = filtersToParams(nextApplied);
+      setSearchParams(next, { replace: true });
+      scrollToSectionTop();
+    };
+
+    if (opts?.immediate) {
+      run();
+      return;
+    }
+
+    applyTimerRef.current = window.setTimeout(run, 250);
   };
 
-  const scheduleKeywordAutoApply = (keywordValue: string) => {
-    clearKeywordTimer();
-
-    keywordTimerRef.current = window.setTimeout(() => {
-      const kw = (keywordValue ?? "").trim();
-
-      // sécurité
-      if (kw.length < 2) return;
-
-      // évite de ré-appliquer la même valeur
-      if (kw === lastAutoAppliedKeywordRef.current) return;
-
-      // ✅ on applique uniquement keyword sur la base de "applied" (pas le draft complet)
-      const base = appliedRef.current;
-      const nextApplied: Filters = { ...base, keyword: kw };
-
-      lastAutoAppliedKeywordRef.current = kw;
-      applyFiltersObject(nextApplied);
-    }, 250);
+  // helper: met à jour draft + applique automatiquement
+  const updateDraft = (patch: Partial<Filters>, opts?: { immediate?: boolean }) => {
+    setDraft((prev) => {
+      const next = { ...prev, ...patch };
+      // Important: on n'applique pas pendant l'init/external apply
+      if (!applyingExternalRef.current) applyFiltersObject(next, opts);
+      return next;
+    });
   };
 
   useEffect(() => {
     return () => {
-      clearKeywordTimer();
+      clearApplyTimer();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -405,8 +374,7 @@ const WorkerSearchSection: React.FC = () => {
           return {
             id: w.id,
             name:
-              (((w.first_name || "") + (w.last_name ? ` ${w.last_name}` : "")).trim() ||
-                "Ouvrier") as string,
+              (((w.first_name || "") + (w.last_name ? ` ${w.last_name}` : "")).trim() || "Ouvrier") as string,
             job: w.profession ?? "",
             country: w.country ?? "",
             region: w.region ?? "",
@@ -442,15 +410,12 @@ const WorkerSearchSection: React.FC = () => {
   }, [language]);
 
   // ----------------------------
-  // 2) Init: URL -> applied+draft
+  // 2) Init: URL / sessionStorage / event
   // ----------------------------
   const applyExternalFilters = (f: Filters) => {
     applyingExternalRef.current = true;
     setApplied(f);
     setDraft(f);
-
-    // ✅ aligne l'anti double auto-apply sur ce qui vient d'être appliqué
-    lastAutoAppliedKeywordRef.current = (f.keyword ?? "").trim();
 
     window.setTimeout(() => {
       applyingExternalRef.current = false;
@@ -502,26 +467,43 @@ const WorkerSearchSection: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ À l’arrivée sur la page recherche, aligner le titre juste sous le header (sans espace)
+  // ✅ À l’arrivée, aligner la section juste sous le header
   useLayoutEffect(() => {
     scrollToSectionTop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Ré-appliquer quand l'URL change (clic Rechercher, navigation, etc.)
+  // Ré-appliquer quand l'URL change (navigation, etc.)
   useEffect(() => {
     if (!initializedRef.current) return;
     if (applyingExternalRef.current) return;
 
     const f = paramsToFilters(searchParams);
-    if (!sameFilters(f, applied)) {
+    // on évite boucle: si déjà identique, ne rien faire
+    // (on compare sur les champs principaux sans fonction "sameFilters" pour rester simple)
+    const isSame =
+      f.keyword === applied.keyword &&
+      f.job === applied.job &&
+      f.region === applied.region &&
+      f.city === applied.city &&
+      f.commune === applied.commune &&
+      f.district === applied.district &&
+      f.maxPrice === applied.maxPrice &&
+      f.minRating === applied.minRating &&
+      f.view === applied.view &&
+      f.near === applied.near &&
+      f.radiusKm === applied.radiusKm &&
+      f.lat === applied.lat &&
+      f.lng === applied.lng;
+
+    if (!isSame) {
       applyExternalFilters(f);
       scrollToSectionTop();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams.toString()]);
 
-  // Support event global op:search (optionnel)
+  // Support event global op:search
   useEffect(() => {
     const onSearch = (evt: any) => {
       const payload: SearchPayload | undefined = evt?.detail;
@@ -548,14 +530,12 @@ const WorkerSearchSection: React.FC = () => {
   // 3) Derived options
   // ----------------------------
   const jobs = useMemo(
-    () =>
-      Array.from(new Set(workers.map((w) => w.job).filter((j) => j && j.trim().length > 0))),
+    () => Array.from(new Set(workers.map((w) => w.job).filter((j) => j && j.trim().length > 0))),
     [workers]
   );
 
   const regions = useMemo(
-    () =>
-      Array.from(new Set(workers.map((w) => w.region).filter((r) => r && r.trim().length > 0))),
+    () => Array.from(new Set(workers.map((w) => w.region).filter((r) => r && r.trim().length > 0))),
     [workers]
   );
 
@@ -577,11 +557,7 @@ const WorkerSearchSection: React.FC = () => {
       Array.from(
         new Set(
           workers
-            .filter(
-              (w) =>
-                (!draft.region || w.region === draft.region) &&
-                (!draft.city || w.city === draft.city)
-            )
+            .filter((w) => (!draft.region || w.region === draft.region) && (!draft.city || w.city === draft.city))
             .map((w) => w.commune)
             .filter((c) => c && c.trim().length > 0)
         )
@@ -626,8 +602,7 @@ const WorkerSearchSection: React.FC = () => {
       .map((w) => ({ ...w, distanceKm: computeDistance(w, f) }))
       .filter((w) => {
         const kw = f.keyword.trim().toLowerCase();
-        const matchKeyword =
-          !kw || w.name.toLowerCase().includes(kw) || w.job.toLowerCase().includes(kw);
+        const matchKeyword = !kw || w.name.toLowerCase().includes(kw) || w.job.toLowerCase().includes(kw);
 
         const matchJob = f.job === "all" || w.job === f.job;
         const matchPrice = w.hourlyRate <= f.maxPrice;
@@ -644,11 +619,7 @@ const WorkerSearchSection: React.FC = () => {
         const matchDistrict = !f.district || districtNorm === f.district.trim().toLowerCase();
 
         const matchRadius =
-          !f.near ||
-          f.lat == null ||
-          f.lng == null ||
-          w.distanceKm == null ||
-          w.distanceKm <= f.radiusKm;
+          !f.near || f.lat == null || f.lng == null || w.distanceKm == null || w.distanceKm <= f.radiusKm;
 
         return (
           matchKeyword &&
@@ -680,31 +651,17 @@ const WorkerSearchSection: React.FC = () => {
   // ----------------------------
   // 4) Actions
   // ----------------------------
-  const applyFilters = () => {
-    setApplied(draft);
-    const next = filtersToParams(draft);
-    setSearchParams(next, { replace: true });
-
-    // ✅ synchroniser l'anti double auto-apply (keyword appliqué manuellement)
-    lastAutoAppliedKeywordRef.current = (draft.keyword ?? "").trim();
-    clearKeywordTimer();
-
-    scrollToSectionTop();
-  };
-
-  const cancelDraft = () => {
-    setDraft(applied);
-    clearKeywordTimer();
-  };
-
   const resetAll = () => {
+    // immédiat: pas de délai pour reset
+    applyingExternalRef.current = true;
     setDraft(DEFAULT_FILTERS);
     setApplied(DEFAULT_FILTERS);
     setSearchParams({}, { replace: true });
     setGeoError(null);
 
-    lastAutoAppliedKeywordRef.current = "";
-    clearKeywordTimer();
+    window.setTimeout(() => {
+      applyingExternalRef.current = false;
+    }, 0);
 
     scrollToSectionTop();
   };
@@ -713,7 +670,7 @@ const WorkerSearchSection: React.FC = () => {
     setGeoError(null);
 
     if (!navigator.geolocation) {
-      setDraft((prev) => ({ ...prev, near: false, lat: null, lng: null }));
+      updateDraft({ near: false, lat: null, lng: null }, { immediate: true });
       setGeoError(
         language === "fr"
           ? "La géolocalisation n'est pas supportée par ce navigateur."
@@ -726,19 +683,21 @@ const WorkerSearchSection: React.FC = () => {
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setDraft((prev) => ({
-          ...prev,
-          near: true,
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        }));
+        updateDraft(
+          {
+            near: true,
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          },
+          { immediate: true }
+        );
         setGeoLocating(false);
       },
       (err) => {
         console.error("geolocation error", err);
         setGeoLocating(false);
 
-        setDraft((prev) => ({ ...prev, near: false, lat: null, lng: null }));
+        updateDraft({ near: false, lat: null, lng: null }, { immediate: true });
 
         setGeoError(
           language === "fr"
@@ -754,12 +713,11 @@ const WorkerSearchSection: React.FC = () => {
     title: language === "fr" ? "Trouvez votre professionnel" : "Find your professional",
     subtitle:
       language === "fr"
-        ? "Modifiez vos filtres, puis cliquez sur Appliquer pour lancer la recherche."
-        : "Adjust filters, then click Apply to run the search.",
+        ? "Modifiez vos filtres pour lancer la recherche automatiquement."
+        : "Adjust filters to automatically update results.",
     filters: language === "fr" ? "Filtres" : "Filters",
     keywordLabel: language === "fr" ? "Métier ou nom" : "Trade or name",
-    searchPlaceholder:
-      language === "fr" ? "Plombier, électricien, Mamadou..." : "Plumber, electrician, John...",
+    searchPlaceholder: language === "fr" ? "Plombier, électricien, Mamadou..." : "Plumber, electrician, John...",
     job: language === "fr" ? "Métier" : "Job",
     allJobs: language === "fr" ? "Tous les métiers" : "All trades",
     priceLabel: language === "fr" ? "Tarif horaire max" : "Max hourly rate",
@@ -773,16 +731,11 @@ const WorkerSearchSection: React.FC = () => {
     allCommunes: language === "fr" ? "Toutes les communes" : "All communes",
     allDistricts: language === "fr" ? "Tous les quartiers" : "All districts",
     reset: language === "fr" ? "Réinitialiser" : "Reset",
-    cancel: language === "fr" ? "Annuler" : "Cancel",
-    apply: language === "fr" ? "Appliquer" : "Apply",
     noResults:
       language === "fr"
         ? "Aucun professionnel ne correspond à ces critères pour le moment."
         : "No professional matches your criteria yet.",
-    noData:
-      language === "fr"
-        ? "Aucun professionnel n’est encore disponible."
-        : "No professionals are available yet.",
+    noData: language === "fr" ? "Aucun professionnel n’est encore disponible." : "No professionals are available yet.",
     contact: language === "fr" ? "Contacter" : "Contact",
     perHour: "/h",
     years: language === "fr" ? "ans d'expérience" : "years of experience",
@@ -801,15 +754,9 @@ const WorkerSearchSection: React.FC = () => {
       language === "fr"
         ? "Activez la localisation pour trier et filtrer par distance."
         : "Enable location to sort/filter by distance.",
-    pending: language === "fr" ? "Modifs en attente" : "Pending changes",
-    applied: language === "fr" ? "Filtres appliqués" : "Applied filters",
   };
 
-  const hasAnyGeoWorkers = useMemo(
-    () => workers.some((w) => w.latitude != null && w.longitude != null),
-    [workers]
-  );
-
+  const hasAnyGeoWorkers = useMemo(() => workers.some((w) => w.latitude != null && w.longitude != null), [workers]);
   const appliedHasCoords = applied.lat != null && applied.lng != null;
 
   return (
@@ -837,22 +784,9 @@ const WorkerSearchSection: React.FC = () => {
                 <span>{text.geoHint}</span>
               </span>
 
-              <span
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
-                  dirty ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                }`}
-              >
-                {dirty ? (
-                  <>
-                    <Info className="w-3 h-3" />
-                    {text.pending}
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-3 h-3" />
-                    {text.applied}
-                  </>
-                )}
+              <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 border-emerald-200 bg-emerald-50 text-emerald-700">
+                <Check className="w-3 h-3" />
+                {language === "fr" ? "Filtres appliqués" : "Applied filters"}
               </span>
             </div>
 
@@ -871,7 +805,7 @@ const WorkerSearchSection: React.FC = () => {
             <div className="flex border border-gray-300 rounded-lg bg-white overflow-hidden">
               <button
                 type="button"
-                onClick={() => setDraft((p) => ({ ...p, view: "list" }))}
+                onClick={() => updateDraft({ view: "list" }, { immediate: true })}
                 className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
                   draft.view === "list" ? "bg-pro-blue text-white" : "text-gray-600 hover:bg-gray-100"
                 }`}
@@ -881,7 +815,7 @@ const WorkerSearchSection: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => setDraft((p) => ({ ...p, view: "grid" }))}
+                onClick={() => updateDraft({ view: "grid" }, { immediate: true })}
                 className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
                   draft.view === "grid" ? "bg-pro-blue text-white" : "text-gray-600 hover:bg-gray-100"
                 }`}
@@ -898,49 +832,17 @@ const WorkerSearchSection: React.FC = () => {
             <div className="flex items-start justify-between gap-3 mb-4">
               <h3 className="text-base font-semibold text-pro-gray">{text.filters}</h3>
 
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  className="bg-pro-blue hover:bg-blue-700"
-                  onClick={applyFilters}
-                  disabled={!dirty}
-                >
-                  <Check className="w-4 h-4 mr-2" />
-                  {text.apply}
-                </Button>
-
-                <Button type="button" size="sm" variant="outline" onClick={cancelDraft} disabled={!dirty}>
-                  <X className="w-4 h-4 mr-2" />
-                  {text.cancel}
-                </Button>
-              </div>
+              <Button className="border-gray-300 text-sm" variant="outline" type="button" onClick={resetAll}>
+                <RotateCcw className="w-4 h-4 mr-2" />
+                {text.reset}
+              </Button>
             </div>
 
-            {/* ✅ Auto-apply UNIQUEMENT ici (keyword) */}
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">{text.keywordLabel}</label>
               <Input
                 value={draft.keyword}
-                onChange={(e) => {
-                  const value = e.target.value;
-
-                  // ✅ on met à jour le draft de façon sûre (évite draft "stale")
-                  setDraft((prev) => ({ ...prev, keyword: value }));
-
-                  const trimmed = value.trim();
-
-                  // < 2 caractères => retour comportement normal (pas d'auto-apply)
-                  if (trimmed.length < 2) {
-                    clearKeywordTimer();
-                    // autorise une future auto-apply (quand on repassera >=2)
-                    lastAutoAppliedKeywordRef.current = "";
-                    return;
-                  }
-
-                  // >= 2 => auto-apply keyword uniquement (debounce 250ms)
-                  scheduleKeywordAutoApply(trimmed);
-                }}
+                onChange={(e) => updateDraft({ keyword: e.target.value })}
                 placeholder={text.searchPlaceholder}
                 className="text-sm"
               />
@@ -953,7 +855,7 @@ const WorkerSearchSection: React.FC = () => {
                 className="w-full bg-pro-blue hover:bg-blue-700"
                 onClick={() => {
                   if (draft.near || (draft.lat != null && draft.lng != null)) {
-                    setDraft((p) => ({ ...p, near: false, lat: null, lng: null }));
+                    updateDraft({ near: false, lat: null, lng: null }, { immediate: true });
                     setGeoError(null);
                     return;
                   }
@@ -984,7 +886,7 @@ const WorkerSearchSection: React.FC = () => {
                     min={1}
                     max={100}
                     step={1}
-                    onValueChange={(v) => setDraft((p) => ({ ...p, radiusKm: v[0] }))}
+                    onValueChange={(v) => updateDraft({ radiusKm: v[0] })}
                   />
                 </div>
               )}
@@ -994,7 +896,7 @@ const WorkerSearchSection: React.FC = () => {
               <label className="block text-xs font-medium text-gray-600 mb-1">{text.job}</label>
               <select
                 value={draft.job}
-                onChange={(e) => setDraft((p) => ({ ...p, job: e.target.value }))}
+                onChange={(e) => updateDraft({ job: e.target.value })}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="all">{text.allJobs}</option>
@@ -1012,13 +914,7 @@ const WorkerSearchSection: React.FC = () => {
                 value={draft.region}
                 onChange={(e) => {
                   const region = e.target.value;
-                  setDraft((p) => ({
-                    ...p,
-                    region,
-                    city: "",
-                    commune: "",
-                    district: "",
-                  }));
+                  updateDraft({ region, city: "", commune: "", district: "" });
                 }}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
@@ -1037,12 +933,7 @@ const WorkerSearchSection: React.FC = () => {
                 value={draft.city}
                 onChange={(e) => {
                   const city = e.target.value;
-                  setDraft((p) => ({
-                    ...p,
-                    city,
-                    commune: "",
-                    district: "",
-                  }));
+                  updateDraft({ city, commune: "", district: "" });
                 }}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
@@ -1061,11 +952,7 @@ const WorkerSearchSection: React.FC = () => {
                 value={draft.commune}
                 onChange={(e) => {
                   const commune = e.target.value;
-                  setDraft((p) => ({
-                    ...p,
-                    commune,
-                    district: "",
-                  }));
+                  updateDraft({ commune, district: "" });
                 }}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
@@ -1082,7 +969,7 @@ const WorkerSearchSection: React.FC = () => {
               <label className="block text-xs font-medium text-gray-600 mb-1">{text.district}</label>
               <select
                 value={draft.district}
-                onChange={(e) => setDraft((p) => ({ ...p, district: e.target.value }))}
+                onChange={(e) => updateDraft({ district: e.target.value })}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="">{text.allDistricts}</option>
@@ -1110,11 +997,11 @@ const WorkerSearchSection: React.FC = () => {
                 min={50000}
                 max={DEFAULT_MAX_PRICE}
                 step={10000}
-                onValueChange={(v) => setDraft((p) => ({ ...p, maxPrice: v[0] }))}
+                onValueChange={(v) => updateDraft({ maxPrice: v[0] })}
               />
             </div>
 
-            <div className="mb-6">
+            <div className="mb-2">
               <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                 <span>{text.ratingLabel}</span>
                 <span className="text-[11px] text-gray-500">
@@ -1126,34 +1013,9 @@ const WorkerSearchSection: React.FC = () => {
                 min={0}
                 max={5}
                 step={0.5}
-                onValueChange={(v) => setDraft((p) => ({ ...p, minRating: v[0] }))}
+                onValueChange={(v) => updateDraft({ minRating: v[0] })}
               />
             </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <Button className="w-full border-gray-300 text-sm" variant="outline" type="button" onClick={resetAll}>
-                <RotateCcw className="w-4 h-4 mr-2" />
-                {text.reset}
-              </Button>
-
-              <Button
-                type="button"
-                className="w-full bg-pro-blue hover:bg-blue-700 text-sm"
-                onClick={applyFilters}
-                disabled={!dirty}
-              >
-                <Check className="w-4 h-4 mr-2" />
-                {text.apply}
-              </Button>
-            </div>
-
-            {dirty && (
-              <div className="mt-3 text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                {language === "fr"
-                  ? "Des modifications sont en attente. Cliquez sur “Appliquer” pour lancer la recherche."
-                  : "Pending changes. Click “Apply” to run the search."}
-              </div>
-            )}
           </aside>
 
           {/* ✅ Le reste (liste / grid) inchangé */}
@@ -1326,18 +1188,6 @@ const WorkerSearchSection: React.FC = () => {
                     </div>
                   );
                 })}
-              </div>
-            )}
-
-            {dirty && (
-              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                {language === "fr"
-                  ? "Vous avez modifié des filtres mais ils ne sont pas encore appliqués."
-                  : "You changed filters but they are not applied yet."}{" "}
-                <button type="button" className="underline font-semibold" onClick={applyFilters}>
-                  {language === "fr" ? "Appliquer maintenant" : "Apply now"}
-                </button>
-                .
               </div>
             )}
           </div>
