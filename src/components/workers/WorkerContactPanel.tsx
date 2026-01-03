@@ -35,13 +35,11 @@ const WorkerContactPanel: React.FC<WorkerContactPanelProps> = ({ worker }) => {
   const [preferredDate, setPreferredDate] = useState("");
   const [message, setMessage] = useState("");
 
-  const baseMessage = `Bonjour ${worker.fullName},
+const baseMessage = `Bonjour ${worker.fullName},
 
-Je vous contacte via OuvriersPro pour un besoin de ${
-    worker.profession || "travaux"
-  }.
+Je vous contacte via ProxiServices pour un besoin de ${worker.profession || "services"}.
 
-Détails de ma demande : 
+Détails de ma demande :
 `;
 
   const whatsNumber = (worker.whatsapp || worker.phone || "").replace(/\s+/g, "");
@@ -51,11 +49,11 @@ Détails de ma demande :
         }?text=${encodeURIComponent(baseMessage)}`
       : "";
 
-  const mailtoUrl = worker.email
-    ? `mailto:${worker.email}?subject=${encodeURIComponent(
-        `Demande de ${worker.profession || "travaux"} via OuvriersPro`
-      )}&body=${encodeURIComponent(baseMessage)}`
-    : "";
+const mailtoUrl = worker.email
+  ? `mailto:${worker.email}?subject=${encodeURIComponent(
+      `Demande de ${worker.profession || "services"} via ProxiServices`
+    )}&body=${encodeURIComponent(baseMessage)}`
+  : "";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,8 +70,9 @@ Détails de ma demande :
       message,
     });
     alert(
-      "Votre demande a été enregistrée. L’ouvrier vous répondra directement."
+      "Votre demande a été enregistrée. Le prestataire vous répondra directement."
     );
+
   };
 
   return (
