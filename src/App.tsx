@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 
 // Pages publiques
@@ -42,11 +42,16 @@ import ClientContactForm from "./pages/ClientContactForm";
 // Protection routes
 import PrivateRoute from "./components/PrivateRoute";
 
-// ✅ Layout admin
+// ✅ Layout admin (header sticky pour toutes les pages admin)
 import AdminLayout from "@/components/layout/AdminLayout";
 
 const queryClient = new QueryClient();
 
+/**
+ * ✅ Scroll manager:
+ * - gère /#anchor proprement avec header sticky
+ * - utilise un offset robuste sur tous écrans
+ */
 function ScrollManager() {
   const location = useLocation();
 
@@ -79,9 +84,9 @@ const AppRoutes = () => (
       {/* 🏠 Accueil */}
       <Route path="/" element={<Index />} />
 
-      {/* 🔎 Recherche : on force le retour à l’accueil */}
-      <Route path="/search" element={<Navigate to="/" replace />} />
-      <Route path="/rechercher" element={<Navigate to="/" replace />} />
+      {/* 🔎 Recherche : on reste sur Index (home) */}
+      <Route path="/search" element={<Index />} />
+      <Route path="/rechercher" element={<Index />} />
 
       {/* ❓ FAQ */}
       <Route path="/faq" element={<Faq />} />
@@ -96,7 +101,7 @@ const AppRoutes = () => (
       {/* 🆕 Inscription */}
       <Route path="/register" element={<Register />} />
 
-      {/* 📝 Inscription prestataire */}
+      {/* 📝 Inscription prestataire (nom de route conservé pour compatibilité) */}
       <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
 
       {/* 👤 Fiche prestataire */}
@@ -193,7 +198,7 @@ const AppRoutes = () => (
         }
       />
 
-      {/* 🛠️ Admin */}
+      {/* 🛠️ Admin (layout sticky commun) */}
       <Route
         path="/admin"
         element={
@@ -221,6 +226,10 @@ const App = () => (
         <BrowserRouter>
           <Toaster />
           <Sonner />
+
+          {/* ✅ dvh = vrai “viewport height” sur mobile
+              ✅ min-w-0 sur le wrapper = empêche les enfants flex de forcer une largeur fixe
+              ✅ overflow-x-clip = évite le scroll horizontal sans masquer les layouts */}
           <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
             <AppRoutes />
           </div>
