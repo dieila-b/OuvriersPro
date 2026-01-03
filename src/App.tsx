@@ -19,6 +19,9 @@ import MonCompte from "./pages/MonCompte";
 // ✅ FAQ
 import Faq from "./pages/Faq";
 
+// ✅ Admin FAQ Questions
+import AdminFaqQuestions from "./pages/AdminFaqQuestions";
+
 // Back-office Admin
 import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
 import AdminOuvrierInscriptions from "./pages/AdminOuvrierInscriptions";
@@ -211,6 +214,9 @@ const AppRoutes = () => (
         <Route path="ouvrier-contacts" element={<AdminOuvrierContacts />} />
         <Route path="ouvriers" element={<AdminOuvrierInscriptions />} />
         <Route path="publicites" element={<AdminAds />} />
+
+        {/* ✅ Admin FAQ Questions */}
+        <Route path="faq-questions" element={<AdminFaqQuestions />} />
       </Route>
 
       {/* ❌ 404 */}
