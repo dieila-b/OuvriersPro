@@ -371,7 +371,7 @@ const WorkerReviews: React.FC<WorkerReviewsProps> = ({ workerId }) => {
         (currentUser.user_metadata?.full_name as string | undefined) ||
         (currentUser.user_metadata?.name as string | undefined) ||
         currentUser.email ||
-        (language === "fr" ? "Client OuvriersPro" : "OuvriersPro client");
+        (language === "fr" ? "Client ProxiServices" : "ProxiServices client");
 
       const { error } = await supabase.from("op_ouvrier_reviews").insert({
         worker_id: workerId,
