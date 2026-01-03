@@ -20,9 +20,7 @@ const Header = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [location.pathname, location.search, location.hash]);
+  useEffect(() => setMobileOpen(false), [location.pathname, location.search, location.hash]);
 
   useEffect(() => {
     if (!mobileOpen) {
@@ -86,29 +84,23 @@ const Header = () => {
 
   return (
     <header className="sticky top-0 z-40 w-full max-w-full bg-white/95 backdrop-blur border-b border-gray-200">
-      {/* ✅ FULL WIDTH wrapper (pas de max-w ici) */}
       <div className="w-full px-4 sm:px-6 lg:px-10">
-        {/* ✅ on garde un layout stable, mais sans “boîte” */}
         <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3">
           {/* Logo */}
           <Link to="/" className="min-w-0 flex items-center gap-2">
             <div className="w-10 h-10 bg-pro-blue rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-bold text-lg">OP</span>
+              <span className="text-white font-bold text-lg">PS</span>
             </div>
             <span className="text-base sm:text-xl font-bold text-pro-gray truncate">
-              OuvriersPro
+              ProxiServices
             </span>
           </Link>
 
           {/* Navigation Desktop */}
           <nav className="hidden md:flex min-w-0 items-center gap-6">
             <NavLinkButton onClick={handleSearchClick}>{t("nav.search")}</NavLinkButton>
-            <NavLinkButton onClick={() => handleNavClickSection("faq")}>
-              {t("nav.faq")}
-            </NavLinkButton>
-            <NavLinkButton onClick={() => handleNavClickSection("contact")}>
-              {t("nav.contact")}
-            </NavLinkButton>
+            <NavLinkButton onClick={() => handleNavClickSection("faq")}>{t("nav.faq")}</NavLinkButton>
+            <NavLinkButton onClick={() => handleNavClickSection("contact")}>{t("nav.contact")}</NavLinkButton>
           </nav>
 
           {/* Actions Desktop */}
@@ -129,19 +121,13 @@ const Header = () => {
               >
                 <User className="w-4 h-4" />
                 <span className="hidden lg:inline">{accountLabel}</span>
-                <span className="lg:hidden">
-                  {language === "fr" ? "Compte" : "Account"}
-                </span>
+                <span className="lg:hidden">{language === "fr" ? "Compte" : "Account"}</span>
               </Button>
             </Link>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center gap-1 whitespace-nowrap"
-                >
+                <Button variant="outline" size="sm" className="flex items-center gap-1 whitespace-nowrap">
                   <Languages className="w-4 h-4" />
                   <span className="uppercase">{language}</span>
                 </Button>
@@ -161,11 +147,7 @@ const Header = () => {
           <div className="md:hidden min-w-0 flex items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center gap-1 whitespace-nowrap"
-                >
+                <Button variant="outline" size="sm" className="flex items-center gap-1 whitespace-nowrap">
                   <Languages className="w-4 h-4" />
                   <span className="uppercase">{language}</span>
                 </Button>
