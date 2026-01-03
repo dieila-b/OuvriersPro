@@ -15,7 +15,9 @@ import WorkerDetail from "./pages/WorkerDetail";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MonCompte from "./pages/MonCompte";
-import FAQ from "./pages/FAQ"; // ✅ AJOUT
+
+// ✅ FAQ (assure-toi que le fichier existe bien : src/pages/FAQ.tsx)
+import FAQ from "./pages/FAQ";
 
 // Back-office Admin
 import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
@@ -82,7 +84,7 @@ const AppRoutes = () => (
       {/* 🏠 Accueil */}
       <Route path="/" element={<Index />} />
 
-      {/* 🔎 Recherche : on reste sur Index (home) avec ancre #search */}
+      {/* 🔎 Recherche : on reste sur Index (home) */}
       <Route path="/search" element={<Index />} />
       <Route path="/rechercher" element={<Index />} />
 
@@ -99,10 +101,10 @@ const AppRoutes = () => (
       {/* 🆕 Inscription */}
       <Route path="/register" element={<Register />} />
 
-      {/* 📝 Inscription ouvrier */}
+      {/* 📝 Inscription prestataire (nom de route conservé pour compatibilité) */}
       <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
 
-      {/* 👤 Fiche ouvrier */}
+      {/* 👤 Fiche prestataire */}
       <Route
         path="/ouvrier/:id"
         element={
@@ -162,7 +164,7 @@ const AppRoutes = () => (
         }
       />
 
-      {/* 👷‍♂️ Espace ouvrier */}
+      {/* 👷‍♂️ Espace prestataire */}
       <Route
         path="/espace-ouvrier"
         element={
