@@ -66,6 +66,11 @@ const Header = () => {
     else navigate(`/#${sectionId}`);
   };
 
+  // ✅ FAQ = page, pas une section
+  const handleFaqClick = () => {
+    navigate("/faq");
+  };
+
   const NavLinkButton = ({
     children,
     onClick,
@@ -99,7 +104,10 @@ const Header = () => {
           {/* Navigation Desktop */}
           <nav className="hidden md:flex min-w-0 items-center gap-6">
             <NavLinkButton onClick={handleSearchClick}>{t("nav.search")}</NavLinkButton>
-            <NavLinkButton onClick={() => handleNavClickSection("faq")}>{t("nav.faq")}</NavLinkButton>
+
+            {/* ✅ FAQ = route */}
+            <NavLinkButton onClick={handleFaqClick}>{t("nav.faq")}</NavLinkButton>
+
             <NavLinkButton onClick={() => handleNavClickSection("contact")}>{t("nav.contact")}</NavLinkButton>
           </nav>
 
@@ -208,10 +216,11 @@ const Header = () => {
                   <span className="truncate">{t("nav.search")}</span>
                 </button>
 
+                {/* ✅ FAQ = page */}
                 <button
                   type="button"
                   onClick={() => {
-                    handleNavClickSection("faq");
+                    handleFaqClick();
                     setMobileOpen(false);
                   }}
                   className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue min-w-0"
