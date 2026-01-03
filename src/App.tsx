@@ -17,7 +17,7 @@ import Register from "./pages/Register";
 import MonCompte from "./pages/MonCompte";
 
 // ✅ FAQ (assure-toi que le fichier existe bien : src/pages/FAQ.tsx)
-import FAQ from "./pages/FAQ";
+import faq from "./pages/faq";
 
 // Back-office Admin
 import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
