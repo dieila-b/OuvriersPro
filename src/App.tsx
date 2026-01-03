@@ -16,8 +16,8 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MonCompte from "./pages/MonCompte";
 
-// ✅ FAQ (assure-toi que le fichier existe bien : src/pages/FAQ.tsx)
-import faq from "./pages/faq";
+// ✅ FAQ
+import Faq from "./pages/Faq";
 
 // Back-office Admin
 import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
@@ -89,8 +89,8 @@ const AppRoutes = () => (
       <Route path="/rechercher" element={<Index />} />
 
       {/* ❓ FAQ */}
-      <Route path="/faq" element={<FAQ />} />
-      <Route path="/aide" element={<FAQ />} />
+      <Route path="/faq" element={<Faq />} />
+      <Route path="/aide" element={<Faq />} />
 
       {/* 🧑‍💼 Mon compte */}
       <Route path="/mon-compte" element={<MonCompte />} />
