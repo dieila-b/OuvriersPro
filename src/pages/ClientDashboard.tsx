@@ -256,7 +256,7 @@ const ClientDashboard: React.FC = () => {
   const displayName =
     clientInfo?.fullName ||
     clientInfo?.email ||
-    (language === "fr" ? "Client OuvriersPro" : "OuvriersPro client");
+    (language === "fr" ? "Client ProxiServices" : "ProxiServices client");
 
   const initials = displayName
     .split(" ")
@@ -658,12 +658,12 @@ const ClientDashboard: React.FC = () => {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">
-                    {language === "fr" ? "Astuce OuvriersPro" : "OuvriersPro tip"}
+                    {language === "fr" ? "Conseil ProxiServices" : "ProxiServices tip"}
                   </p>
                   <p className="text-sm leading-relaxed">
                     {language === "fr"
-                      ? "Plus vos demandes sont précises (photos, délais, budget estimé), plus vous recevez des réponses rapides et adaptées."
-                      : "The more precise your requests are (photos, timeline, estimated budget), the faster and more accurate responses you get."}
+                      ? "Plus votre demande est détaillée (photos, délais, budget estimatif), plus vous augmentez vos chances de recevoir des réponses rapides et pertinentes."
+                      : "The more detailed your request is (photos, timeline, estimated budget), the more likely you are to receive quick and relevant replies."}
                   </p>
                 </div>
                 <ArrowRight className="w-5 h-5 text-slate-400" />
