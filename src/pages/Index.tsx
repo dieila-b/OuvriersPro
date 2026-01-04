@@ -53,6 +53,47 @@ const Index = () => {
     );
   }, [searchPayload]);
 
+  // ✅ Mesure réelle des overlays en haut (header + barres sticky/fixed)
+  const getTopOverlayOffset = () => {
+    const samplesX = [20, Math.floor(window.innerWidth / 2), window.innerWidth - 20];
+    const yProbe = 6;
+
+    let maxBottom = 0;
+
+    const consider = (el: Element | null) => {
+      if (!el) return;
+      let cur: Element | null = el;
+
+      while (cur) {
+        const cs = window.getComputedStyle(cur as HTMLElement);
+        const pos = cs.position;
+
+        if (pos === "fixed" || pos === "sticky") {
+          const r = (cur as HTMLElement).getBoundingClientRect();
+          // élément collant en haut
+          if (r.top <= 0 && r.height > 0) {
+            maxBottom = Math.max(maxBottom, r.bottom);
+          }
+        }
+
+        cur = cur.parentElement;
+      }
+    };
+
+    for (const x of samplesX) {
+      consider(document.elementFromPoint(x, yProbe));
+    }
+
+    // fallback header (au cas où elementFromPoint ne capte pas bien)
+    const headerEl = document.querySelector("header") as HTMLElement | null;
+    if (headerEl) {
+      const r = headerEl.getBoundingClientRect();
+      if (r.height > 0) maxBottom = Math.max(maxBottom, r.bottom);
+    }
+
+    return Math.max(0, Math.round(maxBottom));
+  };
+
   // ✅ 0) Si on est sur /search ou /rechercher : on redirige vers l’accueil + #search
   // => un refresh ne te laissera plus “bloqué” sur la page recherche
   useEffect(() => {
@@ -92,7 +133,7 @@ const Index = () => {
     }
   }, [isHomeRoute, location.hash, hasAnySearchParam, searchPayload]);
 
-  // ✅ 2) Scroll ancres (#search, #subscription...) sur l’accueil
+  // ✅ 2) Scroll ancres (#search, #subscription...) sur l’accueil (sans “vide” au-dessus)
   useEffect(() => {
     if (!isHomeRoute) return;
     if (!location.hash) return;
@@ -101,12 +142,31 @@ const Index = () => {
     const el = document.getElementById(id);
     if (!el) return;
 
-    const headerEl = document.querySelector("header") as HTMLElement | null;
-    const headerHeight = headerEl?.offsetHeight ?? 72;
+    const desiredGap = 6;
 
-    const y = el.getBoundingClientRect().top + window.scrollY - headerHeight - 8;
+    const doScroll = () => {
+      const overlay = getTopOverlayOffset();
+      const targetTop = overlay + desiredGap;
+
+      const rect = el.getBoundingClientRect();
+      const delta = rect.top - targetTop;
+
+      if (Math.abs(delta) > 1) {
+        window.scrollBy({ top: delta, behavior: "auto" });
+      }
+    };
+
     const timeout = window.setTimeout(() => {
-      window.scrollTo({ top: Math.max(y, 0), behavior: "smooth" });
+      // 1) scroll standard
+      el.scrollIntoView({ block: "start", behavior: "smooth" });
+
+      // 2) correction après layout (double RAF + micro-timeout)
+      requestAnimationFrame(() => {
+        doScroll();
+        requestAnimationFrame(doScroll);
+      });
+
+      window.setTimeout(doScroll, 80);
     }, 120);
 
     return () => window.clearTimeout(timeout);
@@ -131,11 +191,12 @@ const Index = () => {
 
           <FeaturesSection />
 
-          <div id="search" className="w-full scroll-mt-20 sm:scroll-mt-24">
+          {/* ✅ Optionnel: enlever scroll-mt pour éviter tout offset additionnel */}
+          <div id="search" className="w-full">
             <WorkerSearchSection />
           </div>
 
-          <div id="subscription" className="w-full scroll-mt-20 sm:scroll-mt-24">
+          <div id="subscription" className="w-full">
             <SubscriptionSection />
           </div>
         </>
