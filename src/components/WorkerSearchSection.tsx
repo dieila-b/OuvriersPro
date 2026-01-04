@@ -1,6 +1,6 @@
 // src/components/WorkerSearchSection.tsx
 import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Slider } from "@/components/ui/slider";
@@ -199,22 +199,33 @@ function paramsToFilters(searchParams: URLSearchParams): Filters {
 const WorkerSearchSection: React.FC = () => {
   const { language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // ✅ Référence de section pour scroller AU BON ENDROIT (alignée sous le header)
+  // ✅ ancre réelle (le bloc du titre), pour tomber DIRECTEMENT sur "Trouvez votre professionnel"
   const sectionRef = useRef<HTMLElement | null>(null);
+  const topAnchorRef = useRef<HTMLDivElement | null>(null);
 
-  const scrollToSectionTop = () => {
-    const el = sectionRef.current;
+  const scrollToResultsTop = (opts?: { behavior?: ScrollBehavior }) => {
+    const anchor = topAnchorRef.current;
+    const fallback = sectionRef.current;
+    const el = anchor ?? fallback;
     if (!el) return;
 
     const headerEl = document.querySelector("header") as HTMLElement | null;
     const headerH = headerEl?.offsetHeight ?? 72;
 
+    // petit offset pour coller sous le header (sans “vide”)
+    const extra = 8;
+
+    // double RAF = layout stable (évite le “gap” quand la page vient de naviguer)
     requestAnimationFrame(() => {
-      const y = el.getBoundingClientRect().top + window.scrollY - headerH;
-      window.scrollTo({ top: Math.max(y, 0), behavior: "auto" });
+      requestAnimationFrame(() => {
+        const top = el.getBoundingClientRect().top + window.scrollY;
+        const y = top - headerH - extra;
+        window.scrollTo({ top: Math.max(0, y), behavior: opts?.behavior ?? "auto" });
+      });
     });
   };
 
@@ -276,8 +287,7 @@ const WorkerSearchSection: React.FC = () => {
   const [draft, setDraft] = useState<Filters>(DEFAULT_FILTERS);
 
   // ------------------------------------------------------------------
-  // ✅ AUTO-APPLY: dès qu’un filtre change, on applique et on met à jour l’URL,
-  // avec debounce 250ms pour éviter trop de updates.
+  // ✅ AUTO-APPLY (debounce 250ms)
   // ------------------------------------------------------------------
   const applyTimerRef = useRef<number | null>(null);
 
@@ -295,7 +305,11 @@ const WorkerSearchSection: React.FC = () => {
       setApplied(nextApplied);
       const next = filtersToParams(nextApplied);
       setSearchParams(next, { replace: true });
-      scrollToSectionTop();
+
+      // ✅ IMPORTANT: si on est sur /search (ou /rechercher), on recolle directement le haut du bloc résultats
+      if (location.pathname === "/search" || location.pathname === "/rechercher") {
+        scrollToResultsTop({ behavior: "auto" });
+      }
     };
 
     if (opts?.immediate) {
@@ -306,11 +320,9 @@ const WorkerSearchSection: React.FC = () => {
     applyTimerRef.current = window.setTimeout(run, 250);
   };
 
-  // helper: met à jour draft + applique automatiquement
   const updateDraft = (patch: Partial<Filters>, opts?: { immediate?: boolean }) => {
     setDraft((prev) => {
       const next = { ...prev, ...patch };
-      // Important: on n'applique pas pendant l'init/external apply
       if (!applyingExternalRef.current) applyFiltersObject(next, opts);
       return next;
     });
@@ -446,7 +458,6 @@ const WorkerSearchSection: React.FC = () => {
       return;
     }
 
-    // fallback sessionStorage (Index.tsx)
     const stored = safeParseJson<SearchPayload>(sessionStorage.getItem("op:last_search"));
     if (stored && (stored.keyword || stored.district || stored.lat || stored.lng || stored.near)) {
       const next = new URLSearchParams(searchParams);
@@ -467,11 +478,13 @@ const WorkerSearchSection: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ À l’arrivée, aligner la section juste sous le header
+  // ✅ À l’arrivée SUR /search, on colle le haut du bloc résultats (pas sur /)
   useLayoutEffect(() => {
-    scrollToSectionTop();
+    if (location.pathname === "/search" || location.pathname === "/rechercher") {
+      scrollToResultsTop({ behavior: "auto" });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [location.pathname]);
 
   // Ré-appliquer quand l'URL change (navigation, etc.)
   useEffect(() => {
@@ -479,8 +492,7 @@ const WorkerSearchSection: React.FC = () => {
     if (applyingExternalRef.current) return;
 
     const f = paramsToFilters(searchParams);
-    // on évite boucle: si déjà identique, ne rien faire
-    // (on compare sur les champs principaux sans fonction "sameFilters" pour rester simple)
+
     const isSame =
       f.keyword === applied.keyword &&
       f.job === applied.job &&
@@ -498,7 +510,9 @@ const WorkerSearchSection: React.FC = () => {
 
     if (!isSame) {
       applyExternalFilters(f);
-      scrollToSectionTop();
+      if (location.pathname === "/search" || location.pathname === "/rechercher") {
+        scrollToResultsTop({ behavior: "auto" });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams.toString()]);
@@ -518,13 +532,17 @@ const WorkerSearchSection: React.FC = () => {
 
       if (Object.keys(next).length) {
         setSearchParams(next, { replace: true });
-        scrollToSectionTop();
+
+        // ✅ si l’event déclenche la page résultats, on “snap” immédiatement sur le titre
+        if (location.pathname === "/search" || location.pathname === "/rechercher") {
+          scrollToResultsTop({ behavior: "auto" });
+        }
       }
     };
 
     window.addEventListener("op:search", onSearch as EventListener);
     return () => window.removeEventListener("op:search", onSearch as EventListener);
-  }, [setSearchParams]);
+  }, [setSearchParams, location.pathname]);
 
   // ----------------------------
   // 3) Derived options
@@ -652,7 +670,6 @@ const WorkerSearchSection: React.FC = () => {
   // 4) Actions
   // ----------------------------
   const resetAll = () => {
-    // immédiat: pas de délai pour reset
     applyingExternalRef.current = true;
     setDraft(DEFAULT_FILTERS);
     setApplied(DEFAULT_FILTERS);
@@ -663,7 +680,9 @@ const WorkerSearchSection: React.FC = () => {
       applyingExternalRef.current = false;
     }, 0);
 
-    scrollToSectionTop();
+    if (location.pathname === "/search" || location.pathname === "/rechercher") {
+      scrollToResultsTop({ behavior: "auto" });
+    }
   };
 
   const requestMyPosition = () => {
@@ -760,9 +779,16 @@ const WorkerSearchSection: React.FC = () => {
   const appliedHasCoords = applied.lat != null && applied.lng != null;
 
   return (
-    <section ref={sectionRef} id="worker-search" className="w-full pt-0 pb-10 sm:pb-14 lg:pb-16 bg-white">
+    <section
+      ref={sectionRef}
+      id="worker-search"
+      className="w-full pt-0 pb-10 sm:pb-14 lg:pb-16 bg-white"
+    >
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
-        <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-6 sm:mb-8 border-b border-gray-200 pb-4 min-w-0">
+        {/* ✅ Ancre interne = le titre (la scroll arrive ici, donc plus d’espace au-dessus) */}
+        <div ref={topAnchorRef} />
+
+        <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-5 sm:mb-7 border-b border-gray-200 pb-3 min-w-0">
           <div className="min-w-0">
             <h2 className="mt-0 text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
               {text.title}
@@ -1018,7 +1044,6 @@ const WorkerSearchSection: React.FC = () => {
             </div>
           </aside>
 
-          {/* ✅ Le reste (liste / grid) inchangé */}
           <div className="min-w-0">
             {error && (
               <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">{error}</div>
