@@ -308,10 +308,8 @@ export default function AdminContent() {
     () => allKeys.filter((k) => getRow(k, "en") && !getRow(k, "fr")).length,
     [allKeys, getRow]
   );
-
-  // ✅ FIX NETLIFY: all keys -> allKeys
   const missingBoth = React.useMemo(
-    () => allKeys.filter((k) => !getRow(k, "fr") && !getRow(k, "en")).length,
+    () => all keys.filter((k) => !getRow(k, "fr") && !getRow(k, "en")).length,
     [allKeys, getRow]
   );
 
@@ -496,8 +494,7 @@ export default function AdminContent() {
     } catch (e: any) {
       toast({
         title: "Erreur traduction",
-        description:
-          e?.message ?? "Traduction impossible (Edge Function translate).",
+        description: e?.message ?? "Traduction impossible (Edge Function translate).",
         variant: "destructive",
       });
     } finally {
@@ -539,8 +536,7 @@ export default function AdminContent() {
       if (!fr || !en || !frVal || !enVal) {
         toast({
           title: "Publication impossible",
-          description:
-            "FR et EN doivent exister et être non vides pour publier.",
+          description: "FR et EN doivent exister et être non vides pour publier.",
           variant: "destructive",
         });
         return;
@@ -548,10 +544,8 @@ export default function AdminContent() {
     }
 
     try {
-      if (fr)
-        await togglePublish.mutateAsync({ id: fr.id, is_published: next });
-      if (en)
-        await togglePublish.mutateAsync({ id: en.id, is_published: next });
+      if (fr) await togglePublish.mutateAsync({ id: fr.id, is_published: next });
+      if (en) await togglePublish.mutateAsync({ id: en.id, is_published: next });
 
       toast({
         title: next ? "Publié (FR + EN)" : "Dépublié (FR + EN)",
@@ -571,41 +565,28 @@ export default function AdminContent() {
     const keys = filteredKeys.filter((k) => {
       const fr = getRow(k, "fr");
       const en = getRow(k, "en");
-      return Boolean(
-        fr &&
-          en &&
-          (fr.value ?? "").trim() &&
-          (en.value ?? "").trim()
-      );
+      return Boolean(fr && en && (fr.value ?? "").trim() && (en.value ?? "").trim());
     });
 
     if (keys.length === 0) {
       toast({
         title: "Rien à publier",
-        description:
-          "Aucune clé complète FR+EN (non vide) dans le filtre actuel.",
+        description: "Aucune clé complète FR+EN (non vide) dans le filtre actuel.",
       });
       return;
     }
 
-    const ok = window.confirm(
-      `Publier ${keys.length} clé(s) complètes FR+EN ?`
-    );
+    const ok = window.confirm(`Publier ${keys.length} clé(s) complètes FR+EN ?`);
     if (!ok) return;
 
     try {
       for (const k of keys) {
         const fr = getRow(k, "fr");
         const en = getRow(k, "en");
-        if (fr)
-          await togglePublish.mutateAsync({ id: fr.id, is_published: true });
-        if (en)
-          await togglePublish.mutateAsync({ id: en.id, is_published: true });
+        if (fr) await togglePublish.mutateAsync({ id: fr.id, is_published: true });
+        if (en) await togglePublish.mutateAsync({ id: en.id, is_published: true });
       }
-      toast({
-        title: "Batch publish OK",
-        description: `${keys.length} clé(s) publiées.`,
-      });
+      toast({ title: "Batch publish OK", description: `${keys.length} clé(s) publiées.` });
       await list.refetch();
     } catch (e: any) {
       toast({
@@ -698,8 +679,7 @@ export default function AdminContent() {
         (supabase as any)?.restUrl ??
         null;
 
-      const { data: sessionData, error: sessionErr } =
-        await supabase.auth.getSession();
+      const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
       if (sessionErr) throw sessionErr;
 
       const session = sessionData?.session ?? null;
@@ -712,7 +692,7 @@ export default function AdminContent() {
         .limit(25);
 
       const canSelect = !error;
-      const rowCount = data?.length ?? 0;
+      const rowCount = (data?.length ?? 0);
 
       setDiag({
         hasSession: Boolean(session),
@@ -721,9 +701,7 @@ export default function AdminContent() {
         supabaseUrl: url,
         canSelect,
         rowCount,
-        sampleKeys: (data ?? [])
-          .map((r: any) => `${r.key} (${r.locale})`)
-          .slice(0, 10),
+        sampleKeys: (data ?? []).map((r: any) => `${r.key} (${r.locale})`).slice(0, 10),
         error: error ? (error as any)?.message ?? JSON.stringify(error) : null,
       });
 
@@ -763,28 +741,18 @@ export default function AdminContent() {
         <div>
           <h1 className="text-xl font-semibold">Back-Office — Contenu du site</h1>
           <p className="text-sm text-muted-foreground">
-            CMS FR/EN : clés (catalogue + DB), recherche, filtres, manquants,
-            copie, traduction, publication, batch publish.
+            CMS FR/EN : clés (catalogue + DB), recherche, filtres, manquants, copie,
+            traduction, publication, batch publish.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => list.refetch()}
-            disabled={isBusy}
-          >
+          <Button type="button" variant="outline" onClick={() => list.refetch()} disabled={isBusy}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Actualiser
           </Button>
 
-          <Button
-            type="button"
-            variant="outline"
-            onClick={resetFilters}
-            disabled={isBusy}
-          >
+          <Button type="button" variant="outline" onClick={resetFilters} disabled={isBusy}>
             <RotateCcw className="h-4 w-4 mr-2" />
             Réinitialiser
           </Button>
@@ -794,33 +762,18 @@ export default function AdminContent() {
             Nouvelle clé
           </Button>
 
-          <Button
-            type="button"
-            variant="outline"
-            onClick={seedMissingDefaults}
-            disabled={isBusy}
-          >
+          <Button type="button" variant="outline" onClick={seedMissingDefaults} disabled={isBusy}>
             <ListPlus className="h-4 w-4 mr-2" />
             Initialiser clés manquantes
           </Button>
 
-          <Button
-            type="button"
-            variant="outline"
-            onClick={batchPublishComplete}
-            disabled={isBusy}
-          >
+          <Button type="button" variant="outline" onClick={batchPublishComplete} disabled={isBusy}>
             <CheckCircle2 className="h-4 w-4 mr-2" />
             Batch publish
           </Button>
 
           {/* ✅ Diagnostic */}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={runDiagnostics}
-            disabled={isBusy}
-          >
+          <Button type="button" variant="outline" onClick={runDiagnostics} disabled={isBusy}>
             <Bug className="h-4 w-4 mr-2" />
             Diagnostic
           </Button>
@@ -866,9 +819,7 @@ export default function AdminContent() {
               </div>
 
               <div className="rounded-lg border p-3">
-                <div className="text-xs text-muted-foreground">
-                  SELECT site_content
-                </div>
+                <div className="text-xs text-muted-foreground">SELECT site_content</div>
                 <div className="flex items-center gap-2">
                   {diag.canSelect ? (
                     <span className="inline-flex items-center gap-1 text-emerald-700">
@@ -880,9 +831,7 @@ export default function AdminContent() {
                     </span>
                   )}
                   <span className="text-xs text-muted-foreground">
-                    {typeof diag.rowCount === "number"
-                      ? `Échantillon: ${diag.rowCount}`
-                      : ""}
+                    {typeof diag.rowCount === "number" ? `Échantillon: ${diag.rowCount}` : ""}
                   </span>
                 </div>
                 {diag.error && (
@@ -898,9 +847,7 @@ export default function AdminContent() {
                   {(diag.sampleKeys ?? []).length ? (
                     <ul className="list-disc pl-5 space-y-1">
                       {diag.sampleKeys!.map((s, i) => (
-                        <li key={i} className="break-all">
-                          {s}
-                        </li>
+                        <li key={i} className="break-all">{s}</li>
                       ))}
                     </ul>
                   ) : (
@@ -911,21 +858,11 @@ export default function AdminContent() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={runDiagnostics}
-                disabled={isBusy}
-              >
+              <Button type="button" variant="outline" onClick={runDiagnostics} disabled={isBusy}>
                 <Bug className="h-4 w-4 mr-2" />
                 Relancer
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setDiagOpen(false)}
-                disabled={isBusy}
-              >
+              <Button type="button" variant="outline" onClick={() => setDiagOpen(false)} disabled={isBusy}>
                 Fermer
               </Button>
             </div>
@@ -1043,7 +980,9 @@ export default function AdminContent() {
                         onClick={() => setSelectedKey(k)}
                         className={[
                           "border-b align-top cursor-pointer",
-                          selectedKey === k ? "bg-muted/40" : "hover:bg-muted/20",
+                          selectedKey === k
+                            ? "bg-muted/40"
+                            : "hover:bg-muted/20",
                         ].join(" ")}
                       >
                         <td className="py-3 pr-3">
@@ -1054,21 +993,18 @@ export default function AdminContent() {
                                 {fr && en ? "Complet FR+EN" : "Incomplet"}
                                 {!en && (
                                   <span className="ml-2 inline-flex items-center gap-1 text-amber-700">
-                                    <AlertTriangle className="h-3 w-3" /> EN
-                                    manquant
+                                    <AlertTriangle className="h-3 w-3" /> EN manquant
                                   </span>
                                 )}
                                 {!fr && (
                                   <span className="ml-2 inline-flex items-center gap-1 text-amber-700">
-                                    <AlertTriangle className="h-3 w-3" /> FR
-                                    manquant
+                                    <AlertTriangle className="h-3 w-3" /> FR manquant
                                   </span>
                                 )}
                               </>
                             ) : (
                               <span className="inline-flex items-center gap-1 text-amber-700">
-                                <AlertTriangle className="h-3 w-3" /> Absent
-                                (FR+EN)
+                                <AlertTriangle className="h-3 w-3" /> Absent (FR+EN)
                               </span>
                             )}
                           </div>
@@ -1120,10 +1056,7 @@ export default function AdminContent() {
                           </div>
                         </td>
 
-                        <td
-                          className="py-3 pr-3"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <td className="py-3 pr-3" onClick={(e) => e.stopPropagation()}>
                           <div className="flex flex-wrap gap-2">
                             <Button
                               type="button"
@@ -1198,10 +1131,7 @@ export default function AdminContent() {
 
                   {!list.isLoading && filteredKeys.length === 0 && (
                     <tr>
-                      <td
-                        colSpan={5}
-                        className="py-6 text-center text-sm text-muted-foreground"
-                      >
+                      <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
                         Aucun résultat.
                       </td>
                     </tr>
@@ -1226,9 +1156,7 @@ export default function AdminContent() {
               <>
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-sm font-medium truncate">
-                      {selectedKey}
-                    </div>
+                    <div className="text-sm font-medium truncate">{selectedKey}</div>
                     <div className="text-xs text-muted-foreground mt-1">
                       Catégorie : {detectCategory(selectedKey)}
                     </div>
@@ -1383,9 +1311,7 @@ export default function AdminContent() {
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() =>
-                        createMissingLocale(selectedKey, activeLocale)
-                      }
+                      onClick={() => createMissingLocale(selectedKey, activeLocale)}
                       disabled={isBusy}
                       className="rounded-xl"
                     >
