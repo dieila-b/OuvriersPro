@@ -1,15 +1,15 @@
-import React from "react";
+import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  LifeBuoy,
+  ArrowRight,
+  MessageSquare,
   Facebook,
   Twitter,
   Instagram,
   Linkedin,
   Mail,
   Phone,
-  LifeBuoy,
-  ArrowRight,
-  MessageSquare,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,6 @@ import ContactModal from "@/components/contact/ContactModal";
 const Footer = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
-
   const [contactOpen, setContactOpen] = React.useState(false);
 
   const t = React.useMemo(() => {
@@ -26,36 +25,51 @@ const Footer = () => {
     return {
       helpTitle: fr ? "Besoin d’aide ?" : "Need help?",
       helpDesc: fr
-        ? "Contactez le support ou consultez notre FAQ."
-        : "Contact support or browse our FAQ.",
+        ? "Contacte notre support ou consulte la FAQ."
+        : "Contact support or browse the FAQ.",
       ctaSupport: fr ? "Contacter le support" : "Contact support",
-      ctaFaq: fr ? "Aide / FAQ" : "Help / FAQ",
+      ctaFaq: fr ? "Voir la FAQ" : "View FAQ",
 
       brandDesc: fr
-        ? "Trouvez rapidement des prestataires fiables près de chez vous."
-        : "Find trusted providers near you—fast.",
+        ? "Trouvez des prestataires fiables près de chez vous, en quelques minutes."
+        : "Find trusted providers near you in minutes.",
+      marketplace: fr ? "Marketplace de services" : "Service marketplace",
+
       services: fr ? "Services" : "Services",
       company: fr ? "Entreprise" : "Company",
       resources: fr ? "Ressources" : "Resources",
       contact: fr ? "Contact" : "Contact",
 
-      seeMore: fr ? "Voir plus" : "See more",
+      seeMore: fr ? "Découvrir" : "Explore",
 
-      terms: fr ? "Conditions d'utilisation" : "Terms of Use",
+      about: fr ? "À propos" : "About",
+      partners: fr ? "Partenaires" : "Partners",
+
+      terms: fr ? "Conditions d’utilisation" : "Terms of Use",
       privacy: fr ? "Politique de confidentialité" : "Privacy Policy",
       cookies: fr ? "Cookies" : "Cookies",
 
       openForm: fr ? "Ouvrir le formulaire" : "Open contact form",
-      replyInfo: fr ? "Réponse par email sous 24–48h." : "Email reply within 24–48h.",
+      contactHint: fr
+        ? "Réponse par email sous 24–48h (jours ouvrés)."
+        : "Reply by email within 24–48h (business days).",
     };
   }, [language]);
 
   const year = new Date().getFullYear();
 
+  // Mets tes URLs réelles ici (ou laisse "" pour masquer l’icône)
+  const social = [
+    { name: "Facebook", href: "", Icon: Facebook },
+    { name: "Twitter", href: "", Icon: Twitter },
+    { name: "Instagram", href: "", Icon: Instagram },
+    { name: "LinkedIn", href: "", Icon: Linkedin },
+  ].filter((s) => Boolean(s.href));
+
   return (
     <footer className="bg-pro-gray text-white">
       <div className="container mx-auto px-4 py-14">
-        {/* Top Help Banner (unique CTA zone) */}
+        {/* ✅ Bandeau unique “Besoin d’aide ?” */}
         <div className="mb-10 rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
@@ -88,59 +102,49 @@ const Footer = () => {
           </div>
         </div>
 
-        {/* Main footer grid */}
+        {/* ✅ Grille principale (sans répétitions) */}
         <div className="grid gap-10 md:grid-cols-4">
           {/* Brand */}
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-xl bg-pro-blue flex items-center justify-center">
                 <span className="font-bold">PS</span>
               </div>
               <div className="leading-tight">
                 <div className="text-lg font-bold">ProxiServices</div>
-                <div className="text-xs text-white/60">
-                  {language === "fr" ? "Marketplace de services" : "Service marketplace"}
-                </div>
+                <div className="text-xs text-white/60">{t.marketplace}</div>
               </div>
             </div>
 
-            <p className="mt-4 text-sm text-white/70 leading-relaxed">{t.brandDesc}</p>
+            <p className="mt-4 text-sm text-white/70 leading-relaxed">
+              {t.brandDesc}
+            </p>
 
-            <div className="mt-5 flex items-center gap-2">
-              <a
-                href="#"
-                aria-label="Facebook"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/75 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <Facebook className="h-4 w-4" />
-              </a>
-              <a
-                href="#"
-                aria-label="Twitter"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/75 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <Twitter className="h-4 w-4" />
-              </a>
-              <a
-                href="#"
-                aria-label="Instagram"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/75 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <Instagram className="h-4 w-4" />
-              </a>
-              <a
-                href="#"
-                aria-label="LinkedIn"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/75 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <Linkedin className="h-4 w-4" />
-              </a>
-            </div>
+            {/* ✅ Icônes sociales discrètes (et seulement si URLs fournies) */}
+            {social.length > 0 && (
+              <div className="mt-5 flex items-center gap-2">
+                {social.map(({ name, href, Icon }) => (
+                  <a
+                    key={name}
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={name}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/0 text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+                  >
+                    <Icon className="h-4 w-4" />
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Services */}
           <div>
-            <h3 className="text-sm font-semibold tracking-wide text-white/90">{t.services}</h3>
+            <h3 className="text-sm font-semibold tracking-wide text-white/90">
+              {t.services}
+            </h3>
+
             <ul className="mt-4 space-y-2 text-sm text-white/70">
               <li>Bâtiment</li>
               <li>Plomberie</li>
@@ -152,34 +156,38 @@ const Footer = () => {
             <button
               type="button"
               onClick={() => navigate("/#search")}
-              className="mt-4 inline-flex items-center gap-2 text-sm text-white/80 hover:text-white transition-colors"
+              className="mt-4 inline-flex items-center gap-2 text-sm text-white/75 hover:text-white transition-colors"
             >
               {t.seeMore} <ArrowRight className="h-4 w-4" />
             </button>
           </div>
 
-          {/* Company + Resources */}
+          {/* Entreprise + Ressources */}
           <div>
-            <h3 className="text-sm font-semibold tracking-wide text-white/90">{t.company}</h3>
+            <h3 className="text-sm font-semibold tracking-wide text-white/90">
+              {t.company}
+            </h3>
             <ul className="mt-4 space-y-2 text-sm text-white/70">
               <li>
                 <Link to="/faq" className="hover:text-white transition-colors">
-                  {t.ctaFaq}
+                  FAQ
                 </Link>
               </li>
               <li>
                 <Link to="/a-propos" className="hover:text-white transition-colors">
-                  {language === "fr" ? "À propos" : "About"}
+                  {t.about}
                 </Link>
               </li>
               <li>
                 <Link to="/partenaires" className="hover:text-white transition-colors">
-                  {language === "fr" ? "Partenaires" : "Partners"}
+                  {t.partners}
                 </Link>
               </li>
             </ul>
 
-            <h3 className="mt-8 text-sm font-semibold tracking-wide text-white/90">{t.resources}</h3>
+            <h3 className="mt-8 text-sm font-semibold tracking-wide text-white/90">
+              {t.resources}
+            </h3>
             <ul className="mt-4 space-y-2 text-sm text-white/70">
               <li>
                 <Link to="/conditions" className="hover:text-white transition-colors">
@@ -199,9 +207,11 @@ const Footer = () => {
             </ul>
           </div>
 
-          {/* Contact */}
+          {/* Contact (sans répétition “anti-spam”) */}
           <div>
-            <h3 className="text-sm font-semibold tracking-wide text-white/90">{t.contact}</h3>
+            <h3 className="text-sm font-semibold tracking-wide text-white/90">
+              {t.contact}
+            </h3>
 
             <div className="mt-4 space-y-3">
               <a
@@ -209,7 +219,7 @@ const Footer = () => {
                 className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10 hover:text-white transition-colors"
               >
                 <Mail className="h-4 w-4" />
-                contact@proxiservices.com
+                <span className="truncate">contact@proxiservices.com</span>
               </a>
 
               <a
@@ -229,33 +239,26 @@ const Footer = () => {
                 {t.openForm}
               </Button>
 
-              <p className="text-xs text-white/60">{t.replyInfo}</p>
+              {/* ✅ Helper line unique */}
+              <p className="text-xs text-white/60">{t.contactHint}</p>
             </div>
           </div>
         </div>
 
-        {/* Bottom bar */}
-        <div className="mt-12 border-t border-white/10 pt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        {/* ✅ Bas de footer minimal (sans répéter les liens) */}
+        <div className="mt-12 border-t border-white/10 pt-6">
           <p className="text-xs text-white/55">
-            © {year} ProxiServices. {language === "fr" ? "Tous droits réservés." : "All rights reserved."}
+            © {year} ProxiServices.{" "}
+            {language === "fr" ? "Tous droits réservés." : "All rights reserved."}
           </p>
-
-          <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-white/60">
-            <Link to="/conditions" className="hover:text-white transition-colors">
-              {t.terms}
-            </Link>
-            <Link to="/confidentialite" className="hover:text-white transition-colors">
-              {t.privacy}
-            </Link>
-            <Link to="/cookies" className="hover:text-white transition-colors">
-              {t.cookies}
-            </Link>
-          </div>
         </div>
       </div>
 
-      {/* Contact modal (re-used) */}
-      <ContactModal open={contactOpen} onOpenChange={setContactOpen} defaultSubject="Support ProxiServices" />
+      <ContactModal
+        open={contactOpen}
+        onOpenChange={setContactOpen}
+        defaultSubject="Support ProxiServices"
+      />
     </footer>
   );
 };
