@@ -92,7 +92,7 @@ const Header = () => {
   return (
     <>
       <header className="sticky top-0 z-40 w-full max-w-full">
-        {/* ✅ barre moderne (dégradé + border) */}
+        {/* ✅ barre moderne (blur + border) */}
         <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3">
@@ -111,13 +111,14 @@ const Header = () => {
                 </div>
               </Link>
 
-              {/* Navigation Desktop */}
+              {/* Navigation Desktop (pro & épuré) */}
               <nav className="hidden md:flex min-w-0 items-center gap-6">
+                {/* ✅ Conserver uniquement Rechercher en top nav (pro) */}
                 <NavLinkButton onClick={handleSearchClick}>{t("nav.search")}</NavLinkButton>
-                <NavLinkButton onClick={handleFaqClick}>{t("nav.faq")}</NavLinkButton>
 
-                {/* ✅ On garde un seul "Contact" dans la nav (plus de doublon) */}
-                <NavLinkButton onClick={handleContactClick}>{t("nav.contact")}</NavLinkButton>
+                {/* ✅ Si tu veux garder la FAQ en haut, laisse la ligne suivante.
+                    Sinon, commente-la pour un header encore plus minimal. */}
+                {/* <NavLinkButton onClick={handleFaqClick}>{t("nav.faq")}</NavLinkButton> */}
               </nav>
 
               {/* Actions Desktop */}
@@ -142,8 +143,7 @@ const Header = () => {
                   </Button>
                 </Link>
 
-                {/* ✅ On retire le bouton "Contact" (doublon) et on garde seulement l'icône mail (compact pro)
-                    => même action (modal) mais sans répéter le mot "Contact" */}
+                {/* ✅ Contact (icône uniquement) -> modal */}
                 <Button
                   type="button"
                   variant="outline"
@@ -222,8 +222,8 @@ const Header = () => {
             </div>
           </div>
 
-          {/* ✅ petit liseré/gradient (moderne) */}
-          <div className="h-1 w-full bg-gradient-to-r from-pro-blue via-blue-600 to-pro-blue" />
+          {/* ✅ liseré premium (subtil) */}
+          <div className="h-1 w-full bg-gradient-to-r from-pro-blue/90 via-blue-600/90 to-pro-blue/90" />
         </div>
 
         {/* Mobile drawer */}
@@ -260,6 +260,8 @@ const Header = () => {
                     <span className="truncate">{t("nav.search")}</span>
                   </button>
 
+                  {/* ✅ Optionnel: FAQ dans le menu mobile (souvent ok).
+                      Si tu veux du ultra minimal, tu peux aussi supprimer ce bloc. */}
                   <button
                     type="button"
                     onClick={() => {
@@ -271,7 +273,7 @@ const Header = () => {
                     <span className="truncate">{t("nav.faq")}</span>
                   </button>
 
-                  {/* ✅ Contact mobile -> modal */}
+                  {/* Contact mobile -> modal */}
                   <button
                     type="button"
                     onClick={() => {
@@ -312,7 +314,7 @@ const Header = () => {
         )}
       </header>
 
-      {/* ✅ Modal Contact monté une seule fois, piloté par state */}
+      {/* Modal Contact monté une seule fois */}
       <ContactModal open={contactOpen} onOpenChange={setContactOpen} cooldownSeconds={30} />
     </>
   );
