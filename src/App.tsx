@@ -95,6 +95,12 @@ const AppRoutes = () => (
       <Route path="/faq" element={<Faq />} />
       <Route path="/aide" element={<Faq />} />
 
+      {/* ✅ Pages légales (footer) -> pour l’instant on réutilise la page FAQ
+          Tu pourras ensuite remplacer par de vraies pages dédiées. */}
+      <Route path="/conditions" element={<Faq />} />
+      <Route path="/confidentialite" element={<Faq />} />
+      <Route path="/cookies" element={<Faq />} />
+
       {/* 🧑‍💼 Mon compte */}
       <Route path="/mon-compte" element={<MonCompte />} />
 
