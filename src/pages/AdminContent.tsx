@@ -1,3 +1,4 @@
+// src/pages/AdminContent.tsx
 import * as React from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,20 +27,108 @@ import {
   Wand2,
   Sparkles,
   RotateCcw,
+  ListPlus,
 } from "lucide-react";
 
 type Locale = "fr" | "en";
-type Category = "Home" | "Footer" | "Legal" | "Contact" | "Other";
-type MissingMode = "all" | "en_missing" | "fr_missing";
+type Category =
+  | "Home"
+  | "Header"
+  | "Footer"
+  | "Legal"
+  | "Contact"
+  | "Company"
+  | "Services"
+  | "Other";
+type MissingMode = "all" | "en_missing" | "fr_missing" | "both_missing";
 
 const LOCALES: Locale[] = ["fr", "en"];
 const TYPES = ["text", "markdown", "json"] as const;
 
+/**
+ * ✅ Catalogue de clés attendues (tu peux en ajouter autant que tu veux).
+ * Objectif: afficher/éditer même si la DB ne contient pas encore ces clés.
+ */
+const DEFAULT_KEYS: string[] = [
+  // Header
+  "header.tagline",
+
+  // Home (hero + search + features)
+  "home.hero.title",
+  "home.hero.subtitle",
+  "home.hero.cta_primary",
+  "home.hero.cta_secondary",
+  "home.search.title",
+  "home.search.subtitle",
+  "home.search.placeholder",
+  "home.search.placeholder_keyword",
+  "home.search.placeholder_district",
+  "home.search.button",
+  "home.search.btn_search",
+  "home.features.title",
+  "home.features.subtitle",
+  "home.features.card1.title",
+  "home.features.card1.desc",
+  "home.features.card2.title",
+  "home.features.card2.desc",
+  "home.features.card3.title",
+  "home.features.card3.desc",
+
+  // Footer / sections
+  "footer.brand.tagline",
+  "footer.brand.desc",
+  "footer.services.title",
+  "footer.services.more",
+  "footer.company.title",
+  "footer.resources.title",
+  "footer.contact.title",
+  "footer.contact.cta",
+  "footer.contact.button",
+  "footer.contact_hint",
+  "footer.contact.label_email",
+  "footer.contact.label_phone",
+  "footer.contact.label_hours",
+  "footer.contact.label_zone",
+  "footer.location.value",
+  "footer.hours.value",
+  "footer.bottom.rights",
+
+  // Contact modal / form
+  "contact.modal.title",
+  "contact.modal.desc",
+  "contact.form.email",
+  "contact.form.subject",
+  "contact.form.message",
+  "contact.form.btn_send",
+  "contact.form.success",
+  "contact.form.error",
+
+  // Legal titles (au minimum)
+  "legal.terms.title",
+  "legal.privacy.title",
+  "legal.cookies.title",
+
+  // (Optionnel) contenus complets des pages légales
+  // si tu veux éditer les paragraphes entiers dans le CMS:
+  "legal.terms.body",
+  "legal.privacy.body",
+  "legal.cookies.body",
+
+  // Company pages (si tu crées de vraies pages "À propos", "Partenaires")
+  "company.about.title",
+  "company.about.body",
+  "company.partners.title",
+  "company.partners.body",
+];
+
 function detectCategory(key: string): Category {
   if (key.startsWith("home.")) return "Home";
+  if (key.startsWith("header.")) return "Header";
   if (key.startsWith("footer.")) return "Footer";
   if (key.startsWith("legal.")) return "Legal";
   if (key.startsWith("contact.")) return "Contact";
+  if (key.startsWith("company.")) return "Company";
+  if (key.startsWith("services.")) return "Services";
   return "Other";
 }
 
@@ -55,6 +144,8 @@ function missingLabel(mode: MissingMode) {
       return "EN manquants";
     case "fr_missing":
       return "FR manquants";
+    case "both_missing":
+      return "FR+EN absents";
     default:
       return "Tous";
   }
@@ -79,7 +170,6 @@ async function translateViaEdgeFn(args: {
 
   if (error) throw error;
 
-  // ✅ Ton index.ts renvoie: { ok:true, translatedText: "..." }
   const translated =
     (data as any)?.translatedText ??
     (data as any)?.translated_text ??
@@ -117,16 +207,29 @@ export default function AdminContent() {
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
   const [activeLocale, setActiveLocale] = React.useState<Locale>("fr");
 
-  const [typeByLocale, setTypeByLocale] = React.useState<Record<Locale, string>>({ fr: "text", en: "text" });
-  const [valueByLocale, setValueByLocale] = React.useState<Record<Locale, string>>({ fr: "", en: "" });
-  const [publishedByLocale, setPublishedByLocale] = React.useState<Record<Locale, boolean>>({ fr: true, en: true });
+  const [typeByLocale, setTypeByLocale] = React.useState<Record<Locale, string>>({
+    fr: "text",
+    en: "text",
+  });
+  const [valueByLocale, setValueByLocale] = React.useState<Record<Locale, string>>({
+    fr: "",
+    en: "",
+  });
+  const [publishedByLocale, setPublishedByLocale] = React.useState<Record<Locale, boolean>>({
+    fr: true,
+    en: true,
+  });
 
   const [translatingKey, setTranslatingKey] = React.useState<string | null>(null);
   const [translatingDir, setTranslatingDir] = React.useState<string | null>(null);
 
   const rows = list.data ?? [];
   const isBusy =
-    list.isLoading || upsert.isPending || togglePublish.isPending || del.isPending || Boolean(translatingKey);
+    list.isLoading ||
+    upsert.isPending ||
+    togglePublish.isPending ||
+    del.isPending ||
+    Boolean(translatingKey);
 
   const byKey = React.useMemo(() => {
     const map = new Map<string, SiteContentRow[]>();
@@ -141,7 +244,13 @@ export default function AdminContent() {
     return map;
   }, [rows]);
 
-  const allKeys = React.useMemo(() => Array.from(byKey.keys()).sort(), [byKey]);
+  // ✅ union: DB keys + DEFAULT_KEYS
+  const allKeys = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const k of DEFAULT_KEYS) set.add(k);
+    for (const k of byKey.keys()) set.add(k);
+    return Array.from(set).sort();
+  }, [byKey]);
 
   const getRow = React.useCallback(
     (key: string, locale: Locale): SiteContentRow | null => {
@@ -156,14 +265,18 @@ export default function AdminContent() {
     [getRow]
   );
 
-  const missingEn = React.useMemo(() => allKeys.filter((k) => getRow(k, "fr") && !getRow(k, "en")).length, [
-    allKeys,
-    getRow,
-  ]);
-  const missingFr = React.useMemo(() => allKeys.filter((k) => getRow(k, "en") && !getRow(k, "fr")).length, [
-    allKeys,
-    getRow,
-  ]);
+  const missingEn = React.useMemo(
+    () => allKeys.filter((k) => getRow(k, "fr") && !getRow(k, "en")).length,
+    [allKeys, getRow]
+  );
+  const missingFr = React.useMemo(
+    () => allKeys.filter((k) => getRow(k, "en") && !getRow(k, "fr")).length,
+    [allKeys, getRow]
+  );
+  const missingBoth = React.useMemo(
+    () => allKeys.filter((k) => !getRow(k, "fr") && !getRow(k, "en")).length,
+    [allKeys, getRow]
+  );
 
   const filteredKeys = React.useMemo(() => {
     let keys = allKeys;
@@ -172,6 +285,7 @@ export default function AdminContent() {
 
     if (missingMode === "en_missing") keys = keys.filter((k) => getRow(k, "fr") && !getRow(k, "en"));
     else if (missingMode === "fr_missing") keys = keys.filter((k) => getRow(k, "en") && !getRow(k, "fr"));
+    else if (missingMode === "both_missing") keys = keys.filter((k) => !getRow(k, "fr") && !getRow(k, "en"));
 
     const query = q.trim().toLowerCase();
     if (!query) return keys;
@@ -184,6 +298,7 @@ export default function AdminContent() {
     });
   }, [allKeys, q, category, missingMode, getRow]);
 
+  // Charge dans l'éditeur à la sélection
   React.useEffect(() => {
     if (!selectedKey) return;
 
@@ -199,10 +314,11 @@ export default function AdminContent() {
       en: en?.value ?? "",
     });
     setPublishedByLocale({
-      fr: fr?.is_published ?? true,
-      en: en?.is_published ?? true,
+      fr: fr?.is_published ?? false,
+      en: en?.is_published ?? false,
     });
 
+    // Si une locale manque, bascule automatiquement vers celle manquante
     if (fr && !en) setActiveLocale("en");
     else if (en && !fr) setActiveLocale("fr");
   }, [selectedKey, getRow]);
@@ -223,7 +339,7 @@ export default function AdminContent() {
     setActiveLocale("fr");
     setTypeByLocale({ fr: "text", en: "text" });
     setValueByLocale({ fr: "", en: "" });
-    setPublishedByLocale({ fr: true, en: false });
+    setPublishedByLocale({ fr: false, en: false });
   };
 
   const saveLocale = async (key: string, locale: Locale) => {
@@ -255,7 +371,7 @@ export default function AdminContent() {
     const fromRow = getRow(key, from);
     const fromType = typeByLocale[from] ?? fromRow?.type ?? "text";
     const fromValue = valueByLocale[from] ?? fromRow?.value ?? "";
-    const fromPub = Boolean(publishedByLocale[from] ?? fromRow?.is_published ?? true);
+    const fromPub = Boolean(publishedByLocale[from] ?? fromRow?.is_published ?? false);
 
     setTypeByLocale((s) => ({ ...s, [to]: fromType }));
     setValueByLocale((s) => ({ ...s, [to]: fromValue }));
@@ -325,111 +441,23 @@ export default function AdminContent() {
     }
   };
 
-  const createEnMissingDraft = async (key: string) => {
-    const fr = getRow(key, "fr");
-    if (!fr) {
-      toast({ title: "Impossible", description: "FR manquant : crée d’abord la version FR.", variant: "destructive" });
-      return;
-    }
-    const en = getRow(key, "en");
-    if (en) {
-      toast({ title: "Déjà présent", description: "La version EN existe déjà." });
-      return;
-    }
-
-    setSelectedKey(key);
-    setActiveLocale("en");
-    setTranslatingKey(key);
-    setTranslatingDir("FR→EN");
-
+  const createMissingLocale = async (key: string, locale: Locale) => {
     try {
-      const translated = await translateViaEdgeFn({
-        text: fr.value ?? "",
-        source: "fr",
-        target: "en",
-        type: fr.type ?? "text",
-        mode: "draft",
-      });
-
-      const draft = ensureToReviewNote(translated, "en");
-
-      setTypeByLocale((s) => ({ ...s, en: fr.type ?? "text" }));
-      setValueByLocale((s) => ({ ...s, en: draft }));
-      setPublishedByLocale((s) => ({ ...s, en: false }));
-
       await upsert.mutateAsync({
         key,
-        locale: "en",
-        type: fr.type ?? "text",
-        value: draft,
+        locale,
+        type: typeByLocale[locale] ?? "text",
+        value: valueByLocale[locale] ?? "",
         is_published: false,
       });
-
-      toast({ title: "EN créé (brouillon)", description: "EN généré et enregistré en brouillon (To review)." });
+      toast({ title: "Créé", description: `${key} (${locale.toUpperCase()}) créé en brouillon.` });
       await list.refetch();
     } catch (e: any) {
       toast({
         title: "Erreur",
-        description: e?.message ?? "Création EN impossible (translate).",
+        description: e?.message ?? "Création impossible.",
         variant: "destructive",
       });
-    } finally {
-      setTranslatingKey(null);
-      setTranslatingDir(null);
-    }
-  };
-
-  const createFrMissingDraft = async (key: string) => {
-    const en = getRow(key, "en");
-    if (!en) {
-      toast({ title: "Impossible", description: "EN manquant : crée d’abord la version EN.", variant: "destructive" });
-      return;
-    }
-    const fr = getRow(key, "fr");
-    if (fr) {
-      toast({ title: "Déjà présent", description: "La version FR existe déjà." });
-      return;
-    }
-
-    setSelectedKey(key);
-    setActiveLocale("fr");
-    setTranslatingKey(key);
-    setTranslatingDir("EN→FR");
-
-    try {
-      const translated = await translateViaEdgeFn({
-        text: en.value ?? "",
-        source: "en",
-        target: "fr",
-        type: en.type ?? "text",
-        mode: "draft",
-      });
-
-      const draft = ensureToReviewNote(translated, "fr");
-
-      setTypeByLocale((s) => ({ ...s, fr: en.type ?? "text" }));
-      setValueByLocale((s) => ({ ...s, fr: draft }));
-      setPublishedByLocale((s) => ({ ...s, fr: false }));
-
-      await upsert.mutateAsync({
-        key,
-        locale: "fr",
-        type: en.type ?? "text",
-        value: draft,
-        is_published: false,
-      });
-
-      toast({ title: "FR créé (brouillon)", description: "FR généré et enregistré en brouillon (À valider)." });
-      await list.refetch();
-    } catch (e: any) {
-      toast({
-        title: "Erreur",
-        description: e?.message ?? "Création FR impossible (translate).",
-        variant: "destructive",
-      });
-    } finally {
-      setTranslatingKey(null);
-      setTranslatingDir(null);
     }
   };
 
@@ -521,6 +549,48 @@ export default function AdminContent() {
     }
   };
 
+  // ✅ Seed: crée toutes les clés manquantes FR/EN en brouillon (value vide)
+  const seedMissingDefaults = async () => {
+    if (isBusy) return;
+
+    const ok = window.confirm(
+      "Initialiser les clés manquantes (DEFAULT_KEYS) en FR+EN ?\n\n- crée les lignes absentes\n- en brouillon\n- sans écraser ce qui existe"
+    );
+    if (!ok) return;
+
+    try {
+      let created = 0;
+
+      for (const k of DEFAULT_KEYS) {
+        for (const loc of LOCALES) {
+          const existing = getRow(k, loc);
+          if (existing) continue;
+
+          await upsert.mutateAsync({
+            key: k,
+            locale: loc,
+            type: "text",
+            value: "",
+            is_published: false,
+          });
+          created += 1;
+        }
+      }
+
+      toast({
+        title: "Initialisation terminée",
+        description: created > 0 ? `${created} entrée(s) créée(s) en brouillon.` : "Aucune entrée à créer (tout existe déjà).",
+      });
+      await list.refetch();
+    } catch (e: any) {
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Initialisation impossible.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const selectedFr = selectedKey ? getRow(selectedKey, "fr") : null;
   const selectedEn = selectedKey ? getRow(selectedKey, "en") : null;
 
@@ -530,7 +600,7 @@ export default function AdminContent() {
         <div>
           <h1 className="text-xl font-semibold">Back-Office — Contenu du site</h1>
           <p className="text-sm text-muted-foreground">
-            CMS FR/EN : recherche, filtres, manquants, copie, traduction (Edge Function), publication, batch publish.
+            CMS FR/EN : clés (catalogue + DB), recherche, filtres, manquants, copie, traduction, publication, batch publish.
           </p>
         </div>
 
@@ -548,6 +618,11 @@ export default function AdminContent() {
           <Button type="button" onClick={createKey} disabled={isBusy}>
             <Plus className="h-4 w-4 mr-2" />
             Nouvelle clé
+          </Button>
+
+          <Button type="button" variant="outline" onClick={seedMissingDefaults} disabled={isBusy}>
+            <ListPlus className="h-4 w-4 mr-2" />
+            Initialiser clés manquantes
           </Button>
 
           <Button type="button" variant="outline" onClick={batchPublishComplete} disabled={isBusy}>
@@ -585,10 +660,13 @@ export default function AdminContent() {
                 disabled={isBusy}
               >
                 <option value="All">Toutes catégories</option>
+                <option value="Header">Header</option>
                 <option value="Home">Home</option>
                 <option value="Footer">Footer</option>
+                <option value="Company">Company</option>
                 <option value="Legal">Legal</option>
                 <option value="Contact">Contact</option>
+                <option value="Services">Services</option>
                 <option value="Other">Other</option>
               </select>
 
@@ -601,13 +679,14 @@ export default function AdminContent() {
                 <option value="all">{missingLabel("all")}</option>
                 <option value="en_missing">{missingLabel("en_missing")} ({missingEn})</option>
                 <option value="fr_missing">{missingLabel("fr_missing")} ({missingFr})</option>
+                <option value="both_missing">{missingLabel("both_missing")} ({missingBoth})</option>
               </select>
             </div>
           </div>
 
           <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div className="text-xs text-muted-foreground">
-              {list.isLoading ? "Chargement…" : `${filteredKeys.length} clé(s)`}
+              {list.isLoading ? "Chargement…" : `${filteredKeys.length} clé(s) (catalogue + DB)`}
             </div>
 
             {translatingKey && (
@@ -645,7 +724,9 @@ export default function AdminContent() {
                     const fr = getRow(k, "fr");
                     const en = getRow(k, "en");
                     const cat = detectCategory(k);
-                    const complete = Boolean(fr) && Boolean(en);
+
+                    const frText = (fr?.value ?? "").trim();
+                    const enText = (en?.value ?? "").trim();
 
                     return (
                       <tr
@@ -659,15 +740,23 @@ export default function AdminContent() {
                         <td className="py-3 pr-3">
                           <div className="font-medium">{k}</div>
                           <div className="mt-1 text-xs text-muted-foreground">
-                            {complete ? "Complet FR+EN" : "Incomplet"}
-                            {!en && fr && (
-                              <span className="ml-2 inline-flex items-center gap-1 text-amber-700">
-                                <AlertTriangle className="h-3 w-3" /> EN manquant
-                              </span>
-                            )}
-                            {!fr && en && (
-                              <span className="ml-2 inline-flex items-center gap-1 text-amber-700">
-                                <AlertTriangle className="h-3 w-3" /> FR manquant
+                            {fr || en ? (
+                              <>
+                                {fr && en ? "Complet FR+EN" : "Incomplet"}
+                                {!en && (
+                                  <span className="ml-2 inline-flex items-center gap-1 text-amber-700">
+                                    <AlertTriangle className="h-3 w-3" /> EN manquant
+                                  </span>
+                                )}
+                                {!fr && (
+                                  <span className="ml-2 inline-flex items-center gap-1 text-amber-700">
+                                    <AlertTriangle className="h-3 w-3" /> FR manquant
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-amber-700">
+                                <AlertTriangle className="h-3 w-3" /> Absent (FR+EN)
                               </span>
                             )}
                           </div>
@@ -688,7 +777,7 @@ export default function AdminContent() {
                             </span>
                           )}
                           <div className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap break-words line-clamp-3">
-                            {(fr?.value ?? "").trim() || "—"}
+                            {frText || "—"}
                           </div>
                         </td>
 
@@ -703,38 +792,75 @@ export default function AdminContent() {
                             </span>
                           )}
                           <div className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap break-words line-clamp-3">
-                            {(en?.value ?? "").trim() || "—"}
+                            {enText || "—"}
                           </div>
                         </td>
 
                         <td className="py-3 pr-3" onClick={(e) => e.stopPropagation()}>
                           <div className="flex flex-wrap gap-2">
-                            <Button type="button" variant="outline" size="sm" onClick={() => copyLocaleToLocale(k, "fr", "en")} disabled={isBusy || !fr}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => copyLocaleToLocale(k, "fr", "en")}
+                              disabled={isBusy || !fr}
+                            >
                               <Copy className="h-4 w-4 mr-2" />
                               FR→EN
                             </Button>
 
-                            <Button type="button" variant="outline" size="sm" onClick={() => copyLocaleToLocale(k, "en", "fr")} disabled={isBusy || !en}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => copyLocaleToLocale(k, "en", "fr")}
+                              disabled={isBusy || !en}
+                            >
                               <Copy className="h-4 w-4 mr-2" />
                               EN→FR
                             </Button>
 
-                            <Button type="button" variant="outline" size="sm" onClick={() => createEnMissingDraft(k)} disabled={isBusy || !!en || !fr}>
+                            {/* ✅ Création directe si absent */}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => createMissingLocale(k, "en")}
+                              disabled={isBusy || !!en}
+                            >
                               <Languages className="h-4 w-4 mr-2" />
                               Créer EN
                             </Button>
 
-                            <Button type="button" variant="outline" size="sm" onClick={() => createFrMissingDraft(k)} disabled={isBusy || !!fr || !en}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => createMissingLocale(k, "fr")}
+                              disabled={isBusy || !!fr}
+                            >
                               <Languages className="h-4 w-4 mr-2" />
                               Créer FR
                             </Button>
 
-                            <Button type="button" variant="outline" size="sm" onClick={() => setPublishBoth(k, true)} disabled={isBusy || !isComplete(k)}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPublishBoth(k, true)}
+                              disabled={isBusy || !isComplete(k)}
+                            >
                               <CheckCircle2 className="h-4 w-4 mr-2" />
                               Publier
                             </Button>
 
-                            <Button type="button" variant="outline" size="sm" onClick={() => setPublishBoth(k, false)} disabled={isBusy}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPublishBoth(k, false)}
+                              disabled={isBusy}
+                            >
                               <EyeOff className="h-4 w-4 mr-2" />
                               Dépublier
                             </Button>
@@ -876,10 +1002,28 @@ export default function AdminContent() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button type="button" onClick={() => saveLocale(selectedKey, activeLocale)} disabled={isBusy} className="rounded-xl">
+                  <Button
+                    type="button"
+                    onClick={() => saveLocale(selectedKey, activeLocale)}
+                    disabled={isBusy}
+                    className="rounded-xl"
+                  >
                     <Save className="h-4 w-4 mr-2" />
                     Enregistrer {activeLocale.toUpperCase()}
                   </Button>
+
+                  {!getRow(selectedKey, activeLocale) && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => createMissingLocale(selectedKey, activeLocale)}
+                      disabled={isBusy}
+                      className="rounded-xl"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Créer {activeLocale.toUpperCase()}
+                    </Button>
+                  )}
 
                   <Button
                     type="button"
