@@ -7,11 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import {
-  useSiteContentList,
   useUpsertSiteContent,
   useTogglePublishSiteContent,
   useDeleteSiteContent,
-  SiteContentRow,
 } from "@/hooks/useSiteContent";
 import {
   Search,
@@ -28,10 +26,11 @@ import {
   Sparkles,
   RotateCcw,
   ListPlus,
+  Bug,
   Database,
   ShieldAlert,
-  Bug,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 type Locale = "fr" | "en";
 type Category =
@@ -45,18 +44,25 @@ type Category =
   | "Other";
 type MissingMode = "all" | "en_missing" | "fr_missing" | "both_missing";
 
+type SiteContentRow = {
+  id: string;
+  key: string;
+  locale: Locale;
+  type: string | null;
+  value: string | null;
+  is_published: boolean | null;
+  updated_at?: string | null;
+};
+
 const LOCALES: Locale[] = ["fr", "en"];
 const TYPES = ["text", "markdown", "json"] as const;
 
 /**
- * ✅ Catalogue de clés attendues (tu peux en ajouter autant que tu veux).
- * Objectif: afficher/éditer même si la DB ne contient pas encore ces clés.
+ * Catalogue de clés attendues (tu peux en ajouter)
  */
 const DEFAULT_KEYS: string[] = [
-  // Header
   "header.tagline",
 
-  // Home (hero + search + features)
   "home.hero.title",
   "home.hero.subtitle",
   "home.hero.cta_primary",
@@ -77,7 +83,6 @@ const DEFAULT_KEYS: string[] = [
   "home.features.card3.title",
   "home.features.card3.desc",
 
-  // Footer / sections
   "footer.brand.tagline",
   "footer.brand.desc",
   "footer.services.title",
@@ -96,7 +101,6 @@ const DEFAULT_KEYS: string[] = [
   "footer.hours.value",
   "footer.bottom.rights",
 
-  // Contact modal / form
   "contact.modal.title",
   "contact.modal.desc",
   "contact.form.email",
@@ -106,17 +110,13 @@ const DEFAULT_KEYS: string[] = [
   "contact.form.success",
   "contact.form.error",
 
-  // Legal titles (au minimum)
   "legal.terms.title",
   "legal.privacy.title",
   "legal.cookies.title",
-
-  // (Optionnel) contenus complets des pages légales
   "legal.terms.body",
   "legal.privacy.body",
   "legal.cookies.body",
 
-  // Company pages
   "company.about.title",
   "company.about.body",
   "company.partners.title",
@@ -157,7 +157,7 @@ async function translateViaEdgeFn(args: {
   text: string;
   source: Locale;
   target: Locale;
-  type?: string; // text|markdown|json
+  type?: string;
   mode?: "draft" | "final";
 }) {
   const { data, error } = await supabase.functions.invoke("translate", {
@@ -169,7 +169,6 @@ async function translateViaEdgeFn(args: {
       mode: args.mode ?? "draft",
     },
   });
-
   if (error) throw error;
 
   const translated =
@@ -198,10 +197,85 @@ function ensureToReviewNote(text: string, locale: Locale) {
 export default function AdminContent() {
   const { toast } = useToast();
 
-  const list = useSiteContentList();
+  // Mutations : on garde tes hooks existants
   const upsert = useUpsertSiteContent();
   const togglePublish = useTogglePublishSiteContent();
   const del = useDeleteSiteContent();
+
+  // ✅ LISTE DIRECTE (remplace useSiteContentList)
+  const list = useQuery({
+    queryKey: ["site_content_list_direct"],
+    queryFn: async (): Promise<SiteContentRow[]> => {
+      const { data, error } = await supabase
+        .from("site_content")
+        .select("id,key,locale,type,value,is_published,updated_at")
+        .order("key", { ascending: true })
+        .order("locale", { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []) as SiteContentRow[];
+    },
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+  });
+
+  // ✅ DIAGNOSTIC toujours visible
+  const [diag, setDiag] = React.useState<{
+    supabaseUrl: string;
+    hasSession: boolean;
+    email: string;
+    userId: string;
+    selectOk: boolean;
+    selectErr: string;
+    rowCount: number;
+  }>({
+    supabaseUrl:
+      (supabase as any)?.supabaseUrl ??
+      (supabase as any)?.url ??
+      (supabase as any)?.restUrl ??
+      "",
+    hasSession: false,
+    email: "",
+    userId: "",
+    selectOk: false,
+    selectErr: "",
+    rowCount: 0,
+  });
+
+  const runDiag = React.useCallback(async () => {
+    try {
+      const { data: sessionData, error: sErr } = await supabase.auth.getSession();
+      if (sErr) throw sErr;
+
+      const session = sessionData?.session ?? null;
+      const user = session?.user ?? null;
+
+      const { data, error } = await supabase
+        .from("site_content")
+        .select("id", { count: "exact" })
+        .limit(1);
+
+      setDiag((prev) => ({
+        ...prev,
+        hasSession: Boolean(session),
+        email: (user as any)?.email ?? "",
+        userId: user?.id ?? "",
+        selectOk: !error,
+        selectErr: error ? ((error as any)?.message ?? JSON.stringify(error)) : "",
+        rowCount: Array.isArray(data) ? data.length : 0,
+      }));
+    } catch (e: any) {
+      setDiag((prev) => ({
+        ...prev,
+        selectOk: false,
+        selectErr: e?.message ?? "Diagnostic impossible",
+      }));
+    }
+  }, []);
+
+  React.useEffect(() => {
+    runDiag();
+  }, [runDiag]);
 
   const [q, setQ] = React.useState("");
   const [category, setCategory] = React.useState<Category | "All">("All");
@@ -210,53 +284,21 @@ export default function AdminContent() {
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
   const [activeLocale, setActiveLocale] = React.useState<Locale>("fr");
 
-  const [typeByLocale, setTypeByLocale] = React.useState<Record<Locale, string>>(
-    {
-      fr: "text",
-      en: "text",
-    }
-  );
-  const [valueByLocale, setValueByLocale] = React.useState<Record<Locale, string>>(
-    {
-      fr: "",
-      en: "",
-    }
-  );
-  const [publishedByLocale, setPublishedByLocale] = React.useState<
-    Record<Locale, boolean>
-  >({
+  const [typeByLocale, setTypeByLocale] = React.useState<Record<Locale, string>>({
+    fr: "text",
+    en: "text",
+  });
+  const [valueByLocale, setValueByLocale] = React.useState<Record<Locale, string>>({
+    fr: "",
+    en: "",
+  });
+  const [publishedByLocale, setPublishedByLocale] = React.useState<Record<Locale, boolean>>({
     fr: true,
     en: true,
   });
 
-  const [translatingKey, setTranslatingKey] = React.useState<string | null>(
-    null
-  );
-  const [translatingDir, setTranslatingDir] = React.useState<string | null>(
-    null
-  );
-
-  // ✅ Debug / Diagnostic (partie 4)
-  const [diagOpen, setDiagOpen] = React.useState(false);
-  const [diag, setDiag] = React.useState<{
-    hasSession: boolean;
-    userId?: string | null;
-    email?: string | null;
-    supabaseUrl?: string | null;
-    canSelect?: boolean;
-    rowCount?: number;
-    sampleKeys?: string[];
-    error?: string | null;
-  }>({
-    hasSession: false,
-    userId: null,
-    email: null,
-    supabaseUrl: null,
-    canSelect: undefined,
-    rowCount: undefined,
-    sampleKeys: [],
-    error: null,
-  });
+  const [translatingKey, setTranslatingKey] = React.useState<string | null>(null);
+  const [translatingDir, setTranslatingDir] = React.useState<string | null>(null);
 
   const rows = list.data ?? [];
   const isBusy =
@@ -272,14 +314,9 @@ export default function AdminContent() {
       if (!map.has(r.key)) map.set(r.key, []);
       map.get(r.key)!.push(r);
     }
-    for (const [k, arr] of map.entries()) {
-      arr.sort((a, b) => a.locale.localeCompare(b.locale));
-      map.set(k, arr);
-    }
     return map;
   }, [rows]);
 
-  // ✅ union: DB keys + DEFAULT_KEYS
   const allKeys = React.useMemo(() => {
     const set = new Set<string>();
     for (const k of DEFAULT_KEYS) set.add(k);
@@ -309,22 +346,18 @@ export default function AdminContent() {
     [allKeys, getRow]
   );
   const missingBoth = React.useMemo(
-    () => all keys.filter((k) => !getRow(k, "fr") && !getRow(k, "en")).length,
+    () => allKeys.filter((k) => !getRow(k, "fr") && !getRow(k, "en")).length,
     [allKeys, getRow]
   );
 
   const filteredKeys = React.useMemo(() => {
     let keys = allKeys;
 
-    if (category !== "All")
-      keys = keys.filter((k) => detectCategory(k) === category);
+    if (category !== "All") keys = keys.filter((k) => detectCategory(k) === category);
 
-    if (missingMode === "en_missing")
-      keys = keys.filter((k) => getRow(k, "fr") && !getRow(k, "en"));
-    else if (missingMode === "fr_missing")
-      keys = keys.filter((k) => getRow(k, "en") && !getRow(k, "fr"));
-    else if (missingMode === "both_missing")
-      keys = keys.filter((k) => !getRow(k, "fr") && !getRow(k, "en"));
+    if (missingMode === "en_missing") keys = keys.filter((k) => getRow(k, "fr") && !getRow(k, "en"));
+    else if (missingMode === "fr_missing") keys = keys.filter((k) => getRow(k, "en") && !getRow(k, "fr"));
+    else if (missingMode === "both_missing") keys = keys.filter((k) => !getRow(k, "fr") && !getRow(k, "en"));
 
     const query = q.trim().toLowerCase();
     if (!query) return keys;
@@ -356,8 +389,8 @@ export default function AdminContent() {
       en: en?.value ?? "",
     });
     setPublishedByLocale({
-      fr: fr?.is_published ?? false,
-      en: en?.is_published ?? false,
+      fr: Boolean(fr?.is_published),
+      en: Boolean(en?.is_published),
     });
 
     if (fr && !en) setActiveLocale("en");
@@ -385,7 +418,6 @@ export default function AdminContent() {
 
   const saveLocale = async (key: string, locale: Locale) => {
     if (!key) return;
-
     try {
       await upsert.mutateAsync({
         key,
@@ -394,18 +426,11 @@ export default function AdminContent() {
         value: valueByLocale[locale] ?? "",
         is_published: Boolean(publishedByLocale[locale]),
       });
-
-      toast({
-        title: "Enregistré",
-        description: `${key} (${locale.toUpperCase()}) mis à jour.`,
-      });
+      toast({ title: "Enregistré", description: `${key} (${locale.toUpperCase()}) mis à jour.` });
       await list.refetch();
+      await runDiag();
     } catch (e: any) {
-      toast({
-        title: "Erreur",
-        description: e?.message ?? "Enregistrement impossible.",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: e?.message ?? "Enregistrement impossible.", variant: "destructive" });
     }
   };
 
@@ -415,9 +440,7 @@ export default function AdminContent() {
     const fromRow = getRow(key, from);
     const fromType = typeByLocale[from] ?? fromRow?.type ?? "text";
     const fromValue = valueByLocale[from] ?? fromRow?.value ?? "";
-    const fromPub = Boolean(
-      publishedByLocale[from] ?? fromRow?.is_published ?? false
-    );
+    const fromPub = Boolean(publishedByLocale[from] ?? fromRow?.is_published ?? false);
 
     setTypeByLocale((s) => ({ ...s, [to]: fromType }));
     setValueByLocale((s) => ({ ...s, [to]: fromValue }));
@@ -425,44 +448,22 @@ export default function AdminContent() {
     setActiveLocale(to);
 
     try {
-      await upsert.mutateAsync({
-        key,
-        locale: to,
-        type: fromType,
-        value: fromValue,
-        is_published: fromPub,
-      });
-
-      toast({
-        title: "Copie effectuée",
-        description: `${from.toUpperCase()} → ${to.toUpperCase()} enregistré.`,
-      });
+      await upsert.mutateAsync({ key, locale: to, type: fromType, value: fromValue, is_published: fromPub });
+      toast({ title: "Copie effectuée", description: `${from.toUpperCase()} → ${to.toUpperCase()} enregistré.` });
       await list.refetch();
+      await runDiag();
     } catch (e: any) {
-      toast({
-        title: "Erreur",
-        description: e?.message ?? "Copie impossible.",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: e?.message ?? "Copie impossible.", variant: "destructive" });
     }
   };
 
-  const translateEditor = async (
-    key: string,
-    from: Locale,
-    to: Locale,
-    options?: { addReviewNote?: boolean }
-  ) => {
+  const translateEditor = async (key: string, from: Locale, to: Locale, options?: { addReviewNote?: boolean }) => {
     const fromRow = getRow(key, from);
     const srcType = (typeByLocale[from] ?? fromRow?.type ?? "text").toString();
     const srcValue = (valueByLocale[from] ?? fromRow?.value ?? "").toString();
 
     if (!srcValue.trim()) {
-      toast({
-        title: "Impossible",
-        description: `Le contenu ${from.toUpperCase()} est vide.`,
-        variant: "destructive",
-      });
+      toast({ title: "Impossible", description: `Le contenu ${from.toUpperCase()} est vide.`, variant: "destructive" });
       return;
     }
 
@@ -471,32 +472,17 @@ export default function AdminContent() {
     setTranslatingDir(dir);
 
     try {
-      const translated = await translateViaEdgeFn({
-        text: srcValue,
-        source: from,
-        target: to,
-        type: srcType,
-        mode: "draft",
-      });
-      const finalText = options?.addReviewNote
-        ? ensureToReviewNote(translated, to)
-        : translated;
+      const translated = await translateViaEdgeFn({ text: srcValue, source: from, target: to, type: srcType, mode: "draft" });
+      const finalText = options?.addReviewNote ? ensureToReviewNote(translated, to) : translated;
 
       setTypeByLocale((s) => ({ ...s, [to]: srcType }));
       setValueByLocale((s) => ({ ...s, [to]: finalText }));
       setPublishedByLocale((s) => ({ ...s, [to]: false }));
       setActiveLocale(to);
 
-      toast({
-        title: "Traduction prête",
-        description: `Traduction ${dir} générée. Vérifie puis enregistre.`,
-      });
+      toast({ title: "Traduction prête", description: `Traduction ${dir} générée. Vérifie puis enregistre.` });
     } catch (e: any) {
-      toast({
-        title: "Erreur traduction",
-        description: e?.message ?? "Traduction impossible (Edge Function translate).",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur traduction", description: e?.message ?? "Traduction impossible.", variant: "destructive" });
     } finally {
       setTranslatingKey(null);
       setTranslatingDir(null);
@@ -512,17 +498,11 @@ export default function AdminContent() {
         value: valueByLocale[locale] ?? "",
         is_published: false,
       });
-      toast({
-        title: "Créé",
-        description: `${key} (${locale.toUpperCase()}) créé en brouillon.`,
-      });
+      toast({ title: "Créé", description: `${key} (${locale.toUpperCase()}) créé en brouillon.` });
       await list.refetch();
+      await runDiag();
     } catch (e: any) {
-      toast({
-        title: "Erreur",
-        description: e?.message ?? "Création impossible.",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: e?.message ?? "Création impossible.", variant: "destructive" });
     }
   };
 
@@ -534,11 +514,7 @@ export default function AdminContent() {
       const frVal = (fr?.value ?? "").trim();
       const enVal = (en?.value ?? "").trim();
       if (!fr || !en || !frVal || !enVal) {
-        toast({
-          title: "Publication impossible",
-          description: "FR et EN doivent exister et être non vides pour publier.",
-          variant: "destructive",
-        });
+        toast({ title: "Publication impossible", description: "FR et EN doivent exister et être non vides pour publier.", variant: "destructive" });
         return;
       }
     }
@@ -546,54 +522,11 @@ export default function AdminContent() {
     try {
       if (fr) await togglePublish.mutateAsync({ id: fr.id, is_published: next });
       if (en) await togglePublish.mutateAsync({ id: en.id, is_published: next });
-
-      toast({
-        title: next ? "Publié (FR + EN)" : "Dépublié (FR + EN)",
-        description: `Statut appliqué pour ${key}.`,
-      });
+      toast({ title: next ? "Publié (FR + EN)" : "Dépublié (FR + EN)", description: `Statut appliqué pour ${key}.` });
       await list.refetch();
+      await runDiag();
     } catch (e: any) {
-      toast({
-        title: "Erreur",
-        description: e?.message ?? "Mise à jour du statut impossible.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const batchPublishComplete = async () => {
-    const keys = filteredKeys.filter((k) => {
-      const fr = getRow(k, "fr");
-      const en = getRow(k, "en");
-      return Boolean(fr && en && (fr.value ?? "").trim() && (en.value ?? "").trim());
-    });
-
-    if (keys.length === 0) {
-      toast({
-        title: "Rien à publier",
-        description: "Aucune clé complète FR+EN (non vide) dans le filtre actuel.",
-      });
-      return;
-    }
-
-    const ok = window.confirm(`Publier ${keys.length} clé(s) complètes FR+EN ?`);
-    if (!ok) return;
-
-    try {
-      for (const k of keys) {
-        const fr = getRow(k, "fr");
-        const en = getRow(k, "en");
-        if (fr) await togglePublish.mutateAsync({ id: fr.id, is_published: true });
-        if (en) await togglePublish.mutateAsync({ id: en.id, is_published: true });
-      }
-      toast({ title: "Batch publish OK", description: `${keys.length} clé(s) publiées.` });
-      await list.refetch();
-    } catch (e: any) {
-      toast({
-        title: "Erreur",
-        description: e?.message ?? "Batch publish impossible.",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: e?.message ?? "Mise à jour du statut impossible.", variant: "destructive" });
     }
   };
 
@@ -601,28 +534,19 @@ export default function AdminContent() {
     const row = getRow(key, locale);
     if (!row) return;
 
-    const ok = window.confirm(
-      `Supprimer ${key} (${locale.toUpperCase()}) ?\n\nCette action est irréversible.`
-    );
+    const ok = window.confirm(`Supprimer ${key} (${locale.toUpperCase()}) ?\n\nCette action est irréversible.`);
     if (!ok) return;
 
     try {
       await del.mutateAsync({ id: row.id });
-      toast({
-        title: "Supprimé",
-        description: `${key} (${locale.toUpperCase()}) supprimé.`,
-      });
+      toast({ title: "Supprimé", description: `${key} (${locale.toUpperCase()}) supprimé.` });
       await list.refetch();
+      await runDiag();
     } catch (e: any) {
-      toast({
-        title: "Erreur",
-        description: e?.message ?? "Suppression impossible.",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: e?.message ?? "Suppression impossible.", variant: "destructive" });
     }
   };
 
-  // ✅ Seed: crée toutes les clés manquantes FR/EN en brouillon (value vide)
   const seedMissingDefaults = async () => {
     if (isBusy) return;
 
@@ -633,102 +557,19 @@ export default function AdminContent() {
 
     try {
       let created = 0;
-
       for (const k of DEFAULT_KEYS) {
         for (const loc of LOCALES) {
           const existing = getRow(k, loc);
           if (existing) continue;
-
-          await upsert.mutateAsync({
-            key: k,
-            locale: loc,
-            type: "text",
-            value: "",
-            is_published: false,
-          });
+          await upsert.mutateAsync({ key: k, locale: loc, type: "text", value: "", is_published: false });
           created += 1;
         }
       }
-
-      toast({
-        title: "Initialisation terminée",
-        description:
-          created > 0
-            ? `${created} entrée(s) créée(s) en brouillon.`
-            : "Aucune entrée à créer (tout existe déjà).",
-      });
+      toast({ title: "Initialisation terminée", description: created > 0 ? `${created} entrée(s) créée(s).` : "Aucune entrée à créer." });
       await list.refetch();
+      await runDiag();
     } catch (e: any) {
-      toast({
-        title: "Erreur",
-        description: e?.message ?? "Initialisation impossible.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // ✅ Diagnostic: prouve (1) bonne URL Supabase, (2) session OK, (3) SELECT possible et (4) nb lignes visibles
-  const runDiagnostics = async () => {
-    try {
-      setDiagOpen(true);
-      setDiag((s) => ({ ...s, error: null }));
-
-      const url =
-        (supabase as any)?.supabaseUrl ??
-        (supabase as any)?.url ??
-        (supabase as any)?.restUrl ??
-        null;
-
-      const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
-      if (sessionErr) throw sessionErr;
-
-      const session = sessionData?.session ?? null;
-      const user = session?.user ?? null;
-
-      // Test SELECT minimal
-      const { data, error } = await supabase
-        .from("site_content")
-        .select("key,locale", { count: "exact" })
-        .limit(25);
-
-      const canSelect = !error;
-      const rowCount = (data?.length ?? 0);
-
-      setDiag({
-        hasSession: Boolean(session),
-        userId: user?.id ?? null,
-        email: (user as any)?.email ?? null,
-        supabaseUrl: url,
-        canSelect,
-        rowCount,
-        sampleKeys: (data ?? []).map((r: any) => `${r.key} (${r.locale})`).slice(0, 10),
-        error: error ? (error as any)?.message ?? JSON.stringify(error) : null,
-      });
-
-      if (error) {
-        toast({
-          title: "Diagnostic: SELECT bloqué",
-          description:
-            (error as any)?.message ??
-            "Le SELECT sur site_content échoue (RLS, table, permissions).",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Diagnostic OK",
-          description: `SELECT site_content OK (${rowCount} lignes visibles dans l'échantillon).`,
-        });
-      }
-    } catch (e: any) {
-      setDiag((s) => ({
-        ...s,
-        error: e?.message ?? "Diagnostic impossible.",
-      }));
-      toast({
-        title: "Diagnostic impossible",
-        description: e?.message ?? "Erreur inconnue.",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: e?.message ?? "Initialisation impossible.", variant: "destructive" });
     }
   };
 
@@ -737,12 +578,58 @@ export default function AdminContent() {
 
   return (
     <div className="p-4 md:p-6 space-y-4">
+      {/* ✅ Bandeau diagnostic toujours visible */}
+      <Card className="border-dashed">
+        <CardContent className="p-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-2 text-sm">
+            <Database className="h-4 w-4" />
+            <span className="font-medium">Diagnostic</span>
+            <span className="text-muted-foreground">|</span>
+            <span className="text-xs text-muted-foreground break-all font-mono">
+              {diag.supabaseUrl || "Supabase URL inconnue"}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            {diag.hasSession ? (
+              <span className="inline-flex items-center gap-1 text-emerald-700">
+                <CheckCircle2 className="h-4 w-4" /> Session OK
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-amber-700">
+                <ShieldAlert className="h-4 w-4" /> Pas de session
+              </span>
+            )}
+
+            {diag.selectOk ? (
+              <span className="inline-flex items-center gap-1 text-emerald-700">
+                <CheckCircle2 className="h-4 w-4" /> SELECT OK
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-rose-700">
+                <ShieldAlert className="h-4 w-4" /> SELECT bloqué
+              </span>
+            )}
+
+            <Button type="button" variant="outline" size="sm" onClick={() => { runDiag(); list.refetch(); }} disabled={isBusy}>
+              <Bug className="h-4 w-4 mr-2" />
+              Rafraîchir diag
+            </Button>
+          </div>
+
+          {!diag.selectOk && diag.selectErr ? (
+            <div className="mt-2 w-full rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
+              {diag.selectErr}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <h1 className="text-xl font-semibold">Back-Office — Contenu du site</h1>
           <p className="text-sm text-muted-foreground">
-            CMS FR/EN : clés (catalogue + DB), recherche, filtres, manquants, copie,
-            traduction, publication, batch publish.
+            CMS FR/EN : clés (catalogue + DB), recherche, filtres, manquants, copie, traduction, publication.
           </p>
         </div>
 
@@ -766,109 +653,8 @@ export default function AdminContent() {
             <ListPlus className="h-4 w-4 mr-2" />
             Initialiser clés manquantes
           </Button>
-
-          <Button type="button" variant="outline" onClick={batchPublishComplete} disabled={isBusy}>
-            <CheckCircle2 className="h-4 w-4 mr-2" />
-            Batch publish
-          </Button>
-
-          {/* ✅ Diagnostic */}
-          <Button type="button" variant="outline" onClick={runDiagnostics} disabled={isBusy}>
-            <Bug className="h-4 w-4 mr-2" />
-            Diagnostic
-          </Button>
         </div>
       </div>
-
-      {/* ✅ Bandeau diagnostic */}
-      {diagOpen && (
-        <Card className="border-dashed">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base inline-flex items-center gap-2">
-              <Database className="h-4 w-4" /> Diagnostic Supabase / RLS
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm space-y-2">
-            <div className="grid gap-2 md:grid-cols-2">
-              <div className="rounded-lg border p-3">
-                <div className="text-xs text-muted-foreground">Supabase URL</div>
-                <div className="font-mono text-xs break-all">
-                  {diag.supabaseUrl ?? "—"}
-                </div>
-              </div>
-
-              <div className="rounded-lg border p-3">
-                <div className="text-xs text-muted-foreground">Session</div>
-                <div className="flex items-center gap-2">
-                  {diag.hasSession ? (
-                    <span className="inline-flex items-center gap-1 text-emerald-700">
-                      <CheckCircle2 className="h-4 w-4" /> OK
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-amber-700">
-                      <ShieldAlert className="h-4 w-4" /> Aucune session
-                    </span>
-                  )}
-                  <span className="text-xs text-muted-foreground truncate">
-                    {diag.email ?? ""}
-                  </span>
-                </div>
-                <div className="font-mono text-xs text-muted-foreground break-all">
-                  {diag.userId ?? ""}
-                </div>
-              </div>
-
-              <div className="rounded-lg border p-3">
-                <div className="text-xs text-muted-foreground">SELECT site_content</div>
-                <div className="flex items-center gap-2">
-                  {diag.canSelect ? (
-                    <span className="inline-flex items-center gap-1 text-emerald-700">
-                      <CheckCircle2 className="h-4 w-4" /> Autorisé
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-rose-700">
-                      <ShieldAlert className="h-4 w-4" /> Bloqué
-                    </span>
-                  )}
-                  <span className="text-xs text-muted-foreground">
-                    {typeof diag.rowCount === "number" ? `Échantillon: ${diag.rowCount}` : ""}
-                  </span>
-                </div>
-                {diag.error && (
-                  <div className="mt-2 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
-                    {diag.error}
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-lg border p-3">
-                <div className="text-xs text-muted-foreground">Exemples clés</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {(diag.sampleKeys ?? []).length ? (
-                    <ul className="list-disc pl-5 space-y-1">
-                      {diag.sampleKeys!.map((s, i) => (
-                        <li key={i} className="break-all">{s}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    "—"
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" onClick={runDiagnostics} disabled={isBusy}>
-                <Bug className="h-4 w-4 mr-2" />
-                Relancer
-              </Button>
-              <Button type="button" variant="outline" onClick={() => setDiagOpen(false)} disabled={isBusy}>
-                Fermer
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <Card>
         <CardContent className="p-4 md:p-5">
@@ -886,11 +672,6 @@ export default function AdminContent() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <div className="text-xs text-muted-foreground inline-flex items-center gap-2 mr-1">
-                <Languages className="h-4 w-4" />
-                FR/EN
-              </div>
-
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as any)}
@@ -915,34 +696,21 @@ export default function AdminContent() {
                 disabled={isBusy}
               >
                 <option value="all">{missingLabel("all")}</option>
-                <option value="en_missing">
-                  {missingLabel("en_missing")} ({missingEn})
-                </option>
-                <option value="fr_missing">
-                  {missingLabel("fr_missing")} ({missingFr})
-                </option>
-                <option value="both_missing">
-                  {missingLabel("both_missing")} ({missingBoth})
-                </option>
+                <option value="en_missing">{missingLabel("en_missing")} ({missingEn})</option>
+                <option value="fr_missing">{missingLabel("fr_missing")} ({missingFr})</option>
+                <option value="both_missing">{missingLabel("both_missing")} ({missingBoth})</option>
               </select>
             </div>
           </div>
 
-          <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div className="text-xs text-muted-foreground">
-              {list.isLoading
-                ? "Chargement…"
-                : `${filteredKeys.length} clé(s) (catalogue + DB)`}
-            </div>
-
-            {translatingKey && (
-              <div className="text-xs inline-flex items-center gap-2 rounded-full border px-3 py-1 bg-white">
-                <Sparkles className="h-3.5 w-3.5" />
-                Traduction: <span className="font-medium">{translatingDir}</span>{" "}
-                — <span className="font-mono">{translatingKey}</span>
-              </div>
-            )}
+          <div className="mt-3 text-xs text-muted-foreground">
+            {list.isLoading ? "Chargement…" : `${filteredKeys.length} clé(s) (catalogue + DB) — DB rows: ${rows.length}`}
           </div>
+          {list.isError ? (
+            <div className="mt-2 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
+              {(list.error as any)?.message ?? "Erreur de chargement"}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -980,9 +748,7 @@ export default function AdminContent() {
                         onClick={() => setSelectedKey(k)}
                         className={[
                           "border-b align-top cursor-pointer",
-                          selectedKey === k
-                            ? "bg-muted/40"
-                            : "hover:bg-muted/20",
+                          selectedKey === k ? "bg-muted/40" : "hover:bg-muted/20",
                         ].join(" ")}
                       >
                         <td className="py-3 pr-3">
@@ -1011,19 +777,12 @@ export default function AdminContent() {
                         </td>
 
                         <td className="py-3 pr-3">
-                          <span className="inline-flex rounded-full border px-2 py-0.5 text-xs">
-                            {cat}
-                          </span>
+                          <span className="inline-flex rounded-full border px-2 py-0.5 text-xs">{cat}</span>
                         </td>
 
                         <td className="py-3 pr-3">
                           {fr ? (
-                            <span
-                              className={[
-                                "inline-flex text-[11px] px-2 py-0.5 rounded-full border",
-                                badgeStatus(fr.is_published),
-                              ].join(" ")}
-                            >
+                            <span className={["inline-flex text-[11px] px-2 py-0.5 rounded-full border", badgeStatus(Boolean(fr.is_published))].join(" ")}>
                               {fr.is_published ? "Publié" : "Brouillon"}
                             </span>
                           ) : (
@@ -1038,12 +797,7 @@ export default function AdminContent() {
 
                         <td className="py-3 pr-3">
                           {en ? (
-                            <span
-                              className={[
-                                "inline-flex text-[11px] px-2 py-0.5 rounded-full border",
-                                badgeStatus(en.is_published),
-                              ].join(" ")}
-                            >
+                            <span className={["inline-flex text-[11px] px-2 py-0.5 rounded-full border", badgeStatus(Boolean(en.is_published))].join(" ")}>
                               {en.is_published ? "Publié" : "Brouillon"}
                             </span>
                           ) : (
@@ -1058,68 +812,32 @@ export default function AdminContent() {
 
                         <td className="py-3 pr-3" onClick={(e) => e.stopPropagation()}>
                           <div className="flex flex-wrap gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => copyLocaleToLocale(k, "fr", "en")}
-                              disabled={isBusy || !fr}
-                            >
+                            <Button type="button" variant="outline" size="sm" onClick={() => copyLocaleToLocale(k, "fr", "en")} disabled={isBusy || !fr}>
                               <Copy className="h-4 w-4 mr-2" />
                               FR→EN
                             </Button>
 
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => copyLocaleToLocale(k, "en", "fr")}
-                              disabled={isBusy || !en}
-                            >
+                            <Button type="button" variant="outline" size="sm" onClick={() => copyLocaleToLocale(k, "en", "fr")} disabled={isBusy || !en}>
                               <Copy className="h-4 w-4 mr-2" />
                               EN→FR
                             </Button>
 
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => createMissingLocale(k, "en")}
-                              disabled={isBusy || !!en}
-                            >
+                            <Button type="button" variant="outline" size="sm" onClick={() => createMissingLocale(k, "en")} disabled={isBusy || !!en}>
                               <Languages className="h-4 w-4 mr-2" />
                               Créer EN
                             </Button>
 
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => createMissingLocale(k, "fr")}
-                              disabled={isBusy || !!fr}
-                            >
+                            <Button type="button" variant="outline" size="sm" onClick={() => createMissingLocale(k, "fr")} disabled={isBusy || !!fr}>
                               <Languages className="h-4 w-4 mr-2" />
                               Créer FR
                             </Button>
 
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setPublishBoth(k, true)}
-                              disabled={isBusy || !isComplete(k)}
-                            >
+                            <Button type="button" variant="outline" size="sm" onClick={() => setPublishBoth(k, true)} disabled={isBusy || !isComplete(k)}>
                               <CheckCircle2 className="h-4 w-4 mr-2" />
                               Publier
                             </Button>
 
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setPublishBoth(k, false)}
-                              disabled={isBusy}
-                            >
+                            <Button type="button" variant="outline" size="sm" onClick={() => setPublishBoth(k, false)} disabled={isBusy}>
                               <EyeOff className="h-4 w-4 mr-2" />
                               Dépublier
                             </Button>
@@ -1180,17 +898,10 @@ export default function AdminContent() {
 
                 <div className="grid gap-3 md:grid-cols-2">
                   <div>
-                    <label className="text-xs text-muted-foreground">
-                      Type ({activeLocale.toUpperCase()})
-                    </label>
+                    <label className="text-xs text-muted-foreground">Type ({activeLocale.toUpperCase()})</label>
                     <select
                       value={typeByLocale[activeLocale]}
-                      onChange={(e) =>
-                        setTypeByLocale((s) => ({
-                          ...s,
-                          [activeLocale]: e.target.value,
-                        }))
-                      }
+                      onChange={(e) => setTypeByLocale((s) => ({ ...s, [activeLocale]: e.target.value }))}
                       disabled={isBusy}
                       className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                     >
@@ -1206,12 +917,7 @@ export default function AdminContent() {
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() =>
-                        setPublishedByLocale((p) => ({
-                          ...p,
-                          [activeLocale]: true,
-                        }))
-                      }
+                      onClick={() => setPublishedByLocale((p) => ({ ...p, [activeLocale]: true }))}
                       disabled={isBusy}
                       className="rounded-xl w-full"
                     >
@@ -1222,12 +928,7 @@ export default function AdminContent() {
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() =>
-                        setPublishedByLocale((p) => ({
-                          ...p,
-                          [activeLocale]: false,
-                        }))
-                      }
+                      onClick={() => setPublishedByLocale((p) => ({ ...p, [activeLocale]: false }))}
                       disabled={isBusy}
                       className="rounded-xl w-full"
                     >
@@ -1247,11 +948,7 @@ export default function AdminContent() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() =>
-                      translateEditor(selectedKey, "fr", "en", {
-                        addReviewNote: true,
-                      })
-                    }
+                    onClick={() => translateEditor(selectedKey, "fr", "en", { addReviewNote: true })}
                     disabled={isBusy}
                   >
                     <Sparkles className="h-4 w-4 mr-2" />
@@ -1262,34 +959,21 @@ export default function AdminContent() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() =>
-                      translateEditor(selectedKey, "en", "fr", {
-                        addReviewNote: true,
-                      })
-                    }
+                    onClick={() => translateEditor(selectedKey, "en", "fr", { addReviewNote: true })}
                     disabled={isBusy}
                   >
                     <Sparkles className="h-4 w-4 mr-2" />
                     Traduire EN→FR
                   </Button>
 
-                  <div className="text-xs text-muted-foreground">
-                    Génère dans l’éditeur, puis enregistre.
-                  </div>
+                  <div className="text-xs text-muted-foreground">Génère dans l’éditeur, puis enregistre.</div>
                 </div>
 
                 <div>
-                  <label className="text-xs text-muted-foreground">
-                    Contenu ({activeLocale.toUpperCase()})
-                  </label>
+                  <label className="text-xs text-muted-foreground">Contenu ({activeLocale.toUpperCase()})</label>
                   <Textarea
                     value={valueByLocale[activeLocale]}
-                    onChange={(e) =>
-                      setValueByLocale((s) => ({
-                        ...s,
-                        [activeLocale]: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setValueByLocale((s) => ({ ...s, [activeLocale]: e.target.value }))}
                     rows={16}
                     placeholder="Saisissez le contenu…"
                     disabled={isBusy}
@@ -1297,24 +981,13 @@ export default function AdminContent() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    onClick={() => saveLocale(selectedKey, activeLocale)}
-                    disabled={isBusy}
-                    className="rounded-xl"
-                  >
+                  <Button type="button" onClick={() => saveLocale(selectedKey, activeLocale)} disabled={isBusy} className="rounded-xl">
                     <Save className="h-4 w-4 mr-2" />
                     Enregistrer {activeLocale.toUpperCase()}
                   </Button>
 
                   {!getRow(selectedKey, activeLocale) && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => createMissingLocale(selectedKey, activeLocale)}
-                      disabled={isBusy}
-                      className="rounded-xl"
-                    >
+                    <Button type="button" variant="outline" onClick={() => createMissingLocale(selectedKey, activeLocale)} disabled={isBusy} className="rounded-xl">
                       <Plus className="h-4 w-4 mr-2" />
                       Créer {activeLocale.toUpperCase()}
                     </Button>
@@ -1324,11 +997,7 @@ export default function AdminContent() {
                     type="button"
                     variant="destructive"
                     onClick={() => deleteLocale(selectedKey, activeLocale)}
-                    disabled={
-                      isBusy ||
-                      (!selectedFr && activeLocale === "fr") ||
-                      (!selectedEn && activeLocale === "en")
-                    }
+                    disabled={isBusy || (!selectedFr && activeLocale === "fr") || (!selectedEn && activeLocale === "en")}
                     className="rounded-xl"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
