@@ -10,7 +10,6 @@ import { Card } from "@/components/ui/card";
 import { Send, CheckCircle2, AlertTriangle } from "lucide-react";
 
 type Category =
-  | "all"
   | "home_services"
   | "health"
   | "it"
@@ -21,7 +20,7 @@ type Category =
   | "reviews"
   | "security";
 
-const CATEGORY_OPTIONS: { value: Exclude<Category, "all">; fr: string; en: string }[] = [
+const CATEGORY_OPTIONS: { value: Category; fr: string; en: string }[] = [
   { value: "home_services", fr: "Services à domicile", en: "Home services" },
   { value: "health", fr: "Santé", en: "Health" },
   { value: "it", fr: "Informatique", en: "IT" },
@@ -39,10 +38,11 @@ export default function Faq() {
   const t = useMemo(() => {
     return {
       title: language === "fr" ? "FAQ ProxiServices" : "ProxiServices FAQ",
+      // ✅ Texte mis à jour: on ne parle plus de filtre par catégorie (barre supprimée)
       subtitle:
         language === "fr"
-          ? "Retrouvez les réponses aux questions les plus fréquentes et filtrez par catégorie de service."
-          : "Find answers to the most common questions and filter by service category.",
+          ? "Retrouvez les réponses aux questions les plus fréquentes."
+          : "Find answers to the most common questions.",
       askTitle: language === "fr" ? "Vous n’avez pas trouvé ?" : "Didn’t find what you need?",
       askSubtitle:
         language === "fr"
@@ -60,9 +60,7 @@ export default function Faq() {
       send: language === "fr" ? "Envoyer" : "Send",
       sending: language === "fr" ? "Envoi..." : "Sending...",
       success:
-        language === "fr"
-          ? "Merci. Votre question a bien été envoyée."
-          : "Thanks. Your question has been sent.",
+        language === "fr" ? "Merci. Votre question a bien été envoyée." : "Thanks. Your question has been sent.",
       error:
         language === "fr"
           ? "Impossible d’envoyer votre question pour le moment."
@@ -150,6 +148,7 @@ export default function Faq() {
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray">{t.title}</h1>
           <p className="mt-2 text-gray-600">{t.subtitle}</p>
 
+          {/* ✅ Barre de catégories supprimée (partie encadrée) */}
           <div className="mt-6 bg-gray-50 border border-gray-200 rounded-2xl p-4 sm:p-6">
             <FaqAccordion />
           </div>
@@ -192,7 +191,9 @@ export default function Faq() {
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-pro-gray">{t.category}</label>
+                      <label className="text-sm font-medium text-pro-gray">
+                        {t.category} <span className="text-gray-400">{t.optional}</span>
+                      </label>
                       <select
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
