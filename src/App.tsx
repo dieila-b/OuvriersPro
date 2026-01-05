@@ -16,8 +16,15 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MonCompte from "./pages/MonCompte";
 
-// ✅ FAQ
+// ✅ FAQ + pages publiques
 import Faq from "./pages/Faq";
+import About from "./pages/About";
+import Partners from "./pages/Partners";
+
+// ✅ Pages légales (à créer si pas déjà fait)
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
+import CookiesPolicy from "./pages/Cookies";
 
 // ✅ Admin FAQ Questions
 import AdminFaqQuestions from "./pages/AdminFaqQuestions";
@@ -95,11 +102,14 @@ const AppRoutes = () => (
       <Route path="/faq" element={<Faq />} />
       <Route path="/aide" element={<Faq />} />
 
-      {/* ✅ Pages légales (footer) -> pour l’instant on réutilise la page FAQ
-          Tu pourras ensuite remplacer par de vraies pages dédiées. */}
-      <Route path="/conditions" element={<Faq />} />
-      <Route path="/confidentialite" element={<Faq />} />
-      <Route path="/cookies" element={<Faq />} />
+      {/* ✅ Pages “réelles” (footer / entreprise) */}
+      <Route path="/a-propos" element={<About />} />
+      <Route path="/partenaires" element={<Partners />} />
+
+      {/* ✅ Pages légales (footer) */}
+      <Route path="/conditions" element={<Terms />} />
+      <Route path="/confidentialite" element={<Privacy />} />
+      <Route path="/cookies" element={<CookiesPolicy />} />
 
       {/* 🧑‍💼 Mon compte */}
       <Route path="/mon-compte" element={<MonCompte />} />
