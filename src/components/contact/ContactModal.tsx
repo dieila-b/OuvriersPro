@@ -1,106 +1,153 @@
 // src/components/contact/ContactModal.tsx
-import React, { useMemo, useState } from "react";
+import * as React from "react";
 import { supabase } from "@/lib/supabase";
-import { useLanguage } from "@/contexts/LanguageContext";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Send, CheckCircle2, AlertTriangle } from "lucide-react";
 
-import { Mail, Send, CheckCircle2, AlertTriangle } from "lucide-react";
+const LS_KEY = "op:contact:last_sent_at";
+
+function getCooldownRemaining(cooldownSeconds: number) {
+  try {
+    const last = Number(localStorage.getItem(LS_KEY) || "0");
+    if (!last) return 0;
+    const elapsedMs = Date.now() - last;
+    const remaining = Math.ceil(cooldownSeconds - elapsedMs / 1000);
+    return Math.max(0, remaining);
+  } catch {
+    return 0;
+  }
+}
+
+function setCooldownNow() {
+  try {
+    localStorage.setItem(LS_KEY, String(Date.now()));
+  } catch {
+    // ignore
+  }
+}
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  defaultSubject?: string;
+  cooldownSeconds?: number; // default 30
+  defaultSubject?: string;  // default "Demande de contact"
 };
 
-export default function ContactModal({ open, onOpenChange, defaultSubject = "" }: Props) {
-  const { language } = useLanguage();
+export default function ContactModal({
+  open,
+  onOpenChange,
+  cooldownSeconds = 30,
+  defaultSubject = "Demande de contact",
+}: Props) {
+  const [fullName, setFullName] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [subject, setSubject] = React.useState(defaultSubject);
+  const [message, setMessage] = React.useState("");
 
-  const t = useMemo(() => {
-    return {
-      title: language === "fr" ? "Contacter ProxiServices" : "Contact ProxiServices",
-      subtitle:
-        language === "fr"
-          ? "Expliquez votre besoin. Notre équipe vous répondra par email."
-          : "Describe your request. Our team will reply by email.",
-      name: language === "fr" ? "Nom et prénom" : "Full name",
-      email: language === "fr" ? "Adresse email" : "Email address",
-      subject: language === "fr" ? "Objet" : "Subject",
-      message: language === "fr" ? "Message" : "Message",
-      namePh: language === "fr" ? "Ex: Mamadou Diallo" : "e.g., John Doe",
-      emailPh: language === "fr" ? "ex: nom@email.com" : "e.g., name@email.com",
-      subjectPh: language === "fr" ? "Ex: Demande d’information" : "e.g., Information request",
-      messagePh:
-        language === "fr"
-          ? "Décrivez votre demande (support, prestation, paiement, sécurité, etc.)"
-          : "Describe your request (support, provider, payments, safety, etc.)",
-      send: language === "fr" ? "Envoyer" : "Send",
-      sending: language === "fr" ? "Envoi..." : "Sending...",
-      close: language === "fr" ? "Fermer" : "Close",
-      required:
-        language === "fr" ? "Veuillez renseigner l’email et le message." : "Please enter email and message.",
-      success:
-        language === "fr"
-          ? "Merci. Votre message a bien été envoyé."
-          : "Thanks. Your message has been sent.",
-      error:
-        language === "fr"
-          ? "Impossible d’envoyer le message pour le moment."
-          : "Unable to send your message right now.",
-      mailFallback:
-        language === "fr" ? "Ouvrir votre email" : "Open your email",
-    };
-  }, [language]);
+  const [sending, setSending] = React.useState(false);
+  const [ok, setOk] = React.useState<string | null>(null);
+  const [err, setErr] = React.useState<string | null>(null);
+  const [cooldownRemaining, setCooldownRemaining] = React.useState(0);
 
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [subject, setSubject] = useState(defaultSubject);
-  const [message, setMessage] = useState("");
-
-  const [sending, setSending] = useState(false);
-  const [ok, setOk] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  const resetStatus = () => {
+  const resetStatus = React.useCallback(() => {
     setOk(null);
     setErr(null);
-  };
+  }, []);
 
-  const resetForm = () => {
-    setFullName("");
-    setEmail("");
-    setSubject(defaultSubject);
-    setMessage("");
-    resetStatus();
-  };
-
-  // Reset à l’ouverture (optionnel mais pratique)
+  // Cooldown ticker
   React.useEffect(() => {
-    if (open) {
-      setSubject(defaultSubject);
-      resetStatus();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultSubject]);
+    if (!open) return;
 
-  const mailtoFallback = () => {
-    const to = "support@proxiservices.com";
-    const subj = encodeURIComponent(subject || "Contact ProxiServices");
-    const body = encodeURIComponent(
-      `Nom: ${fullName || "-"}\nEmail: ${email || "-"}\n\nMessage:\n${message}\n`
-    );
-    window.location.href = `mailto:${to}?subject=${subj}&body=${body}`;
-  };
+    const tick = () => setCooldownRemaining(getCooldownRemaining(cooldownSeconds));
+    tick();
+    const id = window.setInterval(tick, 500);
+    return () => window.clearInterval(id);
+  }, [open, cooldownSeconds]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Auto-fill (auth + profiles)
+  React.useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        const user = data?.user ?? null;
+        const authEmail = user?.email ?? "";
+
+        if (!user) {
+          if (!cancelled) setEmail((v) => v || "");
+          return;
+        }
+
+        // adapte si tes colonnes diffèrent
+        const { data: profile, error } = await supabase
+          .from("profiles")
+          .select("full_name,email")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (error) {
+          if (!cancelled) setEmail((v) => v || authEmail);
+          return;
+        }
+
+        if (!cancelled) {
+          const pName = (profile as any)?.full_name ?? "";
+          const pEmail = (profile as any)?.email ?? "";
+
+          if (pName) setFullName((v) => v || pName);
+          setEmail((v) => v || pEmail || authEmail);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  // reset subject when default changes
+  React.useEffect(() => {
+    setSubject(defaultSubject);
+  }, [defaultSubject]);
+
+  const canSend =
+    email.trim().length > 0 &&
+    message.trim().length > 0 &&
+    cooldownRemaining === 0 &&
+    !sending;
+
+  const handleSend = async () => {
     resetStatus();
 
-    if (!email.trim() || !message.trim()) {
-      setErr(t.required);
+    const e = email.trim();
+    const m = message.trim();
+    const s = subject.trim();
+
+    if (!e || !m) {
+      setErr("Veuillez renseigner l’email et le message.");
+      return;
+    }
+
+    const remaining = getCooldownRemaining(cooldownSeconds);
+    if (remaining > 0) {
+      setCooldownRemaining(remaining);
+      setErr(`Veuillez patienter ${remaining}s avant de renvoyer un message.`);
       return;
     }
 
@@ -110,144 +157,139 @@ export default function ContactModal({ open, onOpenChange, defaultSubject = "" }
         data: { user },
       } = await supabase.auth.getUser();
 
-      // Réutilise ta table existante si tu veux (op_faq_questions).
-      // Si tu préfères une table dédiée: op_contact_messages, dis-moi.
       const payload = {
-        full_name: fullName.trim() || null,
-        email: email.trim(),
-        subject: (subject || "").trim() || null,
-        message: message.trim(),
-        category: "contact", // optionnel (colonne nullable dans ton schéma précédent)
+        status: "new" as const,
         user_id: user?.id ?? null,
+        full_name: fullName.trim() || null,
+        email: e,
+        subject: s || null,
+        message: m,
+        page_url: typeof window !== "undefined" ? window.location.href : null,
+        user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
       };
 
-      const { error } = await supabase.from("op_faq_questions").insert(payload);
+      const { error } = await supabase.from("op_contact_messages").insert(payload);
       if (error) throw error;
 
-      setOk(t.success);
+      setCooldownNow();
+      setCooldownRemaining(cooldownSeconds);
 
-      // petit reset doux (tu peux aussi fermer direct)
-      setTimeout(() => {
-        resetForm();
-        onOpenChange(false);
-      }, 900);
-    } catch (e) {
-      console.error("ContactModal submit error:", e);
-      setErr(t.error);
+      setOk("Merci. Votre message a bien été envoyé.");
+      setMessage("");
+    } catch (ex) {
+      console.error("Contact submit error:", ex);
+      setErr("Impossible d’envoyer votre message pour le moment.");
     } finally {
       setSending(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => (v ? onOpenChange(true) : onOpenChange(false))}>
-      <DialogContent className="max-w-lg rounded-2xl">
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (v) resetStatus();
+        onOpenChange(v);
+      }}
+    >
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-pro-blue/10 text-pro-blue">
-              <Mail className="h-4 w-4" />
-            </span>
-            {t.title}
-          </DialogTitle>
-          <DialogDescription>{t.subtitle}</DialogDescription>
+          <DialogTitle>Contact</DialogTitle>
+          <DialogDescription>Envoyez-nous votre message. Réponse par email.</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="mt-2 grid gap-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-pro-gray">{t.name}</label>
+        <div className="grid gap-3">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <label className="text-sm font-medium text-pro-gray">
+                Nom <span className="text-gray-400">(optionnel)</span>
+              </label>
               <Input
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder={t.namePh}
+                placeholder="Ex: Mamadou Diallo"
                 onFocus={resetStatus}
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="grid gap-1.5">
               <label className="text-sm font-medium text-pro-gray">
-                {t.email} <span className="text-red-500">*</span>
+                Email <span className="text-red-500">*</span>
               </label>
               <Input
+                type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={t.emailPh}
-                type="email"
+                placeholder="ex: nom@email.com"
                 required
                 onFocus={resetStatus}
               />
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-pro-gray">{t.subject}</label>
+          <div className="grid gap-1.5">
+            <label className="text-sm font-medium text-pro-gray">
+              Objet <span className="text-gray-400">(optionnel)</span>
+            </label>
             <Input
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder={t.subjectPh}
+              placeholder="Ex: Paiement / Sécurité"
               onFocus={resetStatus}
             />
           </div>
 
-          <div className="space-y-1.5">
+          <div className="grid gap-1.5">
             <label className="text-sm font-medium text-pro-gray">
-              {t.message} <span className="text-red-500">*</span>
+              Message <span className="text-red-500">*</span>
             </label>
             <Textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder={t.messagePh}
+              placeholder="Décrivez votre demande..."
               rows={5}
               required
               onFocus={resetStatus}
             />
           </div>
 
+          {cooldownRemaining > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 text-sm">
+              Anti-spam actif : vous pourrez renvoyer un message dans{" "}
+              <span className="font-semibold">{cooldownRemaining}s</span>.
+            </div>
+          )}
+
           {ok && (
-            <div className="flex items-start gap-2 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-emerald-800">
-              <CheckCircle2 className="h-5 w-5 mt-0.5" />
+            <div className="flex items-start gap-2 rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-emerald-800">
+              <CheckCircle2 className="w-5 h-5 mt-0.5" />
               <div className="text-sm">{ok}</div>
             </div>
           )}
 
           {err && (
-            <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-amber-900">
-              <AlertTriangle className="h-5 w-5 mt-0.5" />
+            <div className="flex items-start gap-2 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-amber-900">
+              <AlertTriangle className="w-5 h-5 mt-0.5" />
               <div className="text-sm">{err}</div>
             </div>
           )}
+        </div>
 
-          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:items-center sm:justify-between pt-1">
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-xl"
-              onClick={() => onOpenChange(false)}
-              disabled={sending}
-            >
-              {t.close}
-            </Button>
+        <DialogFooter className="gap-2">
+          <Button type="button" variant="outline" className="rounded-xl" onClick={() => onOpenChange(false)}>
+            Fermer
+          </Button>
 
-            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-              <button
-                type="button"
-                onClick={mailtoFallback}
-                className="text-sm text-gray-500 hover:text-pro-blue underline underline-offset-4"
-              >
-                {t.mailFallback}
-              </button>
-
-              <Button
-                type="submit"
-                className="rounded-xl bg-pro-blue hover:bg-pro-blue/90 flex items-center gap-2"
-                disabled={sending}
-              >
-                <Send className="h-4 w-4" />
-                {sending ? t.sending : t.send}
-              </Button>
-            </div>
-          </div>
-        </form>
+          <Button
+            type="button"
+            className="rounded-xl bg-pro-blue hover:bg-pro-blue/90 flex items-center gap-2"
+            onClick={handleSend}
+            disabled={!canSend}
+          >
+            <Send className="h-4 w-4" />
+            {sending ? "Envoi..." : "Envoyer"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
