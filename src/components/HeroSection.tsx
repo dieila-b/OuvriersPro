@@ -7,31 +7,10 @@ import { Search, MapPin, ChevronDown, LocateFixed } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import AdSlot from "@/components/AdSlot";
-import { useSiteContent } from "@/hooks/useSiteContent";
 
 const HeroSection = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
-
-  // ✅ CMS locale
-  const locale = language === "fr" ? "fr" : "en";
-
-  // ✅ CMS: Title + Subtitle
-  const cmsTitle = useSiteContent("home.hero.title", locale);
-  const cmsSubtitle = useSiteContent("home.hero.subtitle", locale);
-
-  const titleFallback =
-    language === "fr"
-      ? "Trouvez des prestataires fiables près de chez vous"
-      : "Find trusted providers near you";
-
-  const subtitleFallback =
-    language === "fr"
-      ? "Comparez, contactez, réservez en toute confiance."
-      : "Compare, contact, and book with confidence.";
-
-  const heroTitle = cmsTitle.data?.value?.trim() || titleFallback;
-  const heroSubtitle = cmsSubtitle.data?.value?.trim() || subtitleFallback;
 
   const [searchTerm, setSearchTerm] = useState("");
   const [district, setDistrict] = useState("");
@@ -181,14 +160,12 @@ const HeroSection = () => {
       {/* ✅ Contenu HERO au-dessus de la pub */}
       <div className="relative z-10 w-full px-4 sm:px-6 lg:px-10 py-8 sm:py-10">
         <div className="w-full max-w-5xl mx-auto text-center">
-          {/* ✅ Title CMS + fallback (au lieu de t("home.title")) */}
           <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
-            {heroTitle}
+            {t("home.title")}
           </h1>
 
-          {/* ✅ Subtitle CMS + fallback (au lieu de t("home.subtitle")) */}
           <p className="mt-3 sm:mt-4 text-sm sm:text-base md:text-xl text-blue-100 break-words">
-            {heroSubtitle}
+            {t("home.subtitle")}
           </p>
         </div>
 
@@ -318,7 +295,7 @@ const HeroSection = () => {
         </div>
       </div>
 
-      {/* ✅ Pub */}
+      {/* ✅ Pub: plus de margin négatif => ne recouvre plus la zone du bouton */}
       <div className="relative z-0 w-full px-0 pb-8 sm:pb-10 lg:pb-12 mt-4 sm:mt-6">
         <AdSlot placement="home_feed" className="w-full" />
       </div>

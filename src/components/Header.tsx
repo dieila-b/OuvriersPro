@@ -12,7 +12,6 @@ import {
 import { Link, useLocation } from "react-router-dom";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import ContactModal from "@/components/contact/ContactModal";
-import { useSiteContent } from "@/hooks/useSiteContent";
 
 const Header = () => {
   const { language, setLanguage } = useLanguage();
@@ -23,17 +22,6 @@ const Header = () => {
   const [contactOpen, setContactOpen] = useState(false);
 
   const location = useLocation();
-
-  // ✅ CMS locale
-  const locale = language === "fr" ? "fr" : "en";
-
-  // ✅ CMS: tagline header
-  const headerTagline = useSiteContent("header.tagline", locale);
-
-  const taglineFallback =
-    language === "fr"
-      ? "Prestataires vérifiés, proches de vous"
-      : "Verified providers, near you";
 
   useEffect(() => setMobileOpen(false), [location.pathname, location.search, location.hash]);
 
@@ -75,10 +63,10 @@ const Header = () => {
                   <span className="block text-base sm:text-xl font-extrabold text-pro-gray truncate">
                     ProxiServices
                   </span>
-
-                  {/* ✅ Tagline CMS + fallback */}
                   <span className="hidden sm:block text-[11px] text-gray-500 truncate">
-                    {headerTagline.data?.value?.trim() || taglineFallback}
+                    {language === "fr"
+                      ? "Prestataires vérifiés, proches de vous"
+                      : "Verified providers, near you"}
                   </span>
                 </div>
               </Link>
@@ -108,7 +96,7 @@ const Header = () => {
                   </Button>
                 </Link>
 
-                {/* ✅ Contact icon retiré */}
+                {/* ✅ Contact icon retiré (encadré sur ta capture) */}
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -135,6 +123,8 @@ const Header = () => {
 
               {/* Mobile actions */}
               <div className="md:hidden min-w-0 flex items-center gap-2">
+                {/* ✅ Contact icon mobile retiré */}
+
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -200,6 +190,8 @@ const Header = () => {
                 </div>
 
                 <div className="mt-3 flex flex-col gap-1 min-w-0">
+                  {/* ✅ Rechercher/FAQ/Contact retirés du drawer pour correspondre au header minimal */}
+
                   {isAdmin && (
                     <Link
                       to="/admin/dashboard"
@@ -228,7 +220,8 @@ const Header = () => {
         )}
       </header>
 
-      {/* Modal Contact disponible (ouvert depuis footer/CTA/sidebar) */}
+      {/* ✅ Modal Contact toujours disponible (ouvert depuis footer/CTA/sidebar),
+          mais plus de bouton dans le header. */}
       <ContactModal open={contactOpen} onOpenChange={setContactOpen} cooldownSeconds={30} />
     </>
   );
