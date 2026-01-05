@@ -1,4 +1,5 @@
 import * as React from "react";
+import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,8 @@ import {
   AlertTriangle,
   Save,
   Trash2,
+  Wand2,
+  Sparkles,
 } from "lucide-react";
 
 type Locale = "fr" | "en";
@@ -57,20 +60,58 @@ function missingLabel(mode: MissingMode) {
 }
 
 /**
- * Auto-translate baseline:
- * - For now: simple heuristic + preserve punctuation
- * - Adds a "To review" note to make it explicit it's a draft.
+ * Edge function translator
+ * Expected function name: "translate"
  *
- * If you later want premium translation:
- * -> replace this with a Supabase Edge Function call.
+ * Recommended payload (you can adapt server-side):
+ * {
+ *   text: string,
+ *   source: "fr"|"en",
+ *   target: "fr"|"en",
+ *   format?: "text"|"markdown"|"json"
+ * }
+ *
+ * Expected response:
+ * { text: "..." } OR { translation: "..." }
  */
-function autoTranslateFrToEnDraft(fr: string) {
-  const trimmed = (fr ?? "").trim();
-  if (!trimmed) return "[To review]";
+async function translateViaEdgeFn(args: {
+  text: string;
+  source: Locale;
+  target: Locale;
+  format?: string;
+}) {
+  const { data, error } = await supabase.functions.invoke("translate", {
+    body: {
+      text: args.text,
+      source: args.source,
+      target: args.target,
+      format: args.format ?? "text",
+    },
+  });
 
-  // Very lightweight heuristic: keep text as-is + marker.
-  // This is intentionally conservative to avoid wrong confident translation.
-  return `[To review]\n${trimmed}`;
+  if (error) throw error;
+
+  const translated =
+    (data as any)?.text ??
+    (data as any)?.translation ??
+    (data as any)?.translated_text ??
+    "";
+
+  if (typeof translated !== "string") return "";
+  return translated;
+}
+
+function ensureToReviewNote(text: string, locale: Locale) {
+  const trimmed = (text ?? "").trim();
+  if (!trimmed) return locale === "en" ? "[To review]" : "[À valider]";
+
+  // Avoid double-prefix
+  const lower = trimmed.toLowerCase();
+  const hasEn = lower.startsWith("[to review]");
+  const hasFr = lower.startsWith("[à valider]") || lower.startsWith("[a valider]");
+
+  if (locale === "en") return hasEn ? trimmed : `[To review]\n${trimmed}`;
+  return hasFr ? trimmed : `[À valider]\n${trimmed}`;
 }
 
 export default function AdminContent() {
@@ -103,8 +144,13 @@ export default function AdminContent() {
     en: true,
   });
 
+  // Local UI state (translation)
+  const [translatingKey, setTranslatingKey] = React.useState<string | null>(null);
+  const [translatingDir, setTranslatingDir] = React.useState<string | null>(null);
+
   const rows = list.data ?? [];
-  const isBusy = list.isLoading || upsert.isPending || togglePublish.isPending || del.isPending;
+  const isBusy =
+    list.isLoading || upsert.isPending || togglePublish.isPending || del.isPending || Boolean(translatingKey);
 
   // Group by key
   const byKey = React.useMemo(() => {
@@ -135,28 +181,23 @@ export default function AdminContent() {
     [getRow]
   );
 
-  const missingEn = React.useMemo(() => allKeys.filter((k) => getRow(k, "fr") && !getRow(k, "en")).length, [
-    allKeys,
-    getRow,
-  ]);
-  const missingFr = React.useMemo(() => allKeys.filter((k) => getRow(k, "en") && !getRow(k, "fr")).length, [
-    allKeys,
-    getRow,
-  ]);
+  const missingEn = React.useMemo(
+    () => allKeys.filter((k) => getRow(k, "fr") && !getRow(k, "en")).length,
+    [allKeys, getRow]
+  );
+  const missingFr = React.useMemo(
+    () => allKeys.filter((k) => getRow(k, "en") && !getRow(k, "fr")).length,
+    [allKeys, getRow]
+  );
 
   // Filter keys (search + category + missing)
   const filteredKeys = React.useMemo(() => {
     let keys = allKeys;
 
-    if (category !== "All") {
-      keys = keys.filter((k) => detectCategory(k) === category);
-    }
+    if (category !== "All") keys = keys.filter((k) => detectCategory(k) === category);
 
-    if (missingMode === "en_missing") {
-      keys = keys.filter((k) => getRow(k, "fr") && !getRow(k, "en"));
-    } else if (missingMode === "fr_missing") {
-      keys = keys.filter((k) => getRow(k, "en") && !getRow(k, "fr"));
-    }
+    if (missingMode === "en_missing") keys = keys.filter((k) => getRow(k, "fr") && !getRow(k, "en"));
+    else if (missingMode === "fr_missing") keys = keys.filter((k) => getRow(k, "en") && !getRow(k, "fr"));
 
     const query = q.trim().toLowerCase();
     if (!query) return keys;
@@ -165,10 +206,7 @@ export default function AdminContent() {
       if (k.toLowerCase().includes(query)) return true;
       const fr = getRow(k, "fr");
       const en = getRow(k, "en");
-      return (
-        (fr?.value ?? "").toLowerCase().includes(query) ||
-        (en?.value ?? "").toLowerCase().includes(query)
-      );
+      return (fr?.value ?? "").toLowerCase().includes(query) || (en?.value ?? "").toLowerCase().includes(query);
     });
   }, [allKeys, q, category, missingMode, getRow]);
 
@@ -192,7 +230,6 @@ export default function AdminContent() {
       en: en?.is_published ?? true,
     });
 
-    // Auto focus missing language
     if (fr && !en) setActiveLocale("en");
     else if (en && !fr) setActiveLocale("fr");
   }, [selectedKey, getRow]);
@@ -266,7 +303,52 @@ export default function AdminContent() {
     }
   };
 
-  // ✅ Create missing EN by draft auto-translation + note “To review” and NOT published
+  // Translate existing locale in editor -> overwrite target editor value (doesn't save automatically)
+  const translateEditor = async (key: string, from: Locale, to: Locale, options?: { addReviewNote?: boolean }) => {
+    const fromRow = getRow(key, from);
+    const srcType = typeByLocale[from] ?? fromRow?.type ?? "text";
+    const srcValue = (valueByLocale[from] ?? fromRow?.value ?? "").toString();
+
+    if (!srcValue.trim()) {
+      toast({
+        title: "Impossible",
+        description: `Le contenu ${from.toUpperCase()} est vide.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const dir = `${from.toUpperCase()}→${to.toUpperCase()}`;
+    setTranslatingKey(key);
+    setTranslatingDir(dir);
+
+    try {
+      const translated = await translateViaEdgeFn({ text: srcValue, source: from, target: to, format: srcType });
+
+      const finalText = options?.addReviewNote ? ensureToReviewNote(translated, to) : translated;
+
+      setTypeByLocale((s) => ({ ...s, [to]: srcType }));
+      setValueByLocale((s) => ({ ...s, [to]: finalText }));
+      setPublishedByLocale((s) => ({ ...s, [to]: false })); // keep as draft by default when translating
+      setActiveLocale(to);
+
+      toast({
+        title: "Traduction prête",
+        description: `Traduction ${dir} générée. Pense à vérifier puis enregistrer.`,
+      });
+    } catch (e: any) {
+      toast({
+        title: "Erreur traduction",
+        description: e?.message ?? "Traduction impossible (Edge Function translate).",
+        variant: "destructive",
+      });
+    } finally {
+      setTranslatingKey(null);
+      setTranslatingDir(null);
+    }
+  };
+
+  // ✅ Create missing EN by translation + note “To review” and NOT published
   const createEnMissingDraft = async (key: string) => {
     const fr = getRow(key, "fr");
     if (!fr) {
@@ -279,15 +361,25 @@ export default function AdminContent() {
       return;
     }
 
-    const draft = autoTranslateFrToEnDraft(fr.value ?? "");
-
-    setTypeByLocale((s) => ({ ...s, en: fr.type ?? "text" }));
-    setValueByLocale((s) => ({ ...s, en: draft }));
-    setPublishedByLocale((s) => ({ ...s, en: false }));
     setSelectedKey(key);
     setActiveLocale("en");
+    setTranslatingKey(key);
+    setTranslatingDir("FR→EN");
 
     try {
+      const translated = await translateViaEdgeFn({
+        text: fr.value ?? "",
+        source: "fr",
+        target: "en",
+        format: fr.type ?? "text",
+      });
+
+      const draft = ensureToReviewNote(translated, "en");
+
+      setTypeByLocale((s) => ({ ...s, en: fr.type ?? "text" }));
+      setValueByLocale((s) => ({ ...s, en: draft }));
+      setPublishedByLocale((s) => ({ ...s, en: false }));
+
       await upsert.mutateAsync({
         key,
         locale: "en",
@@ -298,47 +390,100 @@ export default function AdminContent() {
 
       toast({
         title: "EN créé (brouillon)",
-        description: "Une version EN a été générée en brouillon avec une note “To review”.",
+        description: "Une version EN a été générée via traduction et enregistrée en brouillon (To review).",
       });
       await list.refetch();
     } catch (e: any) {
       toast({
         title: "Erreur",
-        description: e?.message ?? "Création EN impossible.",
+        description: e?.message ?? "Création EN impossible (translate).",
         variant: "destructive",
       });
+    } finally {
+      setTranslatingKey(null);
+      setTranslatingDir(null);
     }
   };
 
-  // ✅ Publish/unpublish BOTH (creates missing locale rows if needed with current editor values)
+  // Optionnel: create missing FR by translation + note “À valider”
+  const createFrMissingDraft = async (key: string) => {
+    const en = getRow(key, "en");
+    if (!en) {
+      toast({ title: "Impossible", description: "EN manquant : crée d’abord la version EN.", variant: "destructive" });
+      return;
+    }
+    const fr = getRow(key, "fr");
+    if (fr) {
+      toast({ title: "Déjà présent", description: "La version FR existe déjà." });
+      return;
+    }
+
+    setSelectedKey(key);
+    setActiveLocale("fr");
+    setTranslatingKey(key);
+    setTranslatingDir("EN→FR");
+
+    try {
+      const translated = await translateViaEdgeFn({
+        text: en.value ?? "",
+        source: "en",
+        target: "fr",
+        format: en.type ?? "text",
+      });
+
+      const draft = ensureToReviewNote(translated, "fr");
+
+      setTypeByLocale((s) => ({ ...s, fr: en.type ?? "text" }));
+      setValueByLocale((s) => ({ ...s, fr: draft }));
+      setPublishedByLocale((s) => ({ ...s, fr: false }));
+
+      await upsert.mutateAsync({
+        key,
+        locale: "fr",
+        type: en.type ?? "text",
+        value: draft,
+        is_published: false,
+      });
+
+      toast({
+        title: "FR créé (brouillon)",
+        description: "Une version FR a été générée via traduction et enregistrée en brouillon (À valider).",
+      });
+      await list.refetch();
+    } catch (e: any) {
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Création FR impossible (translate).",
+        variant: "destructive",
+      });
+    } finally {
+      setTranslatingKey(null);
+      setTranslatingDir(null);
+    }
+  };
+
+  // ✅ Publish/unpublish BOTH
+  // Guard: "Publish" requires both locales to exist AND to have non-empty content (basic safety)
   const setPublishBoth = async (key: string, next: boolean) => {
     const fr = getRow(key, "fr");
     const en = getRow(key, "en");
 
+    if (next) {
+      const frVal = (fr?.value ?? "").trim();
+      const enVal = (en?.value ?? "").trim();
+      if (!fr || !en || !frVal || !enVal) {
+        toast({
+          title: "Publication impossible",
+          description: "FR et EN doivent exister et contenir un texte (non vide) pour publier les 2 langues.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     try {
-      // update existing rows
       if (fr) await togglePublish.mutateAsync({ id: fr.id, is_published: next });
       if (en) await togglePublish.mutateAsync({ id: en.id, is_published: next });
-
-      // create missing rows if needed
-      if (!fr) {
-        await upsert.mutateAsync({
-          key,
-          locale: "fr",
-          type: typeByLocale.fr ?? "text",
-          value: valueByLocale.fr ?? "",
-          is_published: next,
-        });
-      }
-      if (!en) {
-        await upsert.mutateAsync({
-          key,
-          locale: "en",
-          type: typeByLocale.en ?? "text",
-          value: valueByLocale.en ?? "",
-          is_published: next,
-        });
-      }
 
       toast({
         title: next ? "Publié (FR + EN)" : "Dépublié (FR + EN)",
@@ -354,11 +499,16 @@ export default function AdminContent() {
     }
   };
 
-  // ✅ Batch publish all keys complete FR+EN
+  // ✅ Batch publish all complete keys (FR+EN exist + non-empty)
   const batchPublishComplete = async () => {
-    const keys = filteredKeys.filter((k) => isComplete(k));
+    const keys = filteredKeys.filter((k) => {
+      const fr = getRow(k, "fr");
+      const en = getRow(k, "en");
+      return Boolean(fr && en && (fr.value ?? "").trim() && (en.value ?? "").trim());
+    });
+
     if (keys.length === 0) {
-      toast({ title: "Rien à publier", description: "Aucune clé complète FR+EN dans le filtre actuel." });
+      toast({ title: "Rien à publier", description: "Aucune clé complète FR+EN (non vide) dans le filtre actuel." });
       return;
     }
 
@@ -389,9 +539,7 @@ export default function AdminContent() {
     const row = getRow(key, locale);
     if (!row) return;
 
-    const ok = window.confirm(
-      `Supprimer ${key} (${locale.toUpperCase()}) ?\n\nCette action est irréversible.`
-    );
+    const ok = window.confirm(`Supprimer ${key} (${locale.toUpperCase()}) ?\n\nCette action est irréversible.`);
     if (!ok) return;
 
     try {
@@ -407,7 +555,6 @@ export default function AdminContent() {
     }
   };
 
-  // Editor helpers
   const selectedFr = selectedKey ? getRow(selectedKey, "fr") : null;
   const selectedEn = selectedKey ? getRow(selectedKey, "en") : null;
 
@@ -418,7 +565,7 @@ export default function AdminContent() {
         <div>
           <h1 className="text-xl font-semibold">Back-Office — Contenu du site</h1>
           <p className="text-sm text-muted-foreground">
-            Mode CMS (table). Multilingue FR/EN, manquants, copie, batch publish, catégories.
+            CMS FR/EN. Filtres, manquants, copie, traduction (Edge Function), publication FR+EN, batch publish, catégories.
           </p>
         </div>
 
@@ -427,10 +574,12 @@ export default function AdminContent() {
             <RefreshCw className="h-4 w-4 mr-2" />
             Actualiser
           </Button>
+
           <Button type="button" onClick={createKey} disabled={isBusy}>
             <Plus className="h-4 w-4 mr-2" />
             Nouvelle clé
           </Button>
+
           <Button type="button" variant="outline" onClick={batchPublishComplete} disabled={isBusy}>
             <CheckCircle2 className="h-4 w-4 mr-2" />
             Batch publish (complets)
@@ -481,14 +630,28 @@ export default function AdminContent() {
                 disabled={isBusy}
               >
                 <option value="all">{missingLabel("all")}</option>
-                <option value="en_missing">{missingLabel("en_missing")} ({missingEn})</option>
-                <option value="fr_missing">{missingLabel("fr_missing")} ({missingFr})</option>
+                <option value="en_missing">
+                  {missingLabel("en_missing")} ({missingEn})
+                </option>
+                <option value="fr_missing">
+                  {missingLabel("fr_missing")} ({missingFr})
+                </option>
               </select>
             </div>
           </div>
 
-          <div className="mt-3 text-xs text-muted-foreground">
-            {list.isLoading ? "Chargement…" : `${filteredKeys.length} clé(s) dans le filtre`}
+          <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="text-xs text-muted-foreground">
+              {list.isLoading ? "Chargement…" : `${filteredKeys.length} clé(s) dans le filtre`}
+            </div>
+
+            {translatingKey && (
+              <div className="text-xs inline-flex items-center gap-2 rounded-full border px-3 py-1 bg-white">
+                <Sparkles className="h-3.5 w-3.5" />
+                Traduction en cours: <span className="font-medium">{translatingDir}</span> —{" "}
+                <span className="font-mono">{translatingKey}</span>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -537,6 +700,7 @@ export default function AdminContent() {
                           >
                             {k}
                           </button>
+
                           <div className="mt-1 text-xs text-muted-foreground">
                             {complete ? "Complet FR+EN" : "Incomplet"}
                             {!en && fr && (
@@ -553,14 +717,17 @@ export default function AdminContent() {
                         </td>
 
                         <td className="py-3 pr-3">
-                          <span className="inline-flex rounded-full border px-2 py-0.5 text-xs">
-                            {cat}
-                          </span>
+                          <span className="inline-flex rounded-full border px-2 py-0.5 text-xs">{cat}</span>
                         </td>
 
                         <td className="py-3 pr-3">
                           {fr ? (
-                            <span className={["inline-flex text-[11px] px-2 py-0.5 rounded-full border", badgeStatus(fr.is_published)].join(" ")}>
+                            <span
+                              className={[
+                                "inline-flex text-[11px] px-2 py-0.5 rounded-full border",
+                                badgeStatus(fr.is_published),
+                              ].join(" ")}
+                            >
                               {fr.is_published ? "Publié" : "Brouillon"}
                             </span>
                           ) : (
@@ -575,7 +742,12 @@ export default function AdminContent() {
 
                         <td className="py-3 pr-3">
                           {en ? (
-                            <span className={["inline-flex text-[11px] px-2 py-0.5 rounded-full border", badgeStatus(en.is_published)].join(" ")}>
+                            <span
+                              className={[
+                                "inline-flex text-[11px] px-2 py-0.5 rounded-full border",
+                                badgeStatus(en.is_published),
+                              ].join(" ")}
+                            >
                               {en.is_published ? "Publié" : "Brouillon"}
                             </span>
                           ) : (
@@ -620,7 +792,7 @@ export default function AdminContent() {
                               size="sm"
                               onClick={() => createEnMissingDraft(k)}
                               disabled={isBusy || !!en || !fr}
-                              title="Créer EN manquant (brouillon + note To review)"
+                              title="Créer EN manquant (auto-translate en brouillon + note “To review”)"
                             >
                               <Languages className="h-4 w-4 mr-2" />
                               Créer EN
@@ -630,9 +802,21 @@ export default function AdminContent() {
                               type="button"
                               variant="outline"
                               size="sm"
+                              onClick={() => createFrMissingDraft(k)}
+                              disabled={isBusy || !!fr || !en}
+                              title="Créer FR manquant (auto-translate en brouillon + note “À valider”)"
+                            >
+                              <Languages className="h-4 w-4 mr-2" />
+                              Créer FR
+                            </Button>
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
                               onClick={() => setPublishBoth(k, true)}
                               disabled={isBusy || !isComplete(k)}
-                              title="Publier FR + EN (uniquement si complet)"
+                              title="Publier FR + EN (si complet)"
                             >
                               <CheckCircle2 className="h-4 w-4 mr-2" />
                               Publier
@@ -684,9 +868,7 @@ export default function AdminContent() {
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-sm font-medium truncate">{selectedKey}</div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Catégorie : {detectCategory(selectedKey)}
-                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">Catégorie : {detectCategory(selectedKey)}</div>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -707,14 +889,10 @@ export default function AdminContent() {
 
                 <div className="grid gap-3 md:grid-cols-2">
                   <div>
-                    <label className="text-xs text-muted-foreground">
-                      Type ({activeLocale.toUpperCase()})
-                    </label>
+                    <label className="text-xs text-muted-foreground">Type ({activeLocale.toUpperCase()})</label>
                     <select
                       value={typeByLocale[activeLocale]}
-                      onChange={(e) =>
-                        setTypeByLocale((s) => ({ ...s, [activeLocale]: e.target.value }))
-                      }
+                      onChange={(e) => setTypeByLocale((s) => ({ ...s, [activeLocale]: e.target.value }))}
                       disabled={isBusy}
                       className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                     >
@@ -730,9 +908,7 @@ export default function AdminContent() {
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() =>
-                        setPublishedByLocale((p) => ({ ...p, [activeLocale]: true }))
-                      }
+                      onClick={() => setPublishedByLocale((p) => ({ ...p, [activeLocale]: true }))}
                       disabled={isBusy}
                       className="rounded-xl w-full"
                       title="Marquer comme publié (appliqué au save)"
@@ -744,9 +920,7 @@ export default function AdminContent() {
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() =>
-                        setPublishedByLocale((p) => ({ ...p, [activeLocale]: false }))
-                      }
+                      onClick={() => setPublishedByLocale((p) => ({ ...p, [activeLocale]: false }))}
                       disabled={isBusy}
                       className="rounded-xl w-full"
                       title="Marquer comme brouillon (appliqué au save)"
@@ -757,15 +931,47 @@ export default function AdminContent() {
                   </div>
                 </div>
 
+                {/* Translate actions (editor-level) */}
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/10 p-3">
+                  <div className="text-xs text-muted-foreground mr-2 inline-flex items-center gap-2">
+                    <Wand2 className="h-4 w-4" />
+                    Traduction (Edge Function)
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => translateEditor(selectedKey, "fr", "en", { addReviewNote: true })}
+                    disabled={isBusy}
+                    title="Traduire le contenu FR vers EN (brouillon + note “To review”)"
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Traduire FR→EN
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => translateEditor(selectedKey, "en", "fr", { addReviewNote: true })}
+                    disabled={isBusy}
+                    title="Traduire le contenu EN vers FR (brouillon + note “À valider”)"
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Traduire EN→FR
+                  </Button>
+
+                  <div className="text-xs text-muted-foreground">
+                    Génère dans l’éditeur. Enregistre ensuite.
+                  </div>
+                </div>
+
                 <div>
-                  <label className="text-xs text-muted-foreground">
-                    Contenu ({activeLocale.toUpperCase()})
-                  </label>
+                  <label className="text-xs text-muted-foreground">Contenu ({activeLocale.toUpperCase()})</label>
                   <Textarea
                     value={valueByLocale[activeLocale]}
-                    onChange={(e) =>
-                      setValueByLocale((s) => ({ ...s, [activeLocale]: e.target.value }))
-                    }
+                    onChange={(e) => setValueByLocale((s) => ({ ...s, [activeLocale]: e.target.value }))}
                     rows={14}
                     placeholder="Saisissez le contenu…"
                     disabled={isBusy}
@@ -774,9 +980,7 @@ export default function AdminContent() {
                     <span>{(valueByLocale[activeLocale]?.length ?? 0)} caractère(s)</span>
                     <span>
                       Statut:{" "}
-                      <span className="font-medium">
-                        {publishedByLocale[activeLocale] ? "Publié" : "Brouillon"}
-                      </span>
+                      <span className="font-medium">{publishedByLocale[activeLocale] ? "Publié" : "Brouillon"}</span>
                     </span>
                   </div>
                 </div>
@@ -796,7 +1000,11 @@ export default function AdminContent() {
                     type="button"
                     variant="destructive"
                     onClick={() => deleteLocale(selectedKey, activeLocale)}
-                    disabled={isBusy || (!selectedFr && activeLocale === "fr") || (!selectedEn && activeLocale === "en")}
+                    disabled={
+                      isBusy ||
+                      (!selectedFr && activeLocale === "fr") ||
+                      (!selectedEn && activeLocale === "en")
+                    }
                     className="rounded-xl"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
@@ -807,9 +1015,15 @@ export default function AdminContent() {
                 <div className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">
                   <div className="font-medium text-foreground mb-1">Bonnes pratiques</div>
                   <ul className="list-disc pl-5 space-y-1">
-                    <li>Garde des clés structurées (ex: <code>home.hero.title</code>, <code>footer.contact_hint</code>).</li>
-                    <li>Publie en masse uniquement quand FR+EN sont complets (bouton Batch publish).</li>
-                    <li>“Créer EN” génère un brouillon marqué <code>[To review]</code>.</li>
+                    <li>
+                      Clés structurées : <code>home.*</code>, <code>footer.*</code>, <code>legal.*</code>,{" "}
+                      <code>contact.*</code>.
+                    </li>
+                    <li>
+                      “Créer EN/FR” utilise la Edge Function <code>translate</code> et enregistre en <b>brouillon</b>{" "}
+                      avec une note de relecture.
+                    </li>
+                    <li>“Publier” (FR+EN) nécessite que les deux langues existent et ne soient pas vides.</li>
                   </ul>
                 </div>
               </>
