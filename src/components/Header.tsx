@@ -2,27 +2,26 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
-import { Languages, Search as SearchIcon, User, Menu, X, Mail } from "lucide-react";
+import { Languages, User, Menu, X } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import ContactModal from "@/components/contact/ContactModal";
 
 const Header = () => {
-  const { language, setLanguage, t } = useLanguage();
+  const { language, setLanguage } = useLanguage();
   const { user, isAdmin, isWorker } = useAuthProfile();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // ✅ Modal Contact (sans navigation)
+  // ✅ Modal Contact (sans navigation) — on le garde (mais sans bouton header)
   const [contactOpen, setContactOpen] = useState(false);
 
   const location = useLocation();
-  const navigate = useNavigate();
 
   useEffect(() => setMobileOpen(false), [location.pathname, location.search, location.hash]);
 
@@ -49,50 +48,9 @@ const Header = () => {
     return "/espace-client";
   }, [user, isAdmin, isWorker]);
 
-  const scrollToSection = (id: string) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-
-    const headerEl = document.querySelector("header") as HTMLElement | null;
-    const headerHeight = headerEl?.offsetHeight ?? 64;
-
-    const y = el.getBoundingClientRect().top + window.scrollY - headerHeight - 10;
-    window.scrollTo({ top: Math.max(y, 0), behavior: "smooth" });
-  };
-
-  const handleSearchClick = () => {
-    if (location.pathname === "/") scrollToSection("search");
-    else navigate("/#search");
-  };
-
-  const handleFaqClick = () => {
-    if (location.pathname === "/faq" || location.pathname === "/aide") return;
-    navigate("/faq");
-  };
-
-  // ✅ Contact = modal
-  const handleContactClick = () => setContactOpen(true);
-
-  const NavLinkButton = ({
-    children,
-    onClick,
-  }: {
-    children: React.ReactNode;
-    onClick: () => void;
-  }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      className="min-w-0 text-sm font-semibold text-pro-gray/90 hover:text-pro-blue transition-colors whitespace-nowrap"
-    >
-      {children}
-    </button>
-  );
-
   return (
     <>
       <header className="sticky top-0 z-40 w-full max-w-full">
-        {/* ✅ barre moderne (blur + border) */}
         <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3">
@@ -106,20 +64,15 @@ const Header = () => {
                     ProxiServices
                   </span>
                   <span className="hidden sm:block text-[11px] text-gray-500 truncate">
-                    {language === "fr" ? "Prestataires vérifiés, proches de vous" : "Verified providers, near you"}
+                    {language === "fr"
+                      ? "Prestataires vérifiés, proches de vous"
+                      : "Verified providers, near you"}
                   </span>
                 </div>
               </Link>
 
-              {/* Navigation Desktop (pro & épuré) */}
-              <nav className="hidden md:flex min-w-0 items-center gap-6">
-                {/* ✅ Conserver uniquement Rechercher en top nav (pro) */}
-                <NavLinkButton onClick={handleSearchClick}>{t("nav.search")}</NavLinkButton>
-
-                {/* ✅ Si tu veux garder la FAQ en haut, laisse la ligne suivante.
-                    Sinon, commente-la pour un header encore plus minimal. */}
-                {/* <NavLinkButton onClick={handleFaqClick}>{t("nav.faq")}</NavLinkButton> */}
-              </nav>
+              {/* ✅ Navigation Desktop retirée (Rechercher supprimé) */}
+              <nav className="hidden md:flex" aria-hidden="true" />
 
               {/* Actions Desktop */}
               <div className="hidden md:flex min-w-0 items-center gap-2">
@@ -143,18 +96,7 @@ const Header = () => {
                   </Button>
                 </Link>
 
-                {/* ✅ Contact (icône uniquement) -> modal */}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleContactClick}
-                  className="rounded-full px-3 whitespace-nowrap"
-                  aria-label={t("nav.contact")}
-                  title={t("nav.contact")}
-                >
-                  <Mail className="w-4 h-4" />
-                </Button>
+                {/* ✅ Contact icon retiré (encadré sur ta capture) */}
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -181,20 +123,15 @@ const Header = () => {
 
               {/* Mobile actions */}
               <div className="md:hidden min-w-0 flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleContactClick}
-                  className="rounded-full px-3"
-                  aria-label={t("nav.contact")}
-                >
-                  <Mail className="w-4 h-4" />
-                </Button>
+                {/* ✅ Contact icon mobile retiré */}
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="rounded-full flex items-center gap-1 whitespace-nowrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full flex items-center gap-1 whitespace-nowrap"
+                    >
                       <Languages className="w-4 h-4" />
                       <span className="uppercase">{language}</span>
                     </Button>
@@ -222,7 +159,7 @@ const Header = () => {
             </div>
           </div>
 
-          {/* ✅ liseré premium (subtil) */}
+          {/* liseré premium */}
           <div className="h-1 w-full bg-gradient-to-r from-pro-blue/90 via-blue-600/90 to-pro-blue/90" />
         </div>
 
@@ -242,49 +179,18 @@ const Header = () => {
                   <span className="text-sm font-semibold text-pro-gray">
                     {language === "fr" ? "Menu" : "Menu"}
                   </span>
-                  <Button variant="outline" size="sm" onClick={() => setMobileOpen(false)} className="rounded-full">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setMobileOpen(false)}
+                    className="rounded-full"
+                  >
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
 
                 <div className="mt-3 flex flex-col gap-1 min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleSearchClick();
-                      setMobileOpen(false);
-                    }}
-                    className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue min-w-0"
-                  >
-                    <SearchIcon className="w-4 h-4 flex-shrink-0" />
-                    <span className="truncate">{t("nav.search")}</span>
-                  </button>
-
-                  {/* ✅ Optionnel: FAQ dans le menu mobile (souvent ok).
-                      Si tu veux du ultra minimal, tu peux aussi supprimer ce bloc. */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleFaqClick();
-                      setMobileOpen(false);
-                    }}
-                    className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue min-w-0"
-                  >
-                    <span className="truncate">{t("nav.faq")}</span>
-                  </button>
-
-                  {/* Contact mobile -> modal */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMobileOpen(false);
-                      handleContactClick();
-                    }}
-                    className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue min-w-0"
-                  >
-                    <Mail className="w-4 h-4 flex-shrink-0" />
-                    <span className="truncate">{t("nav.contact")}</span>
-                  </button>
+                  {/* ✅ Rechercher/FAQ/Contact retirés du drawer pour correspondre au header minimal */}
 
                   {isAdmin && (
                     <Link
@@ -314,7 +220,8 @@ const Header = () => {
         )}
       </header>
 
-      {/* Modal Contact monté une seule fois */}
+      {/* ✅ Modal Contact toujours disponible (ouvert depuis footer/CTA/sidebar),
+          mais plus de bouton dans le header. */}
       <ContactModal open={contactOpen} onOpenChange={setContactOpen} cooldownSeconds={30} />
     </>
   );
