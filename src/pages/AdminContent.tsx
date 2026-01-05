@@ -25,6 +25,7 @@ import {
   Trash2,
   Wand2,
   Sparkles,
+  RotateCcw,
 } from "lucide-react";
 
 type Locale = "fr" | "en";
@@ -63,38 +64,30 @@ async function translateViaEdgeFn(args: {
   text: string;
   source: Locale;
   target: Locale;
-  format?: string;
+  type?: string; // text|markdown|json
+  mode?: "draft" | "final";
 }) {
-  // Recommandé: envoyer Authorization Bearer pour les fonctions qui checkent le user
-  const { data: sess } = await supabase.auth.getSession();
-  const token = sess?.session?.access_token;
-
   const { data, error } = await supabase.functions.invoke("translate", {
     body: {
       text: args.text,
       source: args.source,
       target: args.target,
-      // Certains serveurs attendent "type" au lieu de "format"
-      format: args.format ?? "text",
-      type: args.format ?? "text",
-      mode: "draft",
+      type: args.type ?? "text",
+      mode: args.mode ?? "draft",
     },
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
 
   if (error) throw error;
 
-  // Parsing robuste de la réponse
+  // ✅ Ton index.ts renvoie: { ok:true, translatedText: "..." }
   const translated =
     (data as any)?.translatedText ??
+    (data as any)?.translated_text ??
     (data as any)?.text ??
     (data as any)?.translation ??
-    (data as any)?.translated_text ??
-    (data as any)?.result ??
     "";
 
-  if (typeof translated !== "string") return "";
-  return translated;
+  return typeof translated === "string" ? translated : "";
 }
 
 function ensureToReviewNote(text: string, locale: Locale) {
@@ -124,18 +117,9 @@ export default function AdminContent() {
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
   const [activeLocale, setActiveLocale] = React.useState<Locale>("fr");
 
-  const [typeByLocale, setTypeByLocale] = React.useState<Record<Locale, string>>({
-    fr: "text",
-    en: "text",
-  });
-  const [valueByLocale, setValueByLocale] = React.useState<Record<Locale, string>>({
-    fr: "",
-    en: "",
-  });
-  const [publishedByLocale, setPublishedByLocale] = React.useState<Record<Locale, boolean>>({
-    fr: true,
-    en: true,
-  });
+  const [typeByLocale, setTypeByLocale] = React.useState<Record<Locale, string>>({ fr: "text", en: "text" });
+  const [valueByLocale, setValueByLocale] = React.useState<Record<Locale, string>>({ fr: "", en: "" });
+  const [publishedByLocale, setPublishedByLocale] = React.useState<Record<Locale, boolean>>({ fr: true, en: true });
 
   const [translatingKey, setTranslatingKey] = React.useState<string | null>(null);
   const [translatingDir, setTranslatingDir] = React.useState<string | null>(null);
@@ -172,14 +156,14 @@ export default function AdminContent() {
     [getRow]
   );
 
-  const missingEn = React.useMemo(
-    () => allKeys.filter((k) => getRow(k, "fr") && !getRow(k, "en")).length,
-    [allKeys, getRow]
-  );
-  const missingFr = React.useMemo(
-    () => allKeys.filter((k) => getRow(k, "en") && !getRow(k, "fr")).length,
-    [allKeys, getRow]
-  );
+  const missingEn = React.useMemo(() => allKeys.filter((k) => getRow(k, "fr") && !getRow(k, "en")).length, [
+    allKeys,
+    getRow,
+  ]);
+  const missingFr = React.useMemo(() => allKeys.filter((k) => getRow(k, "en") && !getRow(k, "fr")).length, [
+    allKeys,
+    getRow,
+  ]);
 
   const filteredKeys = React.useMemo(() => {
     let keys = allKeys;
@@ -219,10 +203,15 @@ export default function AdminContent() {
       en: en?.is_published ?? true,
     });
 
-    // Si un locale manque, on bascule sur celui à créer/éditer
     if (fr && !en) setActiveLocale("en");
     else if (en && !fr) setActiveLocale("fr");
   }, [selectedKey, getRow]);
+
+  const resetFilters = () => {
+    setQ("");
+    setCategory("All");
+    setMissingMode("all");
+  };
 
   const createKey = () => {
     const k = prompt("Nouvelle clé (ex: home.hero.title) :");
@@ -239,6 +228,7 @@ export default function AdminContent() {
 
   const saveLocale = async (key: string, locale: Locale) => {
     if (!key) return;
+
     try {
       await upsert.mutateAsync({
         key,
@@ -247,10 +237,15 @@ export default function AdminContent() {
         value: valueByLocale[locale] ?? "",
         is_published: Boolean(publishedByLocale[locale]),
       });
+
       toast({ title: "Enregistré", description: `${key} (${locale.toUpperCase()}) mis à jour.` });
       await list.refetch();
     } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Enregistrement impossible.", variant: "destructive" });
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Enregistrement impossible.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -268,21 +263,36 @@ export default function AdminContent() {
     setActiveLocale(to);
 
     try {
-      await upsert.mutateAsync({ key, locale: to, type: fromType, value: fromValue, is_published: fromPub });
+      await upsert.mutateAsync({
+        key,
+        locale: to,
+        type: fromType,
+        value: fromValue,
+        is_published: fromPub,
+      });
+
       toast({ title: "Copie effectuée", description: `${from.toUpperCase()} → ${to.toUpperCase()} enregistré.` });
       await list.refetch();
     } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Copie impossible.", variant: "destructive" });
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Copie impossible.",
+        variant: "destructive",
+      });
     }
   };
 
-  const translateEditor = async (key: string, from: Locale, to: Locale) => {
+  const translateEditor = async (key: string, from: Locale, to: Locale, options?: { addReviewNote?: boolean }) => {
     const fromRow = getRow(key, from);
     const srcType = (typeByLocale[from] ?? fromRow?.type ?? "text").toString();
     const srcValue = (valueByLocale[from] ?? fromRow?.value ?? "").toString();
 
     if (!srcValue.trim()) {
-      toast({ title: "Impossible", description: `Le contenu ${from.toUpperCase()} est vide.`, variant: "destructive" });
+      toast({
+        title: "Impossible",
+        description: `Le contenu ${from.toUpperCase()} est vide.`,
+        variant: "destructive",
+      });
       return;
     }
 
@@ -291,15 +301,18 @@ export default function AdminContent() {
     setTranslatingDir(dir);
 
     try {
-      const translated = await translateViaEdgeFn({ text: srcValue, source: from, target: to, format: srcType });
-      const draft = ensureToReviewNote(translated, to);
+      const translated = await translateViaEdgeFn({ text: srcValue, source: from, target: to, type: srcType, mode: "draft" });
+      const finalText = options?.addReviewNote ? ensureToReviewNote(translated, to) : translated;
 
       setTypeByLocale((s) => ({ ...s, [to]: srcType }));
-      setValueByLocale((s) => ({ ...s, [to]: draft }));
+      setValueByLocale((s) => ({ ...s, [to]: finalText }));
       setPublishedByLocale((s) => ({ ...s, [to]: false }));
       setActiveLocale(to);
 
-      toast({ title: "Traduction prête", description: `Traduction ${dir} générée. Vérifie puis enregistre.` });
+      toast({
+        title: "Traduction prête",
+        description: `Traduction ${dir} générée. Vérifie puis enregistre.`,
+      });
     } catch (e: any) {
       toast({
         title: "Erreur traduction",
@@ -318,7 +331,8 @@ export default function AdminContent() {
       toast({ title: "Impossible", description: "FR manquant : crée d’abord la version FR.", variant: "destructive" });
       return;
     }
-    if (getRow(key, "en")) {
+    const en = getRow(key, "en");
+    if (en) {
       toast({ title: "Déjà présent", description: "La version EN existe déjà." });
       return;
     }
@@ -329,18 +343,36 @@ export default function AdminContent() {
     setTranslatingDir("FR→EN");
 
     try {
-      const translated = await translateViaEdgeFn({ text: fr.value ?? "", source: "fr", target: "en", format: fr.type ?? "text" });
+      const translated = await translateViaEdgeFn({
+        text: fr.value ?? "",
+        source: "fr",
+        target: "en",
+        type: fr.type ?? "text",
+        mode: "draft",
+      });
+
       const draft = ensureToReviewNote(translated, "en");
 
       setTypeByLocale((s) => ({ ...s, en: fr.type ?? "text" }));
       setValueByLocale((s) => ({ ...s, en: draft }));
       setPublishedByLocale((s) => ({ ...s, en: false }));
 
-      await upsert.mutateAsync({ key, locale: "en", type: fr.type ?? "text", value: draft, is_published: false });
-      toast({ title: "EN créé (brouillon)", description: "Version EN générée et enregistrée en brouillon." });
+      await upsert.mutateAsync({
+        key,
+        locale: "en",
+        type: fr.type ?? "text",
+        value: draft,
+        is_published: false,
+      });
+
+      toast({ title: "EN créé (brouillon)", description: "EN généré et enregistré en brouillon (To review)." });
       await list.refetch();
     } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Création EN impossible.", variant: "destructive" });
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Création EN impossible (translate).",
+        variant: "destructive",
+      });
     } finally {
       setTranslatingKey(null);
       setTranslatingDir(null);
@@ -353,7 +385,8 @@ export default function AdminContent() {
       toast({ title: "Impossible", description: "EN manquant : crée d’abord la version EN.", variant: "destructive" });
       return;
     }
-    if (getRow(key, "fr")) {
+    const fr = getRow(key, "fr");
+    if (fr) {
       toast({ title: "Déjà présent", description: "La version FR existe déjà." });
       return;
     }
@@ -364,18 +397,36 @@ export default function AdminContent() {
     setTranslatingDir("EN→FR");
 
     try {
-      const translated = await translateViaEdgeFn({ text: en.value ?? "", source: "en", target: "fr", format: en.type ?? "text" });
+      const translated = await translateViaEdgeFn({
+        text: en.value ?? "",
+        source: "en",
+        target: "fr",
+        type: en.type ?? "text",
+        mode: "draft",
+      });
+
       const draft = ensureToReviewNote(translated, "fr");
 
       setTypeByLocale((s) => ({ ...s, fr: en.type ?? "text" }));
       setValueByLocale((s) => ({ ...s, fr: draft }));
       setPublishedByLocale((s) => ({ ...s, fr: false }));
 
-      await upsert.mutateAsync({ key, locale: "fr", type: en.type ?? "text", value: draft, is_published: false });
-      toast({ title: "FR créé (brouillon)", description: "Version FR générée et enregistrée en brouillon." });
+      await upsert.mutateAsync({
+        key,
+        locale: "fr",
+        type: en.type ?? "text",
+        value: draft,
+        is_published: false,
+      });
+
+      toast({ title: "FR créé (brouillon)", description: "FR généré et enregistré en brouillon (À valider)." });
       await list.refetch();
     } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Création FR impossible.", variant: "destructive" });
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Création FR impossible (translate).",
+        variant: "destructive",
+      });
     } finally {
       setTranslatingKey(null);
       setTranslatingDir(null);
@@ -392,7 +443,7 @@ export default function AdminContent() {
       if (!fr || !en || !frVal || !enVal) {
         toast({
           title: "Publication impossible",
-          description: "FR et EN doivent exister et ne pas être vides pour publier les 2 langues.",
+          description: "FR et EN doivent exister et être non vides pour publier.",
           variant: "destructive",
         });
         return;
@@ -403,10 +454,17 @@ export default function AdminContent() {
       if (fr) await togglePublish.mutateAsync({ id: fr.id, is_published: next });
       if (en) await togglePublish.mutateAsync({ id: en.id, is_published: next });
 
-      toast({ title: next ? "Publié (FR + EN)" : "Dépublié (FR + EN)", description: `Statut appliqué pour ${key}.` });
+      toast({
+        title: next ? "Publié (FR + EN)" : "Dépublié (FR + EN)",
+        description: `Statut appliqué pour ${key}.`,
+      });
       await list.refetch();
     } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Mise à jour du statut impossible.", variant: "destructive" });
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Mise à jour du statut impossible.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -435,7 +493,11 @@ export default function AdminContent() {
       toast({ title: "Batch publish OK", description: `${keys.length} clé(s) publiées.` });
       await list.refetch();
     } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Batch publish impossible.", variant: "destructive" });
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Batch publish impossible.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -443,7 +505,7 @@ export default function AdminContent() {
     const row = getRow(key, locale);
     if (!row) return;
 
-    const ok = window.confirm(`Supprimer ${key} (${locale.toUpperCase()}) ?\n\nAction irréversible.`);
+    const ok = window.confirm(`Supprimer ${key} (${locale.toUpperCase()}) ?\n\nCette action est irréversible.`);
     if (!ok) return;
 
     try {
@@ -451,7 +513,11 @@ export default function AdminContent() {
       toast({ title: "Supprimé", description: `${key} (${locale.toUpperCase()}) supprimé.` });
       await list.refetch();
     } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Suppression impossible.", variant: "destructive" });
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Suppression impossible.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -460,12 +526,11 @@ export default function AdminContent() {
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <h1 className="text-xl font-semibold">Back-Office — Contenu du site</h1>
           <p className="text-sm text-muted-foreground">
-            CMS FR/EN. Affichage lisible (préviews multiligne), éditeur FR/EN, copie, traduction (Edge Function), publication FR+EN, batch publish.
+            CMS FR/EN : recherche, filtres, manquants, copie, traduction (Edge Function), publication, batch publish.
           </p>
         </div>
 
@@ -475,6 +540,11 @@ export default function AdminContent() {
             Actualiser
           </Button>
 
+          <Button type="button" variant="outline" onClick={resetFilters} disabled={isBusy}>
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Réinitialiser
+          </Button>
+
           <Button type="button" onClick={createKey} disabled={isBusy}>
             <Plus className="h-4 w-4 mr-2" />
             Nouvelle clé
@@ -482,12 +552,11 @@ export default function AdminContent() {
 
           <Button type="button" variant="outline" onClick={batchPublishComplete} disabled={isBusy}>
             <CheckCircle2 className="h-4 w-4 mr-2" />
-            Batch publish (complets)
+            Batch publish
           </Button>
         </div>
       </div>
 
-      {/* Filters */}
       <Card>
         <CardContent className="p-4 md:p-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -530,25 +599,21 @@ export default function AdminContent() {
                 disabled={isBusy}
               >
                 <option value="all">{missingLabel("all")}</option>
-                <option value="en_missing">
-                  {missingLabel("en_missing")} ({missingEn})
-                </option>
-                <option value="fr_missing">
-                  {missingLabel("fr_missing")} ({missingFr})
-                </option>
+                <option value="en_missing">{missingLabel("en_missing")} ({missingEn})</option>
+                <option value="fr_missing">{missingLabel("fr_missing")} ({missingFr})</option>
               </select>
             </div>
           </div>
 
           <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div className="text-xs text-muted-foreground">
-              {list.isLoading ? "Chargement…" : `${filteredKeys.length} clé(s) dans le filtre`}
+              {list.isLoading ? "Chargement…" : `${filteredKeys.length} clé(s)`}
             </div>
 
             {translatingKey && (
               <div className="text-xs inline-flex items-center gap-2 rounded-full border px-3 py-1 bg-white">
                 <Sparkles className="h-3.5 w-3.5" />
-                Traduction en cours: <span className="font-medium">{translatingDir}</span> —{" "}
+                Traduction: <span className="font-medium">{translatingDir}</span> —{" "}
                 <span className="font-mono">{translatingKey}</span>
               </div>
             )}
@@ -556,9 +621,7 @@ export default function AdminContent() {
         </CardContent>
       </Card>
 
-      {/* Table + Editor */}
       <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
-        {/* Table */}
         <Card className="overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Contenus</CardTitle>
@@ -566,14 +629,14 @@ export default function AdminContent() {
 
           <CardContent className="pt-0">
             <div className="overflow-auto">
-              <table className="w-full text-sm table-fixed">
+              <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-background z-10">
                   <tr className="text-left border-b">
-                    <th className="py-2 pr-3 font-semibold w-[28%]">Clé</th>
-                    <th className="py-2 pr-3 font-semibold w-[12%]">Catégorie</th>
-                    <th className="py-2 pr-3 font-semibold w-[23%]">FR</th>
-                    <th className="py-2 pr-3 font-semibold w-[23%]">EN</th>
-                    <th className="py-2 pr-3 font-semibold w-[14%]">Actions</th>
+                    <th className="py-2 pr-3 font-semibold">Clé</th>
+                    <th className="py-2 pr-3 font-semibold">Catégorie</th>
+                    <th className="py-2 pr-3 font-semibold">FR</th>
+                    <th className="py-2 pr-3 font-semibold">EN</th>
+                    <th className="py-2 pr-3 font-semibold">Actions</th>
                   </tr>
                 </thead>
 
@@ -587,20 +650,14 @@ export default function AdminContent() {
                     return (
                       <tr
                         key={k}
+                        onClick={() => setSelectedKey(k)}
                         className={[
-                          "border-b align-top",
+                          "border-b align-top cursor-pointer",
                           selectedKey === k ? "bg-muted/40" : "hover:bg-muted/20",
                         ].join(" ")}
                       >
                         <td className="py-3 pr-3">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedKey(k)}
-                            className="text-left font-medium hover:underline break-words"
-                          >
-                            {k}
-                          </button>
-
+                          <div className="font-medium">{k}</div>
                           <div className="mt-1 text-xs text-muted-foreground">
                             {complete ? "Complet FR+EN" : "Incomplet"}
                             {!en && fr && (
@@ -620,15 +677,9 @@ export default function AdminContent() {
                           <span className="inline-flex rounded-full border px-2 py-0.5 text-xs">{cat}</span>
                         </td>
 
-                        {/* FR preview: lisible (multiligne) */}
                         <td className="py-3 pr-3">
                           {fr ? (
-                            <span
-                              className={[
-                                "inline-flex text-[11px] px-2 py-0.5 rounded-full border",
-                                badgeStatus(fr.is_published),
-                              ].join(" ")}
-                            >
+                            <span className={["inline-flex text-[11px] px-2 py-0.5 rounded-full border", badgeStatus(fr.is_published)].join(" ")}>
                               {fr.is_published ? "Publié" : "Brouillon"}
                             </span>
                           ) : (
@@ -636,21 +687,14 @@ export default function AdminContent() {
                               Absent
                             </span>
                           )}
-
-                          <div className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap break-words max-h-24 overflow-auto pr-1">
+                          <div className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap break-words line-clamp-3">
                             {(fr?.value ?? "").trim() || "—"}
                           </div>
                         </td>
 
-                        {/* EN preview: lisible (multiligne) */}
                         <td className="py-3 pr-3">
                           {en ? (
-                            <span
-                              className={[
-                                "inline-flex text-[11px] px-2 py-0.5 rounded-full border",
-                                badgeStatus(en.is_published),
-                              ].join(" ")}
-                            >
+                            <span className={["inline-flex text-[11px] px-2 py-0.5 rounded-full border", badgeStatus(en.is_published)].join(" ")}>
                               {en.is_published ? "Publié" : "Brouillon"}
                             </span>
                           ) : (
@@ -658,82 +702,39 @@ export default function AdminContent() {
                               Absent
                             </span>
                           )}
-
-                          <div className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap break-words max-h-24 overflow-auto pr-1">
+                          <div className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap break-words line-clamp-3">
                             {(en?.value ?? "").trim() || "—"}
                           </div>
                         </td>
 
-                        <td className="py-3 pr-3">
-                          <div className="flex flex-col gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => copyLocaleToLocale(k, "fr", "en")}
-                              disabled={isBusy || !fr}
-                              title="Copier FR → EN"
-                            >
+                        <td className="py-3 pr-3" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={() => copyLocaleToLocale(k, "fr", "en")} disabled={isBusy || !fr}>
                               <Copy className="h-4 w-4 mr-2" />
                               FR→EN
                             </Button>
 
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => copyLocaleToLocale(k, "en", "fr")}
-                              disabled={isBusy || !en}
-                              title="Copier EN → FR"
-                            >
+                            <Button type="button" variant="outline" size="sm" onClick={() => copyLocaleToLocale(k, "en", "fr")} disabled={isBusy || !en}>
                               <Copy className="h-4 w-4 mr-2" />
                               EN→FR
                             </Button>
 
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => createEnMissingDraft(k)}
-                              disabled={isBusy || !!en || !fr}
-                              title="Créer EN manquant (auto-translate brouillon)"
-                            >
+                            <Button type="button" variant="outline" size="sm" onClick={() => createEnMissingDraft(k)} disabled={isBusy || !!en || !fr}>
                               <Languages className="h-4 w-4 mr-2" />
                               Créer EN
                             </Button>
 
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => createFrMissingDraft(k)}
-                              disabled={isBusy || !!fr || !en}
-                              title="Créer FR manquant (auto-translate brouillon)"
-                            >
+                            <Button type="button" variant="outline" size="sm" onClick={() => createFrMissingDraft(k)} disabled={isBusy || !!fr || !en}>
                               <Languages className="h-4 w-4 mr-2" />
                               Créer FR
                             </Button>
 
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setPublishBoth(k, true)}
-                              disabled={isBusy || !isComplete(k)}
-                              title="Publier FR + EN (si complet)"
-                            >
+                            <Button type="button" variant="outline" size="sm" onClick={() => setPublishBoth(k, true)} disabled={isBusy || !isComplete(k)}>
                               <CheckCircle2 className="h-4 w-4 mr-2" />
                               Publier
                             </Button>
 
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setPublishBoth(k, false)}
-                              disabled={isBusy}
-                              title="Dépublier FR + EN"
-                            >
+                            <Button type="button" variant="outline" size="sm" onClick={() => setPublishBoth(k, false)} disabled={isBusy}>
                               <EyeOff className="h-4 w-4 mr-2" />
                               Dépublier
                             </Button>
@@ -746,7 +747,7 @@ export default function AdminContent() {
                   {!list.isLoading && filteredKeys.length === 0 && (
                     <tr>
                       <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
-                        Aucun résultat dans le filtre.
+                        Aucun résultat.
                       </td>
                     </tr>
                   )}
@@ -756,7 +757,6 @@ export default function AdminContent() {
           </CardContent>
         </Card>
 
-        {/* Editor */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Éditeur</CardTitle>
@@ -765,13 +765,13 @@ export default function AdminContent() {
           <CardContent className="space-y-4">
             {!selectedKey ? (
               <div className="rounded-xl border p-4 text-sm text-muted-foreground">
-                Sélectionne une clé dans le tableau pour modifier son contenu FR/EN.
+                Sélectionne une clé à gauche pour voir et modifier son contenu.
               </div>
             ) : (
               <>
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-sm font-medium break-words">{selectedKey}</div>
+                    <div className="text-sm font-medium truncate">{selectedKey}</div>
                     <div className="text-xs text-muted-foreground mt-1">Catégorie : {detectCategory(selectedKey)}</div>
                   </div>
 
@@ -843,9 +843,8 @@ export default function AdminContent() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => translateEditor(selectedKey, "fr", "en")}
+                    onClick={() => translateEditor(selectedKey, "fr", "en", { addReviewNote: true })}
                     disabled={isBusy}
-                    title="Traduire FR vers EN (brouillon + note)"
                   >
                     <Sparkles className="h-4 w-4 mr-2" />
                     Traduire FR→EN
@@ -855,15 +854,14 @@ export default function AdminContent() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => translateEditor(selectedKey, "en", "fr")}
+                    onClick={() => translateEditor(selectedKey, "en", "fr", { addReviewNote: true })}
                     disabled={isBusy}
-                    title="Traduire EN vers FR (brouillon + note)"
                   >
                     <Sparkles className="h-4 w-4 mr-2" />
                     Traduire EN→FR
                   </Button>
 
-                  <div className="text-xs text-muted-foreground">Génère dans l’éditeur. Enregistre ensuite.</div>
+                  <div className="text-xs text-muted-foreground">Génère dans l’éditeur, puis enregistre.</div>
                 </div>
 
                 <div>
@@ -871,16 +869,10 @@ export default function AdminContent() {
                   <Textarea
                     value={valueByLocale[activeLocale]}
                     onChange={(e) => setValueByLocale((s) => ({ ...s, [activeLocale]: e.target.value }))}
-                    rows={14}
+                    rows={16}
                     placeholder="Saisissez le contenu…"
                     disabled={isBusy}
                   />
-                  <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{(valueByLocale[activeLocale]?.length ?? 0)} caractère(s)</span>
-                    <span>
-                      Statut: <span className="font-medium">{publishedByLocale[activeLocale] ? "Publié" : "Brouillon"}</span>
-                    </span>
-                  </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
