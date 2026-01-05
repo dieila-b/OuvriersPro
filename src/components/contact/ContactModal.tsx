@@ -1,9 +1,9 @@
-// src/components/contact/ContactModal.tsx
 import * as React from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
   Dialog,
   DialogContent,
@@ -69,6 +69,14 @@ export default function ContactModal({
   cooldownSeconds = 30,
   defaultSubject = "Demande de contact",
 }: Props) {
+  const { t, language } = useLanguage();
+
+  const cms = (key: string, fallbackFr: string, fallbackEn: string) => {
+    const v = t(key);
+    if (!v || v === key) return language === "fr" ? fallbackFr : fallbackEn;
+    return v;
+  };
+
   const [fullName, setFullName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [subject, setSubject] = React.useState(defaultSubject);
@@ -84,12 +92,10 @@ export default function ContactModal({
     setErr(null);
   }, []);
 
-  // Reset subject when default changes
   React.useEffect(() => {
     setSubject(defaultSubject);
   }, [defaultSubject]);
 
-  // Cooldown ticker (only when modal is open)
   React.useEffect(() => {
     if (!open) return;
 
@@ -100,7 +106,6 @@ export default function ContactModal({
     return () => window.clearInterval(id);
   }, [open, cooldownSeconds]);
 
-  // Auto-fill (auth + profiles)
   React.useEffect(() => {
     if (!open) return;
 
@@ -117,7 +122,6 @@ export default function ContactModal({
           return;
         }
 
-        // adapte si tes colonnes diffèrent
         const { data: profile, error } = await supabase
           .from("profiles")
           .select("full_name,email")
@@ -148,10 +152,7 @@ export default function ContactModal({
   }, [open]);
 
   const canSend =
-    email.trim().length > 0 &&
-    message.trim().length > 0 &&
-    cooldownRemaining === 0 &&
-    !sending;
+    email.trim().length > 0 && message.trim().length > 0 && cooldownRemaining === 0 && !sending;
 
   const handleSend = async () => {
     resetStatus();
@@ -161,14 +162,20 @@ export default function ContactModal({
     const s = subject.trim();
 
     if (!e || !m) {
-      setErr("Veuillez renseigner l’email et le message.");
+      setErr(cms("contact.form.validation.required", "Veuillez renseigner l’email et le message.", "Please provide an email and a message."));
       return;
     }
 
     const remaining = getCooldownRemaining(cooldownSeconds);
     if (remaining > 0) {
       setCooldownRemaining(remaining);
-      setErr(`Veuillez patienter ${remaining}s avant de renvoyer un message.`);
+      setErr(
+        cms(
+          "contact.form.cooldown.error",
+          `Veuillez patienter ${remaining}s avant de renvoyer un message.`,
+          `Please wait ${remaining}s before sending another message.`
+        )
+      );
       return;
     }
 
@@ -198,11 +205,23 @@ export default function ContactModal({
       setCooldownNow();
       setCooldownRemaining(cooldownSeconds);
 
-      setOk("Merci. Votre message a bien été envoyé.");
+      setOk(
+        cms(
+          "contact.form.success",
+          "Merci. Votre message a bien été envoyé.",
+          "Thank you. Your message has been sent successfully."
+        )
+      );
       setMessage("");
     } catch (ex) {
       console.error("Contact submit error:", ex);
-      setErr("Impossible d’envoyer votre message pour le moment.");
+      setErr(
+        cms(
+          "contact.form.error",
+          "Impossible d’envoyer votre message pour le moment.",
+          "We couldn’t send your message right now."
+        )
+      );
     } finally {
       setSending(false);
     }
@@ -218,33 +237,44 @@ export default function ContactModal({
     >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Contact</DialogTitle>
-          <DialogDescription>Envoyez-nous votre message. Réponse par email.</DialogDescription>
+          <DialogTitle>
+            {cms("contact.modal.title", "Contacter le support", "Contact Support")}
+          </DialogTitle>
+          <DialogDescription>
+            {cms(
+              "contact.modal.desc",
+              "Décrivez votre demande, nous revenons vers vous rapidement.",
+              "Share the details of your request and our team will get back to you shortly."
+            )}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3">
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <label className="text-sm font-medium text-pro-gray">
-                Nom <span className="text-gray-400">(optionnel)</span>
+                {cms("contact.form.full_name", "Nom", "Full name")}{" "}
+                <span className="text-gray-400">
+                  ({cms("common.optional", "optionnel", "optional")})
+                </span>
               </label>
               <Input
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="Ex: Mamadou Diallo"
+                placeholder={cms("contact.form.full_name_placeholder", "Ex: Mamadou Diallo", "e.g., Alex Johnson")}
                 onFocus={resetStatus}
               />
             </div>
 
             <div className="grid gap-1.5">
               <label className="text-sm font-medium text-pro-gray">
-                Email <span className="text-red-500">*</span>
+                {cms("contact.form.email", "Email", "Email")} <span className="text-red-500">*</span>
               </label>
               <Input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="ex: nom@email.com"
+                placeholder={cms("contact.form.email_placeholder", "ex: nom@email.com", "e.g., name@email.com")}
                 required
                 onFocus={resetStatus}
               />
@@ -253,24 +283,27 @@ export default function ContactModal({
 
           <div className="grid gap-1.5">
             <label className="text-sm font-medium text-pro-gray">
-              Objet <span className="text-gray-400">(optionnel)</span>
+              {cms("contact.form.subject", "Objet", "Subject")}{" "}
+              <span className="text-gray-400">
+                ({cms("common.optional", "optionnel", "optional")})
+              </span>
             </label>
             <Input
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="Ex: Paiement / Sécurité"
+              placeholder={cms("contact.form.subject_placeholder", "Ex: Paiement / Sécurité", "e.g., Billing / Security")}
               onFocus={resetStatus}
             />
           </div>
 
           <div className="grid gap-1.5">
             <label className="text-sm font-medium text-pro-gray">
-              Message <span className="text-red-500">*</span>
+              {cms("contact.form.message", "Message", "Message")} <span className="text-red-500">*</span>
             </label>
             <Textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Décrivez votre demande..."
+              placeholder={cms("contact.form.message_placeholder", "Décrivez votre demande...", "Describe your request...")}
               rows={5}
               required
               onFocus={resetStatus}
@@ -279,8 +312,17 @@ export default function ContactModal({
 
           {cooldownRemaining > 0 && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 text-sm">
-              Anti-spam actif : vous pourrez renvoyer un message dans{" "}
-              <span className="font-semibold">{cooldownRemaining}s</span>.
+              {cms(
+                "contact.form.cooldown.notice_prefix",
+                "Veuillez patienter",
+                "Please wait"
+              )}{" "}
+              <span className="font-semibold">{cooldownRemaining}s</span>{" "}
+              {cms(
+                "contact.form.cooldown.notice_suffix",
+                "avant d’envoyer un nouveau message.",
+                "before sending another message."
+              )}
             </div>
           )}
 
@@ -301,7 +343,7 @@ export default function ContactModal({
 
         <DialogFooter className="gap-2">
           <Button type="button" variant="outline" className="rounded-xl" onClick={() => onOpenChange(false)}>
-            Fermer
+            {cms("common.close", "Fermer", "Close")}
           </Button>
 
           <Button
@@ -311,7 +353,7 @@ export default function ContactModal({
             disabled={!canSend}
           >
             <Send className="h-4 w-4" />
-            {sending ? "Envoi..." : "Envoyer"}
+            {sending ? cms("common.sending", "Envoi...", "Sending...") : cms("contact.form.btn_send", "Envoyer", "Send")}
           </Button>
         </DialogFooter>
       </DialogContent>
