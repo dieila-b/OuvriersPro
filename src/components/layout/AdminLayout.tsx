@@ -5,7 +5,9 @@ import { Outlet, NavLink, Link } from "react-router-dom";
 function navClass({ isActive }: { isActive: boolean }) {
   return [
     "px-3 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap",
-    isActive ? "bg-white shadow-sm text-pro-gray" : "text-gray-600 hover:text-pro-gray hover:bg-white/60",
+    isActive
+      ? "bg-white shadow-sm text-pro-gray"
+      : "text-gray-600 hover:text-pro-gray hover:bg-white/60",
   ].join(" ");
 }
 
@@ -20,7 +22,9 @@ export default function AdminLayout() {
               <div className="h-8 w-8 rounded-xl bg-pro-blue text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
                 PS
               </div>
-              <div className="text-sm font-semibold text-pro-gray truncate">Administration</div>
+              <div className="text-sm font-semibold text-pro-gray truncate">
+                Administration
+              </div>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -37,9 +41,14 @@ export default function AdminLayout() {
                 Publicités
               </NavLink>
 
-              {/* ✅ Nouveau: Questions FAQ */}
+              {/* ✅ Questions FAQ */}
               <NavLink to="/admin/faq-questions" className={navClass}>
                 Questions FAQ
+              </NavLink>
+
+              {/* ✅ Nouveau: Contenu du site (CMS) */}
+              <NavLink to="/admin/contenu" className={navClass}>
+                Contenu du site
               </NavLink>
 
               <Link
