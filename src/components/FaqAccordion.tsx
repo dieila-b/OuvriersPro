@@ -1,8 +1,7 @@
 // src/components/FaqAccordion.tsx
-import React, { useMemo, useState } from "react";
+import React from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Button } from "@/components/ui/button";
 
 type Category =
   | "all"
@@ -18,7 +17,7 @@ type Category =
 
 type FaqItem = {
   id: string;
-  category: Exclude<Category, "all">;
+  category: Exclude<Category, "all">; // conservé (utile si tu veux re-filtrer plus tard)
   q: { fr: string; en: string };
   a: { fr: string; en: string };
 };
@@ -107,52 +106,15 @@ const FAQ_ITEMS: FaqItem[] = [
   },
 ];
 
-const CATEGORY_LABELS: Record<Category, { fr: string; en: string }> = {
-  all: { fr: "Toutes", en: "All" },
-  home_services: { fr: "Services à domicile", en: "Home services" },
-  health: { fr: "Santé", en: "Health" },
-  it: { fr: "Informatique", en: "IT" },
-  tutoring: { fr: "Cours / Répétiteurs", en: "Tutoring" },
-  business: { fr: "Général", en: "General" },
-  payments: { fr: "Paiement / Tarifs", en: "Payments / Pricing" },
-  account: { fr: "Compte", en: "Account" },
-  reviews: { fr: "Avis", en: "Reviews" },
-  security: { fr: "Sécurité", en: "Safety" },
-};
-
 export default function FaqAccordion() {
   const { language } = useLanguage();
-  const [category, setCategory] = useState<Category>("all");
-
-  const items = useMemo(() => {
-    if (category === "all") return FAQ_ITEMS;
-    return FAQ_ITEMS.filter((x) => x.category === category);
-  }, [category]);
 
   return (
     <div className="w-full">
-      {/* Filtre catégories */}
-      <div className="flex flex-wrap gap-2 mb-5">
-        {(Object.keys(CATEGORY_LABELS) as Category[]).map((c) => {
-          const active = c === category;
-          return (
-            <Button
-              key={c}
-              type="button"
-              size="sm"
-              variant={active ? "default" : "outline"}
-              className={active ? "bg-pro-blue hover:bg-blue-700" : ""}
-              onClick={() => setCategory(c)}
-            >
-              {language === "fr" ? CATEGORY_LABELS[c].fr : CATEGORY_LABELS[c].en}
-            </Button>
-          );
-        })}
-      </div>
+      {/* ✅ Barre de catégories supprimée */}
 
-      {/* Accordion */}
       <Accordion type="single" collapsible className="w-full">
-        {items.map((it) => (
+        {FAQ_ITEMS.map((it) => (
           <AccordionItem key={it.id} value={it.id} className="border-b border-gray-200">
             <AccordionTrigger className="text-left text-pro-gray">
               {language === "fr" ? it.q.fr : it.q.en}
@@ -163,14 +125,6 @@ export default function FaqAccordion() {
           </AccordionItem>
         ))}
       </Accordion>
-
-      {items.length === 0 && (
-        <div className="mt-6 text-sm text-gray-600">
-          {language === "fr"
-            ? "Aucune question pour cette catégorie pour le moment."
-            : "No questions in this category yet."}
-        </div>
-      )}
     </div>
   );
 }
