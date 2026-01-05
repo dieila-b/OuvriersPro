@@ -13,6 +13,16 @@ export type SiteContentRow = {
 
 const SELECT_FIELDS = "id,key,locale,type,value,is_published,updated_at";
 
+/**
+ * Utilitaire: évite .single() / .maybeSingle() quand le backend retourne
+ * parfois un tableau ou quand la vue/rls crée un comportement non attendu.
+ */
+function firstOrNull<T>(data: T[] | T | null | undefined): T | null {
+  if (!data) return null;
+  if (Array.isArray(data)) return (data[0] ?? null) as T | null;
+  return data as T;
+}
+
 export function useSiteContentList() {
   return useQuery({
     queryKey: ["site_content_list"],
@@ -29,12 +39,6 @@ export function useSiteContentList() {
   });
 }
 
-/**
- * ⚠️ Important:
- * - maybeSingle() plante si la requête retourne >1 ligne
- * - Cela arrive si tu as des doublons (key, locale)
- * ✅ Solution: on force limit(1) puis maybeSingle()
- */
 export function useSiteContent(key: string, locale: string) {
   return useQuery({
     queryKey: ["site_content", key, locale],
@@ -44,12 +48,11 @@ export function useSiteContent(key: string, locale: string) {
         .select(SELECT_FIELDS)
         .eq("key", key)
         .eq("locale", locale)
-        .order("updated_at", { ascending: false }) // si doublons, on prend le plus récent
-        .limit(1)
-        .maybeSingle();
+        .order("updated_at", { ascending: false })
+        .limit(1);
 
       if (error) throw error;
-      return (data ?? null) as SiteContentRow | null;
+      return (firstOrNull<SiteContentRow>(data) ?? null) as SiteContentRow | null;
     },
     enabled: Boolean(key) && Boolean(locale),
   });
@@ -66,40 +69,37 @@ export function useUpsertSiteContent() {
       value: string;
       is_published: boolean;
     }) => {
-      /**
-       * ⚠️ .single() peut aussi planter si Supabase retourne plusieurs lignes
-       * (ou si la contrainte unique n’existe pas encore)
-       * ✅ On sécurise: limit(1) + maybeSingle()
-       */
+      // IMPORTANT:
+      // - .single() peut casser si la DB renvoie 0 ou >1 ligne
+      // - on sécurise: limit(1) et lecture first
       const { data, error } = await supabase
         .from("site_content")
         .upsert(payload, { onConflict: "key,locale" })
         .select(SELECT_FIELDS)
         .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
 
       if (error) throw error;
 
-      // Si la DB renvoie null (cas rare), on force une lecture derrière
-      if (!data) {
-        const { data: fallback, error: e2 } = await supabase
-          .from("site_content")
-          .select(SELECT_FIELDS)
-          .eq("key", payload.key)
-          .eq("locale", payload.locale)
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      const row = firstOrNull<SiteContentRow>(data);
+      if (row) return row;
 
-        if (e2) throw e2;
-        return (fallback ?? null) as SiteContentRow;
-      }
+      // Fallback: relire
+      const { data: fallback, error: e2 } = await supabase
+        .from("site_content")
+        .select(SELECT_FIELDS)
+        .eq("key", payload.key)
+        .eq("locale", payload.locale)
+        .order("updated_at", { ascending: false })
+        .limit(1);
 
-      return data as SiteContentRow;
+      if (e2) throw e2;
+
+      const row2 = firstOrNull<SiteContentRow>(fallback);
+      if (!row2) throw new Error("Upsert OK mais aucune ligne retournée (RLS/SELECT ?).");
+      return row2;
     },
     onSuccess: (row) => {
-      if (!row) return;
       qc.invalidateQueries({ queryKey: ["site_content_list"] });
       qc.setQueryData(["site_content", row.key, row.locale], row);
     },
@@ -111,20 +111,17 @@ export function useTogglePublishSiteContent() {
 
   return useMutation({
     mutationFn: async (payload: { id: string; is_published: boolean }) => {
-      /**
-       * ⚠️ .single() peut planter si la requête renvoie 0 ou >1 ligne
-       * ✅ On sécurise: limit(1) + maybeSingle()
-       */
       const { data, error } = await supabase
         .from("site_content")
         .update({ is_published: payload.is_published })
         .eq("id", payload.id)
         .select(SELECT_FIELDS)
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
 
       if (error) throw error;
-      return (data ?? null) as SiteContentRow | null;
+
+      const row = firstOrNull<SiteContentRow>(data);
+      return (row ?? null) as SiteContentRow | null;
     },
     onSuccess: (row) => {
       qc.invalidateQueries({ queryKey: ["site_content_list"] });
