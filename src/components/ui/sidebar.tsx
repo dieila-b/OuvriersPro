@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { VariantProps, cva } from "class-variance-authority"
-import { PanelLeft } from "lucide-react"
+import { Mail, PanelLeft, Phone } from "lucide-react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
@@ -16,6 +16,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
 
 const SIDEBAR_COOKIE_NAME = "sidebar:state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
@@ -733,6 +742,159 @@ const SidebarMenuSubButton = React.forwardRef<
 })
 SidebarMenuSubButton.displayName = "SidebarMenuSubButton"
 
+/**
+ * ✅ CTA Contact (ouvre un modal, sans changer de page)
+ * - À utiliser dans ton menu : <SidebarFooter><ContactCTA /></SidebarFooter>
+ */
+function normalizePhone(phone: string) {
+  return phone.replace(/[^\d+]/g, "")
+}
+
+const DEFAULT_SUPPORT_EMAIL = "support@proxiservices.com"
+
+const ContactCTA: React.FC<{
+  className?: string
+  emailTo?: string
+  phoneTo?: string // ex: "+224620000000"
+  title?: string
+  subtitle?: string
+  buttonLabel?: string
+}> = ({
+  className,
+  emailTo = DEFAULT_SUPPORT_EMAIL,
+  phoneTo,
+  title = "Contact",
+  subtitle = "Une question ? Notre équipe vous répond rapidement.",
+  buttonLabel = "Contact",
+}) => {
+  const [open, setOpen] = React.useState(false)
+
+  const [fullName, setFullName] = React.useState("")
+  const [email, setEmail] = React.useState("")
+  const [message, setMessage] = React.useState("")
+
+  const canSend = email.trim().length > 0 && message.trim().length > 0
+
+  const mailtoHref = React.useMemo(() => {
+    const subject = encodeURIComponent("Demande de contact")
+    const body = encodeURIComponent(
+      `Nom: ${fullName || "-"}\nEmail: ${email || "-"}\n\nMessage:\n${message}\n`
+    )
+    return `mailto:${emailTo}?subject=${subject}&body=${body}`
+  }, [emailTo, fullName, email, message])
+
+  const telHref = React.useMemo(() => {
+    if (!phoneTo) return null
+    return `tel:${normalizePhone(phoneTo)}`
+  }, [phoneTo])
+
+  return (
+    <>
+      <div className={cn("mt-2", className)}>
+        <Button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="w-full rounded-xl bg-pro-blue hover:bg-pro-blue/90 justify-start gap-2"
+        >
+          <Mail className="h-4 w-4" />
+          <span className="truncate">{buttonLabel}</span>
+        </Button>
+
+        <p className="mt-2 text-xs text-sidebar-foreground/70 leading-snug">
+          {subtitle}
+        </p>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>
+              Envoyez-nous votre message. Réponse par email.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <label className="text-sm font-medium text-pro-gray">
+                  Nom <span className="text-gray-400">(optionnel)</span>
+                </label>
+                <Input
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Ex: Mamadou Diallo"
+                />
+              </div>
+
+              <div className="grid gap-1.5">
+                <label className="text-sm font-medium text-pro-gray">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="ex: nom@email.com"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-1.5">
+              <label className="text-sm font-medium text-pro-gray">
+                Message <span className="text-red-500">*</span>
+              </label>
+              <Textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Décrivez votre demande..."
+                rows={5}
+                required
+              />
+            </div>
+
+            {telHref && (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4" />
+                  <span className="font-medium">Urgence / appel :</span>
+                  <a className="underline" href={telHref}>
+                    {phoneTo}
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+              className="rounded-xl"
+            >
+              Fermer
+            </Button>
+
+            <Button
+              type="button"
+              className="rounded-xl bg-pro-blue hover:bg-pro-blue/90"
+              disabled={!canSend}
+              onClick={() => {
+                // ouvre le client mail sans navigation de page
+                window.location.href = mailtoHref
+              }}
+            >
+              Envoyer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
 export {
   Sidebar,
   SidebarContent,
@@ -758,4 +920,5 @@ export {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
+  ContactCTA,
 }
