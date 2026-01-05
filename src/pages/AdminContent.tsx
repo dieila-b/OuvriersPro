@@ -1,8 +1,8 @@
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import {
   useSiteContentList,
@@ -13,40 +13,64 @@ import {
 } from "@/hooks/useSiteContent";
 import {
   Search,
-  Plus,
-  Save,
-  Trash2,
-  Eye,
-  EyeOff,
   RefreshCw,
-  Languages,
+  Plus,
   Copy,
   CheckCircle2,
+  EyeOff,
+  Languages,
   AlertTriangle,
+  Save,
+  Trash2,
 } from "lucide-react";
 
-const LOCALES = ["fr", "en"] as const;
-type Locale = (typeof LOCALES)[number];
+type Locale = "fr" | "en";
+type Category = "Home" | "Footer" | "Legal" | "Contact" | "Other";
+type MissingMode = "all" | "en_missing" | "fr_missing";
 
+const LOCALES: Locale[] = ["fr", "en"];
 const TYPES = ["text", "markdown", "json"] as const;
 
-type MissingMode = "all" | "fr_missing" | "en_missing";
+function detectCategory(key: string): Category {
+  if (key.startsWith("home.")) return "Home";
+  if (key.startsWith("footer.")) return "Footer";
+  if (key.startsWith("legal.")) return "Legal";
+  if (key.startsWith("contact.")) return "Contact";
+  return "Other";
+}
 
-function badgeClass(published: boolean) {
+function badgeStatus(published: boolean) {
   return published
     ? "border-emerald-200 text-emerald-700 bg-emerald-50"
     : "border-amber-200 text-amber-700 bg-amber-50";
 }
 
-function missingBadge(mode: MissingMode) {
+function missingLabel(mode: MissingMode) {
   switch (mode) {
-    case "fr_missing":
-      return "Clés manquantes en FR";
     case "en_missing":
-      return "Clés manquantes en EN";
+      return "EN manquants";
+    case "fr_missing":
+      return "FR manquants";
     default:
-      return "Toutes les clés";
+      return "Tous";
   }
+}
+
+/**
+ * Auto-translate baseline:
+ * - For now: simple heuristic + preserve punctuation
+ * - Adds a "To review" note to make it explicit it's a draft.
+ *
+ * If you later want premium translation:
+ * -> replace this with a Supabase Edge Function call.
+ */
+function autoTranslateFrToEnDraft(fr: string) {
+  const trimmed = (fr ?? "").trim();
+  if (!trimmed) return "[To review]";
+
+  // Very lightweight heuristic: keep text as-is + marker.
+  // This is intentionally conservative to avoid wrong confident translation.
+  return `[To review]\n${trimmed}`;
 }
 
 export default function AdminContent() {
@@ -57,12 +81,15 @@ export default function AdminContent() {
   const togglePublish = useTogglePublishSiteContent();
   const del = useDeleteSiteContent();
 
-  const [query, setQuery] = React.useState("");
+  const [q, setQ] = React.useState("");
+  const [category, setCategory] = React.useState<Category | "All">("All");
   const [missingMode, setMissingMode] = React.useState<MissingMode>("all");
+
+  // Drawer editor
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
   const [activeLocale, setActiveLocale] = React.useState<Locale>("fr");
 
-  // Editor state per locale
+  // Editor fields per locale
   const [typeByLocale, setTypeByLocale] = React.useState<Record<Locale, string>>({
     fr: "text",
     en: "text",
@@ -77,8 +104,9 @@ export default function AdminContent() {
   });
 
   const rows = list.data ?? [];
+  const isBusy = list.isLoading || upsert.isPending || togglePublish.isPending || del.isPending;
 
-  // Group rows by key
+  // Group by key
   const byKey = React.useMemo(() => {
     const map = new Map<string, SiteContentRow[]>();
     for (const r of rows) {
@@ -94,145 +122,281 @@ export default function AdminContent() {
 
   const allKeys = React.useMemo(() => Array.from(byKey.keys()).sort(), [byKey]);
 
-  const keyHasLocale = React.useCallback(
-    (key: string, locale: Locale) => {
+  const getRow = React.useCallback(
+    (key: string, locale: Locale): SiteContentRow | null => {
       const arr = byKey.get(key) ?? [];
-      return arr.some((r) => r.locale === locale);
+      return arr.find((r) => r.locale === locale) ?? null;
     },
     [byKey]
   );
 
-  const filteredKeys = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
+  const isComplete = React.useCallback(
+    (key: string) => Boolean(getRow(key, "fr")) && Boolean(getRow(key, "en")),
+    [getRow]
+  );
 
+  const missingEn = React.useMemo(() => allKeys.filter((k) => getRow(k, "fr") && !getRow(k, "en")).length, [
+    allKeys,
+    getRow,
+  ]);
+  const missingFr = React.useMemo(() => allKeys.filter((k) => getRow(k, "en") && !getRow(k, "fr")).length, [
+    allKeys,
+    getRow,
+  ]);
+
+  // Filter keys (search + category + missing)
+  const filteredKeys = React.useMemo(() => {
     let keys = allKeys;
 
-    // Missing mode filter
-    if (missingMode === "en_missing") {
-      keys = keys.filter((k) => keyHasLocale(k, "fr") && !keyHasLocale(k, "en"));
-    } else if (missingMode === "fr_missing") {
-      keys = keys.filter((k) => keyHasLocale(k, "en") && !keyHasLocale(k, "fr"));
+    if (category !== "All") {
+      keys = keys.filter((k) => detectCategory(k) === category);
     }
 
-    // Search filter
-    if (!q) return keys;
+    if (missingMode === "en_missing") {
+      keys = keys.filter((k) => getRow(k, "fr") && !getRow(k, "en"));
+    } else if (missingMode === "fr_missing") {
+      keys = keys.filter((k) => getRow(k, "en") && !getRow(k, "fr"));
+    }
+
+    const query = q.trim().toLowerCase();
+    if (!query) return keys;
 
     return keys.filter((k) => {
-      if (k.toLowerCase().includes(q)) return true;
-      const arr = byKey.get(k) ?? [];
-      return arr.some((r) => (r.value ?? "").toLowerCase().includes(q));
+      if (k.toLowerCase().includes(query)) return true;
+      const fr = getRow(k, "fr");
+      const en = getRow(k, "en");
+      return (
+        (fr?.value ?? "").toLowerCase().includes(query) ||
+        (en?.value ?? "").toLowerCase().includes(query)
+      );
     });
-  }, [allKeys, byKey, query, missingMode, keyHasLocale]);
+  }, [allKeys, q, category, missingMode, getRow]);
 
-  const selectedRows = React.useMemo(() => {
-    if (!selectedKey) return [];
-    return byKey.get(selectedKey) ?? [];
-  }, [byKey, selectedKey]);
-
-  const rowForLocale = React.useMemo(() => {
-    const m: Partial<Record<Locale, SiteContentRow>> = {};
-    for (const r of selectedRows) {
-      if (r.locale === "fr") m.fr = r;
-      if (r.locale === "en") m.en = r;
-    }
-    return m;
-  }, [selectedRows]);
-
-  // hydrate editor when selection changes
+  // Hydrate editor when key changes
   React.useEffect(() => {
-    if (!selectedKey) {
-      setTypeByLocale({ fr: "text", en: "text" });
-      setValueByLocale({ fr: "", en: "" });
-      setPublishedByLocale({ fr: true, en: true });
-      setActiveLocale("fr");
-      return;
-    }
+    if (!selectedKey) return;
 
-    const fr = rowForLocale.fr;
-    const en = rowForLocale.en;
+    const fr = getRow(selectedKey, "fr");
+    const en = getRow(selectedKey, "en");
 
     setTypeByLocale({
       fr: fr?.type ?? "text",
       en: en?.type ?? (fr?.type ?? "text"),
     });
-
     setValueByLocale({
       fr: fr?.value ?? "",
       en: en?.value ?? "",
     });
-
     setPublishedByLocale({
       fr: fr?.is_published ?? true,
       en: en?.is_published ?? true,
     });
 
-    // Si EN manquant mais FR présent, on reste sur EN pour encourager la complétion
+    // Auto focus missing language
     if (fr && !en) setActiveLocale("en");
     else if (en && !fr) setActiveLocale("fr");
-  }, [selectedKey, rowForLocale.fr, rowForLocale.en]);
+  }, [selectedKey, getRow]);
 
-  const isBusy = list.isLoading || upsert.isPending || togglePublish.isPending || del.isPending;
-
-  const createNewKey = () => {
+  const createKey = () => {
     const k = prompt("Nouvelle clé (ex: home.hero.title) :");
     if (!k) return;
     const key = k.trim();
     if (!key) return;
 
     setSelectedKey(key);
+    setActiveLocale("fr");
     setTypeByLocale({ fr: "text", en: "text" });
     setValueByLocale({ fr: "", en: "" });
-    setPublishedByLocale({ fr: true, en: true });
-    setActiveLocale("fr");
+    setPublishedByLocale({ fr: true, en: false }); // EN draft by default
   };
 
-  const saveLocale = async (locale: Locale) => {
-    if (!selectedKey) {
-      toast({
-        title: "Sélection obligatoire",
-        description: "Choisis une clé ou crée-en une.",
-        variant: "destructive",
-      });
-      return;
-    }
+  const saveLocale = async (key: string, locale: Locale) => {
+    if (!key) return;
 
     try {
       await upsert.mutateAsync({
-        key: selectedKey,
+        key,
         locale,
-        type: typeByLocale[locale],
+        type: typeByLocale[locale] ?? "text",
         value: valueByLocale[locale] ?? "",
-        is_published: publishedByLocale[locale],
+        is_published: Boolean(publishedByLocale[locale]),
       });
 
-      toast({ title: "Enregistré", description: `Contenu ${locale.toUpperCase()} mis à jour.` });
+      toast({ title: "Enregistré", description: `${key} (${locale.toUpperCase()}) mis à jour.` });
       await list.refetch();
     } catch (e: any) {
       toast({
         title: "Erreur",
-        description: e?.message ?? "Impossible d’enregistrer.",
+        description: e?.message ?? "Enregistrement impossible.",
         variant: "destructive",
       });
     }
   };
 
-  const deleteLocale = async (locale: Locale) => {
-    const row = rowForLocale[locale];
-    if (!row) {
-      toast({ title: "Rien à supprimer", description: `Aucune version ${locale.toUpperCase()} n’existe.` });
+  const copyLocaleToLocale = async (key: string, from: Locale, to: Locale) => {
+    if (!key) return;
+
+    const fromRow = getRow(key, from);
+    const fromType = typeByLocale[from] ?? fromRow?.type ?? "text";
+    const fromValue = valueByLocale[from] ?? fromRow?.value ?? "";
+    const fromPub = Boolean(publishedByLocale[from] ?? fromRow?.is_published ?? true);
+
+    setTypeByLocale((s) => ({ ...s, [to]: fromType }));
+    setValueByLocale((s) => ({ ...s, [to]: fromValue }));
+    setPublishedByLocale((s) => ({ ...s, [to]: fromPub }));
+    setActiveLocale(to);
+
+    try {
+      await upsert.mutateAsync({
+        key,
+        locale: to,
+        type: fromType,
+        value: fromValue,
+        is_published: fromPub,
+      });
+
+      toast({ title: "Copie effectuée", description: `${from.toUpperCase()} → ${to.toUpperCase()} enregistré.` });
+      await list.refetch();
+    } catch (e: any) {
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Copie impossible.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // ✅ Create missing EN by draft auto-translation + note “To review” and NOT published
+  const createEnMissingDraft = async (key: string) => {
+    const fr = getRow(key, "fr");
+    if (!fr) {
+      toast({ title: "Impossible", description: "FR manquant : crée d’abord la version FR.", variant: "destructive" });
+      return;
+    }
+    const en = getRow(key, "en");
+    if (en) {
+      toast({ title: "Déjà présent", description: "La version EN existe déjà." });
+      return;
+    }
+
+    const draft = autoTranslateFrToEnDraft(fr.value ?? "");
+
+    setTypeByLocale((s) => ({ ...s, en: fr.type ?? "text" }));
+    setValueByLocale((s) => ({ ...s, en: draft }));
+    setPublishedByLocale((s) => ({ ...s, en: false }));
+    setSelectedKey(key);
+    setActiveLocale("en");
+
+    try {
+      await upsert.mutateAsync({
+        key,
+        locale: "en",
+        type: fr.type ?? "text",
+        value: draft,
+        is_published: false,
+      });
+
+      toast({
+        title: "EN créé (brouillon)",
+        description: "Une version EN a été générée en brouillon avec une note “To review”.",
+      });
+      await list.refetch();
+    } catch (e: any) {
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Création EN impossible.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // ✅ Publish/unpublish BOTH (creates missing locale rows if needed with current editor values)
+  const setPublishBoth = async (key: string, next: boolean) => {
+    const fr = getRow(key, "fr");
+    const en = getRow(key, "en");
+
+    try {
+      // update existing rows
+      if (fr) await togglePublish.mutateAsync({ id: fr.id, is_published: next });
+      if (en) await togglePublish.mutateAsync({ id: en.id, is_published: next });
+
+      // create missing rows if needed
+      if (!fr) {
+        await upsert.mutateAsync({
+          key,
+          locale: "fr",
+          type: typeByLocale.fr ?? "text",
+          value: valueByLocale.fr ?? "",
+          is_published: next,
+        });
+      }
+      if (!en) {
+        await upsert.mutateAsync({
+          key,
+          locale: "en",
+          type: typeByLocale.en ?? "text",
+          value: valueByLocale.en ?? "",
+          is_published: next,
+        });
+      }
+
+      toast({
+        title: next ? "Publié (FR + EN)" : "Dépublié (FR + EN)",
+        description: `Statut appliqué pour ${key}.`,
+      });
+      await list.refetch();
+    } catch (e: any) {
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Mise à jour du statut impossible.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // ✅ Batch publish all keys complete FR+EN
+  const batchPublishComplete = async () => {
+    const keys = filteredKeys.filter((k) => isComplete(k));
+    if (keys.length === 0) {
+      toast({ title: "Rien à publier", description: "Aucune clé complète FR+EN dans le filtre actuel." });
       return;
     }
 
     const ok = window.confirm(
-      `Supprimer la version ${locale.toUpperCase()} de la clé:\n\n${row.key}\n\nCette action est irréversible.`
+      `Publier ${keys.length} clé(s) complètes FR+EN ?\n\nCela mettra FR et EN en “Publié”.`
+    );
+    if (!ok) return;
+
+    try {
+      for (const k of keys) {
+        const fr = getRow(k, "fr");
+        const en = getRow(k, "en");
+        if (fr) await togglePublish.mutateAsync({ id: fr.id, is_published: true });
+        if (en) await togglePublish.mutateAsync({ id: en.id, is_published: true });
+      }
+      toast({ title: "Batch publish OK", description: `${keys.length} clé(s) publiées.` });
+      await list.refetch();
+    } catch (e: any) {
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Batch publish impossible.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteLocale = async (key: string, locale: Locale) => {
+    const row = getRow(key, locale);
+    if (!row) return;
+
+    const ok = window.confirm(
+      `Supprimer ${key} (${locale.toUpperCase()}) ?\n\nCette action est irréversible.`
     );
     if (!ok) return;
 
     try {
       await del.mutateAsync({ id: row.id });
-      toast({ title: "Supprimé", description: `${locale.toUpperCase()} supprimé.` });
-
-      // Si on supprime la seule langue restante, conserver la clé sélectionnée mais vider l'éditeur
+      toast({ title: "Supprimé", description: `${key} (${locale.toUpperCase()}) supprimé.` });
       await list.refetch();
     } catch (e: any) {
       toast({
@@ -243,130 +407,9 @@ export default function AdminContent() {
     }
   };
 
-  const toggleLocalePublish = async (locale: Locale, next: boolean) => {
-    setPublishedByLocale((p) => ({ ...p, [locale]: next }));
-
-    const row = rowForLocale[locale];
-    // si la ligne n'existe pas encore, l'état sera appliqué lors de l'enregistrement
-    if (!row) return;
-
-    try {
-      await togglePublish.mutateAsync({ id: row.id, is_published: next });
-      toast({ title: next ? "Publié" : "Dépublié", description: `${locale.toUpperCase()} : statut mis à jour.` });
-      await list.refetch();
-    } catch (e: any) {
-      toast({
-        title: "Erreur",
-        description: e?.message ?? "Impossible de modifier le statut.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // ✅ Copier FR -> EN (type, value, publish) + upsert EN
-  const copyFrToEn = async () => {
-    if (!selectedKey) return;
-
-    const frValue = valueByLocale.fr ?? "";
-    const frType = typeByLocale.fr ?? "text";
-    const frPublished = Boolean(publishedByLocale.fr);
-
-    if (!frValue.trim()) {
-      const ok = window.confirm("Le contenu FR est vide. Copier quand même vers EN ?");
-      if (!ok) return;
-    }
-
-    setTypeByLocale((s) => ({ ...s, en: frType }));
-    setValueByLocale((s) => ({ ...s, en: frValue }));
-    setPublishedByLocale((s) => ({ ...s, en: frPublished }));
-    setActiveLocale("en");
-
-    try {
-      await upsert.mutateAsync({
-        key: selectedKey,
-        locale: "en",
-        type: frType,
-        value: frValue,
-        is_published: frPublished,
-      });
-
-      toast({
-        title: "Copie effectuée",
-        description: "FR → EN appliqué et enregistré.",
-      });
-      await list.refetch();
-    } catch (e: any) {
-      toast({
-        title: "Erreur",
-        description: e?.message ?? "Impossible de copier/enregistrer.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // ✅ Publier/Dépublier les 2 langues (FR + EN)
-  const setPublishBoth = async (next: boolean) => {
-    if (!selectedKey) return;
-
-    setPublishedByLocale((p) => ({ ...p, fr: next, en: next }));
-
-    const frRow = rowForLocale.fr;
-    const enRow = rowForLocale.en;
-
-    try {
-      // si une langue existe: update immédiat
-      if (frRow) await togglePublish.mutateAsync({ id: frRow.id, is_published: next });
-      if (enRow) await togglePublish.mutateAsync({ id: enRow.id, is_published: next });
-
-      // si une langue n'existe pas encore: on "upsert" une ligne minimaliste
-      // (on garde le type/value déjà dans l'éditeur)
-      if (!frRow) {
-        await upsert.mutateAsync({
-          key: selectedKey,
-          locale: "fr",
-          type: typeByLocale.fr ?? "text",
-          value: valueByLocale.fr ?? "",
-          is_published: next,
-        });
-      }
-      if (!enRow) {
-        await upsert.mutateAsync({
-          key: selectedKey,
-          locale: "en",
-          type: typeByLocale.en ?? "text",
-          value: valueByLocale.en ?? "",
-          is_published: next,
-        });
-      }
-
-      toast({
-        title: next ? "Publié (FR + EN)" : "Dépublié (FR + EN)",
-        description: "Le statut a été appliqué aux deux langues.",
-      });
-      await list.refetch();
-    } catch (e: any) {
-      toast({
-        title: "Erreur",
-        description: e?.message ?? "Impossible de modifier le statut des 2 langues.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Missing counters
-  const missingEnCount = React.useMemo(() => {
-    return allKeys.filter((k) => keyHasLocale(k, "fr") && !keyHasLocale(k, "en")).length;
-  }, [allKeys, keyHasLocale]);
-
-  const missingFrCount = React.useMemo(() => {
-    return allKeys.filter((k) => keyHasLocale(k, "en") && !keyHasLocale(k, "fr")).length;
-  }, [allKeys, keyHasLocale]);
-
-  // Active row (for right panel info)
-  const activeRow = selectedKey ? rowForLocale[activeLocale] : null;
-
-  const frExists = Boolean(rowForLocale.fr);
-  const enExists = Boolean(rowForLocale.en);
+  // Editor helpers
+  const selectedFr = selectedKey ? getRow(selectedKey, "fr") : null;
+  const selectedEn = selectedKey ? getRow(selectedKey, "en") : null;
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -375,338 +418,402 @@ export default function AdminContent() {
         <div>
           <h1 className="text-xl font-semibold">Back-Office — Contenu du site</h1>
           <p className="text-sm text-muted-foreground">
-            Gestion complète FR/EN : édition, copie, publication, détection des manquants.
+            Mode CMS (table). Multilingue FR/EN, manquants, copie, batch publish, catégories.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="outline" onClick={() => list.refetch()} disabled={isBusy}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Actualiser
           </Button>
-          <Button type="button" onClick={createNewKey} disabled={isBusy}>
+          <Button type="button" onClick={createKey} disabled={isBusy}>
             <Plus className="h-4 w-4 mr-2" />
             Nouvelle clé
+          </Button>
+          <Button type="button" variant="outline" onClick={batchPublishComplete} disabled={isBusy}>
+            <CheckCircle2 className="h-4 w-4 mr-2" />
+            Batch publish (complets)
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[480px_1fr]">
-        {/* Left: List */}
-        <Card className="overflow-hidden">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center justify-between gap-3">
-              <span>Contenu (toutes les clés)</span>
-              <span className="text-xs font-normal text-muted-foreground flex items-center gap-2">
-                <Languages className="h-4 w-4" />
-                FR/EN
-              </span>
-            </CardTitle>
-
-            <div className="mt-3 flex items-center gap-2">
-              <div className="relative w-full">
+      {/* Filters */}
+      <Card>
+        <CardContent className="p-4 md:p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex-1 min-w-0">
+              <div className="relative">
                 <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
                 <Input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Rechercher par clé ou contenu..."
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Rechercher (clé ou contenu FR/EN)…"
                   className="pl-9"
                 />
               </div>
             </div>
 
-            {/* ✅ Missing screen toggles */}
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant={missingMode === "all" ? "default" : "outline"}
-                onClick={() => setMissingMode("all")}
-                disabled={isBusy}
-                className="rounded-xl"
-              >
-                {missingBadge("all")}
-              </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-xs text-muted-foreground inline-flex items-center gap-2 mr-1">
+                <Languages className="h-4 w-4" />
+                FR/EN
+              </div>
 
-              <Button
-                type="button"
-                variant={missingMode === "en_missing" ? "default" : "outline"}
-                onClick={() => setMissingMode("en_missing")}
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as any)}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                 disabled={isBusy}
-                className="rounded-xl"
               >
-                <span className="inline-flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  EN manquants ({missingEnCount})
-                </span>
-              </Button>
+                <option value="All">Toutes catégories</option>
+                <option value="Home">Home</option>
+                <option value="Footer">Footer</option>
+                <option value="Legal">Legal</option>
+                <option value="Contact">Contact</option>
+                <option value="Other">Other</option>
+              </select>
 
-              <Button
-                type="button"
-                variant={missingMode === "fr_missing" ? "default" : "outline"}
-                onClick={() => setMissingMode("fr_missing")}
+              <select
+                value={missingMode}
+                onChange={(e) => setMissingMode(e.target.value as MissingMode)}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                 disabled={isBusy}
-                className="rounded-xl"
               >
-                <span className="inline-flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  FR manquants ({missingFrCount})
-                </span>
-              </Button>
+                <option value="all">{missingLabel("all")}</option>
+                <option value="en_missing">{missingLabel("en_missing")} ({missingEn})</option>
+                <option value="fr_missing">{missingLabel("fr_missing")} ({missingFr})</option>
+              </select>
             </div>
+          </div>
+
+          <div className="mt-3 text-xs text-muted-foreground">
+            {list.isLoading ? "Chargement…" : `${filteredKeys.length} clé(s) dans le filtre`}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Table + Editor */}
+      <div className="grid gap-4 lg:grid-cols-[1.25fr_1fr]">
+        {/* Table */}
+        <Card className="overflow-hidden">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Contenus</CardTitle>
           </CardHeader>
 
           <CardContent className="pt-0">
-            <div className="text-xs text-muted-foreground mb-2">
-              {list.isLoading ? "Chargement..." : `${filteredKeys.length} clé(s)`}
-            </div>
+            <div className="overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-background z-10">
+                  <tr className="text-left border-b">
+                    <th className="py-2 pr-3 font-semibold">Clé</th>
+                    <th className="py-2 pr-3 font-semibold">Catégorie</th>
+                    <th className="py-2 pr-3 font-semibold">FR</th>
+                    <th className="py-2 pr-3 font-semibold">EN</th>
+                    <th className="py-2 pr-3 font-semibold">Actions</th>
+                  </tr>
+                </thead>
 
-            <div className="max-h-[580px] overflow-auto pr-1">
-              <div className="space-y-2">
-                {filteredKeys.map((k) => {
-                  const active = k === selectedKey;
-                  const arr = byKey.get(k) ?? [];
-                  const fr = arr.find((r) => r.locale === "fr");
-                  const en = arr.find((r) => r.locale === "en");
+                <tbody>
+                  {filteredKeys.map((k) => {
+                    const fr = getRow(k, "fr");
+                    const en = getRow(k, "en");
+                    const cat = detectCategory(k);
+                    const complete = Boolean(fr) && Boolean(en);
 
-                  return (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => setSelectedKey(k)}
-                      className={[
-                        "w-full text-left rounded-xl border px-3 py-2 transition-colors",
-                        active ? "border-primary bg-primary/10" : "border-border hover:bg-muted",
-                      ].join(" ")}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium truncate">{k}</div>
-                          <div className="mt-1 text-xs text-muted-foreground line-clamp-1">
-                            {(fr?.value ?? en?.value ?? "").trim() || "— vide —"}
+                    return (
+                      <tr
+                        key={k}
+                        className={[
+                          "border-b align-top",
+                          selectedKey === k ? "bg-muted/40" : "hover:bg-muted/20",
+                        ].join(" ")}
+                      >
+                        <td className="py-3 pr-3">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKey(k)}
+                            className="text-left font-medium text-pro-gray hover:underline"
+                          >
+                            {k}
+                          </button>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {complete ? "Complet FR+EN" : "Incomplet"}
+                            {!en && fr && (
+                              <span className="ml-2 inline-flex items-center gap-1 text-amber-700">
+                                <AlertTriangle className="h-3 w-3" /> EN manquant
+                              </span>
+                            )}
+                            {!fr && en && (
+                              <span className="ml-2 inline-flex items-center gap-1 text-amber-700">
+                                <AlertTriangle className="h-3 w-3" /> FR manquant
+                              </span>
+                            )}
                           </div>
-                        </div>
+                        </td>
 
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <span
-                            className={[
-                              "text-[11px] px-2 py-0.5 rounded-full border",
-                              fr ? badgeClass(Boolean(fr.is_published)) : "border-slate-200 text-slate-500 bg-slate-50 opacity-80",
-                            ].join(" ")}
-                            title={!fr ? "FR absent" : fr.is_published ? "FR publié" : "FR brouillon"}
-                          >
-                            FR
+                        <td className="py-3 pr-3">
+                          <span className="inline-flex rounded-full border px-2 py-0.5 text-xs">
+                            {cat}
                           </span>
-                          <span
-                            className={[
-                              "text-[11px] px-2 py-0.5 rounded-full border",
-                              en ? badgeClass(Boolean(en.is_published)) : "border-slate-200 text-slate-500 bg-slate-50 opacity-80",
-                            ].join(" ")}
-                            title={!en ? "EN absent" : en.is_published ? "EN publié" : "EN brouillon"}
-                          >
-                            EN
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
+                        </td>
 
-                {!list.isLoading && filteredKeys.length === 0 && (
-                  <div className="text-sm text-muted-foreground border rounded-xl p-4">
-                    Aucun résultat. Essaie une autre recherche ou crée une nouvelle clé.
-                  </div>
-                )}
-              </div>
+                        <td className="py-3 pr-3">
+                          {fr ? (
+                            <span className={["inline-flex text-[11px] px-2 py-0.5 rounded-full border", badgeStatus(fr.is_published)].join(" ")}>
+                              {fr.is_published ? "Publié" : "Brouillon"}
+                            </span>
+                          ) : (
+                            <span className="inline-flex text-[11px] px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">
+                              Absent
+                            </span>
+                          )}
+                          <div className="mt-2 text-xs text-muted-foreground line-clamp-2">
+                            {(fr?.value ?? "").trim() || "—"}
+                          </div>
+                        </td>
+
+                        <td className="py-3 pr-3">
+                          {en ? (
+                            <span className={["inline-flex text-[11px] px-2 py-0.5 rounded-full border", badgeStatus(en.is_published)].join(" ")}>
+                              {en.is_published ? "Publié" : "Brouillon"}
+                            </span>
+                          ) : (
+                            <span className="inline-flex text-[11px] px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">
+                              Absent
+                            </span>
+                          )}
+                          <div className="mt-2 text-xs text-muted-foreground line-clamp-2">
+                            {(en?.value ?? "").trim() || "—"}
+                          </div>
+                        </td>
+
+                        <td className="py-3 pr-3">
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => copyLocaleToLocale(k, "fr", "en")}
+                              disabled={isBusy || !fr}
+                              title="Copier FR → EN"
+                            >
+                              <Copy className="h-4 w-4 mr-2" />
+                              FR→EN
+                            </Button>
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => copyLocaleToLocale(k, "en", "fr")}
+                              disabled={isBusy || !en}
+                              title="Copier EN → FR"
+                            >
+                              <Copy className="h-4 w-4 mr-2" />
+                              EN→FR
+                            </Button>
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => createEnMissingDraft(k)}
+                              disabled={isBusy || !!en || !fr}
+                              title="Créer EN manquant (brouillon + note To review)"
+                            >
+                              <Languages className="h-4 w-4 mr-2" />
+                              Créer EN
+                            </Button>
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPublishBoth(k, true)}
+                              disabled={isBusy || !isComplete(k)}
+                              title="Publier FR + EN (uniquement si complet)"
+                            >
+                              <CheckCircle2 className="h-4 w-4 mr-2" />
+                              Publier
+                            </Button>
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPublishBoth(k, false)}
+                              disabled={isBusy}
+                              title="Dépublier FR + EN"
+                            >
+                              <EyeOff className="h-4 w-4 mr-2" />
+                              Dépublier
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {!list.isLoading && filteredKeys.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
+                        Aucun résultat dans le filtre.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </CardContent>
         </Card>
 
-        {/* Right: Editor */}
+        {/* Editor */}
         <Card>
-          <CardHeader className="pb-3">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <CardTitle className="text-base">Éditeur</CardTitle>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {selectedKey ? (
-                    <>
-                      Clé: <span className="font-medium text-foreground">{selectedKey}</span>
-                      <span className="mx-2 text-muted-foreground">•</span>
-                      {activeRow?.updated_at
-                        ? `Maj ${activeLocale.toUpperCase()}: ${new Date(activeRow.updated_at).toLocaleString()}`
-                        : `${activeLocale.toUpperCase()}: aucune version existante (créée à l’enregistrement)`}
-                    </>
-                  ) : (
-                    "Sélectionne une clé à gauche ou crée-en une."
-                  )}
-                </div>
-              </div>
-
-              {/* Locale tabs */}
-              <div className="flex items-center gap-2">
-                {LOCALES.map((loc) => (
-                  <Button
-                    key={loc}
-                    type="button"
-                    variant={activeLocale === loc ? "default" : "outline"}
-                    onClick={() => setActiveLocale(loc)}
-                    className="rounded-xl"
-                    disabled={isBusy}
-                  >
-                    {loc.toUpperCase()}
-                  </Button>
-                ))}
-              </div>
-            </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Éditeur</CardTitle>
           </CardHeader>
 
           <CardContent className="space-y-4">
-            {/* ✅ Top actions: Copy + publish both */}
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={copyFrToEn}
-                disabled={isBusy || !selectedKey}
-                className="rounded-xl"
-                title="Copier le contenu FR vers EN et enregistrer"
-              >
-                <Copy className="h-4 w-4 mr-2" />
-                Copier FR → EN
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setPublishBoth(true)}
-                disabled={isBusy || !selectedKey}
-                className="rounded-xl"
-                title="Publier FR + EN"
-              >
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-                Publier FR + EN
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setPublishBoth(false)}
-                disabled={isBusy || !selectedKey}
-                className="rounded-xl"
-                title="Dépublier FR + EN"
-              >
-                <EyeOff className="h-4 w-4 mr-2" />
-                Dépublier FR + EN
-              </Button>
-            </div>
-
-            {/* Locale status row */}
-            <div className="rounded-xl border bg-muted/20 p-3 text-sm flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">État :</span>
-                <span
-                  className={[
-                    "text-[11px] px-2 py-0.5 rounded-full border",
-                    frExists ? "border-slate-200 bg-white text-slate-700" : "border-slate-200 bg-slate-50 text-slate-500",
-                  ].join(" ")}
-                >
-                  FR: {frExists ? "OK" : "manquant"}
-                </span>
-                <span
-                  className={[
-                    "text-[11px] px-2 py-0.5 rounded-full border",
-                    enExists ? "border-slate-200 bg-white text-slate-700" : "border-slate-200 bg-slate-50 text-slate-500",
-                  ].join(" ")}
-                >
-                  EN: {enExists ? "OK" : "manquant"}
-                </span>
+            {!selectedKey ? (
+              <div className="rounded-xl border p-4 text-sm text-muted-foreground">
+                Sélectionne une clé dans le tableau pour modifier son contenu FR/EN.
               </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium truncate">{selectedKey}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Catégorie : {detectCategory(selectedKey)}
+                    </div>
+                  </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => toggleLocalePublish(activeLocale, !publishedByLocale[activeLocale])}
-                disabled={isBusy || !selectedKey}
-                className="rounded-xl"
-                title="Publier/Dépublier la langue active"
-              >
-                {publishedByLocale[activeLocale] ? (
-                  <>
-                    <Eye className="h-4 w-4 mr-2" />
-                    {activeLocale.toUpperCase()} publié
-                  </>
-                ) : (
-                  <>
-                    <EyeOff className="h-4 w-4 mr-2" />
-                    {activeLocale.toUpperCase()} brouillon
-                  </>
-                )}
-              </Button>
-            </div>
+                  <div className="flex items-center gap-2">
+                    {LOCALES.map((loc) => (
+                      <Button
+                        key={loc}
+                        type="button"
+                        variant={activeLocale === loc ? "default" : "outline"}
+                        onClick={() => setActiveLocale(loc)}
+                        className="rounded-xl"
+                        disabled={isBusy}
+                      >
+                        {loc.toUpperCase()}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
 
-            {/* Save/delete per locale */}
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                onClick={() => saveLocale(activeLocale)}
-                disabled={isBusy || !selectedKey}
-                className="rounded-xl"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                Enregistrer {activeLocale.toUpperCase()}
-              </Button>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">
+                      Type ({activeLocale.toUpperCase()})
+                    </label>
+                    <select
+                      value={typeByLocale[activeLocale]}
+                      onChange={(e) =>
+                        setTypeByLocale((s) => ({ ...s, [activeLocale]: e.target.value }))
+                      }
+                      disabled={isBusy}
+                      className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      {TYPES.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={() => deleteLocale(activeLocale)}
-                disabled={isBusy || !selectedKey}
-                className="rounded-xl"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Supprimer {activeLocale.toUpperCase()}
-              </Button>
-            </div>
+                  <div className="flex items-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        setPublishedByLocale((p) => ({ ...p, [activeLocale]: true }))
+                      }
+                      disabled={isBusy}
+                      className="rounded-xl w-full"
+                      title="Marquer comme publié (appliqué au save)"
+                    >
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Publié
+                    </Button>
 
-            {/* Type + Content */}
-            <div className="grid gap-3 md:grid-cols-2">
-              <div>
-                <label className="text-xs text-muted-foreground">Type ({activeLocale.toUpperCase()})</label>
-                <select
-                  value={typeByLocale[activeLocale]}
-                  onChange={(e) => setTypeByLocale((s) => ({ ...s, [activeLocale]: e.target.value }))}
-                  disabled={isBusy}
-                  className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  {TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        setPublishedByLocale((p) => ({ ...p, [activeLocale]: false }))
+                      }
+                      disabled={isBusy}
+                      className="rounded-xl w-full"
+                      title="Marquer comme brouillon (appliqué au save)"
+                    >
+                      <EyeOff className="h-4 w-4 mr-2" />
+                      Brouillon
+                    </Button>
+                  </div>
+                </div>
 
-              <div className="rounded-xl border bg-muted/30 p-3 text-xs text-muted-foreground">
-                <div className="font-medium text-foreground mb-1">Conseil</div>
-                Structure tes clés : <code>home.hero.title</code>, <code>footer.contact_hint</code>,{" "}
-                <code>legal.terms.title</code>…
-              </div>
-            </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">
+                    Contenu ({activeLocale.toUpperCase()})
+                  </label>
+                  <Textarea
+                    value={valueByLocale[activeLocale]}
+                    onChange={(e) =>
+                      setValueByLocale((s) => ({ ...s, [activeLocale]: e.target.value }))
+                    }
+                    rows={14}
+                    placeholder="Saisissez le contenu…"
+                    disabled={isBusy}
+                  />
+                  <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{(valueByLocale[activeLocale]?.length ?? 0)} caractère(s)</span>
+                    <span>
+                      Statut:{" "}
+                      <span className="font-medium">
+                        {publishedByLocale[activeLocale] ? "Publié" : "Brouillon"}
+                      </span>
+                    </span>
+                  </div>
+                </div>
 
-            <div>
-              <label className="text-xs text-muted-foreground">Contenu ({activeLocale.toUpperCase()})</label>
-              <Textarea
-                value={valueByLocale[activeLocale]}
-                onChange={(e) => setValueByLocale((s) => ({ ...s, [activeLocale]: e.target.value }))}
-                rows={14}
-                placeholder="Saisissez le contenu…"
-                disabled={isBusy}
-              />
-              <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                <span>{(valueByLocale[activeLocale]?.length ?? 0).toString()} caractère(s)</span>
-                <span className="opacity-80">{publishedByLocale[activeLocale] ? "Publié" : "Brouillon"}</span>
-              </div>
-            </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => saveLocale(selectedKey, activeLocale)}
+                    disabled={isBusy}
+                    className="rounded-xl"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    Enregistrer {activeLocale.toUpperCase()}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => deleteLocale(selectedKey, activeLocale)}
+                    disabled={isBusy || (!selectedFr && activeLocale === "fr") || (!selectedEn && activeLocale === "en")}
+                    className="rounded-xl"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Supprimer {activeLocale.toUpperCase()}
+                  </Button>
+                </div>
+
+                <div className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">
+                  <div className="font-medium text-foreground mb-1">Bonnes pratiques</div>
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li>Garde des clés structurées (ex: <code>home.hero.title</code>, <code>footer.contact_hint</code>).</li>
+                    <li>Publie en masse uniquement quand FR+EN sont complets (bouton Batch publish).</li>
+                    <li>“Créer EN” génère un brouillon marqué <code>[To review]</code>.</li>
+                  </ul>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
