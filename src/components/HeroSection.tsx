@@ -1,3 +1,4 @@
+// src/components/HeroSection.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
@@ -164,19 +165,20 @@ const HeroSection = () => {
     <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden">
       <div className="relative z-10 w-full px-4 sm:px-6 lg:px-10 py-8 sm:py-10">
         <div className="w-full max-w-5xl mx-auto text-center">
+          {/* ✅ Remplace les textes de la 1ère capture par ceux de la 2ème (FR) */}
           <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
             {cms(
               "home.hero.title",
-              "Trouvez des prestataires fiables près de chez vous",
-              "Connect with trusted professionals in your area"
+              "Trouvez le bon professionnel pour votre besoin",
+              "Find the right professional for your needs"
             )}
           </h1>
 
           <p className="mt-3 sm:mt-4 text-sm sm:text-base md:text-xl text-blue-100 break-words">
             {cms(
               "home.hero.subtitle",
-              "Comparez, contactez, réservez en toute confiance.",
-              "Compare providers, message instantly, and book with confidence."
+              "Connectez-vous avec des prestataires qualifiés près de chez vous",
+              "Connect with qualified providers near you"
             )}
           </p>
         </div>
