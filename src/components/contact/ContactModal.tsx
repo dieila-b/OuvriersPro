@@ -16,10 +16,34 @@ import { Send, CheckCircle2, AlertTriangle } from "lucide-react";
 
 const LS_KEY = "op:contact:last_sent_at";
 
+function isBrowser() {
+  return typeof window !== "undefined" && typeof document !== "undefined";
+}
+
+function safeGetLocalStorageItem(key: string) {
+  try {
+    if (!isBrowser() || !("localStorage" in window)) return null;
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetLocalStorageItem(key: string, value: string) {
+  try {
+    if (!isBrowser() || !("localStorage" in window)) return;
+    window.localStorage.setItem(key, value);
+  } catch {
+    // ignore
+  }
+}
+
 function getCooldownRemaining(cooldownSeconds: number) {
   try {
-    const last = Number(localStorage.getItem(LS_KEY) || "0");
+    const lastStr = safeGetLocalStorageItem(LS_KEY);
+    const last = Number(lastStr || "0");
     if (!last) return 0;
+
     const elapsedMs = Date.now() - last;
     const remaining = Math.ceil(cooldownSeconds - elapsedMs / 1000);
     return Math.max(0, remaining);
@@ -29,18 +53,14 @@ function getCooldownRemaining(cooldownSeconds: number) {
 }
 
 function setCooldownNow() {
-  try {
-    localStorage.setItem(LS_KEY, String(Date.now()));
-  } catch {
-    // ignore
-  }
+  safeSetLocalStorageItem(LS_KEY, String(Date.now()));
 }
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   cooldownSeconds?: number; // default 30
-  defaultSubject?: string;  // default "Demande de contact"
+  defaultSubject?: string; // default "Demande de contact"
 };
 
 export default function ContactModal({
@@ -64,12 +84,18 @@ export default function ContactModal({
     setErr(null);
   }, []);
 
-  // Cooldown ticker
+  // Reset subject when default changes
+  React.useEffect(() => {
+    setSubject(defaultSubject);
+  }, [defaultSubject]);
+
+  // Cooldown ticker (only when modal is open)
   React.useEffect(() => {
     if (!open) return;
 
     const tick = () => setCooldownRemaining(getCooldownRemaining(cooldownSeconds));
     tick();
+
     const id = window.setInterval(tick, 500);
     return () => window.clearInterval(id);
   }, [open, cooldownSeconds]);
@@ -121,11 +147,6 @@ export default function ContactModal({
     };
   }, [open]);
 
-  // reset subject when default changes
-  React.useEffect(() => {
-    setSubject(defaultSubject);
-  }, [defaultSubject]);
-
   const canSend =
     email.trim().length > 0 &&
     message.trim().length > 0 &&
@@ -157,15 +178,18 @@ export default function ContactModal({
         data: { user },
       } = await supabase.auth.getUser();
 
+      const pageUrl = isBrowser() ? window.location.href : null;
+      const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : null;
+
       const payload = {
-        status: "new" as const,
+        status: "new",
         user_id: user?.id ?? null,
         full_name: fullName.trim() || null,
         email: e,
         subject: s || null,
         message: m,
-        page_url: typeof window !== "undefined" ? window.location.href : null,
-        user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+        page_url: pageUrl,
+        user_agent: userAgent,
       };
 
       const { error } = await supabase.from("op_contact_messages").insert(payload);
