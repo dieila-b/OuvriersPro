@@ -1,5 +1,6 @@
 // src/pages/Faq.tsx
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Send, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Send, CheckCircle2, AlertTriangle, ArrowLeft } from "lucide-react";
 
 type Category =
   | "home_services"
@@ -116,6 +117,7 @@ const CATEGORY_OPTIONS: { value: Category; fr: string; en: string }[] = [
 
 export default function Faq() {
   const { language } = useLanguage();
+  const navigate = useNavigate();
 
   const t = useMemo(() => {
     return {
@@ -124,6 +126,7 @@ export default function Faq() {
         language === "fr"
           ? "Retrouvez les réponses aux questions les plus fréquentes."
           : "Find answers to the most common questions.",
+      backHome: language === "fr" ? "Retour à l’accueil" : "Back to home",
       askTitle: language === "fr" ? "Vous n’avez pas trouvé ?" : "Didn’t find what you need?",
       askSubtitle:
         language === "fr"
@@ -228,8 +231,25 @@ export default function Faq() {
     <section className="w-full bg-white">
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 py-10 sm:py-12">
         <div className="max-w-5xl mx-auto">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray">{t.title}</h1>
-          <p className="mt-2 text-gray-600">{t.subtitle}</p>
+          {/* ✅ En-tête + bouton retour */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray">{t.title}</h1>
+              <p className="mt-2 text-gray-600">{t.subtitle}</p>
+            </div>
+
+            <div className="shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full border-gray-300"
+                onClick={() => navigate("/")}
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                {t.backHome}
+              </Button>
+            </div>
+          </div>
 
           {/* ✅ FAQ SANS catégories */}
           <div className="mt-6 bg-gray-50 border border-gray-200 rounded-2xl p-4 sm:p-6">
