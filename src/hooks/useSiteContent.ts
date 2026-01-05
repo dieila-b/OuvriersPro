@@ -13,16 +13,6 @@ export type SiteContentRow = {
 
 const SELECT_FIELDS = "id,key,locale,type,value,is_published,updated_at";
 
-/**
- * Utilitaire: évite .single() / .maybeSingle() quand le backend retourne
- * parfois un tableau ou quand la vue/rls crée un comportement non attendu.
- */
-function firstOrNull<T>(data: T[] | T | null | undefined): T | null {
-  if (!data) return null;
-  if (Array.isArray(data)) return (data[0] ?? null) as T | null;
-  return data as T;
-}
-
 export function useSiteContentList() {
   return useQuery({
     queryKey: ["site_content_list"],
@@ -52,7 +42,7 @@ export function useSiteContent(key: string, locale: string) {
         .limit(1);
 
       if (error) throw error;
-      return (firstOrNull<SiteContentRow>(data) ?? null) as SiteContentRow | null;
+      return ((data?.[0] ?? null) as SiteContentRow | null);
     },
     enabled: Boolean(key) && Boolean(locale),
   });
@@ -69,9 +59,7 @@ export function useUpsertSiteContent() {
       value: string;
       is_published: boolean;
     }) => {
-      // IMPORTANT:
-      // - .single() peut casser si la DB renvoie 0 ou >1 ligne
-      // - on sécurise: limit(1) et lecture first
+      // IMPORTANT: pas de .single() / .maybeSingle()
       const { data, error } = await supabase
         .from("site_content")
         .upsert(payload, { onConflict: "key,locale" })
@@ -81,10 +69,11 @@ export function useUpsertSiteContent() {
 
       if (error) throw error;
 
-      const row = firstOrNull<SiteContentRow>(data);
+      // Si RLS empêche le select de retour, data peut être []
+      // => on tente une relecture (qui peut aussi être vide si RLS)
+      const row = (data?.[0] ?? null) as SiteContentRow | null;
       if (row) return row;
 
-      // Fallback: relire
       const { data: fallback, error: e2 } = await supabase
         .from("site_content")
         .select(SELECT_FIELDS)
@@ -94,14 +83,11 @@ export function useUpsertSiteContent() {
         .limit(1);
 
       if (e2) throw e2;
-
-      const row2 = firstOrNull<SiteContentRow>(fallback);
-      if (!row2) throw new Error("Upsert OK mais aucune ligne retournée (RLS/SELECT ?).");
-      return row2;
+      return ((fallback?.[0] ?? null) as SiteContentRow | null);
     },
     onSuccess: (row) => {
       qc.invalidateQueries({ queryKey: ["site_content_list"] });
-      qc.setQueryData(["site_content", row.key, row.locale], row);
+      if (row) qc.setQueryData(["site_content", row.key, row.locale], row);
     },
   });
 }
@@ -111,6 +97,7 @@ export function useTogglePublishSiteContent() {
 
   return useMutation({
     mutationFn: async (payload: { id: string; is_published: boolean }) => {
+      // IMPORTANT: pas de .single() / .maybeSingle()
       const { data, error } = await supabase
         .from("site_content")
         .update({ is_published: payload.is_published })
@@ -119,9 +106,7 @@ export function useTogglePublishSiteContent() {
         .limit(1);
 
       if (error) throw error;
-
-      const row = firstOrNull<SiteContentRow>(data);
-      return (row ?? null) as SiteContentRow | null;
+      return ((data?.[0] ?? null) as SiteContentRow | null);
     },
     onSuccess: (row) => {
       qc.invalidateQueries({ queryKey: ["site_content_list"] });
