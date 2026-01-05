@@ -21,13 +21,16 @@ import Faq from "./pages/Faq";
 import About from "./pages/About";
 import Partners from "./pages/Partners";
 
-// ✅ Pages légales (à créer si pas déjà fait)
+// ✅ Pages légales
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import CookiesPolicy from "./pages/Cookies";
 
 // ✅ Admin FAQ Questions
 import AdminFaqQuestions from "./pages/AdminFaqQuestions";
+
+// ✅ Admin: CMS Contenu du site
+import AdminContent from "./pages/AdminContent";
 
 // Back-office Admin
 import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
@@ -120,7 +123,7 @@ const AppRoutes = () => (
       {/* 🆕 Inscription */}
       <Route path="/register" element={<Register />} />
 
-      {/* 📝 Inscription prestataire (nom de route conservé pour compatibilité) */}
+      {/* 📝 Inscription prestataire */}
       <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
 
       {/* 👤 Fiche prestataire */}
@@ -217,7 +220,7 @@ const AppRoutes = () => (
         }
       />
 
-      {/* 🛠️ Admin (layout sticky commun) */}
+      {/* 🛠️ Admin */}
       <Route
         path="/admin"
         element={
@@ -230,6 +233,9 @@ const AppRoutes = () => (
         <Route path="ouvrier-contacts" element={<AdminOuvrierContacts />} />
         <Route path="ouvriers" element={<AdminOuvrierInscriptions />} />
         <Route path="publicites" element={<AdminAds />} />
+
+        {/* ✅ CMS Back Office (Contenu du site) */}
+        <Route path="contenu" element={<AdminContent />} />
 
         {/* ✅ Admin FAQ Questions */}
         <Route path="faq-questions" element={<AdminFaqQuestions />} />
@@ -249,9 +255,6 @@ const App = () => (
           <Toaster />
           <Sonner />
 
-          {/* ✅ dvh = vrai “viewport height” sur mobile
-              ✅ min-w-0 sur le wrapper = empêche les enfants flex de forcer une largeur fixe
-              ✅ overflow-x-clip = évite le scroll horizontal sans masquer les layouts */}
           <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
             <AppRoutes />
           </div>
