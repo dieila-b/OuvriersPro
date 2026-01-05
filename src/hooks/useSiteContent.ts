@@ -4,32 +4,30 @@ import { supabase } from "@/lib/supabase";
 export type SiteContentRow = {
   id: string;
   key: string;
-  locale: string;
+  locale: string; // fr | en | ...
   type: "text" | "markdown" | "json" | string;
   value: string;
   is_published: boolean;
   updated_at: string;
 };
 
-export function useSiteContentList(locale?: string) {
+export function useSiteContentList() {
   return useQuery({
-    queryKey: ["site_content_list", locale ?? "ALL"],
+    queryKey: ["site_content_list"],
     queryFn: async () => {
-      let q = supabase
+      const { data, error } = await supabase
         .from("site_content")
         .select("id,key,locale,type,value,is_published,updated_at")
-        .order("key", { ascending: true });
+        .order("key", { ascending: true })
+        .order("locale", { ascending: true });
 
-      if (locale) q = q.eq("locale", locale);
-
-      const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as SiteContentRow[];
     },
   });
 }
 
-export function useSiteContent(key: string, locale = "fr") {
+export function useSiteContent(key: string, locale: string) {
   return useQuery({
     queryKey: ["site_content", key, locale],
     queryFn: async () => {
@@ -43,7 +41,7 @@ export function useSiteContent(key: string, locale = "fr") {
       if (error) throw error;
       return (data ?? null) as SiteContentRow | null;
     },
-    enabled: Boolean(key),
+    enabled: Boolean(key) && Boolean(locale),
   });
 }
 
@@ -60,7 +58,7 @@ export function useUpsertSiteContent() {
     }) => {
       const { data, error } = await supabase
         .from("site_content")
-        .upsert(payload, { onConflict: "key" }) // key est unique dans ton schéma actuel
+        .upsert(payload, { onConflict: "key,locale" })
         .select("id,key,locale,type,value,is_published,updated_at")
         .single();
 
@@ -89,8 +87,9 @@ export function useTogglePublishSiteContent() {
       if (error) throw error;
       return data as SiteContentRow;
     },
-    onSuccess: () => {
+    onSuccess: (row) => {
       qc.invalidateQueries({ queryKey: ["site_content_list"] });
+      qc.setQueryData(["site_content", row.key, row.locale], row);
     },
   });
 }
