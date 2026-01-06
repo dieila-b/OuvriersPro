@@ -65,10 +65,6 @@ const LOCALES: Locale[] = ["fr", "en"];
 /**
  * ✅ SECTIONS = “CMS style capture”
  * Ajoute/ajuste ici les clés pour couvrir 100% du contenu de ton site.
- *
- * ✅ AJOUT IMPORTANT :
- * - pricing.section.enabled : switch explicite pour afficher/masquer la section abonnements
- *   (1/true/on/yes = visible, 0/empty = masqué côté front si ton SubscriptionSection utilise ce switch)
  */
 const SECTIONS: SectionDef[] = [
   {
@@ -77,6 +73,7 @@ const SECTIONS: SectionDef[] = [
     description: "Logo, tagline, boutons, langue et menu mobile.",
     fields: [
       { key: "brand.name", label: "Nom de la marque (logo)", type: "text", placeholder: "ProxiServices" },
+
       { key: "header.tagline", label: "Tagline (sous le logo)", type: "text", placeholder: "Prestataires vérifiés, proches de vous" },
 
       { key: "header.btn_login", label: "Bouton (non connecté)", type: "text", placeholder: "Se connecter" },
@@ -157,21 +154,89 @@ const SECTIONS: SectionDef[] = [
     ],
   },
 
+  /**
+   * ✅ MISE À JOUR IMPORTANTE
+   * Cette section contient désormais toutes les clés réellement utilisées par src/components/SearchSection.tsx (version CMS).
+   * Si une clé n’est pas ici, elle ne sera pas créée par “Initialiser” -> compteur “clés manquantes” ne descend pas.
+   */
   {
     id: "search_page",
-    title: "Page Recherche — En-tête & filtres",
-    location: "Recherche > En-tête & Filtres",
-    description: "Titre et micro-textes de la page “Trouvez votre professionnel”.",
+    title: "Page Recherche — En-tête, recherche & filtres (SearchSection)",
+    location: "Recherche > Page",
+    description: "Tous les micro-textes utilisés sur la page Recherche (titre, zones, filtres, géoloc, résultats).",
     fields: [
-      { key: "search.page.title", label: "Titre", type: "text", placeholder: "Trouvez votre professionnel" },
-      { key: "search.page.subtitle", label: "Sous-titre", type: "text", placeholder: "Modifiez vos filtres pour lancer la recherche automatiquement." },
-      { key: "search.filters.title", label: "Bloc filtres — Titre", type: "text", placeholder: "Filtres" },
-      { key: "search.filters.btn_reset", label: "Bouton Réinitialiser", type: "text", placeholder: "Réinitialiser" },
-      { key: "search.filters.btn_geolocate", label: "Bouton Utiliser ma position", type: "text", placeholder: "Utiliser ma position" },
+      // ---- En-tête page ----
+      { key: "search.page.title", label: "Titre page", type: "text", placeholder: "Trouvez votre professionnel" },
+      {
+        key: "search.page.subtitle_alt",
+        label: "Sous-titre page (utilisé par SearchSection)",
+        type: "text",
+        placeholder: "Filtrez par métier, quartier et tarif pour trouver l'ouvrier le plus proche.",
+      },
+
+      // ---- Bloc recherche haut ----
+      { key: "search.top.title", label: "Bloc haut — Titre", type: "text", placeholder: "Rechercher un ouvrier" },
+      { key: "search.top.btn", label: "Bloc haut — Bouton", type: "text", placeholder: "Rechercher" },
+
+      // ---- Labels filtres ----
+      { key: "search.filters.title", label: "Sidebar filtres — Titre", type: "text", placeholder: "Filtres" },
+
+      { key: "search.filters.keyword.label", label: "Filtre — Label métier/nom", type: "text", placeholder: "Métier ou nom" },
+      {
+        key: "search.filters.keyword.placeholder",
+        label: "Filtre — Placeholder métier/nom",
+        type: "text",
+        placeholder: "Plombier, électricien, Mamadou...",
+      },
+
+      { key: "search.filters.district.label", label: "Filtre — Label quartier", type: "text", placeholder: "Quartier" },
+      { key: "search.filters.district.all", label: "Filtre — Option Tous quartiers", type: "text", placeholder: "Tous les quartiers" },
+
+      { key: "search.filters.price.label", label: "Filtre — Label prix max", type: "text", placeholder: "Tarif horaire max" },
+      { key: "search.filters.price.no_limit", label: "Filtre — Texte aucune limite", type: "text", placeholder: "Aucune limite" },
+
+      { key: "search.filters.rating.label", label: "Filtre — Label note minimum", type: "text", placeholder: "Note minimum" },
+      { key: "search.filters.rating.any", label: "Filtre — Texte toutes notes", type: "text", placeholder: "Toutes" },
+
+      // ---- Géoloc ----
+      { key: "search.geo.label", label: "Géoloc — Label switch", type: "text", placeholder: "Recherche par proximité" },
+      { key: "search.geo.radius", label: "Géoloc — Label rayon", type: "text", placeholder: "Rayon de recherche" },
+      { key: "search.geo.loading", label: "Géoloc — Loading", type: "text", placeholder: "Obtention de votre position..." },
+      { key: "search.geo.no_coordinates", label: "Géoloc — Sans GPS", type: "text", placeholder: "Sans position GPS" },
+
+      // ---- Boutons ----
+      { key: "search.filters.btn_reset_long", label: "Bouton reset (long)", type: "text", placeholder: "Réinitialiser les filtres" },
+
+      // ---- Affichage ----
+      { key: "search.view.label", label: "Affichage — Label", type: "text", placeholder: "Affichage" },
       { key: "search.view.list", label: "Affichage — Liste", type: "text", placeholder: "Liste" },
       { key: "search.view.grid", label: "Affichage — Mosaïque", type: "text", placeholder: "Mosaïque" },
-      { key: "search.card.btn_contact", label: "Bouton Contacter (carte)", type: "text", placeholder: "Contacter" },
-      { key: "search.card.price_suffix", label: "Suffixe tarif", type: "text", placeholder: "GNF /h" },
+
+      // ---- Résultats ----
+      {
+        key: "search.results.none",
+        label: "Résultats — Aucun résultat",
+        type: "text",
+        placeholder: "Aucun professionnel ne correspond à ces critères pour le moment.",
+      },
+      { key: "search.results.count", label: "Résultats — Compteur (template)", type: "text", placeholder: "X résultats trouvés" },
+
+      { key: "search.loading_results", label: "Chargement — Résultats (header)", type: "text", placeholder: "Chargement des résultats..." },
+      { key: "search.loading_workers", label: "Chargement — Cartes workers", type: "text", placeholder: "Chargement des professionnels..." },
+
+      // ---- Carte worker ----
+      { key: "search.card.btn_contact", label: "Carte — Bouton Contacter", type: "text", placeholder: "Contacter" },
+      { key: "search.card.per_hour", label: "Carte — Suffixe /h", type: "text", placeholder: "/h" },
+      { key: "search.card.years_suffix", label: "Carte — Suffixe expérience", type: "text", placeholder: "ans d'expérience" },
+
+      /**
+       * Anciennes clés (si d’autres composants les utilisent encore).
+       * On les garde pour éviter de créer de nouvelles “clés manquantes” si elles sont référencées ailleurs.
+       */
+      { key: "search.page.subtitle", label: "Sous-titre page (ancienne clé)", type: "text", placeholder: "Modifiez vos filtres pour lancer la recherche automatiquement." },
+      { key: "search.filters.btn_reset", label: "Bouton Réinitialiser (ancienne clé)", type: "text", placeholder: "Réinitialiser" },
+      { key: "search.filters.btn_geolocate", label: "Bouton Utiliser ma position (ancienne clé)", type: "text", placeholder: "Utiliser ma position" },
+      { key: "search.card.price_suffix", label: "Suffixe tarif (ancienne clé)", type: "text", placeholder: "GNF /h" },
     ],
   },
 
@@ -181,15 +246,6 @@ const SECTIONS: SectionDef[] = [
     location: "Accueil > Abonnements",
     description: "Titres, prix, boutons, avantages.",
     fields: [
-      // ✅ Switch explicite
-      {
-        key: "pricing.section.enabled",
-        label: "Activer la section Abonnements (1=true=on=yes = actif, 0/empty = masqué)",
-        type: "text",
-        placeholder: "0",
-        help: "Conseil: mets 0 tant que tu ne veux pas afficher les abonnements. Mets 1 quand tu voudras les activer.",
-      },
-
       { key: "pricing.section.title", label: "Titre section", type: "text", placeholder: "Rejoignez ProxiServices" },
       { key: "pricing.section.subtitle", label: "Sous-titre", type: "text", placeholder: "Développez votre activité avec plus de visibilité" },
 
@@ -223,6 +279,7 @@ const SECTIONS: SectionDef[] = [
       { key: "pricing.plan.yearly.f3", label: "Plan 3 — Avantage 3", type: "text", placeholder: "Statistiques détaillées" },
       { key: "pricing.plan.yearly.f4", label: "Plan 3 — Avantage 4", type: "text", placeholder: "Support prioritaire" },
 
+      // --- Bénéfices (3 blocs sous les cartes) ---
       { key: "pricing.benefit1.title", label: "Bénéfice 1 — Titre", type: "text", placeholder: "Profil vérifié" },
       { key: "pricing.benefit1.desc", label: "Bénéfice 1 — Description", type: "textarea", placeholder: "Badge de confiance sur votre profil" },
 
@@ -232,6 +289,7 @@ const SECTIONS: SectionDef[] = [
       { key: "pricing.benefit3.title", label: "Bénéfice 3 — Titre", type: "text", placeholder: "Support dédié" },
       { key: "pricing.benefit3.desc", label: "Bénéfice 3 — Description", type: "textarea", placeholder: "Assistance prioritaire 7j/7" },
 
+      // --- Reco: devise + séparateur prix/période ---
       { key: "pricing.currency", label: "Devise affichée (ex: FG / GNF)", type: "text", placeholder: "FG" },
       { key: "pricing.price_separator", label: "Séparateur prix/période (ex: /)", type: "text", placeholder: "/" },
     ],
@@ -399,7 +457,7 @@ export default function AdminContent() {
   );
 
   const list = useQuery({
-    queryKey: ["site_content_sections_full_v3", ALL_KEYS.join("|")],
+    queryKey: ["site_content_sections_full_v2", ALL_KEYS.join("|")],
     queryFn: async (): Promise<SiteContentRow[]> => {
       const { data, error } = await supabase
         .from("site_content")
@@ -596,7 +654,6 @@ export default function AdminContent() {
     }
   };
 
-  // ✅ "manquant" = uniquement si la clé n'existe pas (row absent)
   const globalStats = React.useMemo(() => {
     let published = 0;
     let draft = 0;
@@ -608,10 +665,8 @@ export default function AdminContent() {
       for (const f of section.fields) {
         const fr = getRow(f.key, "fr");
         const en = getRow(f.key, "en");
-
         if (!fr) missingFR += 1;
         if (!en) missingEN += 1;
-
         if (en?.en_is_auto) autoEN += 1;
 
         const anyPublished = Boolean(fr?.is_published) || Boolean(en?.is_published);
@@ -669,11 +724,12 @@ export default function AdminContent() {
       for (const f of section.fields) {
         const rFR = getRow(f.key, "fr");
         const rEN = getRow(f.key, "en");
-
         if (!rFR) missing.push("FR");
         if (!rEN) missing.push("EN");
-
         if (rEN?.en_is_auto) autoCount += 1;
+
+        if (rFR && isEmptyValue(rFR.value)) missing.push("FR");
+        if (rEN && isEmptyValue(rEN.value)) missing.push("EN");
       }
 
       const missingSet = new Set(missing);
@@ -707,8 +763,10 @@ export default function AdminContent() {
     [drafts, getRow, mode, sectionVisible]
   );
 
+  // ---- UI ----
   return (
     <div className="p-4 md:p-6 space-y-4">
+      {/* Top Bar */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -759,7 +817,9 @@ export default function AdminContent() {
         </div>
       </div>
 
+      {/* Main layout: 2 panels */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* LEFT: navigation */}
         <Card className="lg:col-span-4 xl:col-span-3">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -885,7 +945,9 @@ export default function AdminContent() {
                       </div>
 
                       <ChevronRight
-                        className={["h-4 w-4 mt-1 shrink-0", isActive ? "text-slate-700" : "text-muted-foreground"].join(" ")}
+                        className={["h-4 w-4 mt-1 shrink-0", isActive ? "text-slate-700" : "text-muted-foreground"].join(
+                          " "
+                        )}
                       />
                     </div>
                   </button>
@@ -895,6 +957,7 @@ export default function AdminContent() {
           </CardContent>
         </Card>
 
+        {/* RIGHT: editor */}
         <Card className="lg:col-span-8 xl:col-span-9">
           <CardHeader className="pb-2">
             <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
@@ -910,6 +973,7 @@ export default function AdminContent() {
               </div>
 
               <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                {/* Visibilité */}
                 <div className="flex flex-wrap items-center gap-2">
                   {mode === "compare" ? (
                     <>
@@ -948,12 +1012,7 @@ export default function AdminContent() {
                   )}
                 </div>
 
-                <Button
-                  type="button"
-                  onClick={() => saveSection(activeSectionId)}
-                  disabled={isBusy}
-                  className="sm:w-auto w-full"
-                >
+                <Button type="button" onClick={() => saveSection(activeSectionId)} disabled={isBusy} className="sm:w-auto w-full">
                   <Save className="h-4 w-4 mr-2" />
                   Enregistrer{mode === "compare" ? " FR + EN" : ""}
                 </Button>
@@ -962,6 +1021,7 @@ export default function AdminContent() {
           </CardHeader>
 
           <CardContent className="pt-0">
+            {/* helper line */}
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mb-3">
               {mode === "compare" ? (
                 <>
@@ -978,11 +1038,14 @@ export default function AdminContent() {
               ) : (
                 <span className="inline-flex items-center gap-1">
                   {sectionVisible(mode, activeSectionId) ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                  {sectionVisible(mode, activeSectionId) ? "Visible (publié à l’enregistrement)" : "Masqué (brouillon à l’enregistrement)"}
+                  {sectionVisible(mode, activeSectionId)
+                    ? "Visible (publié à l’enregistrement)"
+                    : "Masqué (brouillon à l’enregistrement)"}
                 </span>
               )}
             </div>
 
+            {/* Fields */}
             <div className="space-y-4">
               {(activeSection?.fields ?? []).map((f) => {
                 const frVal = ((drafts.fr?.[activeSectionId] ?? {}) as Record<string, string>)[f.key] ?? "";
@@ -991,8 +1054,8 @@ export default function AdminContent() {
                 const frRow = getRow(f.key, "fr");
                 const enRow = getRow(f.key, "en");
 
-                const missingFR = !frRow;
-                const missingEN = !enRow;
+                const missingFR = !frRow || isEmptyValue(frRow.value);
+                const missingEN = !enRow || isEmptyValue(enRow.value);
 
                 const autoEN = Boolean(enRow?.en_is_auto);
 
@@ -1008,7 +1071,6 @@ export default function AdminContent() {
 
                 const renderInput = (loc: Locale, value: string) => {
                   const disabled = isBusy;
-
                   if (f.type === "textarea") {
                     return (
                       <Textarea
@@ -1035,6 +1097,7 @@ export default function AdminContent() {
 
                 return (
                   <div key={f.key} className="rounded-xl border border-slate-200 p-4">
+                    {/* Field header */}
                     <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                       <div className="min-w-0">
                         <div className="flex items-center flex-wrap gap-2">
@@ -1063,12 +1126,14 @@ export default function AdminContent() {
                         {f.help ? <div className="mt-1 text-[12px] text-muted-foreground">{f.help}</div> : null}
                       </div>
 
+                      {/* Meta right */}
                       <div className="text-[11px] text-muted-foreground md:text-right space-y-1">
                         <div>FR: {metaLine("fr")}</div>
                         <div>EN: {metaLine("en")}</div>
                       </div>
                     </div>
 
+                    {/* Inputs */}
                     <div className="mt-3">
                       {mode === "compare" ? (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -1107,6 +1172,7 @@ export default function AdminContent() {
               })}
             </div>
 
+            {/* Footer actions */}
             <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div className="text-xs text-muted-foreground">
                 Astuce: utilise “Comparer” pour voir FR/EN côte à côte et copier FR → EN.
@@ -1126,6 +1192,7 @@ export default function AdminContent() {
         </Card>
       </div>
 
+      {/* small bottom note */}
       <div className="text-[12px] text-muted-foreground">
         Notes: “EN auto” correspond à <span className="font-mono">en_is_auto</span>. Les champs “non créé” indiquent que la clé n’existe pas encore en base (bouton Initialiser).
       </div>

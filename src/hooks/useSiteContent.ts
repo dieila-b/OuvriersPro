@@ -1,4 +1,3 @@
-// src/hooks/useSiteContent.ts
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 
@@ -14,25 +13,13 @@ export type SiteContentRow = {
 
 const SELECT_FIELDS = "id,key,locale,type,value,is_published,updated_at";
 
-type ListOptions = {
-  /**
-   * true = site public (ne charge que le contenu publié)
-   * false = backoffice/debug (charge tout)
-   */
-  publishedOnly?: boolean;
-};
-
-export function useSiteContentList(options: ListOptions = {}) {
-  const { publishedOnly = true } = options;
-
+export function useSiteContentList() {
   return useQuery({
-    queryKey: ["site_content_list", { publishedOnly }],
+    queryKey: ["site_content_list"],
     queryFn: async () => {
-      let q = supabase.from("site_content").select(SELECT_FIELDS);
-
-      if (publishedOnly) q = q.eq("is_published", true);
-
-      const { data, error } = await q
+      const { data, error } = await supabase
+        .from("site_content")
+        .select(SELECT_FIELDS)
         .order("key", { ascending: true })
         .order("locale", { ascending: true });
 
@@ -42,25 +29,15 @@ export function useSiteContentList(options: ListOptions = {}) {
   });
 }
 
-type GetOptions = {
-  publishedOnly?: boolean;
-};
-
-export function useSiteContent(key: string, locale: string, options: GetOptions = {}) {
-  const { publishedOnly = true } = options;
-
+export function useSiteContent(key: string, locale: string) {
   return useQuery({
-    queryKey: ["site_content", key, locale, { publishedOnly }],
+    queryKey: ["site_content", key, locale],
     queryFn: async () => {
-      let q = supabase
+      const { data, error } = await supabase
         .from("site_content")
         .select(SELECT_FIELDS)
         .eq("key", key)
-        .eq("locale", locale);
-
-      if (publishedOnly) q = q.eq("is_published", true);
-
-      const { data, error } = await q
+        .eq("locale", locale)
         .order("updated_at", { ascending: false })
         .limit(1);
 
@@ -82,6 +59,7 @@ export function useUpsertSiteContent() {
       value: string;
       is_published: boolean;
     }) => {
+      // IMPORTANT: pas de .single() / .maybeSingle()
       const { data, error } = await supabase
         .from("site_content")
         .upsert(payload, { onConflict: "key,locale" })
@@ -91,6 +69,8 @@ export function useUpsertSiteContent() {
 
       if (error) throw error;
 
+      // Si RLS empêche le select de retour, data peut être []
+      // => on tente une relecture (qui peut aussi être vide si RLS)
       const row = (data?.[0] ?? null) as SiteContentRow | null;
       if (row) return row;
 
@@ -107,11 +87,7 @@ export function useUpsertSiteContent() {
     },
     onSuccess: (row) => {
       qc.invalidateQueries({ queryKey: ["site_content_list"] });
-      if (row) {
-        // On met aussi à jour la cache entry "publishedOnly" et "all"
-        qc.setQueryData(["site_content", row.key, row.locale, { publishedOnly: true }], row.is_published ? row : null);
-        qc.setQueryData(["site_content", row.key, row.locale, { publishedOnly: false }], row);
-      }
+      if (row) qc.setQueryData(["site_content", row.key, row.locale], row);
     },
   });
 }
@@ -121,6 +97,7 @@ export function useTogglePublishSiteContent() {
 
   return useMutation({
     mutationFn: async (payload: { id: string; is_published: boolean }) => {
+      // IMPORTANT: pas de .single() / .maybeSingle()
       const { data, error } = await supabase
         .from("site_content")
         .update({ is_published: payload.is_published })
@@ -133,10 +110,7 @@ export function useTogglePublishSiteContent() {
     },
     onSuccess: (row) => {
       qc.invalidateQueries({ queryKey: ["site_content_list"] });
-      if (row) {
-        qc.setQueryData(["site_content", row.key, row.locale, { publishedOnly: true }], row.is_published ? row : null);
-        qc.setQueryData(["site_content", row.key, row.locale, { publishedOnly: false }], row);
-      }
+      if (row) qc.setQueryData(["site_content", row.key, row.locale], row);
     },
   });
 }

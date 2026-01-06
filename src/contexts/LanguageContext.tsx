@@ -7,23 +7,19 @@ type Language = "fr" | "en";
 interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
-
-  /**
-   * ✅ t() respecte désormais la publication:
-   * - publishedOnly=true (défaut): ne retourne que les valeurs publiées
-   * - publishedOnly=false: retourne même les brouillons (utile admin / preview)
-   */
-  t: (key: string, opts?: { locale?: Language; publishedOnly?: boolean }) => string;
-
-  refreshCms: (opts?: { publishedOnly?: boolean }) => Promise<void>;
+  t: (key: string) => string;
+  // Optionnel: utile si tu veux forcer un refresh depuis certaines pages
+  refreshCms?: () => Promise<void>;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 /**
- * Fallback local (conservé).
+ * Fallback local (ton objet actuel). On le garde pour:
+ * - clés non encore migrées dans le CMS
+ * - mode offline / erreur réseau
  */
-const translations: Record<Language, Record<string, string>> = {
+const translations = {
   fr: {
     "nav.search": "Rechercher",
     "nav.subscribe": "S'abonner",
@@ -137,23 +133,17 @@ type CmsDict = Record<string, string>;
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   const [language, setLanguage] = useState<Language>("fr");
 
-  // ✅ 2 caches séparés:
-  // - published: ce qui est visible sur le site
-  // - all: utile pour l’admin / preview si besoin
-  const [cmsPublished, setCmsPublished] = useState<Record<Language, CmsDict>>({ fr: {}, en: {} });
-  const [cmsAll, setCmsAll] = useState<Record<Language, CmsDict>>({ fr: {}, en: {} });
-
+  // Dictionnaires CMS chargés en mémoire
+  const [cms, setCms] = useState<Record<Language, CmsDict>>({ fr: {}, en: {} });
   const [cmsLoaded, setCmsLoaded] = useState(false);
 
-  const fetchCms = async (opts?: { publishedOnly?: boolean }) => {
-    const publishedOnly = opts?.publishedOnly ?? true;
-
+  const fetchCms = async () => {
     try {
-      let q = supabase.from("site_content").select("key, locale, value, is_published");
+      const { data, error } = await supabase
+        .from("site_content")
+        .select("key, locale, value, is_published")
+        .eq("is_published", true);
 
-      if (publishedOnly) q = q.eq("is_published", true);
-
-      const { data, error } = await q;
       if (error) throw error;
 
       const next: Record<Language, CmsDict> = { fr: {}, en: {} };
@@ -164,51 +154,42 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
         if ((loc === "fr" || loc === "en") && k) next[loc][k] = v;
       }
 
-      if (publishedOnly) setCmsPublished(next);
-      else setCmsAll(next);
-
+      setCms(next);
       setCmsLoaded(true);
-    } catch {
-      // fallback local
+    } catch (e) {
+      // On reste en fallback local
       setCmsLoaded(true);
+      // (Optionnel) console.warn
+      // console.warn("CMS translation load failed", e);
     }
   };
 
-  // ✅ Au chargement, on récupère AU MINIMUM le published (site)
   useEffect(() => {
-    fetchCms({ publishedOnly: true });
+    fetchCms();
+    // Si tu veux un refresh automatique après login/logout, on peut écouter supabase.auth.onAuthStateChange
   }, []);
 
   const t = useMemo(() => {
-    return (key: string, opts?: { locale?: Language; publishedOnly?: boolean }): string => {
-      const loc = opts?.locale ?? language;
-      const publishedOnly = opts?.publishedOnly ?? true;
+    return (key: string): string => {
+      // 1) CMS published
+      const cmsValue = cms[language]?.[key];
+      if (cmsValue && cmsValue !== key) return cmsValue;
 
-      // 1) CMS
-      const cmsValue = publishedOnly ? cmsPublished[loc]?.[key] : cmsAll[loc]?.[key] ?? cmsPublished[loc]?.[key];
-      if (cmsValue !== undefined && cmsValue !== null) {
-        // ⚠️ on garde le comportement: si vide -> retourne "" (permet de masquer via section switch)
-        return String(cmsValue);
-      }
-
-      // 2) Fallback local
-      const dict = translations[loc] ?? {};
+      // 2) Local fallback
+      const dict = translations[language] as Record<string, string>;
       return dict[key] ?? key;
     };
-  }, [cmsPublished, cmsAll, language]);
+  }, [cms, language]);
 
   const value: LanguageContextType = useMemo(
     () => ({
       language,
       setLanguage,
       t,
-      refreshCms: (opts?: { publishedOnly?: boolean }) => fetchCms(opts),
+      refreshCms: fetchCms,
     }),
     [language, t]
   );
-
-  // cmsLoaded n'est pas obligatoire dans le context, mais on le laisse interne
-  void cmsLoaded;
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 };
