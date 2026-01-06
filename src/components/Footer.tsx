@@ -29,13 +29,20 @@ const Footer = () => {
 
   const year = new Date().getFullYear();
 
-  // Réseaux : masqués par défaut (comme ta capture). Mets des URLs pour les afficher.
+  // Réseaux : masqués si vide
   const social = [
     { name: "Facebook", href: cms("footer.social.facebook", "", ""), Icon: Facebook },
     { name: "Twitter", href: cms("footer.social.twitter", "", ""), Icon: Twitter },
     { name: "Instagram", href: cms("footer.social.instagram", "", ""), Icon: Instagram },
     { name: "LinkedIn", href: cms("footer.social.linkedin", "", ""), Icon: Linkedin },
   ].filter((s) => Boolean(s.href));
+
+  // ✅ valeurs contact pilotées CMS
+  const emailValue = cms("footer.contact.email_value", "contact@proxiservices.com", "contact@proxiservices.com");
+  const phoneTel = cms("footer.contact.phone_tel", "+33123456789", "+33123456789");
+  const phoneValue = cms("footer.contact.phone_value", "+33 1 23 45 67 89", "+33 1 23 45 67 89");
+  const hoursValue = cms("footer.hours.value", "Lun–Ven : 09:00–18:00", "Mon–Fri: 09:00–18:00");
+  const locationValue = cms("footer.location.value", "Conakry (et environs)", "Conakry (and nearby)");
 
   return (
     <footer className="bg-pro-gray text-white">
@@ -47,9 +54,11 @@ const Footer = () => {
               <div className="h-9 w-9 rounded-xl bg-pro-blue flex items-center justify-center">
                 <span className="text-sm font-bold">PS</span>
               </div>
-              <div className="leading-tight">
-                <div className="text-base font-bold">ProxiServices</div>
-                <div className="text-[11px] text-white/60">
+              <div className="leading-tight min-w-0">
+                <div className="text-base font-bold truncate">
+                  {cms("brand.name", "ProxiServices", "ProxiServices")}
+                </div>
+                <div className="text-[11px] text-white/60 truncate">
                   {cms("footer.brand.tagline", "Marketplace de services", "Service marketplace")}
                 </div>
               </div>
@@ -155,35 +164,35 @@ const Footer = () => {
             </h3>
 
             <p className="mt-2 text-sm text-white/65">
-              {cms("footer.contact_hint", "Support sous 24–48h (jours ouvrés).", "We typically respond within 24–48 business hours.")}
+              {cms(
+                "footer.contact.cta",
+                "Support sous 24–48h (jours ouvrés).",
+                "We typically respond within 24–48 business hours."
+              )}
             </p>
 
             <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
               <div className="space-y-3">
                 <a
-                  href={`mailto:${cms("footer.contact.email_value", "contact@proxiservices.com", "contact@proxiservices.com")}`}
+                  href={`mailto:${emailValue}`}
                   className="flex items-center justify-between gap-4 text-sm hover:text-white transition-colors"
                 >
                   <span className="inline-flex items-center gap-2 text-white/70">
                     <Mail className="h-4 w-4" />
                     {cms("footer.contact.label_email", "Email", "Email")}
                   </span>
-                  <span className="font-medium text-white/90 truncate">
-                    {cms("footer.contact.email_value", "contact@proxiservices.com", "contact@proxiservices.com")}
-                  </span>
+                  <span className="font-medium text-white/90 truncate">{emailValue}</span>
                 </a>
 
                 <a
-                  href={`tel:${cms("footer.contact.phone_tel", "+33123456789", "+33123456789")}`}
+                  href={`tel:${phoneTel}`}
                   className="flex items-center justify-between gap-4 text-sm hover:text-white transition-colors"
                 >
                   <span className="inline-flex items-center gap-2 text-white/70">
                     <Phone className="h-4 w-4" />
                     {cms("footer.contact.label_phone", "Téléphone", "Phone")}
                   </span>
-                  <span className="font-medium text-white/90">
-                    {cms("footer.contact.phone_value", "+33 1 23 45 67 89", "+33 1 23 45 67 89")}
-                  </span>
+                  <span className="font-medium text-white/90">{phoneValue}</span>
                 </a>
 
                 <div className="flex items-center justify-between gap-4 text-sm">
@@ -191,9 +200,7 @@ const Footer = () => {
                     <Clock className="h-4 w-4" />
                     {cms("footer.contact.label_hours", "Horaires", "Hours")}
                   </span>
-                  <span className="text-white/85">
-                    {cms("footer.contact.hours_value", "Lun–Ven • 09:00–18:00", "Mon–Fri • 09:00–18:00")}
-                  </span>
+                  <span className="text-white/85">{hoursValue}</span>
                 </div>
 
                 <div className="flex items-center justify-between gap-4 text-sm">
@@ -201,9 +208,7 @@ const Footer = () => {
                     <MapPin className="h-4 w-4" />
                     {cms("footer.contact.label_zone", "Zone", "Service area")}
                   </span>
-                  <span className="text-white/85">
-                    {cms("footer.contact.location_value", "Conakry (et environs)", "Conakry (and nearby)")}
-                  </span>
+                  <span className="text-white/85">{locationValue}</span>
                 </div>
               </div>
 
@@ -213,7 +218,7 @@ const Footer = () => {
                 onClick={() => setContactOpen(true)}
               >
                 <MessageSquare className="h-4 w-4" />
-                {cms("footer.contact.cta", "Contacter le support", "Contact support")}
+                {cms("footer.contact.button", "Contacter le support", "Contact support")}
               </Button>
             </div>
           </div>
@@ -221,7 +226,7 @@ const Footer = () => {
 
         <div className="mt-8 border-t border-white/10 pt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <p className="text-xs text-white/55">
-            © {year} ProxiServices. {cms("footer.bottom.rights", "Tous droits réservés.", "All rights reserved.")}
+            {cms("footer.bottom.rights", `© ${year} ProxiServices. Tous droits réservés.`, `© ${year} ProxiServices. All rights reserved.`)}
           </p>
 
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-white/60">
@@ -238,7 +243,7 @@ const Footer = () => {
         </div>
       </div>
 
-      <ContactModal open={contactOpen} onOpenChange={setContactOpen} defaultSubject="Support ProxiServices" />
+      <ContactModal open={contactOpen} onOpenChange={setContactOpen} defaultSubject={cms("contact.modal.title", "Support ProxiServices", "ProxiServices Support")} />
     </footer>
   );
 };
