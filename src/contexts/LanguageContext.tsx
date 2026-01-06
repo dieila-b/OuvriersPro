@@ -1,5 +1,5 @@
 // src/contexts/LanguageContext.tsx
-import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 
 type Language = "fr" | "en";
@@ -8,18 +8,19 @@ interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
   t: (key: string) => string;
-  // Optionnel: utile si tu veux forcer un refresh depuis certaines pages
-  refreshCms?: () => Promise<void>;
+  refreshCms: () => Promise<void>;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
+const LS_LANG_KEY = "app_language";
+
 /**
- * Fallback local (ton objet actuel). On le garde pour:
- * - clés non encore migrées dans le CMS
- * - mode offline / erreur réseau
+ * Fallback local (conservé):
+ * - clés non migrées dans le CMS
+ * - offline / erreur réseau
  */
-const translations = {
+const translations: Record<Language, Record<string, string>> = {
   fr: {
     "nav.search": "Rechercher",
     "nav.subscribe": "S'abonner",
@@ -68,7 +69,6 @@ const translations = {
     "subscription.features.support": "Support prioritaire",
     "subscription.choose": "Choisir ce plan",
 
-    "common.euro": "€",
     "common.loading": "Chargement...",
     "common.save": "Enregistrer",
     "common.cancel": "Annuler",
@@ -121,7 +121,6 @@ const translations = {
     "subscription.features.support": "Priority support",
     "subscription.choose": "Choose this plan",
 
-    "common.euro": "€",
     "common.loading": "Loading...",
     "common.save": "Save",
     "common.cancel": "Cancel",
@@ -131,13 +130,25 @@ const translations = {
 type CmsDict = Record<string, string>;
 
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
-  const [language, setLanguage] = useState<Language>("fr");
+  const [language, _setLanguage] = useState<Language>(() => {
+    const saved = (typeof window !== "undefined" ? window.localStorage.getItem(LS_LANG_KEY) : null) as Language | null;
+    return saved === "en" || saved === "fr" ? saved : "fr";
+  });
 
-  // Dictionnaires CMS chargés en mémoire
+  // Dictionnaires CMS (published) chargés en mémoire
   const [cms, setCms] = useState<Record<Language, CmsDict>>({ fr: {}, en: {} });
   const [cmsLoaded, setCmsLoaded] = useState(false);
 
-  const fetchCms = async () => {
+  const setLanguage = useCallback((lang: Language) => {
+    _setLanguage(lang);
+    try {
+      window.localStorage.setItem(LS_LANG_KEY, lang);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const fetchCms = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from("site_content")
@@ -147,37 +158,41 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
       if (error) throw error;
 
       const next: Record<Language, CmsDict> = { fr: {}, en: {} };
+
       for (const row of data ?? []) {
         const loc = (row as any).locale as Language;
-        const k = String((row as any).key ?? "");
-        const v = String((row as any).value ?? "");
-        if ((loc === "fr" || loc === "en") && k) next[loc][k] = v;
+        const k = String((row as any).key ?? "").trim();
+        const v = String((row as any).value ?? ""); // peut être vide => on garde quand même
+
+        if ((loc === "fr" || loc === "en") && k) {
+          next[loc][k] = v;
+        }
       }
 
       setCms(next);
       setCmsLoaded(true);
-    } catch (e) {
-      // On reste en fallback local
+    } catch {
+      // fallback local
       setCmsLoaded(true);
-      // (Optionnel) console.warn
-      // console.warn("CMS translation load failed", e);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchCms();
-    // Si tu veux un refresh automatique après login/logout, on peut écouter supabase.auth.onAuthStateChange
-  }, []);
+  }, [fetchCms]);
 
   const t = useMemo(() => {
     return (key: string): string => {
-      // 1) CMS published
-      const cmsValue = cms[language]?.[key];
-      if (cmsValue && cmsValue !== key) return cmsValue;
+      const k = String(key ?? "");
 
-      // 2) Local fallback
-      const dict = translations[language] as Record<string, string>;
-      return dict[key] ?? key;
+      // 1) CMS published (même si valeur vide, on la retourne)
+      if (Object.prototype.hasOwnProperty.call(cms[language] ?? {}, k)) {
+        return (cms[language]?.[k] ?? "").toString();
+      }
+
+      // 2) fallback local
+      const dict = translations[language] ?? {};
+      return dict[k] ?? k;
     };
   }, [cms, language]);
 
@@ -188,8 +203,12 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
       t,
       refreshCms: fetchCms,
     }),
-    [language, t]
+    [language, setLanguage, t, fetchCms]
   );
+
+  // Optionnel : tu peux utiliser cmsLoaded si tu veux afficher un loader global
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _ = cmsLoaded;
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 };
