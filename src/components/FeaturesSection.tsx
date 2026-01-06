@@ -24,46 +24,48 @@ const FeaturesSection = () => {
     },
     {
       icon: MapPin,
-      title: cms("home.features.card2.title", "Proche de vous", "Near you"),
+      // ✅ ta capture = “Contact rapide” en #2 et “Avis & confiance” en #3 (on suit ton CMS)
+      title: cms("home.features.card2.title", "Contact rapide", "Fast contact"),
       description: cms(
         "home.features.card2.desc",
-        "Trouvez rapidement un prestataire dans votre zone.",
-        "Quickly find a provider in your area."
+        "Discutez et obtenez un devis simplement.",
+        "Message providers and request a quote easily."
       ),
       color: "text-blue-600",
     },
     {
       icon: MessageCircle,
-      title: cms("home.features.card3.title", "Contact rapide", "Fast communication"),
+      title: cms("home.features.card3.title", "Avis & confiance", "Reviews & trust"),
       description: cms(
         "home.features.card3.desc",
-        "Discutez et obtenez un devis simplement.",
-        "Message providers and request a quote easily."
+        "Évaluations pour choisir en toute sérénité.",
+        "Reliable reviews to choose with confidence."
       ),
       color: "text-purple-600",
     },
   ];
 
+  // ✅ Stats alignées sur les clés du CMS proposé (home.stats.*)
   const stats = [
     {
       icon: Users,
-      number: cms("home.features.stats.pros_value", "2 500+", "2,500+"),
-      label: cms("home.features.stats.pros", "Professionnels", "Professionals"),
+      number: cms("home.stats.item1.value", "2 500+", "2,500+"),
+      label: cms("home.stats.item1.label", "Professionnels", "Professionals"),
     },
     {
       icon: Star,
-      number: cms("home.features.stats.rating_value", "4.8/5", "4.8/5"),
-      label: cms("home.features.stats.rating", "Note moyenne", "Average rating"),
+      number: cms("home.stats.item2.value", "4.8/5", "4.8/5"),
+      label: cms("home.stats.item2.label", "Note moyenne", "Average rating"),
     },
     {
       icon: Clock,
-      number: cms("home.features.stats.response_value", "24h", "24h"),
-      label: cms("home.features.stats.response", "Temps de réponse", "Response time"),
+      number: cms("home.stats.item3.value", "24h", "24h"),
+      label: cms("home.stats.item3.label", "Temps de réponse", "Response time"),
     },
     {
       icon: Shield,
-      number: cms("home.features.stats.verified_value", "100%", "100%"),
-      label: cms("home.features.stats.verified", "Profils vérifiés", "Verified profiles"),
+      number: cms("home.stats.item4.value", "100%", "100%"),
+      label: cms("home.stats.item4.label", "Profils vérifiés", "Verified profiles"),
     },
   ];
 
@@ -72,15 +74,14 @@ const FeaturesSection = () => {
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div className="text-center mb-6 sm:mb-8">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
-            {cms("home.features.title", "Pourquoi ProxiServices ?", "Why choose ProxiServices?")}
+            {cms("home.features.title", "Pourquoi ProxiServices ?", "Why ProxiServices?")}
           </h2>
 
-          {/* Optionnel : si tu veux afficher un sous-titre CMS */}
           <p className="mt-2 text-sm sm:text-base text-gray-600">
             {cms(
               "home.features.subtitle",
               "Des pros vérifiés, un contact simple, des avis utiles.",
-              "Verified experts, streamlined communication, and reliable reviews."
+              "Verified experts, simple contact, and helpful reviews."
             )}
           </p>
         </div>
@@ -98,7 +99,6 @@ const FeaturesSection = () => {
                 </div>
 
                 <h3 className="text-lg sm:text-xl font-semibold text-pro-gray mb-2">{f.title}</h3>
-
                 <p className="text-gray-600 leading-relaxed text-sm sm:text-base">{f.description}</p>
               </div>
             </div>
