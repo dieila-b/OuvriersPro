@@ -154,89 +154,21 @@ const SECTIONS: SectionDef[] = [
     ],
   },
 
-  /**
-   * ✅ MISE À JOUR IMPORTANTE
-   * Cette section contient désormais toutes les clés réellement utilisées par src/components/SearchSection.tsx (version CMS).
-   * Si une clé n’est pas ici, elle ne sera pas créée par “Initialiser” -> compteur “clés manquantes” ne descend pas.
-   */
   {
     id: "search_page",
-    title: "Page Recherche — En-tête, recherche & filtres (SearchSection)",
-    location: "Recherche > Page",
-    description: "Tous les micro-textes utilisés sur la page Recherche (titre, zones, filtres, géoloc, résultats).",
+    title: "Page Recherche — En-tête & filtres",
+    location: "Recherche > En-tête & Filtres",
+    description: "Titre et micro-textes de la page “Trouvez votre professionnel”.",
     fields: [
-      // ---- En-tête page ----
-      { key: "search.page.title", label: "Titre page", type: "text", placeholder: "Trouvez votre professionnel" },
-      {
-        key: "search.page.subtitle_alt",
-        label: "Sous-titre page (utilisé par SearchSection)",
-        type: "text",
-        placeholder: "Filtrez par métier, quartier et tarif pour trouver l'ouvrier le plus proche.",
-      },
-
-      // ---- Bloc recherche haut ----
-      { key: "search.top.title", label: "Bloc haut — Titre", type: "text", placeholder: "Rechercher un ouvrier" },
-      { key: "search.top.btn", label: "Bloc haut — Bouton", type: "text", placeholder: "Rechercher" },
-
-      // ---- Labels filtres ----
-      { key: "search.filters.title", label: "Sidebar filtres — Titre", type: "text", placeholder: "Filtres" },
-
-      { key: "search.filters.keyword.label", label: "Filtre — Label métier/nom", type: "text", placeholder: "Métier ou nom" },
-      {
-        key: "search.filters.keyword.placeholder",
-        label: "Filtre — Placeholder métier/nom",
-        type: "text",
-        placeholder: "Plombier, électricien, Mamadou...",
-      },
-
-      { key: "search.filters.district.label", label: "Filtre — Label quartier", type: "text", placeholder: "Quartier" },
-      { key: "search.filters.district.all", label: "Filtre — Option Tous quartiers", type: "text", placeholder: "Tous les quartiers" },
-
-      { key: "search.filters.price.label", label: "Filtre — Label prix max", type: "text", placeholder: "Tarif horaire max" },
-      { key: "search.filters.price.no_limit", label: "Filtre — Texte aucune limite", type: "text", placeholder: "Aucune limite" },
-
-      { key: "search.filters.rating.label", label: "Filtre — Label note minimum", type: "text", placeholder: "Note minimum" },
-      { key: "search.filters.rating.any", label: "Filtre — Texte toutes notes", type: "text", placeholder: "Toutes" },
-
-      // ---- Géoloc ----
-      { key: "search.geo.label", label: "Géoloc — Label switch", type: "text", placeholder: "Recherche par proximité" },
-      { key: "search.geo.radius", label: "Géoloc — Label rayon", type: "text", placeholder: "Rayon de recherche" },
-      { key: "search.geo.loading", label: "Géoloc — Loading", type: "text", placeholder: "Obtention de votre position..." },
-      { key: "search.geo.no_coordinates", label: "Géoloc — Sans GPS", type: "text", placeholder: "Sans position GPS" },
-
-      // ---- Boutons ----
-      { key: "search.filters.btn_reset_long", label: "Bouton reset (long)", type: "text", placeholder: "Réinitialiser les filtres" },
-
-      // ---- Affichage ----
-      { key: "search.view.label", label: "Affichage — Label", type: "text", placeholder: "Affichage" },
+      { key: "search.page.title", label: "Titre", type: "text", placeholder: "Trouvez votre professionnel" },
+      { key: "search.page.subtitle", label: "Sous-titre", type: "text", placeholder: "Modifiez vos filtres pour lancer la recherche automatiquement." },
+      { key: "search.filters.title", label: "Bloc filtres — Titre", type: "text", placeholder: "Filtres" },
+      { key: "search.filters.btn_reset", label: "Bouton Réinitialiser", type: "text", placeholder: "Réinitialiser" },
+      { key: "search.filters.btn_geolocate", label: "Bouton Utiliser ma position", type: "text", placeholder: "Utiliser ma position" },
       { key: "search.view.list", label: "Affichage — Liste", type: "text", placeholder: "Liste" },
       { key: "search.view.grid", label: "Affichage — Mosaïque", type: "text", placeholder: "Mosaïque" },
-
-      // ---- Résultats ----
-      {
-        key: "search.results.none",
-        label: "Résultats — Aucun résultat",
-        type: "text",
-        placeholder: "Aucun professionnel ne correspond à ces critères pour le moment.",
-      },
-      { key: "search.results.count", label: "Résultats — Compteur (template)", type: "text", placeholder: "X résultats trouvés" },
-
-      { key: "search.loading_results", label: "Chargement — Résultats (header)", type: "text", placeholder: "Chargement des résultats..." },
-      { key: "search.loading_workers", label: "Chargement — Cartes workers", type: "text", placeholder: "Chargement des professionnels..." },
-
-      // ---- Carte worker ----
-      { key: "search.card.btn_contact", label: "Carte — Bouton Contacter", type: "text", placeholder: "Contacter" },
-      { key: "search.card.per_hour", label: "Carte — Suffixe /h", type: "text", placeholder: "/h" },
-      { key: "search.card.years_suffix", label: "Carte — Suffixe expérience", type: "text", placeholder: "ans d'expérience" },
-
-      /**
-       * Anciennes clés (si d’autres composants les utilisent encore).
-       * On les garde pour éviter de créer de nouvelles “clés manquantes” si elles sont référencées ailleurs.
-       */
-      { key: "search.page.subtitle", label: "Sous-titre page (ancienne clé)", type: "text", placeholder: "Modifiez vos filtres pour lancer la recherche automatiquement." },
-      { key: "search.filters.btn_reset", label: "Bouton Réinitialiser (ancienne clé)", type: "text", placeholder: "Réinitialiser" },
-      { key: "search.filters.btn_geolocate", label: "Bouton Utiliser ma position (ancienne clé)", type: "text", placeholder: "Utiliser ma position" },
-      { key: "search.card.price_suffix", label: "Suffixe tarif (ancienne clé)", type: "text", placeholder: "GNF /h" },
+      { key: "search.card.btn_contact", label: "Bouton Contacter (carte)", type: "text", placeholder: "Contacter" },
+      { key: "search.card.price_suffix", label: "Suffixe tarif", type: "text", placeholder: "GNF /h" },
     ],
   },
 
@@ -279,7 +211,6 @@ const SECTIONS: SectionDef[] = [
       { key: "pricing.plan.yearly.f3", label: "Plan 3 — Avantage 3", type: "text", placeholder: "Statistiques détaillées" },
       { key: "pricing.plan.yearly.f4", label: "Plan 3 — Avantage 4", type: "text", placeholder: "Support prioritaire" },
 
-      // --- Bénéfices (3 blocs sous les cartes) ---
       { key: "pricing.benefit1.title", label: "Bénéfice 1 — Titre", type: "text", placeholder: "Profil vérifié" },
       { key: "pricing.benefit1.desc", label: "Bénéfice 1 — Description", type: "textarea", placeholder: "Badge de confiance sur votre profil" },
 
@@ -289,7 +220,6 @@ const SECTIONS: SectionDef[] = [
       { key: "pricing.benefit3.title", label: "Bénéfice 3 — Titre", type: "text", placeholder: "Support dédié" },
       { key: "pricing.benefit3.desc", label: "Bénéfice 3 — Description", type: "textarea", placeholder: "Assistance prioritaire 7j/7" },
 
-      // --- Reco: devise + séparateur prix/période ---
       { key: "pricing.currency", label: "Devise affichée (ex: FG / GNF)", type: "text", placeholder: "FG" },
       { key: "pricing.price_separator", label: "Séparateur prix/période (ex: /)", type: "text", placeholder: "/" },
     ],
@@ -654,6 +584,9 @@ export default function AdminContent() {
     }
   };
 
+  // ✅ CHANGEMENT IMPORTANT :
+  // "manquant" = uniquement si la clé n'existe pas (row absent)
+  // Les valeurs vides ne sont plus comptées comme manquantes.
   const globalStats = React.useMemo(() => {
     let published = 0;
     let draft = 0;
@@ -665,8 +598,10 @@ export default function AdminContent() {
       for (const f of section.fields) {
         const fr = getRow(f.key, "fr");
         const en = getRow(f.key, "en");
+
         if (!fr) missingFR += 1;
         if (!en) missingEN += 1;
+
         if (en?.en_is_auto) autoEN += 1;
 
         const anyPublished = Boolean(fr?.is_published) || Boolean(en?.is_published);
@@ -724,12 +659,12 @@ export default function AdminContent() {
       for (const f of section.fields) {
         const rFR = getRow(f.key, "fr");
         const rEN = getRow(f.key, "en");
+
+        // ✅ CHANGEMENT : manquant = uniquement non créé (row absent)
         if (!rFR) missing.push("FR");
         if (!rEN) missing.push("EN");
-        if (rEN?.en_is_auto) autoCount += 1;
 
-        if (rFR && isEmptyValue(rFR.value)) missing.push("FR");
-        if (rEN && isEmptyValue(rEN.value)) missing.push("EN");
+        if (rEN?.en_is_auto) autoCount += 1;
       }
 
       const missingSet = new Set(missing);
@@ -1054,8 +989,9 @@ export default function AdminContent() {
                 const frRow = getRow(f.key, "fr");
                 const enRow = getRow(f.key, "en");
 
-                const missingFR = !frRow || isEmptyValue(frRow.value);
-                const missingEN = !enRow || isEmptyValue(enRow.value);
+                // ✅ CHANGEMENT : "manquant" = uniquement non créé
+                const missingFR = !frRow;
+                const missingEN = !enRow;
 
                 const autoEN = Boolean(enRow?.en_is_auto);
 
