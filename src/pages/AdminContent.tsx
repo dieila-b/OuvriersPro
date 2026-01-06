@@ -7,45 +7,24 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 import {
   useUpsertSiteContent,
   useTogglePublishSiteContent,
-  useDeleteSiteContent,
 } from "@/hooks/useSiteContent";
 
 import {
-  Search,
   RefreshCw,
-  Plus,
-  Copy,
-  CheckCircle2,
-  EyeOff,
-  Languages,
-  AlertTriangle,
   Save,
-  Trash2,
-  Sparkles,
-  RotateCcw,
   ListPlus,
-  Bug,
-  Database,
+  Eye,
+  EyeOff,
+  Search,
 } from "lucide-react";
 
 type Locale = "fr" | "en";
-type Category =
-  | "Home"
-  | "Header"
-  | "Footer"
-  | "Legal"
-  | "Contact"
-  | "Company"
-  | "Services"
-  | "Other";
-type MissingMode = "all" | "en_missing" | "fr_missing" | "both_missing";
-
 type SiteContentRow = {
   id: string;
   key: string;
@@ -56,165 +35,287 @@ type SiteContentRow = {
   updated_at?: string | null;
 };
 
+type FieldType = "text" | "textarea" | "url" | "number";
+type FieldDef = {
+  key: string;
+  label: string;
+  placeholder?: string;
+  type: FieldType;
+  help?: string;
+};
+
+type SectionDef = {
+  id: string;
+  title: string;
+  description?: string;
+  fields: FieldDef[];
+};
+
 const LOCALES: Locale[] = ["fr", "en"];
-const TYPES = ["text", "markdown", "json"] as const;
 
-const DEFAULT_KEYS: string[] = [
-  "header.tagline",
+/**
+ * ✅ SECTIONS = “CMS style capture”
+ * Ajoute/ajuste ici les clés pour couvrir 100% du contenu de ton site.
+ *
+ * IMPORTANT:
+ * - Certaines clés existent déjà chez toi (home.hero.title, footer.*, legal.*, contact.*, company.*...)
+ * - D’autres clés ci-dessous sont “nouvelles” (ex: search.page.title, pricing.plan.monthly.price, etc.)
+ *   => “Initialiser les sections” les crée en DB pour que tu puisses les éditer.
+ *   => Ensuite, il faudra que ton FRONT utilise ces clés (si ce n’est pas déjà le cas).
+ */
+const SECTIONS: SectionDef[] = [
+  {
+    id: "header",
+    title: "Header (Barre du haut)",
+    description: "Texte sous le logo, labels d’actions et navigation.",
+    fields: [
+      { key: "header.tagline", label: "Tagline (sous le logo)", type: "text", placeholder: "Prestataires vérifiés, proches de vous" },
+      { key: "header.btn_login", label: "Bouton Connexion", type: "text", placeholder: "Se connecter" },
+      { key: "header.nav.dashboard", label: "Menu: Tableau de bord", type: "text", placeholder: "Tableau de bord" },
+      { key: "header.nav.contact", label: "Menu: Demandes de contact", type: "text", placeholder: "Demandes de contact" },
+      { key: "header.nav.providers", label: "Menu: Inscriptions prestataires", type: "text", placeholder: "Inscriptions prestataires" },
+      { key: "header.nav.ads", label: "Menu: Publicités", type: "text", placeholder: "Publicités" },
+      { key: "header.nav.faq", label: "Menu: Questions FAQ", type: "text", placeholder: "Questions FAQ" },
+      { key: "header.nav.content", label: "Menu: Contenu du site", type: "text", placeholder: "Contenu du site" },
+    ],
+  },
 
-  "home.hero.title",
-  "home.hero.subtitle",
-  "home.hero.cta_primary",
-  "home.hero.cta_secondary",
-  "home.search.title",
-  "home.search.subtitle",
-  "home.search.placeholder",
-  "home.search.placeholder_keyword",
-  "home.search.placeholder_district",
-  "home.search.button",
-  "home.search.btn_search",
-  "home.features.title",
-  "home.features.subtitle",
-  "home.features.card1.title",
-  "home.features.card1.desc",
-  "home.features.card2.title",
-  "home.features.card2.desc",
-  "home.features.card3.title",
-  "home.features.card3.desc",
+  {
+    id: "home_hero",
+    title: "Accueil — Hero (Bannière bleue)",
+    description: "Titre, sous-titre et zone de recherche.",
+    fields: [
+      { key: "home.hero.title", label: "Titre (H1)", type: "text", placeholder: "Trouvez des prestataires fiables près de chez vous" },
+      { key: "home.hero.subtitle", label: "Sous-titre", type: "text", placeholder: "Comparez, contactez et réservez en toute confiance." },
+      { key: "home.search.placeholder_keyword", label: "Placeholder métier", type: "text", placeholder: "Ex : plombier, électricien..." },
+      { key: "home.search.placeholder_district", label: "Placeholder quartier/commune", type: "text", placeholder: "Quartier / commune" },
+      { key: "home.search.btn_search", label: "Bouton Rechercher", type: "text", placeholder: "Rechercher" },
+    ],
+  },
 
-  "footer.brand.tagline",
-  "footer.brand.desc",
-  "footer.services.title",
-  "footer.services.more",
-  "footer.company.title",
-  "footer.resources.title",
-  "footer.contact.title",
-  "footer.contact.cta",
-  "footer.contact.button",
-  "footer.contact_hint",
-  "footer.contact.label_email",
-  "footer.contact.label_phone",
-  "footer.contact.label_hours",
-  "footer.contact.label_zone",
-  "footer.location.value",
-  "footer.hours.value",
-  "footer.bottom.rights",
+  {
+    id: "home_why",
+    title: "Accueil — Section “Pourquoi ProxiServices ?”",
+    description: "Titre + sous-titre au-dessus des cartes.",
+    fields: [
+      { key: "home.features.title", label: "Titre", type: "text", placeholder: "Pourquoi ProxiServices ?" },
+      { key: "home.features.subtitle", label: "Sous-titre", type: "text", placeholder: "Des pros vérifiés, un contact simple, des avis utiles." },
+    ],
+  },
 
-  "contact.modal.title",
-  "contact.modal.desc",
-  "contact.form.email",
-  "contact.form.subject",
-  "contact.form.message",
-  "contact.form.btn_send",
-  "contact.form.success",
-  "contact.form.error",
+  {
+    id: "home_cards",
+    title: "Accueil — 3 cartes (avantages)",
+    description: "Les trois blocs principaux (titre + description).",
+    fields: [
+      { key: "home.features.card1.title", label: "Carte 1 — Titre", type: "text", placeholder: "Prestataires vérifiés" },
+      { key: "home.features.card1.desc", label: "Carte 1 — Description", type: "textarea", placeholder: "Profils contrôlés et informations utiles." },
 
-  "legal.terms.title",
-  "legal.privacy.title",
-  "legal.cookies.title",
-  "legal.terms.body",
-  "legal.privacy.body",
-  "legal.cookies.body",
+      { key: "home.features.card2.title", label: "Carte 2 — Titre", type: "text", placeholder: "Contact rapide" },
+      { key: "home.features.card2.desc", label: "Carte 2 — Description", type: "textarea", placeholder: "Discutez et obtenez un devis simplement." },
 
-  "company.about.title",
-  "company.about.body",
-  "company.partners.title",
-  "company.partners.body",
+      { key: "home.features.card3.title", label: "Carte 3 — Titre", type: "text", placeholder: "Avis & confiance" },
+      { key: "home.features.card3.desc", label: "Carte 3 — Description", type: "textarea", placeholder: "Évaluations pour choisir en toute sérénité." },
+    ],
+  },
+
+  {
+    id: "home_stats",
+    title: "Accueil — Statistiques (4 valeurs)",
+    description: "La ligne 2 500+, 4.8/5, 24h, 100%.",
+    fields: [
+      { key: "home.stats.item1.value", label: "Stat 1 — Valeur", type: "text", placeholder: "2 500+" },
+      { key: "home.stats.item1.label", label: "Stat 1 — Libellé", type: "text", placeholder: "Professionnels" },
+
+      { key: "home.stats.item2.value", label: "Stat 2 — Valeur", type: "text", placeholder: "4.8/5" },
+      { key: "home.stats.item2.label", label: "Stat 2 — Libellé", type: "text", placeholder: "Note moyenne" },
+
+      { key: "home.stats.item3.value", label: "Stat 3 — Valeur", type: "text", placeholder: "24h" },
+      { key: "home.stats.item3.label", label: "Stat 3 — Libellé", type: "text", placeholder: "Temps de réponse" },
+
+      { key: "home.stats.item4.value", label: "Stat 4 — Valeur", type: "text", placeholder: "100%" },
+      { key: "home.stats.item4.label", label: "Stat 4 — Libellé", type: "text", placeholder: "Profils vérifiés" },
+    ],
+  },
+
+  {
+    id: "search_page",
+    title: "Page Recherche — En-tête & filtres",
+    description: "Titre et micro-textes de la page “Trouvez votre professionnel”.",
+    fields: [
+      { key: "search.page.title", label: "Titre", type: "text", placeholder: "Trouvez votre professionnel" },
+      { key: "search.page.subtitle", label: "Sous-titre", type: "text", placeholder: "Modifiez vos filtres pour lancer la recherche automatiquement." },
+      { key: "search.filters.title", label: "Bloc filtres — Titre", type: "text", placeholder: "Filtres" },
+      { key: "search.filters.btn_reset", label: "Bouton Réinitialiser", type: "text", placeholder: "Réinitialiser" },
+      { key: "search.filters.btn_geolocate", label: "Bouton Utiliser ma position", type: "text", placeholder: "Utiliser ma position" },
+      { key: "search.view.list", label: "Affichage — Liste", type: "text", placeholder: "Liste" },
+      { key: "search.view.grid", label: "Affichage — Mosaïque", type: "text", placeholder: "Mosaïque" },
+      { key: "search.card.btn_contact", label: "Bouton Contacter (carte)", type: "text", placeholder: "Contacter" },
+      { key: "search.card.price_suffix", label: "Suffixe tarif", type: "text", placeholder: "GNF /h" },
+    ],
+  },
+
+  {
+    id: "pricing",
+    title: "Abonnements — Cartes (Gratuit / Mensuel / Annuel)",
+    description: "Titres, prix, boutons, avantages.",
+    fields: [
+      { key: "pricing.section.title", label: "Titre section", type: "text", placeholder: "Rejoignez ProxiServices" },
+      { key: "pricing.section.subtitle", label: "Sous-titre", type: "text", placeholder: "Développez votre activité avec plus de visibilité" },
+
+      { key: "pricing.plan.free.name", label: "Plan 1 — Nom", type: "text", placeholder: "Gratuit" },
+      { key: "pricing.plan.free.price", label: "Plan 1 — Prix", type: "text", placeholder: "0" },
+      { key: "pricing.plan.free.period", label: "Plan 1 — Période", type: "text", placeholder: "FG/mois" },
+      { key: "pricing.plan.free.btn", label: "Plan 1 — Bouton", type: "text", placeholder: "Choisir ce plan" },
+      { key: "pricing.plan.free.f1", label: "Plan 1 — Avantage 1", type: "text", placeholder: "1 métier affiché" },
+      { key: "pricing.plan.free.f2", label: "Plan 1 — Avantage 2", type: "text", placeholder: "Profil simplifié" },
+      { key: "pricing.plan.free.f3", label: "Plan 1 — Avantage 3", type: "text", placeholder: "Nombre de contacts limité" },
+      { key: "pricing.plan.free.f4", label: "Plan 1 — Avantage 4", type: "text", placeholder: "Pas de mise en avant" },
+
+      { key: "pricing.plan.monthly.badge", label: "Plan 2 — Badge", type: "text", placeholder: "Populaire" },
+      { key: "pricing.plan.monthly.name", label: "Plan 2 — Nom", type: "text", placeholder: "Mensuel" },
+      { key: "pricing.plan.monthly.price", label: "Plan 2 — Prix", type: "text", placeholder: "5 000" },
+      { key: "pricing.plan.monthly.period", label: "Plan 2 — Période", type: "text", placeholder: "FG/mois" },
+      { key: "pricing.plan.monthly.ribbon", label: "Plan 2 — Bandeau", type: "text", placeholder: "Sans engagement" },
+      { key: "pricing.plan.monthly.btn", label: "Plan 2 — Bouton", type: "text", placeholder: "Choisir ce plan" },
+      { key: "pricing.plan.monthly.f1", label: "Plan 2 — Avantage 1", type: "text", placeholder: "Profil professionnel complet" },
+      { key: "pricing.plan.monthly.f2", label: "Plan 2 — Avantage 2", type: "text", placeholder: "Contacts clients illimités" },
+      { key: "pricing.plan.monthly.f3", label: "Plan 2 — Avantage 3", type: "text", placeholder: "Statistiques détaillées" },
+      { key: "pricing.plan.monthly.f4", label: "Plan 2 — Avantage 4", type: "text", placeholder: "Support prioritaire" },
+
+      { key: "pricing.plan.yearly.name", label: "Plan 3 — Nom", type: "text", placeholder: "Annuel" },
+      { key: "pricing.plan.yearly.price", label: "Plan 3 — Prix", type: "text", placeholder: "50 000" },
+      { key: "pricing.plan.yearly.period", label: "Plan 3 — Période", type: "text", placeholder: "FG/an" },
+      { key: "pricing.plan.yearly.ribbon", label: "Plan 3 — Bandeau", type: "text", placeholder: "2 mois offerts" },
+      { key: "pricing.plan.yearly.btn", label: "Plan 3 — Bouton", type: "text", placeholder: "Choisir ce plan" },
+      { key: "pricing.plan.yearly.f1", label: "Plan 3 — Avantage 1", type: "text", placeholder: "Profil professionnel complet" },
+      { key: "pricing.plan.yearly.f2", label: "Plan 3 — Avantage 2", type: "text", placeholder: "Contacts clients illimités" },
+      { key: "pricing.plan.yearly.f3", label: "Plan 3 — Avantage 3", type: "text", placeholder: "Statistiques détaillées" },
+      { key: "pricing.plan.yearly.f4", label: "Plan 3 — Avantage 4", type: "text", placeholder: "Support prioritaire" },
+    ],
+  },
+
+  {
+    id: "footer",
+    title: "Footer — Colonnes + Contact",
+    description: "Brand, colonnes Services/Entreprise/Ressources/Contact + valeurs.",
+    fields: [
+      { key: "footer.brand.tagline", label: "Brand — Tagline", type: "text", placeholder: "Marketplace de services" },
+      { key: "footer.brand.desc", label: "Brand — Description", type: "textarea", placeholder: "Trouvez des prestataires fiables près de chez vous, en quelques minutes." },
+
+      { key: "footer.services.title", label: "Colonne Services — Titre", type: "text", placeholder: "Services" },
+      { key: "footer.services.more", label: "Services — Lien “Découvrir”", type: "text", placeholder: "Découvrir →" },
+
+      { key: "footer.company.title", label: "Colonne Entreprise — Titre", type: "text", placeholder: "Entreprise" },
+      { key: "footer.resources.title", label: "Colonne Ressources — Titre", type: "text", placeholder: "Ressources" },
+      { key: "footer.contact.title", label: "Colonne Contact — Titre", type: "text", placeholder: "Contact" },
+      { key: "footer.contact.cta", label: "Contact — Phrase support", type: "text", placeholder: "Support sous 24–48h (jours ouvrés)." },
+
+      { key: "footer.contact.label_email", label: "Label Email", type: "text", placeholder: "Email" },
+      { key: "footer.contact.label_phone", label: "Label Téléphone", type: "text", placeholder: "Téléphone" },
+      { key: "footer.contact.label_hours", label: "Label Horaires", type: "text", placeholder: "Horaires" },
+      { key: "footer.contact.label_zone", label: "Label Zone", type: "text", placeholder: "Zone" },
+
+      { key: "footer.location.value", label: "Zone (valeur)", type: "text", placeholder: "Conakry (et environs)" },
+      { key: "footer.hours.value", label: "Horaires (valeur)", type: "text", placeholder: "Lun–Ven : 09:00–18:00" },
+
+      { key: "footer.contact.button", label: "Bouton Contact support", type: "text", placeholder: "Contacter le support" },
+
+      { key: "footer.bottom.rights", label: "Bas de page — Droits", type: "text", placeholder: "© 2026 ProxiServices. Tous droits réservés." },
+      { key: "legal.terms.title", label: "Lien bas — Conditions d’utilisation", type: "text", placeholder: "Conditions d’utilisation" },
+      { key: "legal.privacy.title", label: "Lien bas — Politique de confidentialité", type: "text", placeholder: "Politique de confidentialité" },
+      { key: "legal.cookies.title", label: "Lien bas — Cookies", type: "text", placeholder: "Cookies" },
+    ],
+  },
+
+  {
+    id: "company",
+    title: "Entreprise — À propos / Partenaires",
+    description: "Contenus de la page Entreprise.",
+    fields: [
+      { key: "company.about.title", label: "À propos — Titre", type: "text", placeholder: "À propos" },
+      { key: "company.about.body", label: "À propos — Texte", type: "textarea", placeholder: "ProxiServices connecte clients et prestataires vérifiés..." },
+      { key: "company.partners.title", label: "Partenaires — Titre", type: "text", placeholder: "Partenaires" },
+      { key: "company.partners.body", label: "Partenaires — Texte", type: "textarea", placeholder: "Texte partenaires..." },
+    ],
+  },
+
+  {
+    id: "contact",
+    title: "Contact — Modal / Formulaire",
+    description: "Labels et messages du formulaire de contact.",
+    fields: [
+      { key: "contact.modal.title", label: "Titre modal", type: "text", placeholder: "Contact" },
+      { key: "contact.modal.desc", label: "Description modal", type: "text", placeholder: "Expliquez votre besoin..." },
+      { key: "contact.form.email", label: "Label Email", type: "text", placeholder: "Email" },
+      { key: "contact.form.subject", label: "Label Sujet", type: "text", placeholder: "Sujet" },
+      { key: "contact.form.message", label: "Label Message", type: "text", placeholder: "Message" },
+      { key: "contact.form.btn_send", label: "Bouton Envoyer", type: "text", placeholder: "Envoyer" },
+      { key: "contact.form.success", label: "Message succès", type: "text", placeholder: "Message envoyé." },
+      { key: "contact.form.error", label: "Message erreur", type: "text", placeholder: "Une erreur est survenue." },
+    ],
+  },
+
+  {
+    id: "legal",
+    title: "Pages légales — Conditions / Confidentialité / Cookies",
+    description: "Titres + contenus (longs).",
+    fields: [
+      { key: "legal.terms.title", label: "Conditions — Titre", type: "text", placeholder: "Conditions d’utilisation" },
+      { key: "legal.terms.body", label: "Conditions — Contenu", type: "textarea", placeholder: "Texte conditions..." },
+
+      { key: "legal.privacy.title", label: "Confidentialité — Titre", type: "text", placeholder: "Politique de confidentialité" },
+      { key: "legal.privacy.body", label: "Confidentialité — Contenu", type: "textarea", placeholder: "Texte confidentialité..." },
+
+      { key: "legal.cookies.title", label: "Cookies — Titre", type: "text", placeholder: "Cookies" },
+      { key: "legal.cookies.body", label: "Cookies — Contenu", type: "textarea", placeholder: "Texte cookies..." },
+    ],
+  },
 ];
 
-function detectCategory(key: string): Category {
-  if (key.startsWith("home.")) return "Home";
-  if (key.startsWith("header.")) return "Header";
-  if (key.startsWith("footer.")) return "Footer";
-  if (key.startsWith("legal.")) return "Legal";
-  if (key.startsWith("contact.")) return "Contact";
-  if (key.startsWith("company.")) return "Company";
-  if (key.startsWith("services.")) return "Services";
-  return "Other";
+function inputType(t: FieldType) {
+  if (t === "url") return "url";
+  if (t === "number") return "number";
+  return "text";
 }
 
-function missingLabel(mode: MissingMode) {
-  switch (mode) {
-    case "en_missing":
-      return "EN manquants";
-    case "fr_missing":
-      return "FR manquants";
-    case "both_missing":
-      return "FR+EN absents";
-    default:
-      return "Tous";
-  }
+function normalizeNumberString(v: string) {
+  const s = (v ?? "").toString().trim();
+  if (!s) return "";
+  const n = Number(s);
+  return Number.isFinite(n) ? String(n) : s;
 }
 
-function badgeDot(ok: boolean) {
-  return ok ? "bg-emerald-500" : "bg-amber-500";
-}
-
-async function translateViaEdgeFn(args: {
-  text: string;
-  source: Locale;
-  target: Locale;
-  type?: string;
-  mode?: "draft" | "final";
-}) {
-  const { data, error } = await supabase.functions.invoke("translate", {
-    body: {
-      text: args.text,
-      source: args.source,
-      target: args.target,
-      type: args.type ?? "text",
-      mode: args.mode ?? "draft",
-    },
-  });
-  if (error) throw error;
-
-  const translated =
-    (data as any)?.translatedText ??
-    (data as any)?.translated_text ??
-    (data as any)?.text ??
-    (data as any)?.translation ??
-    "";
-
-  return typeof translated === "string" ? translated : "";
-}
-
-function ensureToReviewNote(text: string, locale: Locale) {
-  const trimmed = (text ?? "").trim();
-  if (!trimmed) return locale === "en" ? "[To review]" : "[À valider]";
-
-  const lower = trimmed.toLowerCase();
-  const hasEn = lower.startsWith("[to review]");
-  const hasFr =
-    lower.startsWith("[à valider]") || lower.startsWith("[a valider]");
-
-  if (locale === "en") return hasEn ? trimmed : `[To review]\n${trimmed}`;
-  return hasFr ? trimmed : `[À valider]\n${trimmed}`;
-}
-
-function prettyJson(value: string) {
-  try {
-    const obj = JSON.parse(value);
-    return JSON.stringify(obj, null, 2);
-  } catch {
-    return value;
-  }
+function pillClasses(visible: boolean) {
+  return visible
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+    : "border-slate-200 bg-slate-50 text-slate-600";
 }
 
 export default function AdminContent() {
   const { toast } = useToast();
-
   const upsert = useUpsertSiteContent();
   const togglePublish = useTogglePublishSiteContent();
-  const del = useDeleteSiteContent();
+
+  const [activeLocale, setActiveLocale] = React.useState<Locale>("fr");
+  const [q, setQ] = React.useState("");
+
+  const ALL_KEYS = React.useMemo(
+    () => Array.from(new Set(SECTIONS.flatMap((s) => s.fields.map((f) => f.key)))).sort(),
+    []
+  );
 
   const list = useQuery({
-    queryKey: ["site_content_list_modern_nav"],
+    queryKey: ["site_content_sections_full", ALL_KEYS.join("|")],
     queryFn: async (): Promise<SiteContentRow[]> => {
       const { data, error } = await supabase
         .from("site_content")
         .select("id,key,locale,type,value,is_published,updated_at")
+        .in("key", ALL_KEYS)
+        .in("locale", LOCALES)
         .order("key", { ascending: true })
         .order("locale", { ascending: true });
+
       if (error) throw error;
       return (data ?? []) as SiteContentRow[];
     },
@@ -222,752 +323,364 @@ export default function AdminContent() {
     refetchOnWindowFocus: false,
   });
 
-  const [diag, setDiag] = React.useState<{
-    supabaseUrl: string;
-    hasSession: boolean;
-    selectOk: boolean;
-    selectErr: string;
-  }>({
-    supabaseUrl:
-      (supabase as any)?.supabaseUrl ??
-      (supabase as any)?.url ??
-      (supabase as any)?.restUrl ??
-      "",
-    hasSession: false,
-    selectOk: false,
-    selectErr: "",
-  });
-
-  const runDiag = React.useCallback(async () => {
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData?.session ?? null;
-
-      const { error } = await supabase.from("site_content").select("id").limit(1);
-
-      setDiag((prev) => ({
-        ...prev,
-        hasSession: Boolean(session),
-        selectOk: !error,
-        selectErr: error ? ((error as any)?.message ?? JSON.stringify(error)) : "",
-      }));
-    } catch (e: any) {
-      setDiag((prev) => ({
-        ...prev,
-        selectOk: false,
-        selectErr: e?.message ?? "Diagnostic impossible",
-      }));
-    }
-  }, []);
-
-  React.useEffect(() => {
-    runDiag();
-  }, [runDiag]);
-
   const rows = list.data ?? [];
-  const isBusy =
-    list.isLoading ||
-    upsert.isPending ||
-    togglePublish.isPending ||
-    del.isPending;
+  const isBusy = list.isLoading || upsert.isPending || togglePublish.isPending;
 
-  const byKey = React.useMemo(() => {
-    const map = new Map<string, SiteContentRow[]>();
-    for (const r of rows) {
-      if (!map.has(r.key)) map.set(r.key, []);
-      map.get(r.key)!.push(r);
-    }
+  const rowByKeyLocale = React.useMemo(() => {
+    const map = new Map<string, SiteContentRow>();
+    for (const r of rows) map.set(`${r.key}__${r.locale}`, r);
     return map;
   }, [rows]);
 
-  const allKeys = React.useMemo(() => {
-    const set = new Set<string>();
-    for (const k of DEFAULT_KEYS) set.add(k);
-    for (const k of byKey.keys()) set.add(k);
-    return Array.from(set).sort();
-  }, [byKey]);
-
   const getRow = React.useCallback(
-    (key: string, locale: Locale): SiteContentRow | null => {
-      const arr = byKey.get(key) ?? [];
-      return arr.find((r) => r.locale === locale) ?? null;
-    },
-    [byKey]
+    (key: string, locale: Locale) => rowByKeyLocale.get(`${key}__${locale}`) ?? null,
+    [rowByKeyLocale]
   );
 
-  const [q, setQ] = React.useState("");
-  const [category, setCategory] = React.useState<Category | "All">("All");
-  const [missingMode, setMissingMode] = React.useState<MissingMode>("all");
+  // drafts[locale][sectionId][key] = value
+  const [drafts, setDrafts] = React.useState<Record<Locale, Record<string, Record<string, string>>>>({
+    fr: {},
+    en: {},
+  });
 
-  const missingEn = React.useMemo(
-    () => allKeys.filter((k) => getRow(k, "fr") && !getRow(k, "en")).length,
-    [allKeys, getRow]
-  );
-  const missingFr = React.useMemo(
-    () => allKeys.filter((k) => getRow(k, "en") && !getRow(k, "fr")).length,
-    [allKeys, getRow]
-  );
-  const missingBoth = React.useMemo(
-    () => allKeys.filter((k) => !getRow(k, "fr") && !getRow(k, "en")).length,
-    [allKeys, getRow]
-  );
+  // visibleByLocale[locale][sectionId] = boolean (publish status)
+  const [visibleByLocale, setVisibleByLocale] = React.useState<Record<Locale, Record<string, boolean>>>({
+    fr: {},
+    en: {},
+  });
 
-  const filteredKeys = React.useMemo(() => {
-    let keys = allKeys;
-
-    if (category !== "All") keys = keys.filter((k) => detectCategory(k) === category);
-
-    if (missingMode === "en_missing") keys = keys.filter((k) => getRow(k, "fr") && !getRow(k, "en"));
-    else if (missingMode === "fr_missing") keys = keys.filter((k) => getRow(k, "en") && !getRow(k, "fr"));
-    else if (missingMode === "both_missing") keys = keys.filter((k) => !getRow(k, "fr") && !getRow(k, "en"));
-
-    const query = q.trim().toLowerCase();
-    if (!query) return keys;
-
-    return keys.filter((k) => {
-      if (k.toLowerCase().includes(query)) return true;
-      const fr = getRow(k, "fr");
-      const en = getRow(k, "en");
-      return (
-        (fr?.value ?? "").toLowerCase().includes(query) ||
-        (en?.value ?? "").toLowerCase().includes(query)
-      );
-    });
-  }, [allKeys, q, category, missingMode, getRow]);
-
-  const categories: Category[] = [
-    "Header",
-    "Home",
-    "Company",
-    "Services",
-    "Contact",
-    "Legal",
-    "Footer",
-    "Other",
-  ];
-
-  const keysByCategory = React.useMemo(() => {
-    const res: Record<Category, string[]> = {
-      Header: [],
-      Home: [],
-      Company: [],
-      Services: [],
-      Contact: [],
-      Legal: [],
-      Footer: [],
-      Other: [],
-    };
-    for (const k of filteredKeys) res[detectCategory(k)].push(k);
-    return res;
-  }, [filteredKeys]);
-
-  // Selection
-  const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
+  // Load DB into drafts when data changes
   React.useEffect(() => {
-    if (!selectedKey && filteredKeys.length) setSelectedKey(filteredKeys[0]);
-  }, [filteredKeys, selectedKey]);
+    const nextDrafts: Record<Locale, Record<string, Record<string, string>>> = { fr: {}, en: {} };
+    const nextVisible: Record<Locale, Record<string, boolean>> = { fr: {}, en: {} };
 
-  // Draft editor
-  const [activeLocale, setActiveLocale] = React.useState<Locale>("fr");
-  const [draftType, setDraftType] = React.useState<string>("text");
-  const [draftValue, setDraftValue] = React.useState<string>("");
-  const [draftPublished, setDraftPublished] = React.useState<boolean>(false);
+    for (const loc of LOCALES) {
+      for (const section of SECTIONS) {
+        const d: Record<string, string> = {};
+        let anyPublished = false;
 
-  // Load selection into editor
-  React.useEffect(() => {
-    if (!selectedKey) return;
-    const row = getRow(selectedKey, activeLocale);
-    const fallback = getRow(selectedKey, activeLocale === "fr" ? "en" : "fr");
+        for (const f of section.fields) {
+          const r = getRow(f.key, loc);
+          const v = (r?.value ?? "").toString();
+          d[f.key] = f.type === "number" ? normalizeNumberString(v) : v;
+          if (Boolean(r?.is_published)) anyPublished = true;
+        }
 
-    const type = (row?.type ?? fallback?.type ?? "text").toString();
-    const value = (row?.value ?? "").toString();
-    const pub = Boolean(row?.is_published);
-
-    setDraftType(type);
-    setDraftValue(value);
-    setDraftPublished(pub);
-
-    if (!row && fallback) {
-      const other: Locale = activeLocale === "fr" ? "en" : "fr";
-      setActiveLocale(other);
+        nextDrafts[loc][section.id] = d;
+        nextVisible[loc][section.id] = anyPublished;
+      }
     }
+
+    setDrafts(nextDrafts);
+    setVisibleByLocale(nextVisible);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKey]);
+  }, [rowByKeyLocale]);
 
-  React.useEffect(() => {
-    if (!selectedKey) return;
-    const row = getRow(selectedKey, activeLocale);
-    const fallback = getRow(selectedKey, activeLocale === "fr" ? "en" : "fr");
-    setDraftType((row?.type ?? fallback?.type ?? "text").toString());
-    setDraftValue((row?.value ?? "").toString());
-    setDraftPublished(Boolean(row?.is_published));
-  }, [activeLocale, selectedKey, getRow]);
-
-  const resetFilters = () => {
-    setQ("");
-    setCategory("All");
-    setMissingMode("all");
+  const setDraft = (loc: Locale, sectionId: string, key: string, value: string) => {
+    setDrafts((prev) => ({
+      ...prev,
+      [loc]: {
+        ...(prev[loc] ?? {}),
+        [sectionId]: {
+          ...((prev[loc] ?? {})[sectionId] ?? {}),
+          [key]: value,
+        },
+      },
+    }));
   };
 
-  const createKey = () => {
-    const k = prompt("Nouvelle clé (ex: home.hero.title) :");
-    if (!k) return;
-    const key = k.trim();
-    if (!key) return;
-    setSelectedKey(key);
-    setActiveLocale("fr");
-    setDraftType("text");
-    setDraftValue("");
-    setDraftPublished(false);
-    toast({ title: "Clé prête", description: `Renseigne le contenu puis enregistre.` });
+  const toggleSectionVisible = async (loc: Locale, sectionId: string, next: boolean) => {
+    setVisibleByLocale((p) => ({ ...p, [loc]: { ...(p[loc] ?? {}), [sectionId]: next } }));
+
+    // appliquer immédiatement sur les rows existantes (si elles existent déjà)
+    try {
+      const section = SECTIONS.find((s) => s.id === sectionId);
+      if (!section) return;
+
+      const tasks: Promise<any>[] = [];
+      for (const f of section.fields) {
+        const row = getRow(f.key, loc);
+        if (row?.id) tasks.push(togglePublish.mutateAsync({ id: row.id, is_published: next }));
+      }
+      if (tasks.length) await Promise.all(tasks);
+      await list.refetch();
+    } catch {
+      // si erreur, l’état UI reste, et la sauvegarde consolidera
+    }
   };
 
-  const seedMissingDefaults = async () => {
+  const saveSection = async (loc: Locale, sectionId: string) => {
+    const section = SECTIONS.find((s) => s.id === sectionId);
+    if (!section) return;
+
+    try {
+      const visible = Boolean((visibleByLocale[loc] ?? {})[sectionId]);
+      const values = ((drafts[loc] ?? {})[sectionId] ?? {}) as Record<string, string>;
+
+      await Promise.all(
+        section.fields.map((f) =>
+          upsert.mutateAsync({
+            key: f.key,
+            locale: loc,
+            type: "text",
+            value: (values[f.key] ?? "").toString(),
+            is_published: visible,
+          })
+        )
+      );
+
+      toast({
+        title: "Enregistré",
+        description: `${section.title} (${loc.toUpperCase()}) mis à jour.`,
+      });
+
+      await list.refetch();
+    } catch (e: any) {
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Enregistrement impossible.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const initSections = async () => {
     if (isBusy) return;
+
     const ok = window.confirm(
-      "Initialiser les clés manquantes (DEFAULT_KEYS) en FR+EN ?\n\n- crée les lignes absentes\n- en brouillon\n- sans écraser ce qui existe"
+      "Initialiser toutes les sections ?\n\n- Crée toutes les clés définies dans le back-office\n- FR + EN\n- Valeurs vides\n- Brouillon (non publié)\n\nAucun écrasement des valeurs existantes."
     );
     if (!ok) return;
 
     try {
       let created = 0;
-      for (const k of DEFAULT_KEYS) {
-        for (const loc of LOCALES) {
-          const existing = getRow(k, loc);
-          if (existing) continue;
-          await upsert.mutateAsync({ key: k, locale: loc, type: "text", value: "", is_published: false });
-          created += 1;
+
+      for (const section of SECTIONS) {
+        for (const field of section.fields) {
+          for (const loc of LOCALES) {
+            const existing = getRow(field.key, loc);
+            if (existing) continue;
+            await upsert.mutateAsync({
+              key: field.key,
+              locale: loc,
+              type: "text",
+              value: "",
+              is_published: false,
+            });
+            created += 1;
+          }
         }
       }
+
       toast({
         title: "Initialisation terminée",
         description: created ? `${created} entrée(s) créée(s).` : "Rien à créer.",
       });
+
       await list.refetch();
-      await runDiag();
     } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Initialisation impossible.", variant: "destructive" });
-    }
-  };
-
-  const saveActive = async () => {
-    if (!selectedKey) return;
-    try {
-      await upsert.mutateAsync({
-        key: selectedKey,
-        locale: activeLocale,
-        type: draftType,
-        value: draftValue,
-        is_published: Boolean(draftPublished),
-      });
-      toast({ title: "Enregistré", description: `${selectedKey} (${activeLocale.toUpperCase()}) mis à jour.` });
-      await list.refetch();
-      await runDiag();
-    } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Enregistrement impossible.", variant: "destructive" });
-    }
-  };
-
-  const createMissingLocale = async (loc: Locale) => {
-    if (!selectedKey) return;
-    try {
-      await upsert.mutateAsync({
-        key: selectedKey,
-        locale: loc,
-        type: draftType || "text",
-        value: "",
-        is_published: false,
-      });
-      toast({ title: "Créé", description: `${selectedKey} (${loc.toUpperCase()}) créé.` });
-      await list.refetch();
-      await runDiag();
-      setActiveLocale(loc);
-    } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Création impossible.", variant: "destructive" });
-    }
-  };
-
-  const togglePublishActive = async (next: boolean) => {
-    if (!selectedKey) return;
-    const row = getRow(selectedKey, activeLocale);
-
-    if (next && !draftValue.trim()) {
       toast({
-        title: "Publication impossible",
-        description: `${activeLocale.toUpperCase()} doit être non vide.`,
+        title: "Erreur",
+        description: e?.message ?? "Initialisation impossible.",
         variant: "destructive",
       });
-      return;
-    }
-
-    try {
-      if (row) {
-        await togglePublish.mutateAsync({ id: row.id, is_published: next });
-      } else {
-        await upsert.mutateAsync({
-          key: selectedKey,
-          locale: activeLocale,
-          type: draftType,
-          value: draftValue,
-          is_published: next,
-        });
-      }
-      setDraftPublished(next);
-      toast({ title: next ? "Publié" : "Dépublié", description: `${selectedKey} (${activeLocale.toUpperCase()})` });
-      await list.refetch();
-      await runDiag();
-    } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Action impossible.", variant: "destructive" });
     }
   };
 
-  const deleteActive = async () => {
-    if (!selectedKey) return;
-    const row = getRow(selectedKey, activeLocale);
-    if (!row) {
-      toast({ title: "Rien à supprimer", description: `Locale inexistante en base.` });
-      return;
-    }
-    const ok = window.confirm(`Supprimer ${selectedKey} (${activeLocale.toUpperCase()}) ?\n\nIrréversible.`);
-    if (!ok) return;
+  const filteredSections = React.useMemo(() => {
+    const query = q.trim().toLowerCase();
+    if (!query) return SECTIONS;
 
-    try {
-      await del.mutateAsync({ id: row.id });
-      toast({ title: "Supprimé", description: `${selectedKey} (${activeLocale.toUpperCase()}) supprimé.` });
-      await list.refetch();
-      await runDiag();
-      setDraftValue("");
-      setDraftPublished(false);
-    } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Suppression impossible.", variant: "destructive" });
-    }
-  };
+    return SECTIONS.filter((s) => {
+      if (s.title.toLowerCase().includes(query)) return true;
+      if ((s.description ?? "").toLowerCase().includes(query)) return true;
 
-  const copyFromOtherLocale = async () => {
-    if (!selectedKey) return;
-    const from: Locale = activeLocale === "fr" ? "en" : "fr";
-    const fromRow = getRow(selectedKey, from);
-    const srcType = (fromRow?.type ?? "text").toString();
-    const srcValue = (fromRow?.value ?? "").toString();
-    const srcPub = Boolean(fromRow?.is_published);
-
-    if (!fromRow) {
-      toast({ title: "Copie impossible", description: `${from.toUpperCase()} est absent.`, variant: "destructive" });
-      return;
-    }
-
-    setDraftType(srcType);
-    setDraftValue(srcValue);
-    setDraftPublished(srcPub);
-
-    try {
-      await upsert.mutateAsync({
-        key: selectedKey,
-        locale: activeLocale,
-        type: srcType,
-        value: srcValue,
-        is_published: srcPub,
+      // cherche aussi dans les labels / clés / contenu du locale actif
+      const d = (drafts[activeLocale]?.[s.id] ?? {}) as Record<string, string>;
+      return s.fields.some((f) => {
+        if (f.label.toLowerCase().includes(query)) return true;
+        if (f.key.toLowerCase().includes(query)) return true;
+        const v = (d[f.key] ?? "").toLowerCase();
+        return v.includes(query);
       });
-      toast({ title: "Copié", description: `${from.toUpperCase()} → ${activeLocale.toUpperCase()} enregistré.` });
-      await list.refetch();
-      await runDiag();
-    } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Copie impossible.", variant: "destructive" });
-    }
-  };
+    });
+  }, [q, drafts, activeLocale]);
 
-  const translateFromOtherLocale = async () => {
-    if (!selectedKey) return;
-    const from: Locale = activeLocale === "fr" ? "en" : "fr";
-    const fromRow = getRow(selectedKey, from);
-    const srcType = (fromRow?.type ?? "text").toString();
-    const srcValue = (fromRow?.value ?? "").toString();
-
-    if (!srcValue.trim()) {
-      toast({
-        title: "Traduction impossible",
-        description: `${from.toUpperCase()} est vide/absent.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const translated = await translateViaEdgeFn({
-        text: srcValue,
-        source: from,
-        target: activeLocale,
-        type: srcType,
-        mode: "draft",
-      });
-      setDraftType(srcType);
-      setDraftValue(ensureToReviewNote(translated, activeLocale));
-      setDraftPublished(false);
-
-      toast({ title: "Traduction prête", description: `Vérifie puis enregistre.` });
-    } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Traduction impossible.", variant: "destructive" });
-    }
-  };
-
-  const selectedFr = selectedKey ? getRow(selectedKey, "fr") : null;
-  const selectedEn = selectedKey ? getRow(selectedKey, "en") : null;
-
-  const previewValue = React.useMemo(() => {
-    if (draftType === "json") return prettyJson(draftValue);
-    return draftValue;
-  }, [draftType, draftValue]);
+  const sectionVisible = (loc: Locale, sectionId: string) =>
+    Boolean((visibleByLocale[loc] ?? {})[sectionId]);
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      {/* Top diagnostic */}
-      <Card className="border-dashed min-w-0">
-        <CardContent className="p-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between min-w-0">
-          <div className="flex items-center gap-2 text-sm min-w-0">
-            <Database className="h-4 w-4 shrink-0" />
-            <span className="font-medium">Diagnostic</span>
-            <span className="text-muted-foreground">|</span>
-            <span className="text-xs text-muted-foreground break-all font-mono min-w-0">
-              {diag.supabaseUrl || "Supabase URL inconnue"}
-            </span>
-          </div>
+      {/* Header */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-lg font-semibold">Contenu du site</h1>
+          <p className="text-sm text-muted-foreground">
+            Modifie toutes les sections visibles sur ton site (accueil, recherche, abonnements, footer, pages légales…).
+          </p>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-            <span className="inline-flex items-center gap-2">
-              <span className={`h-2 w-2 rounded-full ${badgeDot(diag.hasSession)}`} />
-              Session
-            </span>
-            <span className="inline-flex items-center gap-2">
-              <span className={`h-2 w-2 rounded-full ${badgeDot(diag.selectOk)}`} />
-              SELECT
-            </span>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <Tabs value={activeLocale} onValueChange={(v) => setActiveLocale(v as Locale)}>
+            <TabsList className="grid grid-cols-2">
+              <TabsTrigger value="fr">FR</TabsTrigger>
+              <TabsTrigger value="en">EN</TabsTrigger>
+            </TabsList>
+          </Tabs>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                runDiag();
-                list.refetch();
-              }}
-              disabled={isBusy}
-            >
-              <Bug className="h-4 w-4 mr-2" />
-              Rafraîchir
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => list.refetch()} disabled={isBusy}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Recharger
+            </Button>
+            <Button type="button" variant="outline" onClick={initSections} disabled={isBusy}>
+              <ListPlus className="h-4 w-4 mr-2" />
+              Initialiser les sections
             </Button>
           </div>
+        </div>
+      </div>
 
-          {!diag.selectOk && diag.selectErr ? (
-            <div className="w-full mt-2 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
-              {diag.selectErr}
+      {/* Search */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="relative max-w-2xl">
+            <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Rechercher une section, un label, une clé, ou un contenu…"
+              className="pl-9"
+              disabled={isBusy}
+            />
+          </div>
+          <div className="mt-2 text-xs text-muted-foreground">
+            {list.isLoading ? "Chargement…" : `${filteredSections.length} section(s)`}
+          </div>
+          {list.isError ? (
+            <div className="mt-2 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
+              {(list.error as any)?.message ?? "Erreur de chargement"}
             </div>
           ) : null}
         </CardContent>
       </Card>
 
-      {/* Title + actions */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between min-w-0">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold">Contenu du site</h1>
-          <p className="text-sm text-muted-foreground">
-            Navigation à gauche, édition au centre, aperçu à droite (style CMS moderne).
-          </p>
-        </div>
+      {/* Sections grid (responsive like capture) */}
+      <div className="grid gap-4 grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3">
+        {filteredSections.map((section) => {
+          const visible = sectionVisible(activeLocale, section.id);
+          const d = (drafts[activeLocale]?.[section.id] ?? {}) as Record<string, string>;
 
-        <div className="flex flex-wrap items-center gap-2 justify-start sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => list.refetch()} disabled={isBusy}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Actualiser
-          </Button>
-          <Button type="button" variant="outline" onClick={resetFilters} disabled={isBusy}>
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Réinitialiser
-          </Button>
-          <Button type="button" onClick={createKey} disabled={isBusy}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nouvelle clé
-          </Button>
-          <Button type="button" variant="outline" onClick={seedMissingDefaults} disabled={isBusy}>
-            <ListPlus className="h-4 w-4 mr-2" />
-            Initialiser clés
-          </Button>
-        </div>
-      </div>
-
-      {/* ✅ CRITICAL: responsive grid + minmax(0,1fr) to prevent overflow/non-responsive shrink */}
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)_minmax(0,420px)] min-w-0">
-        {/* Sidebar */}
-        <Card className="rounded-2xl min-w-0 lg:sticky lg:top-4 lg:self-start">
-          <CardContent className="p-4 space-y-3 min-w-0">
-            <div className="relative min-w-0">
-              <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-              <Input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Rechercher…"
-                className="pl-9 w-full"
-              />
-            </div>
-
-            <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value as any)}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm w-full"
-                disabled={isBusy}
-              >
-                <option value="All">Toutes</option>
-                {categories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={missingMode}
-                onChange={(e) => setMissingMode(e.target.value as MissingMode)}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm w-full"
-                disabled={isBusy}
-              >
-                <option value="all">{missingLabel("all")}</option>
-                <option value="en_missing">
-                  {missingLabel("en_missing")} ({missingEn})
-                </option>
-                <option value="fr_missing">
-                  {missingLabel("fr_missing")} ({missingFr})
-                </option>
-                <option value="both_missing">
-                  {missingLabel("both_missing")} ({missingBoth})
-                </option>
-              </select>
-            </div>
-
-            <div className="text-xs text-muted-foreground">
-              {list.isLoading ? "Chargement…" : `${filteredKeys.length} clé(s)`}
-            </div>
-
-            {/* Height responsive */}
-            <div className="h-[52vh] sm:h-[56vh] lg:h-[70vh] overflow-auto rounded-xl border min-w-0">
-              {((category === "All" ? categories : [category]) as Category[]).map((cat) => {
-                const items = keysByCategory[cat] ?? [];
-                if (!items.length) return null;
-
-                return (
-                  <div key={cat} className="border-b last:border-b-0">
-                    <div className="px-3 py-2 text-xs font-semibold text-muted-foreground bg-muted/20">
-                      {cat} <span className="font-normal">({items.length})</span>
-                    </div>
-
-                    <div className="p-1">
-                      {items.map((k) => {
-                        const fr = getRow(k, "fr");
-                        const en = getRow(k, "en");
-                        const ok = Boolean(fr?.value?.trim()) && Boolean(en?.value?.trim());
-
-                        return (
-                          <button
-                            key={k}
-                            type="button"
-                            onClick={() => setSelectedKey(k)}
-                            className={[
-                              "w-full text-left px-3 py-2 rounded-lg flex items-start gap-2 min-w-0",
-                              selectedKey === k ? "bg-muted" : "hover:bg-muted/30",
-                            ].join(" ")}
-                          >
-                            <span className={`mt-1 h-2 w-2 rounded-full ${ok ? "bg-emerald-500" : "bg-amber-500"}`} />
-                            <span className="min-w-0">
-                              <div className="text-sm font-medium truncate">{k}</div>
-                              <div className="text-[11px] text-muted-foreground">
-                                {fr ? "FR" : "FR absent"} • {en ? "EN" : "EN absent"}
-                              </div>
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Editor */}
-        <Card className="rounded-2xl min-w-0">
-          <CardContent className="p-4 space-y-4 min-w-0">
-            {!selectedKey ? (
-              <div className="rounded-xl border p-4 text-sm text-muted-foreground">
-                Sélectionne une clé dans la colonne de gauche.
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 min-w-0">
+          return (
+            <Card key={section.id} className="min-w-0">
+              <CardContent className="p-4 space-y-4">
+                {/* Section header */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold break-words">{selectedKey}</div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Catégorie : {detectCategory(selectedKey)}
-                      <span className="mx-2">•</span>
-                      {selectedFr ? "FR ok" : "FR absent"} / {selectedEn ? "EN ok" : "EN absent"}
-                    </div>
+                    <div className="text-xs text-muted-foreground">SECTION</div>
+                    <div className="text-sm font-semibold">{section.title}</div>
+                    {section.description ? (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {section.description}
+                      </div>
+                    ) : null}
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={copyFromOtherLocale} disabled={isBusy}>
-                      <Copy className="h-4 w-4 mr-2" />
-                      Copier
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" onClick={translateFromOtherLocale} disabled={isBusy}>
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Traduire
-                    </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={[
+                        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium",
+                        pillClasses(visible),
+                      ].join(" ")}
+                    >
+                      {visible ? "Affichée" : "Masquée"}
+                    </span>
+
+                    <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={visible}
+                        onChange={(e) => toggleSectionVisible(activeLocale, section.id, e.target.checked)}
+                        disabled={isBusy}
+                      />
+                      Visible sur le site
+                    </label>
                   </div>
                 </div>
 
-                <Tabs value={activeLocale} onValueChange={(v) => setActiveLocale(v as Locale)}>
-                  <TabsList className="w-full grid grid-cols-2">
-                    <TabsTrigger value="fr">FR</TabsTrigger>
-                    <TabsTrigger value="en">EN</TabsTrigger>
-                  </TabsList>
+                {/* Fields */}
+                <div className="grid gap-3">
+                  {section.fields.map((f) => {
+                    const val = (d[f.key] ?? "").toString();
 
-                  {LOCALES.map((loc) => {
-                    const row = selectedKey ? getRow(selectedKey, loc) : null;
-
-                    return (
-                      <TabsContent key={loc} value={loc} className="space-y-3 mt-3">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            {row ? (
-                              <span className="inline-flex items-center gap-2 text-xs">
-                                <span className={`h-2 w-2 rounded-full ${badgeDot(Boolean(row.is_published))}`} />
-                                {row.is_published ? "Publié" : "Brouillon"}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-                                <AlertTriangle className="h-3 w-3" />
-                                Absent
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex flex-wrap gap-2">
-                            {!row && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => createMissingLocale(loc)}
-                                disabled={isBusy}
-                              >
-                                <Languages className="h-4 w-4 mr-2" />
-                                Créer {loc.toUpperCase()}
-                              </Button>
-                            )}
-
-                            <Button type="button" variant="outline" size="sm" onClick={() => togglePublishActive(true)} disabled={isBusy}>
-                              <CheckCircle2 className="h-4 w-4 mr-2" />
-                              Publier
-                            </Button>
-                            <Button type="button" variant="outline" size="sm" onClick={() => togglePublishActive(false)} disabled={isBusy}>
-                              <EyeOff className="h-4 w-4 mr-2" />
-                              Dépublier
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="grid gap-2 grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)] min-w-0">
-                          <div className="min-w-0">
-                            <label className="text-xs text-muted-foreground">Type ({loc.toUpperCase()})</label>
-                            <select
-                              value={draftType}
-                              onChange={(e) => setDraftType(e.target.value)}
-                              disabled={isBusy}
-                              className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                            >
-                              {TYPES.map((t) => (
-                                <option key={t} value={t}>
-                                  {t}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div className="flex flex-col sm:flex-row sm:items-end gap-2 min-w-0">
-                            <Button type="button" className="w-full rounded-xl" onClick={saveActive} disabled={isBusy}>
-                              <Save className="h-4 w-4 mr-2" />
-                              Enregistrer
-                            </Button>
-
-                            <Button type="button" variant="destructive" className="w-full sm:w-auto rounded-xl" onClick={deleteActive} disabled={isBusy}>
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Supprimer
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="min-w-0">
-                          <label className="text-xs text-muted-foreground">Contenu ({loc.toUpperCase()})</label>
+                    if (f.type === "textarea") {
+                      return (
+                        <div key={f.key} className="space-y-1">
+                          <div className="text-xs text-muted-foreground">{f.label}</div>
                           <Textarea
-                            value={draftValue}
-                            onChange={(e) => setDraftValue(e.target.value)}
-                            rows={12}
-                            className="min-h-[240px] sm:min-h-[320px] lg:min-h-[420px]"
-                            placeholder="Saisissez le contenu…"
+                            value={val}
+                            onChange={(e) => setDraft(activeLocale, section.id, f.key, e.target.value)}
+                            placeholder={f.placeholder}
+                            rows={4}
+                            className="min-h-[110px]"
                             disabled={isBusy}
                           />
+                          {f.help ? (
+                            <div className="text-[11px] text-muted-foreground">{f.help}</div>
+                          ) : null}
                         </div>
+                      );
+                    }
 
-                        <div className="text-xs text-muted-foreground">
-                          Astuce : “Copier” copie depuis l’autre langue. “Traduire” génère dans l’éditeur (brouillon).
-                        </div>
-                      </TabsContent>
+                    return (
+                      <div key={f.key} className="space-y-1">
+                        <div className="text-xs text-muted-foreground">{f.label}</div>
+                        <Input
+                          type={inputType(f.type)}
+                          value={val}
+                          onChange={(e) => setDraft(activeLocale, section.id, f.key, e.target.value)}
+                          placeholder={f.placeholder}
+                          disabled={isBusy}
+                        />
+                        {f.help ? (
+                          <div className="text-[11px] text-muted-foreground">{f.help}</div>
+                        ) : null}
+                      </div>
                     );
                   })}
-                </Tabs>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Preview: stacks below on lg, stays right on xl */}
-        <Card className="rounded-2xl min-w-0 lg:col-span-2 xl:col-span-1">
-          <CardContent className="p-4 space-y-3 min-w-0">
-            <div className="flex items-center justify-between min-w-0">
-              <div className="min-w-0">
-                <div className="text-sm font-semibold">Aperçu</div>
-                <div className="text-xs text-muted-foreground">
-                  {draftType === "markdown"
-                    ? "Markdown brut (option preview HTML possible ensuite)"
-                    : "Affichage brut"}
                 </div>
-              </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  runDiag();
-                  list.refetch();
-                }}
-                disabled={isBusy}
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Sync
-              </Button>
-            </div>
+                {/* Footer actions */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    {visible ? (
+                      <>
+                        <Eye className="h-4 w-4" />
+                        Visible (publié à l’enregistrement)
+                      </>
+                    ) : (
+                      <>
+                        <EyeOff className="h-4 w-4" />
+                        Masqué (brouillon à l’enregistrement)
+                      </>
+                    )}
+                  </div>
 
-            <div className="h-[38vh] sm:h-[42vh] lg:h-[40vh] xl:h-[70vh] overflow-auto rounded-xl border bg-muted/10 p-3 min-w-0">
-              <pre className="text-xs whitespace-pre-wrap break-words">{previewValue || "—"}</pre>
-            </div>
-
-            {!diag.selectOk ? (
-              <div className="text-xs text-rose-700 rounded-md border border-rose-200 bg-rose-50 p-2">
-                SELECT bloqué : {diag.selectErr || "Erreur inconnue"}
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+                  <Button
+                    type="button"
+                    onClick={() => saveSection(activeLocale, section.id)}
+                    disabled={isBusy}
+                    className="sm:w-auto w-full"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    Enregistrer
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
