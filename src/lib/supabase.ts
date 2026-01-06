@@ -1,30 +1,23 @@
 // src/lib/supabase.ts
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL =
-  import.meta.env.VITE_SUPABASE_URL ||
-  import.meta.env.VITE_PUBLIC_SUPABASE_URL ||
-  "";
+const FALLBACK_URL = "https://bvezcivihjpscatsgrvu.supabase.co";
+// IMPORTANT: colle ici la clé ANON (public) de Supabase (pas service_role)
+const FALLBACK_ANON_KEY = ""; // <-- COLLE ICI
 
-const SUPABASE_ANON_KEY =
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
-  import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY ||
-  "";
+const supabaseUrl =
+  (import.meta.env.VITE_SUPABASE_URL as string | undefined) || FALLBACK_URL;
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  // Important: évite un "silence" qui te fait croire que la DB est vide
-  // (sur Netlify, c’est fréquent si les env vars ne sont pas posées)
-  // eslint-disable-next-line no-console
+const supabaseAnonKey =
+  (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
+  FALLBACK_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
   console.error("[Supabase] Missing env vars:", {
-    hasUrl: Boolean(SUPABASE_URL),
-    hasAnon: Boolean(SUPABASE_ANON_KEY),
+    hasUrl: !!supabaseUrl,
+    hasAnon: !!supabaseAnonKey,
   });
+  throw new Error("supabaseKey is required.");
 }
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-});
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
