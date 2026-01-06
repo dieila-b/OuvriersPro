@@ -9,11 +9,33 @@ import { Check, Star, BarChart3, Headphones, User } from "lucide-react";
 const SubscriptionSection = () => {
   const { t, language } = useLanguage();
 
-  const cms = (key: string, fallbackFr: string, fallbackEn: string) => {
+  /**
+   * Retourne UNIQUEMENT la valeur CMS.
+   * - Si la clé est absente / non publiée / non chargée, `t(key)` renvoie souvent `key`
+   *   => on renvoie "" pour pouvoir masquer réellement.
+   */
+  const cmsValue = (key: string) => {
     const v = t(key);
-    if (!v || v === key) return language === "fr" ? fallbackFr : fallbackEn;
-    return v;
+    if (!v || v === key) return "";
+    return String(v);
   };
+
+  /**
+   * Fallback autorisé seulement si la section est activée.
+   */
+  const cmsOrFallback = (key: string, fallbackFr: string, fallbackEn: string) => {
+    const v = cmsValue(key);
+    if (v.trim().length > 0) return v;
+    return language === "fr" ? fallbackFr : fallbackEn;
+  };
+
+  // ✅ Garde-fou: si la section n'est pas "publiée" côté CMS, on ne l'affiche PAS du tout.
+  // Pour l'activer plus tard: publie au moins pricing.section.title ou pricing.section.subtitle.
+  const sectionTitle = cmsValue("pricing.section.title");
+  const sectionSubtitle = cmsValue("pricing.section.subtitle");
+  const isEnabled = sectionTitle.trim().length > 0 || sectionSubtitle.trim().length > 0;
+
+  if (!isEnabled) return null;
 
   const parseAmount = (s: string, fallback: number) => {
     const raw = (s ?? "").toString().replace(/\s/g, "").replace(/,/g, ".");
@@ -32,69 +54,81 @@ const SubscriptionSection = () => {
   const plans = [
     {
       code: "FREE",
-      name: cms("pricing.plan.free.name", "Gratuit", "Free"),
-      price: parseAmount(cms("pricing.plan.free.price", "0", "0"), 0),
-      period: cms("pricing.plan.free.period", "FG/mois", "GNF/month"),
+      name: cmsOrFallback("pricing.plan.free.name", "Gratuit", "Free"),
+      price: parseAmount(cmsOrFallback("pricing.plan.free.price", "0", "0"), 0),
+      period: cmsOrFallback("pricing.plan.free.period", "FG/mois", "GNF/month"),
       popular: false,
       isFree: true,
       features: [
-        cms("pricing.plan.free.f1", "1 métier affiché", "1 listed trade"),
-        cms("pricing.plan.free.f2", "Profil simplifié", "Simplified profile"),
-        cms("pricing.plan.free.f3", "Nombre de contacts limité", "Limited number of contacts"),
-        cms("pricing.plan.free.f4", "Pas de mise en avant", "No highlight in results"),
+        cmsOrFallback("pricing.plan.free.f1", "1 métier affiché", "1 listed trade"),
+        cmsOrFallback("pricing.plan.free.f2", "Profil simplifié", "Simplified profile"),
+        cmsOrFallback("pricing.plan.free.f3", "Nombre de contacts limité", "Limited number of contacts"),
+        cmsOrFallback("pricing.plan.free.f4", "Pas de mise en avant", "No highlight in results"),
       ],
-      btn: cms("pricing.plan.free.btn", "Choisir ce plan", "Choose this plan"),
+      btn: cmsOrFallback("pricing.plan.free.btn", "Choisir ce plan", "Choose this plan"),
     },
     {
       code: "MONTHLY",
-      name: cms("pricing.plan.monthly.name", "Mensuel", "Monthly"),
-      price: parseAmount(cms("pricing.plan.monthly.price", "5000", "5000"), 5000),
-      period: cms("pricing.plan.monthly.period", "FG/mois", "GNF/month"),
+      name: cmsOrFallback("pricing.plan.monthly.name", "Mensuel", "Monthly"),
+      price: parseAmount(cmsOrFallback("pricing.plan.monthly.price", "5000", "5000"), 5000),
+      period: cmsOrFallback("pricing.plan.monthly.period", "FG/mois", "GNF/month"),
       popular: true,
       isFree: false,
       features: [
-        cms("pricing.plan.monthly.f1", "Profil professionnel complet", "Full professional profile"),
-        cms("pricing.plan.monthly.f2", "Contacts clients illimités", "Unlimited client contacts"),
-        cms("pricing.plan.monthly.f3", "Statistiques détaillées", "Detailed analytics"),
-        cms("pricing.plan.monthly.f4", "Support prioritaire", "Priority support"),
+        cmsOrFallback("pricing.plan.monthly.f1", "Profil professionnel complet", "Full professional profile"),
+        cmsOrFallback("pricing.plan.monthly.f2", "Contacts clients illimités", "Unlimited client contacts"),
+        cmsOrFallback("pricing.plan.monthly.f3", "Statistiques détaillées", "Detailed analytics"),
+        cmsOrFallback("pricing.plan.monthly.f4", "Support prioritaire", "Priority support"),
       ],
-      savings: cms("pricing.plan.monthly.ribbon", "Sans engagement", "No commitment"),
-      badge: cms("pricing.plan.monthly.badge", "Populaire", "Popular"),
-      btn: cms("pricing.plan.monthly.btn", "Choisir ce plan", "Choose this plan"),
+      savings: cmsOrFallback("pricing.plan.monthly.ribbon", "Sans engagement", "No commitment"),
+      badge: cmsOrFallback("pricing.plan.monthly.badge", "Populaire", "Popular"),
+      btn: cmsOrFallback("pricing.plan.monthly.btn", "Choisir ce plan", "Choose this plan"),
     },
     {
       code: "YEARLY",
-      name: cms("pricing.plan.yearly.name", "Annuel", "Yearly"),
-      price: parseAmount(cms("pricing.plan.yearly.price", "50000", "50000"), 50000),
-      period: cms("pricing.plan.yearly.period", "FG/an", "GNF/year"),
+      name: cmsOrFallback("pricing.plan.yearly.name", "Annuel", "Yearly"),
+      price: parseAmount(cmsOrFallback("pricing.plan.yearly.price", "50000", "50000"), 50000),
+      period: cmsOrFallback("pricing.plan.yearly.period", "FG/an", "GNF/year"),
       popular: false,
       isFree: false,
       features: [
-        cms("pricing.plan.yearly.f1", "Profil professionnel complet", "Full professional profile"),
-        cms("pricing.plan.yearly.f2", "Contacts clients illimités", "Unlimited client contacts"),
-        cms("pricing.plan.yearly.f3", "Statistiques détaillées", "Detailed analytics"),
-        cms("pricing.plan.yearly.f4", "Support prioritaire", "Priority support"),
+        cmsOrFallback("pricing.plan.yearly.f1", "Profil professionnel complet", "Full professional profile"),
+        cmsOrFallback("pricing.plan.yearly.f2", "Contacts clients illimités", "Unlimited client contacts"),
+        cmsOrFallback("pricing.plan.yearly.f3", "Statistiques détaillées", "Detailed analytics"),
+        cmsOrFallback("pricing.plan.yearly.f4", "Support prioritaire", "Priority support"),
       ],
-      savings: cms("pricing.plan.yearly.ribbon", "2 mois offerts", "2 months free"),
-      btn: cms("pricing.plan.yearly.btn", "Choisir ce plan", "Choose this plan"),
+      savings: cmsOrFallback("pricing.plan.yearly.ribbon", "2 mois offerts", "2 months free"),
+      btn: cmsOrFallback("pricing.plan.yearly.btn", "Choisir ce plan", "Choose this plan"),
     },
   ];
 
   const benefits = [
     {
       icon: User,
-      title: cms("pricing.benefit1.title", "Profil vérifié", "Verified profile"),
-      description: cms("pricing.benefit1.desc", "Badge de confiance sur votre profil", "Trust badge on your profile"),
+      title: cmsOrFallback("pricing.benefit1.title", "Profil vérifié", "Verified profile"),
+      description: cmsOrFallback(
+        "pricing.benefit1.desc",
+        "Badge de confiance sur votre profil",
+        "Trust badge on your profile"
+      ),
     },
     {
       icon: BarChart3,
-      title: cms("pricing.benefit2.title", "Analytics détaillés", "Detailed analytics"),
-      description: cms("pricing.benefit2.desc", "Suivez vos performances et optimisez", "Track performance and optimize"),
+      title: cmsOrFallback("pricing.benefit2.title", "Analytics détaillés", "Detailed analytics"),
+      description: cmsOrFallback(
+        "pricing.benefit2.desc",
+        "Suivez vos performances et optimisez",
+        "Track performance and optimize"
+      ),
     },
     {
       icon: Headphones,
-      title: cms("pricing.benefit3.title", "Support dédié", "Dedicated support"),
-      description: cms("pricing.benefit3.desc", "Assistance prioritaire 7j/7", "Priority support 7 days a week"),
+      title: cmsOrFallback("pricing.benefit3.title", "Support dédié", "Dedicated support"),
+      description: cmsOrFallback(
+        "pricing.benefit3.desc",
+        "Assistance prioritaire 7j/7",
+        "Priority support 7 days a week"
+      ),
     },
   ];
 
@@ -103,10 +137,18 @@ const SubscriptionSection = () => {
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div className="text-center mb-10 sm:mb-12 lg:mb-16">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray mb-3 sm:mb-4">
-            {cms("pricing.section.title", "Rejoignez ProxiServices", "Join ProxiServices")}
+            {sectionTitle.trim().length > 0
+              ? sectionTitle
+              : cmsOrFallback("pricing.section.title", "Rejoignez ProxiServices", "Join ProxiServices")}
           </h2>
           <p className="text-sm sm:text-base md:text-xl text-gray-600 max-w-3xl mx-auto">
-            {cms("pricing.section.subtitle", "Développez votre activité avec plus de visibilité", "Grow your business with more visibility")}
+            {sectionSubtitle.trim().length > 0
+              ? sectionSubtitle
+              : cmsOrFallback(
+                  "pricing.section.subtitle",
+                  "Développez votre activité avec plus de visibilité",
+                  "Grow your business with more visibility"
+                )}
           </p>
         </div>
 
@@ -128,9 +170,7 @@ const SubscriptionSection = () => {
               )}
 
               <CardHeader className={`text-center ${plan.popular ? "pt-12" : "pt-6"}`}>
-                <CardTitle className="text-xl sm:text-2xl font-bold text-pro-gray">
-                  {plan.name}
-                </CardTitle>
+                <CardTitle className="text-xl sm:text-2xl font-bold text-pro-gray">{plan.name}</CardTitle>
 
                 <div className="mt-4">
                   <span className="text-3xl sm:text-4xl font-bold text-pro-blue">
