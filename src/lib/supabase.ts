@@ -1,23 +1,14 @@
 // src/lib/supabase.ts
 import { createClient } from "@supabase/supabase-js";
 
-const FALLBACK_URL = "https://bvezcivihjpscatsgrvu.supabase.co";
-// IMPORTANT: colle ici la clé ANON (public) de Supabase (pas service_role)
-const FALLBACK_ANON_KEY = ""; // <-- COLLE ICI
+const SUPABASE_URL = "https://bvezcivihjpscatsgrvu.supabase.co";
 
-const supabaseUrl =
-  (import.meta.env.VITE_SUPABASE_URL as string | undefined) || FALLBACK_URL;
+// ✅ COLLE ICI LA CLÉ ANON (Settings → API → anon public)
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ2ZXpjaXZpaGpwc2NhdHNncnZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMwMjU2ODcsImV4cCI6MjA3ODYwMTY4N30.qX1lSNOgcYa-7HWLs6XQBx0Zlb1yd5dyRQ3s_uBeKtk";
 
-const supabaseAnonKey =
-  (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
-  FALLBACK_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("[Supabase] Missing env vars:", {
-    hasUrl: !!supabaseUrl,
-    hasAnon: !!supabaseAnonKey,
-  });
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY === "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ2ZXpjaXZpaGpwc2NhdHNncnZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMwMjU2ODcsImV4cCI6MjA3ODYwMTY4N30.qX1lSNOgcYa-7HWLs6XQBx0Zlb1yd5dyRQ3s_uBeKtk") {
+  console.error("[Supabase] Missing config", { hasUrl: !!SUPABASE_URL, hasAnon: !!SUPABASE_ANON_KEY });
   throw new Error("supabaseKey is required.");
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
