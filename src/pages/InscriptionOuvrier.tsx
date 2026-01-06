@@ -86,14 +86,8 @@ const GUINEA_REGIONS: GuineaRegion[] = [
       {
         name: "Kindia",
         communes: [
-          {
-            name: "Kindia Centre",
-            districts: ["Koliady", "Banlieue", "Manquepas", "Féréfou"],
-          },
-          {
-            name: "Friguiagbé",
-            districts: ["Friguiagbé Centre", "Sinta", "Damakania"],
-          },
+          { name: "Kindia Centre", districts: ["Koliady", "Banlieue", "Manquepas", "Féréfou"] },
+          { name: "Friguiagbé", districts: ["Friguiagbé Centre", "Sinta", "Damakania"] },
         ],
       },
     ],
@@ -101,130 +95,42 @@ const GUINEA_REGIONS: GuineaRegion[] = [
   {
     name: "Mamou",
     cities: [
-      {
-        name: "Mamou",
-        communes: [
-          {
-            name: "Mamou Centre",
-            districts: ["Poudrière", "Petel", "Horé Fello"],
-          },
-        ],
-      },
-      {
-        name: "Pita",
-        communes: [
-          {
-            name: "Pita Centre",
-            districts: ["Timbi Madina", "Ley Miro"],
-          },
-        ],
-      },
+      { name: "Mamou", communes: [{ name: "Mamou Centre", districts: ["Poudrière", "Petel", "Horé Fello"] }] },
+      { name: "Pita", communes: [{ name: "Pita Centre", districts: ["Timbi Madina", "Ley Miro"] }] },
     ],
   },
   {
     name: "Labé",
     cities: [
-      {
-        name: "Labé",
-        communes: [
-          {
-            name: "Labé Centre",
-            districts: ["Kouroula", "Daka", "Pounthioun"],
-          },
-        ],
-      },
-      {
-        name: "Koubia",
-        communes: [
-          {
-            name: "Koubia Centre",
-            districts: ["Fafaya", "Tougué"],
-          },
-        ],
-      },
+      { name: "Labé", communes: [{ name: "Labé Centre", districts: ["Kouroula", "Daka", "Pounthioun"] }] },
+      { name: "Koubia", communes: [{ name: "Koubia Centre", districts: ["Fafaya", "Tougué"] }] },
     ],
   },
   {
     name: "Boké",
     cities: [
-      {
-        name: "Boké",
-        communes: [
-          {
-            name: "Boké Centre",
-            districts: ["Boké Ville", "Tanmangué", "Dibiya"],
-          },
-        ],
-      },
-      {
-        name: "Kamsar",
-        communes: [
-          {
-            name: "Kamsar Centre",
-            districts: ["Filima", "Kakandé"],
-          },
-        ],
-      },
+      { name: "Boké", communes: [{ name: "Boké Centre", districts: ["Boké Ville", "Tanmangué", "Dibiya"] }] },
+      { name: "Kamsar", communes: [{ name: "Kamsar Centre", districts: ["Filima", "Kakandé"] }] },
     ],
   },
   {
     name: "Kankan",
     cities: [
-      {
-        name: "Kankan",
-        communes: [
-          {
-            name: "Kankan Centre",
-            districts: ["Kabada", "Bordo", "Timbo", "Missira"],
-          },
-        ],
-      },
-      {
-        name: "Kérouané",
-        communes: [
-          {
-            name: "Kérouané Centre",
-            districts: ["Banankoro"],
-          },
-        ],
-      },
+      { name: "Kankan", communes: [{ name: "Kankan Centre", districts: ["Kabada", "Bordo", "Timbo", "Missira"] }] },
+      { name: "Kérouané", communes: [{ name: "Kérouané Centre", districts: ["Banankoro"] }] },
     ],
   },
   {
     name: "Faranah",
     cities: [
-      {
-        name: "Faranah",
-        communes: [
-          {
-            name: "Faranah Centre",
-            districts: ["Faranah Ville", "Syli", "Hérémakono"],
-          },
-        ],
-      },
+      { name: "Faranah", communes: [{ name: "Faranah Centre", districts: ["Faranah Ville", "Syli", "Hérémakono"] }] },
     ],
   },
   {
     name: "N'Zérékoré",
     cities: [
-      {
-        name: "N'Zérékoré",
-        communes: [
-          {
-            name: "N'Zérékoré Centre",
-            districts: ["Mohomou", "Dorota", "Gonia"],
-          },
-        ],
-      },
-      {
-        name: "Lola",
-        communes: [
-          {
-            name: "Lola Centre",
-            districts: ["Bossou"],
-          },
-        ],
-      },
+      { name: "N'Zérékoré", communes: [{ name: "N'Zérékoré Centre", districts: ["Mohomou", "Dorota", "Gonia"] }] },
+      { name: "Lola", communes: [{ name: "Lola Centre", districts: ["Bossou"] }] },
     ],
   },
 ];
@@ -273,7 +179,7 @@ const InscriptionOuvrier: React.FC = () => {
     email: "",
     password: "",
     phone: "",
-    country: "GN", // Guinée par défaut
+    country: "GN",
     region: "",
     city: "",
     commune: "",
@@ -289,7 +195,7 @@ const InscriptionOuvrier: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // 💳 Paiement pour les plans payants
+  // Paiement
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("");
   const [paymentCompleted, setPaymentCompleted] = useState(
     searchParams.get("payment_status") === "success"
@@ -298,11 +204,12 @@ const InscriptionOuvrier: React.FC = () => {
     searchParams.get("payment_ref")
   );
 
-  // 🔁 Plans avec montants en GNF
+  const isPaidPlan = plan === "MONTHLY" || plan === "YEARLY";
+
   const planMeta = useMemo(() => {
     if (plan === "MONTHLY") {
       return {
-        label: t("subscription.monthly"),
+        label: t("subscription.monthly") || (language === "fr" ? "Mensuel" : "Monthly"),
         price: "5 000 FG / mois",
         badge: language === "fr" ? "Sans engagement" : "No commitment",
         description:
@@ -313,7 +220,7 @@ const InscriptionOuvrier: React.FC = () => {
     }
     if (plan === "YEARLY") {
       return {
-        label: t("subscription.yearly"),
+        label: t("subscription.yearly") || (language === "fr" ? "Annuel" : "Yearly"),
         price: "50 000 FG / an",
         badge: language === "fr" ? "2 mois offerts" : "2 months free",
         description:
@@ -335,7 +242,7 @@ const InscriptionOuvrier: React.FC = () => {
 
   const currency = useMemo(() => getCurrencyForCountry(form.country), [form.country]);
 
-  // Sélection actuelle pour la Guinée : région → ville → commune → quartier
+  // Guinée : région → ville → commune → quartier
   const selectedRegion = useMemo(
     () => GUINEA_REGIONS.find((r) => r.name === form.region) || null,
     [form.region]
@@ -368,19 +275,21 @@ const InscriptionOuvrier: React.FC = () => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
+    if (!file) {
+      setProfileFile(null);
+      return;
+    }
+    // contrôle léger: max 2 Mo (comme l'UI l'indique)
+    if (file.size > 2 * 1024 * 1024) {
+      setError(language === "fr" ? "Image trop volumineuse (max 2 Mo)." : "Image too large (max 2MB).");
+      e.target.value = "";
+      setProfileFile(null);
+      return;
+    }
     setProfileFile(file);
   };
 
-  /**
-   * Lance le paiement réel via un endpoint backend (Stripe / PayPal / Mobile Money).
-   * Ce backend doit :
-   *  - créer la session de paiement (Stripe Checkout, PayPal order, etc.)
-   *  - renvoyer { redirectUrl: "https://..." }
-   *  - rediriger l’utilisateur vers l’URL du fournisseur
-   *  - sur succès, renvoyer vers /inscription-ouvrier?plan=...&payment_status=success&payment_ref=XXX
-   */
   const handleStartPayment = async () => {
-    const isPaidPlan = plan === "MONTHLY" || plan === "YEARLY";
     if (!isPaidPlan) return;
 
     if (!paymentMethod) {
@@ -408,12 +317,9 @@ const InscriptionOuvrier: React.FC = () => {
       const successUrl = `${window.location.origin}/inscription-ouvrier?plan=${plan}&payment_status=success&payment_ref={REF}`;
       const cancelUrl = `${window.location.origin}/inscription-ouvrier?plan=${plan}&payment_status=cancel`;
 
-      // 🔥 Appel direct à la Netlify Function (et plus /api/payments/start)
       const res = await fetch("/.netlify/functions/payments-start", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           plan,
           paymentMethod,
@@ -430,11 +336,8 @@ const InscriptionOuvrier: React.FC = () => {
       }
 
       const data = await res.json();
-      if (!data.redirectUrl) {
-        throw new Error("Missing redirectUrl from payment API.");
-      }
+      if (!data.redirectUrl) throw new Error("Missing redirectUrl from payment API.");
 
-      // redirection vers Stripe / PayPal / Mobile Money
       window.location.href = data.redirectUrl as string;
     } catch (err: any) {
       console.error("Erreur démarrage paiement:", err);
@@ -448,51 +351,68 @@ const InscriptionOuvrier: React.FC = () => {
     }
   };
 
+  const validateBeforeSubmit = (): string | null => {
+    const email = form.email.trim().toLowerCase();
+    const password = form.password;
+
+    if (!email || !password) {
+      return language === "fr" ? "Email et mot de passe sont obligatoires." : "Email and password are required.";
+    }
+    if (password.length < 6) {
+      return language === "fr"
+        ? "Le mot de passe doit contenir au moins 6 caractères."
+        : "Password must be at least 6 characters long.";
+    }
+    if (!form.firstName.trim() || !form.lastName.trim()) {
+      return language === "fr" ? "Veuillez renseigner votre prénom et votre nom." : "Please provide your first and last name.";
+    }
+    if (!form.phone.trim()) {
+      return language === "fr" ? "Le téléphone est obligatoire." : "Phone is required.";
+    }
+    if (!form.profession.trim()) {
+      return language === "fr" ? "Le métier principal est obligatoire." : "Main trade is required.";
+    }
+    if (!form.description.trim()) {
+      return language === "fr" ? "La description est obligatoire." : "Description is required.";
+    }
+
+    // Localisation: éviter les inserts avec champs vides si la DB est stricte (NOT NULL)
+    if (form.country === "GN") {
+      if (!form.region) return language === "fr" ? "Veuillez choisir une région." : "Please select a region.";
+      if (!form.city) return language === "fr" ? "Veuillez choisir une ville." : "Please select a city.";
+      if (!form.commune) return language === "fr" ? "Veuillez choisir une commune." : "Please select a commune.";
+      if (!form.district) return language === "fr" ? "Veuillez choisir un quartier." : "Please select a neighborhood.";
+    } else {
+      if (!form.city.trim()) return language === "fr" ? "La ville est obligatoire." : "City is required.";
+    }
+
+    if (isPaidPlan && !paymentCompleted) {
+      return language === "fr"
+        ? "Votre paiement n'a pas encore été confirmé. Effectuez le paiement puis revenez avec payment_status=success."
+        : "Your payment is not confirmed yet. Please complete the payment and come back with payment_status=success.";
+    }
+
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(false);
+
+    const validationError = validateBeforeSubmit();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setLoading(true);
 
     try {
       const email = form.email.trim().toLowerCase();
       const password = form.password;
 
-      // 🔎 Validation minimale côté client
-      if (!email || !password) {
-        setError(
-          language === "fr"
-            ? "Email et mot de passe sont obligatoires."
-            : "Email and password are required."
-        );
-        setLoading(false);
-        return;
-      }
-      if (password.length < 6) {
-        setError(
-          language === "fr"
-            ? "Le mot de passe doit contenir au moins 6 caractères."
-            : "Password must be at least 6 characters long."
-        );
-        setLoading(false);
-        return;
-      }
-
-      // 💳 Vérifications paiement pour les plans payants
-      const isPaidPlan = plan === "MONTHLY" || plan === "YEARLY";
-      if (isPaidPlan) {
-        if (!paymentCompleted) {
-          setError(
-            language === "fr"
-              ? "Votre paiement n'a pas encore été confirmé. Veuillez effectuer le paiement puis revenir sur cette page (payment_status=success) avant de valider votre inscription."
-              : "Your payment is not confirmed yet. Please complete the payment and come back with payment_status=success before submitting your registration."
-          );
-          setLoading(false);
-          return;
-        }
-      }
-
-      // 0) Vérifier s'il existe déjà un profil ouvrier avec cet email
+      // 0) Vérifier doublon profil ouvrier (best-effort)
       const { data: existingWorker, error: existingWorkerError } = await supabase
         .from("op_ouvriers")
         .select("id,status")
@@ -500,12 +420,8 @@ const InscriptionOuvrier: React.FC = () => {
         .maybeSingle();
 
       if (existingWorkerError) {
-        console.warn(
-          "Erreur lors de la vérification des ouvriers existants:",
-          existingWorkerError
-        );
+        console.warn("Vérification doublon ouvrier:", existingWorkerError);
       }
-
       if (existingWorker) {
         setError(
           language === "fr"
@@ -531,8 +447,6 @@ const InscriptionOuvrier: React.FC = () => {
 
       if (authError) {
         const message = authError.message?.toLowerCase() ?? "";
-
-        // Cas spécifique : utilisateur déjà enregistré dans Supabase Auth
         if (
           message.includes("user already registered") ||
           (authError as any).code === "user_already_exists"
@@ -545,7 +459,6 @@ const InscriptionOuvrier: React.FC = () => {
           setLoading(false);
           return;
         }
-
         throw authError;
       }
 
@@ -558,64 +471,60 @@ const InscriptionOuvrier: React.FC = () => {
         );
       }
 
-      // 2) Upload avatar (optionnel)
+      // 2) Upload avatar (optionnel) — ne bloque pas l'inscription si échec
       let avatarUrl: string | null = null;
       if (profileFile) {
-        const fileExt = profileFile.name.split(".").pop();
-        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-        const { data: storageData, error: storageError } = await supabase.storage
-          .from("op_avatars")
-          .upload(fileName, profileFile);
+        try {
+          const fileExt = profileFile.name.split(".").pop() || "jpg";
+          const fileName = `${user.id}-${Date.now()}.${fileExt}`;
 
-        if (storageError) {
-          console.warn("Erreur upload avatar:", storageError.message);
-        } else if (storageData) {
-          const { data: publicUrlData } = supabase.storage
+          const { data: storageData, error: storageError } = await supabase.storage
             .from("op_avatars")
-            .getPublicUrl(storageData.path);
-          avatarUrl = publicUrlData.publicUrl;
+            .upload(fileName, profileFile);
+
+          if (storageError) {
+            console.warn("Erreur upload avatar:", storageError);
+          } else if (storageData) {
+            const { data: publicUrlData } = supabase.storage
+              .from("op_avatars")
+              .getPublicUrl(storageData.path);
+            avatarUrl = publicUrlData.publicUrl;
+          }
+        } catch (e) {
+          console.warn("Upload avatar exception:", e);
         }
       }
 
-      // 3) Synchroniser op_users (FK op_ouvriers.user_id → op_users.id)
-      const fullNameForUser =
-        `${form.firstName} ${form.lastName}`.trim() || email;
+      // 3) Synchroniser op_users
+      const fullNameForUser = `${form.firstName} ${form.lastName}`.trim() || email;
 
-      const { error: opUserError } = await supabase.from("op_users").upsert({
-        id: user.id,
-        role: "worker",
-        full_name: fullNameForUser,
-      });
+      const { error: opUserError } = await supabase.from("op_users").upsert(
+        {
+          id: user.id,
+          role: "worker",
+          full_name: fullNameForUser,
+        },
+        { onConflict: "id" }
+      );
 
       if (opUserError) {
-        console.error("Erreur lors de la création dans op_users:", opUserError);
+        console.error("Erreur op_users:", opUserError);
         throw opUserError;
       }
 
       // 4) Insert profil ouvrier
       const hourlyRateTrim = form.hourlyRate.trim();
-      let hourlyRateNumber: number | null = null;
+      const hourlyRateNumber =
+        hourlyRateTrim === "" ? null : Number.isFinite(Number(hourlyRateTrim)) ? Number(hourlyRateTrim) : null;
 
-      if (hourlyRateTrim !== "") {
-        const parsed = Number(hourlyRateTrim);
-        hourlyRateNumber = Number.isFinite(parsed) ? parsed : null;
-      }
-
-      // ✅ Nouvelle logique paiement (gratuit / mobile money / autres)
       const isFreePlan = plan === "FREE";
       const isManualMobileMoney = !isFreePlan && paymentMethod === "mobile_money";
+      const isPaymentReallyPaid = isFreePlan || (paymentCompleted && !isManualMobileMoney);
 
-      // Pour l’instant, on considère "payé" uniquement :
-      // - le plan gratuit
-      // - ou les paiements non-mobiles avec payment_status=success
-      const isPaymentReallyPaid =
-        isFreePlan || (paymentCompleted && !isManualMobileMoney);
-
-      // Statut initial de paiement enregistré en base
       const initialPaymentStatus: "unpaid" | "pending" | "paid" = isFreePlan
         ? "paid"
         : isManualMobileMoney
-        ? "pending" // Mobile Money = à vérifier manuellement par l'admin
+        ? "pending"
         : isPaymentReallyPaid
         ? "paid"
         : "unpaid";
@@ -628,14 +537,14 @@ const InscriptionOuvrier: React.FC = () => {
         phone: form.phone,
         country: form.country,
         region: form.region || null,
-        city: form.city,
-        commune: form.commune,
-        district: form.district,
-        postal_code: form.postalCode,
+        city: form.city || null,
+        commune: form.commune || null,
+        district: form.district || null,
+        postal_code: form.postalCode || null,
         profession: form.profession,
         description: form.description,
         plan_code: plan,
-        status: "pending", // en attente validation admin
+        status: "pending",
         hourly_rate: hourlyRateNumber,
         currency: currency.code,
         avatar_url: avatarUrl,
@@ -666,6 +575,9 @@ const InscriptionOuvrier: React.FC = () => {
         hourlyRate: "",
       });
       setProfileFile(null);
+      setPaymentMethod("");
+      setPaymentReference(null);
+      setPaymentCompleted(false);
     } catch (err: any) {
       console.error(err);
       setError(
@@ -693,7 +605,7 @@ const InscriptionOuvrier: React.FC = () => {
     { code: "US", label: "États-Unis" },
   ];
 
-  const canSubmit = !loading && (plan === "FREE" || paymentCompleted);
+  const canSubmit = !loading && (!isPaidPlan || paymentCompleted);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-12">
@@ -720,9 +632,7 @@ const InscriptionOuvrier: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="mb-3">
-                <div className="text-xl font-bold text-pro-blue">
-                  {planMeta.label}
-                </div>
+                <div className="text-xl font-bold text-pro-blue">{planMeta.label}</div>
                 <div className="text-gray-700">{planMeta.price}</div>
                 <div className="inline-block mt-2 px-3 py-1 text-xs rounded-full bg-green-100 text-green-700">
                   {planMeta.badge}
@@ -731,19 +641,16 @@ const InscriptionOuvrier: React.FC = () => {
               <p className="text-sm text-gray-600">{planMeta.description}</p>
 
               <ul className="mt-4 text-sm text-gray-700 list-disc list-inside space-y-1">
-                {plan === "FREE" && (
+                {plan === "FREE" ? (
                   <>
                     <li>
                       {language === "fr"
                         ? "1 métier affiché, contacts limités"
                         : "1 listed trade, limited contacts"}
                     </li>
-                    <li>
-                      {language === "fr" ? "Profil simplifié" : "Simplified profile"}
-                    </li>
+                    <li>{language === "fr" ? "Profil simplifié" : "Simplified profile"}</li>
                   </>
-                )}
-                {plan !== "FREE" && (
+                ) : (
                   <>
                     <li>
                       {language === "fr"
@@ -781,41 +688,34 @@ const InscriptionOuvrier: React.FC = () => {
             </CardHeader>
 
             <CardContent>
-              {/* 🎉 Si succès : on masque le formulaire */}
               {success ? (
                 <div className="space-y-6 text-center py-10">
                   <div className="text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-4 text-base md:text-lg">
                     {language === "fr" ? (
                       plan === "FREE" ? (
                         <>
-                          Votre inscription au plan <strong>Gratuit</strong> a bien été
-                          enregistrée.
+                          Votre inscription au plan <strong>Gratuit</strong> a bien été enregistrée.
                           <br />
                           Votre profil sera validé par un administrateur.
                         </>
                       ) : (
                         <>
-                          Votre inscription au plan{" "}
-                          <strong>{planMeta.label}</strong> a bien été enregistrée.
+                          Votre inscription au plan <strong>{planMeta.label}</strong> a bien été enregistrée.
                           <br />
-                          Votre paiement a été pris en compte. Votre profil sera validé
-                          par un administrateur.
+                          Votre paiement a été pris en compte. Votre profil sera validé par un administrateur.
                         </>
                       )
                     ) : plan === "FREE" ? (
                       <>
-                        Your registration to the <strong>Free</strong> plan has been
-                        saved.
+                        Your registration to the <strong>Free</strong> plan has been saved.
                         <br />
                         Your profile will be reviewed by an administrator.
                       </>
                     ) : (
                       <>
-                        Your registration to the <strong>{planMeta.label}</strong> plan
-                        has been saved.
+                        Your registration to the <strong>{planMeta.label}</strong> plan has been saved.
                         <br />
-                        Your payment has been recorded. Your profile will be reviewed by
-                        an administrator.
+                        Your payment has been recorded. Your profile will be reviewed by an administrator.
                       </>
                     )}
                   </div>
@@ -825,13 +725,10 @@ const InscriptionOuvrier: React.FC = () => {
                     onClick={() => (window.location.href = "/")}
                     className="bg-pro-blue hover:bg-blue-700 px-6 py-3 text-base md:text-lg"
                   >
-                    {language === "fr"
-                      ? "Retour à l'accueil"
-                      : "Return to home"}
+                    {language === "fr" ? "Retour à l'accueil" : "Return to home"}
                   </Button>
                 </div>
               ) : (
-                /* 📝 Formulaire normal tant que success = false */
                 <form onSubmit={handleSubmit} className="space-y-4">
                   {/* Nom & Prénom */}
                   <div className="grid md:grid-cols-2 gap-4">
@@ -862,9 +759,7 @@ const InscriptionOuvrier: React.FC = () => {
                   {/* Email & Mot de passe */}
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Email
-                      </label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                       <Input
                         type="email"
                         required
@@ -883,11 +778,7 @@ const InscriptionOuvrier: React.FC = () => {
                         minLength={6}
                         value={form.password}
                         onChange={handleChange("password")}
-                        placeholder={
-                          language === "fr"
-                            ? "Au moins 6 caractères"
-                            : "At least 6 characters"
-                        }
+                        placeholder={language === "fr" ? "Au moins 6 caractères" : "At least 6 characters"}
                       />
                     </div>
                   </div>
@@ -916,7 +807,6 @@ const InscriptionOuvrier: React.FC = () => {
                         setForm((prev) => ({
                           ...prev,
                           country: e.target.value,
-                          // reset localisation si on change de pays
                           region: "",
                           city: "",
                           commune: "",
@@ -955,9 +845,7 @@ const InscriptionOuvrier: React.FC = () => {
                           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
                         >
                           <option value="">
-                            {language === "fr"
-                              ? "Choisissez une région"
-                              : "Select a region"}
+                            {language === "fr" ? "Choisissez une région" : "Select a region"}
                           </option>
                           {GUINEA_REGIONS.map((r) => (
                             <option key={r.name} value={r.name}>
@@ -987,9 +875,7 @@ const InscriptionOuvrier: React.FC = () => {
                             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
                           >
                             <option value="">
-                              {language === "fr"
-                                ? "Choisissez une ville"
-                                : "Select a city"}
+                              {language === "fr" ? "Choisissez une ville" : "Select a city"}
                             </option>
                             {availableCities.map((city) => (
                               <option key={city.name} value={city.name}>
@@ -1029,9 +915,7 @@ const InscriptionOuvrier: React.FC = () => {
                             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
                           >
                             <option value="">
-                              {language === "fr"
-                                ? "Choisissez une commune"
-                                : "Select a commune"}
+                              {language === "fr" ? "Choisissez une commune" : "Select a commune"}
                             </option>
                             {availableCommunes.map((commune) => (
                               <option key={commune.name} value={commune.name}>
@@ -1056,9 +940,7 @@ const InscriptionOuvrier: React.FC = () => {
                             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
                           >
                             <option value="">
-                              {language === "fr"
-                                ? "Choisissez un quartier"
-                                : "Select a neighborhood"}
+                              {language === "fr" ? "Choisissez un quartier" : "Select a neighborhood"}
                             </option>
                             {availableDistricts.map((q) => (
                               <option key={q} value={q}>
@@ -1071,7 +953,7 @@ const InscriptionOuvrier: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      {/* Fallback pour les autres pays : champs texte */}
+                      {/* Fallback autres pays */}
                       <div className="grid md:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1081,9 +963,7 @@ const InscriptionOuvrier: React.FC = () => {
                             required
                             value={form.city}
                             onChange={handleChange("city")}
-                            placeholder={
-                              language === "fr" ? "Votre ville" : "Your city"
-                            }
+                            placeholder={language === "fr" ? "Votre ville" : "Your city"}
                           />
                         </div>
                         <div>
@@ -1101,23 +981,15 @@ const InscriptionOuvrier: React.FC = () => {
                       <div className="grid md:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {language === "fr"
-                              ? "Commune / Région"
-                              : "District / Region"}
+                            {language === "fr" ? "Commune / Région" : "District / Region"}
                           </label>
-                          <Input
-                            value={form.commune}
-                            onChange={handleChange("commune")}
-                          />
+                          <Input value={form.commune} onChange={handleChange("commune")} />
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
                             {language === "fr" ? "Quartier" : "Neighborhood"}
                           </label>
-                          <Input
-                            value={form.district}
-                            onChange={handleChange("district")}
-                          />
+                          <Input value={form.district} onChange={handleChange("district")} />
                         </div>
                       </div>
                     </>
@@ -1150,9 +1022,7 @@ const InscriptionOuvrier: React.FC = () => {
                   {/* Description */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === "fr"
-                        ? "Description de vos services"
-                        : "Description of your services"}
+                      {language === "fr" ? "Description de vos services" : "Description of your services"}
                     </label>
                     <textarea
                       required
@@ -1167,7 +1037,7 @@ const InscriptionOuvrier: React.FC = () => {
                     />
                   </div>
 
-                  {/* Tarif horaire (optionnel) */}
+                  {/* Tarif horaire */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       {language === "fr"
@@ -1187,12 +1057,10 @@ const InscriptionOuvrier: React.FC = () => {
                     />
                   </div>
 
-                  {/* Photo de profil (optionnelle) */}
+                  {/* Photo de profil */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === "fr"
-                        ? "Photo de profil (optionnel)"
-                        : "Profile picture (optional)"}
+                      {language === "fr" ? "Photo de profil (optionnel)" : "Profile picture (optional)"}
                     </label>
                     <input
                       type="file"
@@ -1207,22 +1075,20 @@ const InscriptionOuvrier: React.FC = () => {
                     </p>
                   </div>
 
-                  {/* Messages d’erreur */}
+                  {/* Erreurs */}
                   {error && (
                     <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
                       {error}
                     </div>
                   )}
 
-                  {/* 🧾 Résumé / panier + paiement pour les plans payants – juste au-dessus du bouton */}
+                  {/* Paiement */}
                   {plan !== "FREE" && (
                     <div className="border border-amber-100 bg-amber-50 rounded-lg p-4 mb-3">
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                         <div>
                           <div className="text-sm font-semibold text-amber-800">
-                            {language === "fr"
-                              ? "Résumé de votre abonnement"
-                              : "Subscription summary"}
+                            {language === "fr" ? "Résumé de votre abonnement" : "Subscription summary"}
                           </div>
                           <div className="text-xs text-amber-700">
                             {language === "fr"
@@ -1235,9 +1101,7 @@ const InscriptionOuvrier: React.FC = () => {
                             {language === "fr" ? "Total à payer" : "Total to pay"}
                           </div>
                           <div className="text-lg font-bold text-amber-900">
-                            {plan === "MONTHLY"
-                              ? "5 000 FG / mois"
-                              : "50 000 FG / an"}
+                            {plan === "MONTHLY" ? "5 000 FG / mois" : "50 000 FG / an"}
                           </div>
                         </div>
                       </div>
@@ -1245,9 +1109,7 @@ const InscriptionOuvrier: React.FC = () => {
                       <div className="mt-3 grid md:grid-cols-2 gap-3">
                         <div>
                           <div className="text-xs font-semibold text-amber-800 mb-1">
-                            {language === "fr"
-                              ? "Choisissez un moyen de paiement"
-                              : "Choose a payment method"}
+                            {language === "fr" ? "Choisissez un moyen de paiement" : "Choose a payment method"}
                           </div>
                           <div className="space-y-1 text-xs text-amber-900">
                             <label className="flex items-center gap-2">
@@ -1256,9 +1118,7 @@ const InscriptionOuvrier: React.FC = () => {
                                 name="paymentMethod"
                                 value="card"
                                 checked={paymentMethod === "card"}
-                                onChange={(e) =>
-                                  setPaymentMethod(e.target.value as PaymentMethod)
-                                }
+                                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
                               />
                               <span>
                                 {language === "fr"
@@ -1272,9 +1132,7 @@ const InscriptionOuvrier: React.FC = () => {
                                 name="paymentMethod"
                                 value="paypal"
                                 checked={paymentMethod === "paypal"}
-                                onChange={(e) =>
-                                  setPaymentMethod(e.target.value as PaymentMethod)
-                                }
+                                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
                               />
                               <span>PayPal</span>
                             </label>
@@ -1284,9 +1142,7 @@ const InscriptionOuvrier: React.FC = () => {
                                 name="paymentMethod"
                                 value="mobile_money"
                                 checked={paymentMethod === "mobile_money"}
-                                onChange={(e) =>
-                                  setPaymentMethod(e.target.value as PaymentMethod)
-                                }
+                                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
                               />
                               <span>
                                 {language === "fr"
@@ -1300,9 +1156,7 @@ const InscriptionOuvrier: React.FC = () => {
                                 name="paymentMethod"
                                 value="google_pay"
                                 checked={paymentMethod === "google_pay"}
-                                onChange={(e) =>
-                                  setPaymentMethod(e.target.value as PaymentMethod)
-                                }
+                                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
                               />
                               <span>Google Pay</span>
                             </label>
@@ -1312,16 +1166,8 @@ const InscriptionOuvrier: React.FC = () => {
                         <div className="flex flex-col justify-between">
                           <div className="text-xs text-amber-800 mb-2 leading-relaxed">
                             {language === "fr"
-                              ? "Étape 1 : choisissez votre moyen de paiement."
-                              : "Step 1: choose your payment method."}
-                            <br />
-                            {language === "fr"
-                              ? "Étape 2 : cliquez sur « Procéder au paiement »."
-                              : "Step 2: click “Proceed to payment”."}
-                            <br />
-                            {language === "fr"
-                              ? "Étape 3 : à la fin du paiement, vous reviendrez sur cette page avec payment_status=success, puis vous pourrez valider votre inscription."
-                              : "Step 3: after payment you will return here with payment_status=success, then you can submit your registration."}
+                              ? "Étape 1 : choisissez votre moyen de paiement.\nÉtape 2 : cliquez sur « Procéder au paiement ».\nÉtape 3 : revenez avec payment_status=success pour valider."
+                              : "Step 1: choose your payment method.\nStep 2: click “Proceed to payment”.\nStep 3: come back with payment_status=success to submit."}
                           </div>
                           <div>
                             <Button
@@ -1331,9 +1177,7 @@ const InscriptionOuvrier: React.FC = () => {
                               className="bg-amber-600 hover:bg-amber-700"
                               disabled={loading}
                             >
-                              {language === "fr"
-                                ? "Procéder au paiement"
-                                : "Proceed to payment"}
+                              {language === "fr" ? "Procéder au paiement" : "Proceed to payment"}
                             </Button>
                             {paymentCompleted && (
                               <p className="text-[11px] text-emerald-700 mt-1">
@@ -1367,6 +1211,7 @@ const InscriptionOuvrier: React.FC = () => {
                         ? "Valider mon inscription après paiement"
                         : "Submit my registration after payment"}
                     </Button>
+
                     {plan !== "FREE" && !paymentCompleted && (
                       <p className="mt-1 text-[11px] text-amber-700">
                         {language === "fr"
