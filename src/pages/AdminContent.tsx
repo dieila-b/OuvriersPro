@@ -25,6 +25,7 @@ import {
   LayoutList,
   Globe,
   AlertTriangle,
+  Wrench,
 } from "lucide-react";
 
 type Locale = "fr" | "en";
@@ -73,7 +74,6 @@ const SECTIONS: SectionDef[] = [
     description: "Logo, tagline, boutons, langue et menu mobile.",
     fields: [
       { key: "brand.name", label: "Nom de la marque (logo)", type: "text", placeholder: "ProxiServices" },
-
       { key: "header.tagline", label: "Tagline (sous le logo)", type: "text", placeholder: "Prestataires vérifiés, proches de vous" },
 
       { key: "header.btn_login", label: "Bouton (non connecté)", type: "text", placeholder: "Se connecter" },
@@ -154,89 +154,21 @@ const SECTIONS: SectionDef[] = [
     ],
   },
 
-  /**
-   * ✅ MISE À JOUR IMPORTANTE
-   * Cette section contient désormais toutes les clés réellement utilisées par src/components/SearchSection.tsx (version CMS).
-   * Si une clé n’est pas ici, elle ne sera pas créée par “Initialiser” -> compteur “clés manquantes” ne descend pas.
-   */
   {
     id: "search_page",
-    title: "Page Recherche — En-tête, recherche & filtres (SearchSection)",
-    location: "Recherche > Page",
-    description: "Tous les micro-textes utilisés sur la page Recherche (titre, zones, filtres, géoloc, résultats).",
+    title: "Page Recherche — En-tête & filtres",
+    location: "Recherche > En-tête & Filtres",
+    description: "Titre et micro-textes de la page “Trouvez votre professionnel”.",
     fields: [
-      // ---- En-tête page ----
-      { key: "search.page.title", label: "Titre page", type: "text", placeholder: "Trouvez votre professionnel" },
-      {
-        key: "search.page.subtitle_alt",
-        label: "Sous-titre page (utilisé par SearchSection)",
-        type: "text",
-        placeholder: "Filtrez par métier, quartier et tarif pour trouver l'ouvrier le plus proche.",
-      },
-
-      // ---- Bloc recherche haut ----
-      { key: "search.top.title", label: "Bloc haut — Titre", type: "text", placeholder: "Rechercher un ouvrier" },
-      { key: "search.top.btn", label: "Bloc haut — Bouton", type: "text", placeholder: "Rechercher" },
-
-      // ---- Labels filtres ----
-      { key: "search.filters.title", label: "Sidebar filtres — Titre", type: "text", placeholder: "Filtres" },
-
-      { key: "search.filters.keyword.label", label: "Filtre — Label métier/nom", type: "text", placeholder: "Métier ou nom" },
-      {
-        key: "search.filters.keyword.placeholder",
-        label: "Filtre — Placeholder métier/nom",
-        type: "text",
-        placeholder: "Plombier, électricien, Mamadou...",
-      },
-
-      { key: "search.filters.district.label", label: "Filtre — Label quartier", type: "text", placeholder: "Quartier" },
-      { key: "search.filters.district.all", label: "Filtre — Option Tous quartiers", type: "text", placeholder: "Tous les quartiers" },
-
-      { key: "search.filters.price.label", label: "Filtre — Label prix max", type: "text", placeholder: "Tarif horaire max" },
-      { key: "search.filters.price.no_limit", label: "Filtre — Texte aucune limite", type: "text", placeholder: "Aucune limite" },
-
-      { key: "search.filters.rating.label", label: "Filtre — Label note minimum", type: "text", placeholder: "Note minimum" },
-      { key: "search.filters.rating.any", label: "Filtre — Texte toutes notes", type: "text", placeholder: "Toutes" },
-
-      // ---- Géoloc ----
-      { key: "search.geo.label", label: "Géoloc — Label switch", type: "text", placeholder: "Recherche par proximité" },
-      { key: "search.geo.radius", label: "Géoloc — Label rayon", type: "text", placeholder: "Rayon de recherche" },
-      { key: "search.geo.loading", label: "Géoloc — Loading", type: "text", placeholder: "Obtention de votre position..." },
-      { key: "search.geo.no_coordinates", label: "Géoloc — Sans GPS", type: "text", placeholder: "Sans position GPS" },
-
-      // ---- Boutons ----
-      { key: "search.filters.btn_reset_long", label: "Bouton reset (long)", type: "text", placeholder: "Réinitialiser les filtres" },
-
-      // ---- Affichage ----
-      { key: "search.view.label", label: "Affichage — Label", type: "text", placeholder: "Affichage" },
+      { key: "search.page.title", label: "Titre", type: "text", placeholder: "Trouvez votre professionnel" },
+      { key: "search.page.subtitle", label: "Sous-titre", type: "text", placeholder: "Modifiez vos filtres pour lancer la recherche automatiquement." },
+      { key: "search.filters.title", label: "Bloc filtres — Titre", type: "text", placeholder: "Filtres" },
+      { key: "search.filters.btn_reset", label: "Bouton Réinitialiser", type: "text", placeholder: "Réinitialiser" },
+      { key: "search.filters.btn_geolocate", label: "Bouton Utiliser ma position", type: "text", placeholder: "Utiliser ma position" },
       { key: "search.view.list", label: "Affichage — Liste", type: "text", placeholder: "Liste" },
       { key: "search.view.grid", label: "Affichage — Mosaïque", type: "text", placeholder: "Mosaïque" },
-
-      // ---- Résultats ----
-      {
-        key: "search.results.none",
-        label: "Résultats — Aucun résultat",
-        type: "text",
-        placeholder: "Aucun professionnel ne correspond à ces critères pour le moment.",
-      },
-      { key: "search.results.count", label: "Résultats — Compteur (template)", type: "text", placeholder: "X résultats trouvés" },
-
-      { key: "search.loading_results", label: "Chargement — Résultats (header)", type: "text", placeholder: "Chargement des résultats..." },
-      { key: "search.loading_workers", label: "Chargement — Cartes workers", type: "text", placeholder: "Chargement des professionnels..." },
-
-      // ---- Carte worker ----
-      { key: "search.card.btn_contact", label: "Carte — Bouton Contacter", type: "text", placeholder: "Contacter" },
-      { key: "search.card.per_hour", label: "Carte — Suffixe /h", type: "text", placeholder: "/h" },
-      { key: "search.card.years_suffix", label: "Carte — Suffixe expérience", type: "text", placeholder: "ans d'expérience" },
-
-      /**
-       * Anciennes clés (si d’autres composants les utilisent encore).
-       * On les garde pour éviter de créer de nouvelles “clés manquantes” si elles sont référencées ailleurs.
-       */
-      { key: "search.page.subtitle", label: "Sous-titre page (ancienne clé)", type: "text", placeholder: "Modifiez vos filtres pour lancer la recherche automatiquement." },
-      { key: "search.filters.btn_reset", label: "Bouton Réinitialiser (ancienne clé)", type: "text", placeholder: "Réinitialiser" },
-      { key: "search.filters.btn_geolocate", label: "Bouton Utiliser ma position (ancienne clé)", type: "text", placeholder: "Utiliser ma position" },
-      { key: "search.card.price_suffix", label: "Suffixe tarif (ancienne clé)", type: "text", placeholder: "GNF /h" },
+      { key: "search.card.btn_contact", label: "Bouton Contacter (carte)", type: "text", placeholder: "Contacter" },
+      { key: "search.card.price_suffix", label: "Suffixe tarif", type: "text", placeholder: "GNF /h" },
     ],
   },
 
@@ -279,7 +211,6 @@ const SECTIONS: SectionDef[] = [
       { key: "pricing.plan.yearly.f3", label: "Plan 3 — Avantage 3", type: "text", placeholder: "Statistiques détaillées" },
       { key: "pricing.plan.yearly.f4", label: "Plan 3 — Avantage 4", type: "text", placeholder: "Support prioritaire" },
 
-      // --- Bénéfices (3 blocs sous les cartes) ---
       { key: "pricing.benefit1.title", label: "Bénéfice 1 — Titre", type: "text", placeholder: "Profil vérifié" },
       { key: "pricing.benefit1.desc", label: "Bénéfice 1 — Description", type: "textarea", placeholder: "Badge de confiance sur votre profil" },
 
@@ -289,7 +220,6 @@ const SECTIONS: SectionDef[] = [
       { key: "pricing.benefit3.title", label: "Bénéfice 3 — Titre", type: "text", placeholder: "Support dédié" },
       { key: "pricing.benefit3.desc", label: "Bénéfice 3 — Description", type: "textarea", placeholder: "Assistance prioritaire 7j/7" },
 
-      // --- Reco: devise + séparateur prix/période ---
       { key: "pricing.currency", label: "Devise affichée (ex: FG / GNF)", type: "text", placeholder: "FG" },
       { key: "pricing.price_separator", label: "Séparateur prix/période (ex: /)", type: "text", placeholder: "/" },
     ],
@@ -448,6 +378,7 @@ export default function AdminContent() {
 
   const [mode, setMode] = React.useState<LocaleMode>("fr");
   const activeLocale: Locale = mode === "en" ? "en" : "fr";
+
   const [q, setQ] = React.useState("");
   const [activeSectionId, setActiveSectionId] = React.useState<string>(SECTIONS[0]?.id ?? "header");
 
@@ -457,7 +388,7 @@ export default function AdminContent() {
   );
 
   const list = useQuery({
-    queryKey: ["site_content_sections_full_v2", ALL_KEYS.join("|")],
+    queryKey: ["site_content_sections_full_v3", ALL_KEYS.join("|")],
     queryFn: async (): Promise<SiteContentRow[]> => {
       const { data, error } = await supabase
         .from("site_content")
@@ -546,6 +477,8 @@ export default function AdminContent() {
       const section = SECTIONS.find((s) => s.id === sectionId);
       if (!section) return;
 
+      // Important: on ne peut publier/dépublier que ce qui existe.
+      // Si des clés manquent, elles resteront "manquantes" tant qu'elles ne sont pas créées.
       const tasks: Promise<any>[] = [];
       for (const f of section.fields) {
         const row = getRow(f.key, loc);
@@ -558,11 +491,52 @@ export default function AdminContent() {
     }
   };
 
+  /**
+   * ✅ Crée les clés manquantes (FR/EN) pour une section (ou toutes)
+   * - valeur = ""
+   * - is_published = false par défaut (ne force pas la visibilité)
+   */
+  const ensureKeysExist = async (opts: { sectionId?: string; locales?: Locale[] }) => {
+    const locales = opts.locales ?? LOCALES;
+    const sections = opts.sectionId ? SECTIONS.filter((s) => s.id === opts.sectionId) : SECTIONS;
+
+    let created = 0;
+
+    for (const section of sections) {
+      for (const field of section.fields) {
+        for (const loc of locales) {
+          const existing = getRow(field.key, loc);
+          if (existing) continue;
+
+          await upsert.mutateAsync({
+            key: field.key,
+            locale: loc,
+            type: "text",
+            value: "",
+            is_published: false,
+          });
+
+          created += 1;
+        }
+      }
+    }
+
+    return created;
+  };
+
   const saveSection = async (sectionId: string) => {
     const section = SECTIONS.find((s) => s.id === sectionId);
     if (!section) return;
 
     try {
+      // ✅ 1) On crée d'abord les clés manquantes pour éviter les "Manquant FR+EN"
+      if (mode === "compare") {
+        await ensureKeysExist({ sectionId, locales: ["fr", "en"] });
+      } else {
+        await ensureKeysExist({ sectionId, locales: [mode] });
+      }
+
+      // ✅ 2) Ensuite on enregistre les valeurs
       const doSaveLocale = async (loc: Locale) => {
         const visible = sectionVisible(loc, sectionId);
         const values = ((drafts[loc] ?? {})[sectionId] ?? {}) as Record<string, string>;
@@ -607,24 +581,7 @@ export default function AdminContent() {
     if (!ok) return;
 
     try {
-      let created = 0;
-
-      for (const section of SECTIONS) {
-        for (const field of section.fields) {
-          for (const loc of LOCALES) {
-            const existing = getRow(field.key, loc);
-            if (existing) continue;
-            await upsert.mutateAsync({
-              key: field.key,
-              locale: loc,
-              type: "text",
-              value: "",
-              is_published: false,
-            });
-            created += 1;
-          }
-        }
-      }
+      const created = await ensureKeysExist({ locales: ["fr", "en"] });
 
       toast({
         title: "Initialisation terminée",
@@ -636,6 +593,57 @@ export default function AdminContent() {
       toast({
         title: "Erreur",
         description: e?.message ?? "Initialisation impossible.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const repairMissingAll = async () => {
+    if (isBusy) return;
+
+    const ok = window.confirm(
+      "Réparer les clés manquantes ?\n\n- Crée uniquement les clés absentes\n- FR + EN\n- Valeur vide\n- Brouillon (non publié)\n\nNe modifie pas les valeurs existantes."
+    );
+    if (!ok) return;
+
+    try {
+      const created = await ensureKeysExist({ locales: ["fr", "en"] });
+      toast({
+        title: "Réparation terminée",
+        description: created ? `${created} clé(s) créée(s).` : "Aucune clé manquante à créer.",
+      });
+      await list.refetch();
+    } catch (e: any) {
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Réparation impossible.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const repairMissingSection = async (sectionId: string) => {
+    if (isBusy) return;
+
+    const section = SECTIONS.find((s) => s.id === sectionId);
+    if (!section) return;
+
+    const ok = window.confirm(
+      `Créer les clés manquantes pour la section : ${section.title} ?\n\n- FR + EN\n- Valeur vide\n- Brouillon (non publié)`
+    );
+    if (!ok) return;
+
+    try {
+      const created = await ensureKeysExist({ sectionId, locales: ["fr", "en"] });
+      toast({
+        title: "Section réparée",
+        description: created ? `${created} clé(s) créée(s).` : "Aucune clé manquante pour cette section.",
+      });
+      await list.refetch();
+    } catch (e: any) {
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Réparation impossible.",
         variant: "destructive",
       });
     }
@@ -654,6 +662,7 @@ export default function AdminContent() {
     }
   };
 
+  // ✅ "manquant" = uniquement si la clé n'existe pas (row absent)
   const globalStats = React.useMemo(() => {
     let published = 0;
     let draft = 0;
@@ -665,8 +674,10 @@ export default function AdminContent() {
       for (const f of section.fields) {
         const fr = getRow(f.key, "fr");
         const en = getRow(f.key, "en");
+
         if (!fr) missingFR += 1;
         if (!en) missingEN += 1;
+
         if (en?.en_is_auto) autoEN += 1;
 
         const anyPublished = Boolean(fr?.is_published) || Boolean(en?.is_published);
@@ -694,9 +705,11 @@ export default function AdminContent() {
       return s.fields.some((f) => {
         if (f.label.toLowerCase().includes(query)) return true;
         if (f.key.toLowerCase().includes(query)) return true;
+
         const vActive = (dActive[f.key] ?? "").toLowerCase();
         const vFr = (dFR[f.key] ?? "").toLowerCase();
         const vEn = (dEN[f.key] ?? "").toLowerCase();
+
         return vActive.includes(query) || vFr.includes(query) || vEn.includes(query);
       });
     });
@@ -718,21 +731,19 @@ export default function AdminContent() {
     (section: SectionDef) => {
       const loc = mode === "en" ? "en" : "fr";
       const d = (drafts[loc]?.[section.id] ?? {}) as Record<string, string>;
-      const missing: string[] = [];
+      const missingLocales = new Set<string>();
       let autoCount = 0;
 
       for (const f of section.fields) {
         const rFR = getRow(f.key, "fr");
         const rEN = getRow(f.key, "en");
-        if (!rFR) missing.push("FR");
-        if (!rEN) missing.push("EN");
-        if (rEN?.en_is_auto) autoCount += 1;
 
-        if (rFR && isEmptyValue(rFR.value)) missing.push("FR");
-        if (rEN && isEmptyValue(rEN.value)) missing.push("EN");
+        if (!rFR) missingLocales.add("FR");
+        if (!rEN) missingLocales.add("EN");
+
+        if (rEN?.en_is_auto) autoCount += 1;
       }
 
-      const missingSet = new Set(missing);
       const visibleFR = sectionVisible("fr", section.id);
       const visibleEN = sectionVisible("en", section.id);
 
@@ -753,23 +764,22 @@ export default function AdminContent() {
         category: sectionCategory(section.id),
         filledCount,
         totalCount: section.fields.length,
-        missingSet,
+        missingLocales,
         autoCount,
         visibleFR,
         visibleEN,
         lastUpdated,
       };
     },
-    [drafts, getRow, mode, sectionVisible]
+    [drafts, getRow, mode]
   );
 
-  // ---- UI ----
   return (
     <div className="p-4 md:p-6 space-y-4">
       {/* Top Bar */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-lg font-semibold">Contenu du site</h1>
             <Pill kind="published">{globalStats.published} publié(s)</Pill>
             <Pill kind="draft">{globalStats.draft} brouillon(s)</Pill>
@@ -779,7 +789,7 @@ export default function AdminContent() {
             {globalStats.autoEN > 0 ? <Pill kind="auto">{globalStats.autoEN} EN auto</Pill> : null}
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Gère les textes visibles (Accueil, Recherche, Abonnements, Footer, Légal…). Consulte les clés, statuts et historiques.
+            Gère les textes visibles (Accueil, Recherche, Abonnements, Footer, Légal…). Les “manquants” sont des clés non créées en base.
           </p>
         </div>
 
@@ -812,6 +822,11 @@ export default function AdminContent() {
             <Button type="button" variant="outline" onClick={initSections} disabled={isBusy}>
               <ListPlus className="h-4 w-4 mr-2" />
               Initialiser
+            </Button>
+
+            <Button type="button" variant="outline" onClick={repairMissingAll} disabled={isBusy}>
+              <Wrench className="h-4 w-4 mr-2" />
+              Réparer clés manquantes
             </Button>
           </div>
         </div>
@@ -874,9 +889,9 @@ export default function AdminContent() {
                     : "Masqué";
 
                 const missingLabel = (() => {
-                  if (info.missingSet.size === 0) return null;
-                  const labels = Array.from(info.missingSet).sort().join("/");
-                  return labels.includes("FR") && labels.includes("EN") ? "FR+EN" : labels;
+                  if (info.missingLocales.size === 0) return null;
+                  const labels = Array.from(info.missingLocales).sort().join("+");
+                  return labels === "EN+FR" ? "FR+EN" : labels;
                 })();
 
                 return (
@@ -1012,6 +1027,11 @@ export default function AdminContent() {
                   )}
                 </div>
 
+                <Button type="button" variant="outline" onClick={() => repairMissingSection(activeSectionId)} disabled={isBusy}>
+                  <Wrench className="h-4 w-4 mr-2" />
+                  Créer clés manquantes
+                </Button>
+
                 <Button type="button" onClick={() => saveSection(activeSectionId)} disabled={isBusy} className="sm:w-auto w-full">
                   <Save className="h-4 w-4 mr-2" />
                   Enregistrer{mode === "compare" ? " FR + EN" : ""}
@@ -1054,8 +1074,8 @@ export default function AdminContent() {
                 const frRow = getRow(f.key, "fr");
                 const enRow = getRow(f.key, "en");
 
-                const missingFR = !frRow || isEmptyValue(frRow.value);
-                const missingEN = !enRow || isEmptyValue(enRow.value);
+                const missingFR = !frRow;
+                const missingEN = !enRow;
 
                 const autoEN = Boolean(enRow?.en_is_auto);
 
@@ -1175,7 +1195,7 @@ export default function AdminContent() {
             {/* Footer actions */}
             <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div className="text-xs text-muted-foreground">
-                Astuce: utilise “Comparer” pour voir FR/EN côte à côte et copier FR → EN.
+                Astuce: “Créer clés manquantes” enlève “Manquant FR+EN”. Ensuite tu peux “Visible” + “Enregistrer”.
               </div>
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => list.refetch()} disabled={isBusy}>
@@ -1194,7 +1214,7 @@ export default function AdminContent() {
 
       {/* small bottom note */}
       <div className="text-[12px] text-muted-foreground">
-        Notes: “EN auto” correspond à <span className="font-mono">en_is_auto</span>. Les champs “non créé” indiquent que la clé n’existe pas encore en base (bouton Initialiser).
+        Notes: “EN auto” correspond à <span className="font-mono">en_is_auto</span>. “non créé” signifie que la clé n’existe pas encore en base.
       </div>
     </div>
   );
