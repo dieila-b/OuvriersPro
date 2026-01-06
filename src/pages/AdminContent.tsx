@@ -32,7 +32,6 @@ import {
   ListPlus,
   Bug,
   Database,
-  ShieldAlert,
 } from "lucide-react";
 
 type Locale = "fr" | "en";
@@ -362,19 +361,16 @@ export default function AdminContent() {
     return res;
   }, [filteredKeys]);
 
-  // Selection (navigation)
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
   React.useEffect(() => {
     if (!selectedKey && filteredKeys.length) setSelectedKey(filteredKeys[0]);
   }, [filteredKeys, selectedKey]);
 
-  // Draft editor
   const [activeLocale, setActiveLocale] = React.useState<Locale>("fr");
   const [draftType, setDraftType] = React.useState<string>("text");
   const [draftValue, setDraftValue] = React.useState<string>("");
   const [draftPublished, setDraftPublished] = React.useState<boolean>(false);
 
-  // Load selection into editor
   React.useEffect(() => {
     if (!selectedKey) return;
     const row = getRow(selectedKey, activeLocale);
@@ -388,7 +384,6 @@ export default function AdminContent() {
     setDraftValue(value);
     setDraftPublished(pub);
 
-    // si locale manquante, bascule automatiquement sur l'autre si elle existe
     if (!row && fallback) {
       const other: Locale = activeLocale === "fr" ? "en" : "fr";
       setActiveLocale(other);
@@ -396,7 +391,6 @@ export default function AdminContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedKey]);
 
-  // Reload when locale changes
   React.useEffect(() => {
     if (!selectedKey) return;
     const row = getRow(selectedKey, activeLocale);
@@ -667,8 +661,8 @@ export default function AdminContent() {
         </CardContent>
       </Card>
 
-      {/* Title + actions */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      {/* Title + actions (responsive) */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold">Contenu du site</h1>
           <p className="text-sm text-muted-foreground">
@@ -676,7 +670,7 @@ export default function AdminContent() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 justify-start sm:justify-end">
           <Button type="button" variant="outline" onClick={() => list.refetch()} disabled={isBusy}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Actualiser
@@ -696,10 +690,10 @@ export default function AdminContent() {
         </div>
       </div>
 
-      {/* Main layout: sidebar / editor / preview */}
-      <div className="grid gap-4 lg:grid-cols-[340px_1fr_420px]">
-        {/* Sidebar */}
-        <Card className="rounded-2xl">
+      {/* Main layout: 1 col (mobile) / 2 cols (lg) / 3 cols (xl) */}
+      <div className="grid gap-4 grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[340px_1fr_420px]">
+        {/* Sidebar (sticky desktop) */}
+        <Card className="rounded-2xl lg:sticky lg:top-4 lg:self-start">
           <CardContent className="p-4 space-y-3">
             <div className="relative">
               <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
@@ -711,11 +705,11 @@ export default function AdminContent() {
               />
             </div>
 
-            <div className="grid gap-2 grid-cols-2">
+            <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as any)}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm w-full"
                 disabled={isBusy}
               >
                 <option value="All">Toutes</option>
@@ -729,7 +723,7 @@ export default function AdminContent() {
               <select
                 value={missingMode}
                 onChange={(e) => setMissingMode(e.target.value as MissingMode)}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm w-full"
                 disabled={isBusy}
               >
                 <option value="all">{missingLabel("all")}</option>
@@ -743,7 +737,8 @@ export default function AdminContent() {
               {list.isLoading ? "Chargement…" : `${filteredKeys.length} clé(s)`}
             </div>
 
-            <div className="h-[62vh] overflow-auto rounded-xl border">
+            {/* Responsive height: avoid squeezed columns on medium screens */}
+            <div className="h-[52vh] sm:h-[56vh] lg:h-[70vh] overflow-auto rounded-xl border">
               {((category === "All" ? categories : [category]) as Category[]).map((cat) => {
                 const items = keysByCategory[cat] ?? [];
                 if (!items.length) return null;
@@ -797,7 +792,7 @@ export default function AdminContent() {
               </div>
             ) : (
               <>
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-sm font-semibold break-all">{selectedKey}</div>
                     <div className="text-xs text-muted-foreground mt-1">
@@ -830,7 +825,7 @@ export default function AdminContent() {
 
                     return (
                       <TabsContent key={loc} value={loc} className="space-y-3 mt-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                           <div className="flex items-center gap-2">
                             {row ? (
                               <span className="inline-flex items-center gap-2 text-xs">
@@ -870,7 +865,7 @@ export default function AdminContent() {
                           </div>
                         </div>
 
-                        <div className="grid gap-2 md:grid-cols-[220px_1fr]">
+                        <div className="grid gap-2 grid-cols-1 md:grid-cols-[220px_1fr]">
                           <div>
                             <label className="text-xs text-muted-foreground">
                               Type ({loc.toUpperCase()})
@@ -889,13 +884,13 @@ export default function AdminContent() {
                             </select>
                           </div>
 
-                          <div className="flex items-end gap-2">
+                          <div className="flex flex-col sm:flex-row sm:items-end gap-2">
                             <Button type="button" className="w-full rounded-xl" onClick={saveActive} disabled={isBusy}>
                               <Save className="h-4 w-4 mr-2" />
                               Enregistrer
                             </Button>
 
-                            <Button type="button" variant="destructive" className="rounded-xl" onClick={deleteActive} disabled={isBusy}>
+                            <Button type="button" variant="destructive" className="w-full sm:w-auto rounded-xl" onClick={deleteActive} disabled={isBusy}>
                               <Trash2 className="h-4 w-4 mr-2" />
                               Supprimer
                             </Button>
@@ -909,7 +904,8 @@ export default function AdminContent() {
                           <Textarea
                             value={draftValue}
                             onChange={(e) => setDraftValue(e.target.value)}
-                            rows={16}
+                            rows={12}
+                            className="min-h-[240px] sm:min-h-[320px] lg:min-h-[420px]"
                             placeholder="Saisissez le contenu…"
                             disabled={isBusy}
                           />
@@ -927,14 +923,16 @@ export default function AdminContent() {
           </CardContent>
         </Card>
 
-        {/* Preview */}
-        <Card className="rounded-2xl">
+        {/* Preview: below on lg, right on xl */}
+        <Card className="rounded-2xl lg:col-span-2 xl:col-span-1">
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm font-semibold">Aperçu</div>
                 <div className="text-xs text-muted-foreground">
-                  {draftType === "markdown" ? "Markdown brut (option preview HTML possible ensuite)" : "Affichage brut"}
+                  {draftType === "markdown"
+                    ? "Markdown brut (option preview HTML possible ensuite)"
+                    : "Affichage brut"}
                 </div>
               </div>
 
@@ -953,7 +951,7 @@ export default function AdminContent() {
               </Button>
             </div>
 
-            <div className="h-[68vh] overflow-auto rounded-xl border bg-muted/10 p-3">
+            <div className="h-[38vh] sm:h-[42vh] lg:h-[40vh] xl:h-[70vh] overflow-auto rounded-xl border bg-muted/10 p-3">
               <pre className="text-xs whitespace-pre-wrap break-words">
                 {previewValue || "—"}
               </pre>
