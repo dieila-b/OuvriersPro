@@ -165,21 +165,12 @@ const HeroSection = () => {
     <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden">
       <div className="relative z-10 w-full px-4 sm:px-6 lg:px-10 py-8 sm:py-10">
         <div className="w-full max-w-5xl mx-auto text-center">
-          {/* ✅ Remplace les textes de la 1ère capture par ceux de la 2ème (FR) */}
           <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
-            {cms(
-              "home.hero.title",
-              "Trouvez le bon professionnel pour votre besoin",
-              "Find the right professional for your needs"
-            )}
+            {cms("home.hero.title", "Trouvez des prestataires fiables près de chez vous", "Find trusted providers near you")}
           </h1>
 
           <p className="mt-3 sm:mt-4 text-sm sm:text-base md:text-xl text-blue-100 break-words">
-            {cms(
-              "home.hero.subtitle",
-              "Connectez-vous avec des prestataires qualifiés près de chez vous",
-              "Connect with qualified providers near you"
-            )}
+            {cms("home.hero.subtitle", "Comparez, contactez et réservez en toute confiance.", "Compare, contact and book with confidence.")}
           </p>
         </div>
 
@@ -196,7 +187,7 @@ const HeroSection = () => {
               <div ref={jobsBoxRef} className="relative min-w-0 text-left lg:col-span-6">
                 <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
-                  placeholder={cms("home.search.placeholder_keyword", "Métier / service", "Service / profession")}
+                  placeholder={cms("home.search.placeholder_keyword", "Ex : plombier, électricien…", "e.g., plumber, electrician…")}
                   value={searchTerm}
                   onFocus={() => setOpenJobs(true)}
                   onChange={(e) => {
@@ -236,7 +227,7 @@ const HeroSection = () => {
               <div ref={districtsBoxRef} className="relative min-w-0 text-left lg:col-span-6">
                 <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
-                  placeholder={cms("home.search.placeholder_district", "Quartier", "District / area")}
+                  placeholder={cms("home.search.placeholder_district", "Quartier / commune", "District / area")}
                   value={district}
                   onFocus={() => setOpenDistricts(true)}
                   onChange={(e) => {
