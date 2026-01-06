@@ -203,7 +203,6 @@ const WorkerSearchSection: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // ✅ CMS helper (fallback FR/EN)
   const cms = (key: string, fallbackFr: string, fallbackEn: string) => {
     const v = t(key);
     if (!v || v === key) return language === "fr" ? fallbackFr : fallbackEn;
@@ -252,7 +251,7 @@ const WorkerSearchSection: React.FC = () => {
     return Math.max(0, Math.round(maxBottom));
   };
 
-  // ✅ Scroll qui “snap” sur le titre
+  // ✅ Scroll qui “snap” sur le titre, sans espace au-dessus (même avec barres sticky)
   const scrollToResultsTop = (opts?: { behavior?: ScrollBehavior }) => {
     const el = topAnchorRef.current ?? sectionRef.current;
     if (!el) return;
@@ -308,8 +307,8 @@ const WorkerSearchSection: React.FC = () => {
 
     if (!session) {
       toast({
-        title: cms("search.auth.required.title", "Connexion requise", "Login required"),
-        description: cms("search.auth.required.desc", "Connectez-vous pour voir le profil.", "Sign in to view the profile."),
+        title: cms("auth.login_required.title", "Connexion requise", "Login required"),
+        description: cms("auth.login_required.desc", "Connectez-vous pour voir le profil.", "Sign in to view the profile."),
       });
 
       window.setTimeout(() => {
@@ -339,7 +338,8 @@ const WorkerSearchSection: React.FC = () => {
   const [draft, setDraft] = useState<Filters>(DEFAULT_FILTERS);
 
   // ------------------------------------------------------------------
-  // ✅ AUTO-APPLY (debounce)
+  // ✅ AUTO-APPLY: dès qu’un filtre change, on applique et on met à jour l’URL,
+  // avec debounce 250ms pour éviter trop de updates.
   // ------------------------------------------------------------------
   const applyTimerRef = useRef<number | null>(null);
 
@@ -433,7 +433,8 @@ const WorkerSearchSection: React.FC = () => {
 
           return {
             id: w.id,
-            name: (((w.first_name || "") + (w.last_name ? ` ${w.last_name}` : "")).trim() || cms("search.card.default_name", "Ouvrier", "Worker")) as string,
+            name:
+              (((w.first_name || "") + (w.last_name ? ` ${w.last_name}` : "")).trim() || cms("search.worker.fallback_name", "Ouvrier", "Worker")) as string,
             job: w.profession ?? "",
             country: w.country ?? "",
             region: w.region ?? "",
@@ -458,7 +459,7 @@ const WorkerSearchSection: React.FC = () => {
         setWorkers([]);
         setError(
           cms(
-            "search.error.load",
+            "search.error.load_workers",
             "Impossible de charger les professionnels pour le moment.",
             "Unable to load professionals at the moment."
           )
@@ -469,7 +470,8 @@ const WorkerSearchSection: React.FC = () => {
     };
 
     fetchWorkers();
-  }, [language]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
 
   // ----------------------------
   // 2) Init: URL / sessionStorage / event
@@ -537,7 +539,7 @@ const WorkerSearchSection: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
-  // Ré-appliquer quand l'URL change
+  // Ré-appliquer quand l'URL change (navigation, etc.)
   useEffect(() => {
     if (!initializedRef.current) return;
     if (applyingExternalRef.current) return;
@@ -735,7 +737,7 @@ const WorkerSearchSection: React.FC = () => {
       updateDraft({ near: false, lat: null, lng: null }, { immediate: true });
       setGeoError(
         cms(
-          "home.search.geo.unsupported",
+          "search.geo.unsupported",
           "La géolocalisation n'est pas supportée par ce navigateur.",
           "Geolocation is not supported by this browser."
         )
@@ -766,7 +768,7 @@ const WorkerSearchSection: React.FC = () => {
 
         setGeoError(
           cms(
-            "home.search.geo.error",
+            "search.geo.error",
             "Impossible de récupérer votre position. Autorisez la localisation dans votre navigateur.",
             "Unable to retrieve your location. Please allow location access in your browser."
           )
@@ -776,15 +778,7 @@ const WorkerSearchSection: React.FC = () => {
     );
   };
 
-  const resultCount = (count: number) =>
-    language === "fr"
-      ? `${count} résultat${count > 1 ? "s" : ""} trouvé${count > 1 ? "s" : ""}`
-      : `${count} result${count > 1 ? "s" : ""} found`;
-
-  const hasAnyGeoWorkers = useMemo(() => workers.some((w) => w.latitude != null && w.longitude != null), [workers]);
-  const appliedHasCoords = applied.lat != null && applied.lng != null;
-
-  // CMS texts
+  // ✅ Texts (CMS-driven)
   const title = cms("search.page.title", "Trouvez votre professionnel", "Find your professional");
   const subtitle = cms(
     "search.page.subtitle",
@@ -793,61 +787,80 @@ const WorkerSearchSection: React.FC = () => {
   );
 
   const filtersTitle = cms("search.filters.title", "Filtres", "Filters");
-  const resetLabel = cms("search.filters.btn_reset", "Réinitialiser", "Reset");
-  const geoCta = cms("search.filters.btn_geolocate", "Utiliser ma position", "Use my location");
-
-  const viewModeLabel = cms("search.view.mode", "Affichage", "View");
-  const viewList = cms("search.view.list", "Liste", "List");
-  const viewGrid = cms("search.view.grid", "Mosaïque", "Grid");
-
-  const keywordLabel = cms("search.filters.keyword_label", "Métier ou nom", "Trade or name");
+  const keywordLabel = cms("search.filters.keyword.label", "Métier ou nom", "Trade or name");
   const keywordPlaceholder = cms(
-    "search.filters.keyword_placeholder",
+    "search.filters.keyword.placeholder",
     "Plombier, électricien, Mamadou...",
     "Plumber, electrician, John..."
   );
 
-  const jobLabel = cms("search.filters.job_label", "Métier", "Job");
-  const allJobs = cms("search.filters.job_all", "Tous les métiers", "All trades");
+  const jobLabel = cms("search.filters.job.label", "Métier", "Job");
+  const jobAll = cms("search.filters.job.all", "Tous les métiers", "All trades");
 
-  const regionLabel = cms("search.filters.region_label", "Région", "Region");
-  const cityLabel = cms("search.filters.city_label", "Ville", "City");
-  const communeLabel = cms("search.filters.commune_label", "Commune", "Commune");
-  const districtLabel = cms("search.filters.district_label", "Quartier", "District");
+  const priceLabel = cms("search.filters.price.label", "Tarif horaire max", "Max hourly rate");
+  const priceNoLimit = cms("search.filters.price.no_limit", "Aucune limite", "No limit");
 
-  const allRegions = cms("search.filters.region_all", "Toutes les régions", "All regions");
-  const allCities = cms("search.filters.city_all", "Toutes les villes", "All cities");
-  const allCommunes = cms("search.filters.commune_all", "Toutes les communes", "All communes");
-  const allDistricts = cms("search.filters.district_all", "Tous les quartiers", "All districts");
+  const ratingLabel = cms("search.filters.rating.label", "Note minimum", "Minimum rating");
+  const ratingAny = cms("search.filters.rating.any", "Toutes", "Any");
 
-  const priceLabel = cms("search.filters.price_label", "Tarif horaire max", "Max hourly rate");
-  const priceNoLimit = cms("search.filters.price_nolimit", "Aucune limite", "No limit");
+  const regionLabel = cms("search.filters.region.label", "Région", "Region");
+  const regionAll = cms("search.filters.region.all", "Toutes les régions", "All regions");
 
-  const ratingLabel = cms("search.filters.rating_label", "Note minimum", "Minimum rating");
-  const ratingAny = cms("search.filters.rating_any", "Toutes", "Any");
+  const cityLabel = cms("search.filters.city.label", "Ville", "City");
+  const cityAll = cms("search.filters.city.all", "Toutes les villes", "All cities");
 
-  const distanceLabel = cms("search.filters.distance_label", "Distance", "Distance");
-  const radiusLabel = cms("search.filters.radius_label", "Rayon", "Radius");
+  const communeLabel = cms("search.filters.commune.label", "Commune", "Commune");
+  const communeAll = cms("search.filters.commune.all", "Toutes les communes", "All communes");
+
+  const districtLabel = cms("search.filters.district.label", "Quartier", "District");
+  const districtAll = cms("search.filters.district.all", "Tous les quartiers", "All districts");
+
+  const resetLabel = cms("search.filters.btn_reset", "Réinitialiser", "Reset");
+
+  const viewModeLabel = cms("search.view.label", "Affichage", "View");
+  const viewListLabel = cms("search.view.list", "Liste", "List");
+  const viewGridLabel = cms("search.view.grid", "Mosaïque", "Grid");
+
+  const contactLabel = cms("search.card.btn_contact", "Contacter", "Contact");
+  const perHourLabel = cms("search.card.per_hour", "/h", "/h");
+  const yearsSuffix = cms("search.card.years_suffix", "ans d'expérience", "years of experience");
+  const distanceLabel = cms("search.card.distance_label", "Distance", "Distance");
 
   const geoHint = cms(
-    "search.filters.geo_hint",
+    "search.geo.hint",
     "Activez la localisation pour trier et filtrer par distance.",
     "Enable location to sort/filter by distance."
   );
-
-  const appliedBadge = cms("search.filters.applied_badge", "Filtres appliqués", "Applied filters");
+  const useMyPos = cms("search.filters.btn_geolocate", "Utiliser ma position", "Use my location");
+  const radiusLabel = cms("search.filters.radius.label", "Rayon", "Radius");
+  const kmLabel = cms("search.filters.radius.unit", "km", "km");
 
   const noResults = cms(
-    "search.results.no_results",
+    "search.results.none",
     "Aucun professionnel ne correspond à ces critères pour le moment.",
     "No professional matches your criteria yet."
   );
-  const noData = cms("search.results.no_data", "Aucun professionnel n’est encore disponible.", "No professionals are available yet.");
-  const loadingText = cms("search.results.loading", "Chargement des professionnels...", "Loading professionals...");
+  const noData = cms(
+    "search.results.nodata",
+    "Aucun professionnel n’est encore disponible.",
+    "No professionals are available yet."
+  );
 
-  const contactBtn = cms("search.card.btn_contact", "Contacter", "Contact");
-  const perHourSuffix = cms("search.card.price_suffix", "/h", "/h");
-  const yearsSuffix = cms("search.card.years_suffix", "ans d'expérience", "years of experience");
+  const loadingShort = cms("common.loading", "Chargement...", "Loading...");
+  const loadingWorkers = cms("search.loading_workers", "Chargement des professionnels...", "Loading professionals...");
+
+  const hasAnyGeoWorkers = useMemo(() => workers.some((w) => w.latitude != null && w.longitude != null), [workers]);
+  const appliedHasCoords = applied.lat != null && applied.lng != null;
+
+  const resultCountLabel = useMemo(() => {
+    const count = filteredWorkers.length;
+    if (language === "fr") {
+      const s = count > 1 ? "s" : "";
+      const e = count > 1 ? "s" : "";
+      return cms("search.results.count", `${count} résultat${s} trouvé${e}`, `${count} result${count > 1 ? "s" : ""} found`);
+    }
+    return cms("search.results.count", `${count} résultat${count > 1 ? "s" : ""} trouvé${count > 1 ? "s" : ""}`, `${count} result${count > 1 ? "s" : ""} found`);
+  }, [filteredWorkers.length, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <section ref={sectionRef} id="worker-search" className="w-full pt-0 pb-10 sm:pb-14 lg:pb-16 bg-white">
@@ -857,19 +870,13 @@ const WorkerSearchSection: React.FC = () => {
 
         <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-5 sm:mb-7 border-b border-gray-200 pb-3 min-w-0">
           <div className="min-w-0">
-            <h2 className="mt-0 text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
-              {title}
-            </h2>
+            <h2 className="mt-0 text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">{title}</h2>
             <p className="text-gray-600 mt-1.5 sm:mt-2 text-sm sm:text-base max-w-4xl">{subtitle}</p>
 
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] sm:text-xs text-gray-500">
               <span className="inline-flex items-center gap-1">
                 <Search className="w-3 h-3" />
-                {loading ? (
-                  <span>{cms("common.loading", "Chargement...", "Loading...")}</span>
-                ) : (
-                  <span>{resultCount(filteredWorkers.length)}</span>
-                )}
+                {loading ? <span>{loadingShort}</span> : <span>{resultCountLabel}</span>}
               </span>
 
               <span className="inline-flex items-center gap-1">
@@ -879,7 +886,7 @@ const WorkerSearchSection: React.FC = () => {
 
               <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 border-emerald-200 bg-emerald-50 text-emerald-700">
                 <Check className="w-3 h-3" />
-                {appliedBadge}
+                {cms("search.badge.applied", "Filtres appliqués", "Applied filters")}
               </span>
             </div>
 
@@ -887,7 +894,7 @@ const WorkerSearchSection: React.FC = () => {
               <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-flex items-center gap-2">
                 <Info className="w-4 h-4" />
                 {cms(
-                  "search.geo.missing_coords_warning",
+                  "search.geo.no_workers_coords",
                   "Certains profils n'ont pas encore de position GPS.",
                   "Some profiles do not have GPS coordinates yet."
                 )}
@@ -906,7 +913,7 @@ const WorkerSearchSection: React.FC = () => {
                 }`}
               >
                 <LayoutList className="w-3 h-3" />
-                {viewList}
+                {viewListLabel}
               </button>
               <button
                 type="button"
@@ -916,7 +923,7 @@ const WorkerSearchSection: React.FC = () => {
                 }`}
               >
                 <LayoutGrid className="w-3 h-3" />
-                {viewGrid}
+                {viewGridLabel}
               </button>
             </div>
           </div>
@@ -959,7 +966,7 @@ const WorkerSearchSection: React.FC = () => {
                 disabled={geoLocating}
               >
                 <LocateFixed className="w-4 h-4 mr-2" />
-                {geoLocating ? cms("search.geo.locating", "Localisation...", "Locating...") : geoCta}
+                {geoLocating ? cms("search.geo.locating", "Localisation...", "Locating...") : useMyPos}
               </Button>
 
               {geoError && (
@@ -972,7 +979,9 @@ const WorkerSearchSection: React.FC = () => {
                 <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
                   <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                     <span>{radiusLabel}</span>
-                    <span className="text-[11px] text-gray-500">{draft.radiusKm} km</span>
+                    <span className="text-[11px] text-gray-500">
+                      {draft.radiusKm} {kmLabel}
+                    </span>
                   </div>
                   <Slider
                     defaultValue={[draft.radiusKm]}
@@ -992,7 +1001,7 @@ const WorkerSearchSection: React.FC = () => {
                 onChange={(e) => updateDraft({ job: e.target.value })}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
-                <option value="all">{allJobs}</option>
+                <option value="all">{jobAll}</option>
                 {jobs.map((job) => (
                   <option key={job} value={job}>
                     {job}
@@ -1011,7 +1020,7 @@ const WorkerSearchSection: React.FC = () => {
                 }}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
-                <option value="">{allRegions}</option>
+                <option value="">{regionAll}</option>
                 {regions.map((r) => (
                   <option key={r} value={r}>
                     {r}
@@ -1030,7 +1039,7 @@ const WorkerSearchSection: React.FC = () => {
                 }}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
-                <option value="">{allCities}</option>
+                <option value="">{cityAll}</option>
                 {cities.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -1049,7 +1058,7 @@ const WorkerSearchSection: React.FC = () => {
                 }}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
-                <option value="">{allCommunes}</option>
+                <option value="">{communeAll}</option>
                 {communes.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -1065,7 +1074,7 @@ const WorkerSearchSection: React.FC = () => {
                 onChange={(e) => updateDraft({ district: e.target.value })}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
-                <option value="">{allDistricts}</option>
+                <option value="">{districtAll}</option>
                 {districts.map((d) => (
                   <option key={d} value={d}>
                     {d}
@@ -1078,7 +1087,9 @@ const WorkerSearchSection: React.FC = () => {
               <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                 <span>{priceLabel}</span>
                 <span className="text-[11px] text-gray-500">
-                  {draft.maxPrice >= DEFAULT_MAX_PRICE ? priceNoLimit : `${draft.maxPrice.toLocaleString("fr-FR")} GNF`}
+                  {draft.maxPrice >= DEFAULT_MAX_PRICE
+                    ? priceNoLimit
+                    : `${draft.maxPrice.toLocaleString("fr-FR")} GNF`}
                 </span>
               </div>
               <Slider
@@ -1108,9 +1119,7 @@ const WorkerSearchSection: React.FC = () => {
           </aside>
 
           <div className="min-w-0">
-            {error && (
-              <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">{error}</div>
-            )}
+            {error && <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">{error}</div>}
 
             {!error && !loading && workers.length === 0 && (
               <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
@@ -1126,7 +1135,7 @@ const WorkerSearchSection: React.FC = () => {
 
             {loading && filteredWorkers.length === 0 && (
               <div className="border border-gray-100 rounded-xl p-6 text-sm text-gray-500">
-                {loadingText}
+                {loadingWorkers}
               </div>
             )}
 
@@ -1193,7 +1202,7 @@ const WorkerSearchSection: React.FC = () => {
                       <div className="w-full sm:w-auto flex sm:flex-col items-start sm:items-end justify-between sm:justify-start gap-2 min-w-0">
                         <div className="text-pro-blue font-bold text-base sm:text-lg">
                           {formatCurrency(w.hourlyRate, w.currency)}
-                          <span className="text-xs sm:text-sm text-gray-600 ml-1">{perHourSuffix}</span>
+                          <span className="text-xs sm:text-sm text-gray-600 ml-1">{perHourLabel}</span>
                         </div>
 
                         <Button
@@ -1201,7 +1210,7 @@ const WorkerSearchSection: React.FC = () => {
                           className="w-full sm:w-auto bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm"
                           onClick={() => goToWorkerProfile(w.id)}
                         >
-                          {contactBtn}
+                          {contactLabel}
                         </Button>
                       </div>
                     </div>
@@ -1262,7 +1271,7 @@ const WorkerSearchSection: React.FC = () => {
                       <div className="mt-2 flex items-center justify-between gap-3">
                         <div className="text-sm font-bold text-pro-blue">
                           {formatCurrency(w.hourlyRate, w.currency)}
-                          <span className="ml-1 text-[11px] text-gray-600">{perHourSuffix}</span>
+                          <span className="ml-1 text-[11px] text-gray-600">{perHourLabel}</span>
                         </div>
 
                         <Button
@@ -1270,7 +1279,7 @@ const WorkerSearchSection: React.FC = () => {
                           className="bg-pro-blue hover:bg-blue-700 text-[11px]"
                           onClick={() => goToWorkerProfile(w.id)}
                         >
-                          {contactBtn}
+                          {contactLabel}
                         </Button>
                       </div>
                     </div>
