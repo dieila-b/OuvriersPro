@@ -1,16 +1,20 @@
 // src/pages/AdminContent.tsx
 import * as React from "react";
 import { supabase } from "@/lib/supabase";
+import { useQuery } from "@tanstack/react-query";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
+
 import {
   useUpsertSiteContent,
   useTogglePublishSiteContent,
   useDeleteSiteContent,
 } from "@/hooks/useSiteContent";
+
 import {
   Search,
   RefreshCw,
@@ -22,15 +26,15 @@ import {
   AlertTriangle,
   Save,
   Trash2,
-  Wand2,
   Sparkles,
   RotateCcw,
   ListPlus,
   Bug,
   Database,
   ShieldAlert,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
 
 type Locale = "fr" | "en";
 type Category =
@@ -134,12 +138,6 @@ function detectCategory(key: string): Category {
   return "Other";
 }
 
-function badgeStatus(published: boolean) {
-  return published
-    ? "border-emerald-200 text-emerald-700 bg-emerald-50"
-    : "border-amber-200 text-amber-700 bg-amber-50";
-}
-
 function missingLabel(mode: MissingMode) {
   switch (mode) {
     case "en_missing":
@@ -151,6 +149,12 @@ function missingLabel(mode: MissingMode) {
     default:
       return "Tous";
   }
+}
+
+function badgeStatus(published: boolean) {
+  return published
+    ? "border-emerald-200 text-emerald-700 bg-emerald-50"
+    : "border-amber-200 text-amber-700 bg-amber-50";
 }
 
 async function translateViaEdgeFn(args: {
@@ -194,17 +198,28 @@ function ensureToReviewNote(text: string, locale: Locale) {
   return hasFr ? trimmed : `[À valider]\n${trimmed}`;
 }
 
+type Draft = {
+  type: string;
+  value: string;
+  is_published: boolean;
+};
+
+type DraftState = Record<string, Record<Locale, Draft>>; // key -> locale -> draft
+
+function draftKey(k: string, loc: Locale) {
+  return `${k}__${loc}`;
+}
+
 export default function AdminContent() {
   const { toast } = useToast();
 
-  // Mutations : on garde tes hooks existants
   const upsert = useUpsertSiteContent();
   const togglePublish = useTogglePublishSiteContent();
   const del = useDeleteSiteContent();
 
-  // ✅ LISTE DIRECTE (remplace useSiteContentList)
+  // ✅ LISTE DIRECTE
   const list = useQuery({
-    queryKey: ["site_content_list_direct"],
+    queryKey: ["site_content_list_direct_modern"],
     queryFn: async (): Promise<SiteContentRow[]> => {
       const { data, error } = await supabase
         .from("site_content")
@@ -219,7 +234,7 @@ export default function AdminContent() {
     refetchOnWindowFocus: false,
   });
 
-  // ✅ DIAGNOSTIC toujours visible
+  // ✅ DIAGNOSTIC
   const [diag, setDiag] = React.useState<{
     supabaseUrl: string;
     hasSession: boolean;
@@ -227,7 +242,6 @@ export default function AdminContent() {
     userId: string;
     selectOk: boolean;
     selectErr: string;
-    rowCount: number;
   }>({
     supabaseUrl:
       (supabase as any)?.supabaseUrl ??
@@ -239,7 +253,6 @@ export default function AdminContent() {
     userId: "",
     selectOk: false,
     selectErr: "",
-    rowCount: 0,
   });
 
   const runDiag = React.useCallback(async () => {
@@ -250,7 +263,7 @@ export default function AdminContent() {
       const session = sessionData?.session ?? null;
       const user = session?.user ?? null;
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("site_content")
         .select("id", { count: "exact" })
         .limit(1);
@@ -262,7 +275,6 @@ export default function AdminContent() {
         userId: user?.id ?? "",
         selectOk: !error,
         selectErr: error ? ((error as any)?.message ?? JSON.stringify(error)) : "",
-        rowCount: Array.isArray(data) ? data.length : 0,
       }));
     } catch (e: any) {
       setDiag((prev) => ({
@@ -281,32 +293,27 @@ export default function AdminContent() {
   const [category, setCategory] = React.useState<Category | "All">("All");
   const [missingMode, setMissingMode] = React.useState<MissingMode>("all");
 
-  const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
-  const [activeLocale, setActiveLocale] = React.useState<Locale>("fr");
-
-  const [typeByLocale, setTypeByLocale] = React.useState<Record<Locale, string>>({
-    fr: "text",
-    en: "text",
-  });
-  const [valueByLocale, setValueByLocale] = React.useState<Record<Locale, string>>({
-    fr: "",
-    en: "",
-  });
-  const [publishedByLocale, setPublishedByLocale] = React.useState<Record<Locale, boolean>>({
-    fr: true,
-    en: true,
+  // Sections ouvertes (UX CMS)
+  const [openSections, setOpenSections] = React.useState<Record<string, boolean>>({
+    Header: true,
+    Home: true,
+    Footer: true,
+    Company: true,
+    Services: true,
+    Contact: true,
+    Legal: true,
+    Other: false,
   });
 
-  const [translatingKey, setTranslatingKey] = React.useState<string | null>(null);
-  const [translatingDir, setTranslatingDir] = React.useState<string | null>(null);
+  // Drafts locaux = édition immédiate, sans panneau à droite
+  const [drafts, setDrafts] = React.useState<DraftState>({});
 
   const rows = list.data ?? [];
   const isBusy =
     list.isLoading ||
     upsert.isPending ||
     togglePublish.isPending ||
-    del.isPending ||
-    Boolean(translatingKey);
+    del.isPending;
 
   const byKey = React.useMemo(() => {
     const map = new Map<string, SiteContentRow[]>();
@@ -332,10 +339,43 @@ export default function AdminContent() {
     [byKey]
   );
 
-  const isComplete = React.useCallback(
-    (key: string) => Boolean(getRow(key, "fr")) && Boolean(getRow(key, "en")),
+  const initDraftForKey = React.useCallback(
+    (key: string) => {
+      setDrafts((prev) => {
+        if (prev[key]) return prev;
+
+        const fr = getRow(key, "fr");
+        const en = getRow(key, "en");
+
+        const baseType = (fr?.type ?? en?.type ?? "text").toString();
+
+        return {
+          ...prev,
+          [key]: {
+            fr: {
+              type: (fr?.type ?? baseType).toString(),
+              value: (fr?.value ?? "").toString(),
+              is_published: Boolean(fr?.is_published),
+            },
+            en: {
+              type: (en?.type ?? baseType).toString(),
+              value: (en?.value ?? "").toString(),
+              is_published: Boolean(en?.is_published),
+            },
+          },
+        };
+      });
+    },
     [getRow]
   );
+
+  // Initialise les drafts à partir des données
+  React.useEffect(() => {
+    if (!rows.length) return;
+    // On ne force pas tout, seulement les clés visibles via interaction,
+    // mais on peut précharger les clés filtrées (plus simple).
+    // Ici on laisse lazy: initDraftForKey sera appelé au rendu des cartes.
+  }, [rows]);
 
   const missingEn = React.useMemo(
     () => allKeys.filter((k) => getRow(k, "fr") && !getRow(k, "en")).length,
@@ -373,29 +413,22 @@ export default function AdminContent() {
     });
   }, [allKeys, q, category, missingMode, getRow]);
 
-  // Charge dans l'éditeur à la sélection
-  React.useEffect(() => {
-    if (!selectedKey) return;
-
-    const fr = getRow(selectedKey, "fr");
-    const en = getRow(selectedKey, "en");
-
-    setTypeByLocale({
-      fr: fr?.type ?? "text",
-      en: en?.type ?? (fr?.type ?? "text"),
-    });
-    setValueByLocale({
-      fr: fr?.value ?? "",
-      en: en?.value ?? "",
-    });
-    setPublishedByLocale({
-      fr: Boolean(fr?.is_published),
-      en: Boolean(en?.is_published),
-    });
-
-    if (fr && !en) setActiveLocale("en");
-    else if (en && !fr) setActiveLocale("fr");
-  }, [selectedKey, getRow]);
+  const keysByCategory = React.useMemo(() => {
+    const result: Record<Category, string[]> = {
+      Header: [],
+      Home: [],
+      Footer: [],
+      Company: [],
+      Services: [],
+      Contact: [],
+      Legal: [],
+      Other: [],
+    };
+    for (const k of filteredKeys) {
+      result[detectCategory(k)].push(k);
+    }
+    return result;
+  }, [filteredKeys]);
 
   const resetFilters = () => {
     setQ("");
@@ -409,141 +442,270 @@ export default function AdminContent() {
     const key = k.trim();
     if (!key) return;
 
-    setSelectedKey(key);
-    setActiveLocale("fr");
-    setTypeByLocale({ fr: "text", en: "text" });
-    setValueByLocale({ fr: "", en: "" });
-    setPublishedByLocale({ fr: false, en: false });
-  };
-
-  const saveLocale = async (key: string, locale: Locale) => {
-    if (!key) return;
-    try {
-      await upsert.mutateAsync({
-        key,
-        locale,
-        type: typeByLocale[locale] ?? "text",
-        value: valueByLocale[locale] ?? "",
-        is_published: Boolean(publishedByLocale[locale]),
-      });
-      toast({ title: "Enregistré", description: `${key} (${locale.toUpperCase()}) mis à jour.` });
-      await list.refetch();
-      await runDiag();
-    } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Enregistrement impossible.", variant: "destructive" });
-    }
-  };
-
-  const copyLocaleToLocale = async (key: string, from: Locale, to: Locale) => {
-    if (!key) return;
-
-    const fromRow = getRow(key, from);
-    const fromType = typeByLocale[from] ?? fromRow?.type ?? "text";
-    const fromValue = valueByLocale[from] ?? fromRow?.value ?? "";
-    const fromPub = Boolean(publishedByLocale[from] ?? fromRow?.is_published ?? false);
-
-    setTypeByLocale((s) => ({ ...s, [to]: fromType }));
-    setValueByLocale((s) => ({ ...s, [to]: fromValue }));
-    setPublishedByLocale((s) => ({ ...s, [to]: fromPub }));
-    setActiveLocale(to);
-
-    try {
-      await upsert.mutateAsync({ key, locale: to, type: fromType, value: fromValue, is_published: fromPub });
-      toast({ title: "Copie effectuée", description: `${from.toUpperCase()} → ${to.toUpperCase()} enregistré.` });
-      await list.refetch();
-      await runDiag();
-    } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Copie impossible.", variant: "destructive" });
-    }
-  };
-
-  const translateEditor = async (key: string, from: Locale, to: Locale, options?: { addReviewNote?: boolean }) => {
-    const fromRow = getRow(key, from);
-    const srcType = (typeByLocale[from] ?? fromRow?.type ?? "text").toString();
-    const srcValue = (valueByLocale[from] ?? fromRow?.value ?? "").toString();
-
-    if (!srcValue.trim()) {
-      toast({ title: "Impossible", description: `Le contenu ${from.toUpperCase()} est vide.`, variant: "destructive" });
-      return;
-    }
-
-    const dir = `${from.toUpperCase()}→${to.toUpperCase()}`;
-    setTranslatingKey(key);
-    setTranslatingDir(dir);
-
-    try {
-      const translated = await translateViaEdgeFn({ text: srcValue, source: from, target: to, type: srcType, mode: "draft" });
-      const finalText = options?.addReviewNote ? ensureToReviewNote(translated, to) : translated;
-
-      setTypeByLocale((s) => ({ ...s, [to]: srcType }));
-      setValueByLocale((s) => ({ ...s, [to]: finalText }));
-      setPublishedByLocale((s) => ({ ...s, [to]: false }));
-      setActiveLocale(to);
-
-      toast({ title: "Traduction prête", description: `Traduction ${dir} générée. Vérifie puis enregistre.` });
-    } catch (e: any) {
-      toast({ title: "Erreur traduction", description: e?.message ?? "Traduction impossible.", variant: "destructive" });
-    } finally {
-      setTranslatingKey(null);
-      setTranslatingDir(null);
-    }
+    initDraftForKey(key);
+    toast({
+      title: "Clé prête",
+      description: `La clé "${key}" est prête. Renseigne FR/EN puis enregistre.`,
+    });
   };
 
   const createMissingLocale = async (key: string, locale: Locale) => {
     try {
+      initDraftForKey(key);
+      const d = drafts[key]?.[locale];
       await upsert.mutateAsync({
         key,
         locale,
-        type: typeByLocale[locale] ?? "text",
-        value: valueByLocale[locale] ?? "",
+        type: d?.type ?? "text",
+        value: d?.value ?? "",
         is_published: false,
       });
-      toast({ title: "Créé", description: `${key} (${locale.toUpperCase()}) créé en brouillon.` });
+      toast({
+        title: "Créé",
+        description: `${key} (${locale.toUpperCase()}) créé en brouillon.`,
+      });
       await list.refetch();
       await runDiag();
     } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Création impossible.", variant: "destructive" });
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Création impossible.",
+        variant: "destructive",
+      });
     }
   };
 
-  const setPublishBoth = async (key: string, next: boolean) => {
-    const fr = getRow(key, "fr");
-    const en = getRow(key, "en");
+  const saveLocale = async (key: string, locale: Locale) => {
+    try {
+      initDraftForKey(key);
+      const d = drafts[key]?.[locale];
+      await upsert.mutateAsync({
+        key,
+        locale,
+        type: d?.type ?? "text",
+        value: d?.value ?? "",
+        is_published: Boolean(d?.is_published),
+      });
+      toast({
+        title: "Enregistré",
+        description: `${key} (${locale.toUpperCase()}) mis à jour.`,
+      });
+      await list.refetch();
+      await runDiag();
+    } catch (e: any) {
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Enregistrement impossible.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const copyLocaleToLocale = async (key: string, from: Locale, to: Locale) => {
+    try {
+      initDraftForKey(key);
+      const fromRow = getRow(key, from);
+      const srcType =
+        drafts[key]?.[from]?.type ?? fromRow?.type ?? "text";
+      const srcValue =
+        drafts[key]?.[from]?.value ?? fromRow?.value ?? "";
+      const srcPub =
+        Boolean(drafts[key]?.[from]?.is_published ?? fromRow?.is_published ?? false);
+
+      setDrafts((prev) => ({
+        ...prev,
+        [key]: {
+          ...prev[key],
+          [to]: {
+            type: srcType.toString(),
+            value: srcValue.toString(),
+            is_published: srcPub,
+          },
+        },
+      }));
+
+      await upsert.mutateAsync({
+        key,
+        locale: to,
+        type: srcType.toString(),
+        value: srcValue.toString(),
+        is_published: srcPub,
+      });
+
+      toast({
+        title: "Copie effectuée",
+        description: `${from.toUpperCase()} → ${to.toUpperCase()} enregistré.`,
+      });
+
+      await list.refetch();
+      await runDiag();
+    } catch (e: any) {
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Copie impossible.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const translateEditor = async (key: string, from: Locale, to: Locale) => {
+    try {
+      initDraftForKey(key);
+      const fromRow = getRow(key, from);
+
+      const srcType =
+        (drafts[key]?.[from]?.type ?? fromRow?.type ?? "text").toString();
+      const srcValue =
+        (drafts[key]?.[from]?.value ?? fromRow?.value ?? "").toString();
+
+      if (!srcValue.trim()) {
+        toast({
+          title: "Impossible",
+          description: `Le contenu ${from.toUpperCase()} est vide.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const translated = await translateViaEdgeFn({
+        text: srcValue,
+        source: from,
+        target: to,
+        type: srcType,
+        mode: "draft",
+      });
+
+      const finalText = ensureToReviewNote(translated, to);
+
+      setDrafts((prev) => ({
+        ...prev,
+        [key]: {
+          ...prev[key],
+          [to]: {
+            type: srcType,
+            value: finalText,
+            is_published: false,
+          },
+        },
+      }));
+
+      toast({
+        title: "Traduction prête",
+        description: `Traduction ${from.toUpperCase()}→${to.toUpperCase()} générée. Vérifie puis enregistre.`,
+      });
+    } catch (e: any) {
+      toast({
+        title: "Erreur traduction",
+        description: e?.message ?? "Traduction impossible.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const setPublishLocale = async (key: string, locale: Locale, next: boolean) => {
+    const row = getRow(key, locale);
 
     if (next) {
-      const frVal = (fr?.value ?? "").trim();
-      const enVal = (en?.value ?? "").trim();
-      if (!fr || !en || !frVal || !enVal) {
-        toast({ title: "Publication impossible", description: "FR et EN doivent exister et être non vides pour publier.", variant: "destructive" });
+      const val = (drafts[key]?.[locale]?.value ?? row?.value ?? "").trim();
+      if (!val) {
+        toast({
+          title: "Publication impossible",
+          description: `${locale.toUpperCase()} doit être non vide pour publier.`,
+          variant: "destructive",
+        });
         return;
       }
     }
 
     try {
-      if (fr) await togglePublish.mutateAsync({ id: fr.id, is_published: next });
-      if (en) await togglePublish.mutateAsync({ id: en.id, is_published: next });
-      toast({ title: next ? "Publié (FR + EN)" : "Dépublié (FR + EN)", description: `Statut appliqué pour ${key}.` });
+      // Si la row existe: toggle, sinon: upsert direct
+      if (row) {
+        await togglePublish.mutateAsync({ id: row.id, is_published: next });
+      } else {
+        initDraftForKey(key);
+        const d = drafts[key]?.[locale];
+        await upsert.mutateAsync({
+          key,
+          locale,
+          type: d?.type ?? "text",
+          value: d?.value ?? "",
+          is_published: next,
+        });
+      }
+
+      setDrafts((prev) => ({
+        ...prev,
+        [key]: {
+          ...prev[key],
+          [locale]: {
+            ...(prev[key]?.[locale] ?? { type: "text", value: "", is_published: false }),
+            is_published: next,
+          },
+        },
+      }));
+
+      toast({
+        title: next ? "Publié" : "Dépublié",
+        description: `${key} (${locale.toUpperCase()}) mis à jour.`,
+      });
+
       await list.refetch();
       await runDiag();
     } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Mise à jour du statut impossible.", variant: "destructive" });
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Mise à jour du statut impossible.",
+        variant: "destructive",
+      });
     }
   };
 
   const deleteLocale = async (key: string, locale: Locale) => {
     const row = getRow(key, locale);
-    if (!row) return;
+    if (!row) {
+      toast({
+        title: "Rien à supprimer",
+        description: `${key} (${locale.toUpperCase()}) n'existe pas en base.`,
+      });
+      return;
+    }
 
-    const ok = window.confirm(`Supprimer ${key} (${locale.toUpperCase()}) ?\n\nCette action est irréversible.`);
+    const ok = window.confirm(
+      `Supprimer ${key} (${locale.toUpperCase()}) ?\n\nCette action est irréversible.`
+    );
     if (!ok) return;
 
     try {
       await del.mutateAsync({ id: row.id });
-      toast({ title: "Supprimé", description: `${key} (${locale.toUpperCase()}) supprimé.` });
+
+      // nettoie draft local
+      setDrafts((prev) => {
+        const next = { ...prev };
+        if (!next[key]) return next;
+        next[key] = {
+          ...next[key],
+          [locale]: {
+            ...next[key][locale],
+            value: "",
+            is_published: false,
+          },
+        };
+        return next;
+      });
+
+      toast({
+        title: "Supprimé",
+        description: `${key} (${locale.toUpperCase()}) supprimé.`,
+      });
+
       await list.refetch();
       await runDiag();
     } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Suppression impossible.", variant: "destructive" });
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Suppression impossible.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -561,24 +723,504 @@ export default function AdminContent() {
         for (const loc of LOCALES) {
           const existing = getRow(k, loc);
           if (existing) continue;
-          await upsert.mutateAsync({ key: k, locale: loc, type: "text", value: "", is_published: false });
+          await upsert.mutateAsync({
+            key: k,
+            locale: loc,
+            type: "text",
+            value: "",
+            is_published: false,
+          });
           created += 1;
         }
       }
-      toast({ title: "Initialisation terminée", description: created > 0 ? `${created} entrée(s) créée(s).` : "Aucune entrée à créer." });
+      toast({
+        title: "Initialisation terminée",
+        description: created > 0 ? `${created} entrée(s) créée(s).` : "Aucune entrée à créer.",
+      });
       await list.refetch();
       await runDiag();
     } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? "Initialisation impossible.", variant: "destructive" });
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Initialisation impossible.",
+        variant: "destructive",
+      });
     }
   };
 
-  const selectedFr = selectedKey ? getRow(selectedKey, "fr") : null;
-  const selectedEn = selectedKey ? getRow(selectedKey, "en") : null;
+  const toggleSection = (name: string) => {
+    setOpenSections((s) => ({ ...s, [name]: !s[name] }));
+  };
+
+  const SectionHeader = ({ name, count }: { name: string; count: number }) => {
+    const open = Boolean(openSections[name]);
+    return (
+      <button
+        type="button"
+        onClick={() => toggleSection(name)}
+        className="w-full flex items-center justify-between rounded-xl border bg-background px-4 py-3 hover:bg-muted/20"
+      >
+        <div className="flex items-center gap-3">
+          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          <div className="text-sm font-semibold">{name}</div>
+          <span className="text-xs rounded-full border px-2 py-0.5 text-muted-foreground">
+            {count} élément(s)
+          </span>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Édition FR/EN en ligne
+        </div>
+      </button>
+    );
+  };
+
+  const ContentCard = ({ k }: { k: string }) => {
+    const fr = getRow(k, "fr");
+    const en = getRow(k, "en");
+
+    // lazy init drafts
+    React.useEffect(() => {
+      initDraftForKey(k);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [k]);
+
+    const dfr = drafts[k]?.fr;
+    const den = drafts[k]?.en;
+
+    const frStatus = fr ? Boolean(fr.is_published) : Boolean(dfr?.is_published);
+    const enStatus = en ? Boolean(en.is_published) : Boolean(den?.is_published);
+
+    const frMissing = !fr;
+    const enMissing = !en;
+
+    const cat = detectCategory(k);
+
+    return (
+      <Card className="rounded-2xl">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="font-semibold text-sm break-all">{k}</div>
+                <span className="inline-flex rounded-full border px-2 py-0.5 text-xs">
+                  {cat}
+                </span>
+
+                {frMissing && enMissing ? (
+                  <span className="inline-flex items-center gap-1 text-xs rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-amber-700">
+                    <AlertTriangle className="h-3 w-3" />
+                    Absent FR+EN
+                  </span>
+                ) : (
+                  <>
+                    {frMissing ? (
+                      <span className="inline-flex items-center gap-1 text-xs rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-amber-700">
+                        <AlertTriangle className="h-3 w-3" />
+                        FR manquant
+                      </span>
+                    ) : null}
+                    {enMissing ? (
+                      <span className="inline-flex items-center gap-1 text-xs rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-amber-700">
+                        <AlertTriangle className="h-3 w-3" />
+                        EN manquant
+                      </span>
+                    ) : null}
+                  </>
+                )}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Modifie directement FR et EN ci-dessous (style CMS).
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => copyLocaleToLocale(k, "fr", "en")}
+                disabled={isBusy}
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Copier FR→EN
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => copyLocaleToLocale(k, "en", "fr")}
+                disabled={isBusy}
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Copier EN→FR
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => translateEditor(k, "fr", "en")}
+                disabled={isBusy}
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                Traduire FR→EN
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => translateEditor(k, "en", "fr")}
+                disabled={isBusy}
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                Traduire EN→FR
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* FR */}
+            <div className="rounded-2xl border p-3 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold">FR</span>
+                  {fr ? (
+                    <span
+                      className={[
+                        "inline-flex text-[11px] px-2 py-0.5 rounded-full border",
+                        badgeStatus(frStatus),
+                      ].join(" ")}
+                    >
+                      {frStatus ? "Publié" : "Brouillon"}
+                    </span>
+                  ) : (
+                    <span className="inline-flex text-[11px] px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">
+                      Absent
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {!fr && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => createMissingLocale(k, "fr")}
+                      disabled={isBusy}
+                    >
+                      <Languages className="h-4 w-4 mr-2" />
+                      Créer FR
+                    </Button>
+                  )}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPublishLocale(k, "fr", true)}
+                    disabled={isBusy}
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Publier
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPublishLocale(k, "fr", false)}
+                    disabled={isBusy}
+                  >
+                    <EyeOff className="h-4 w-4 mr-2" />
+                    Dépublier
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid gap-2 md:grid-cols-2">
+                <div>
+                  <label className="text-[11px] text-muted-foreground">Type (FR)</label>
+                  <select
+                    value={(dfr?.type ?? fr?.type ?? "text").toString()}
+                    onChange={(e) =>
+                      setDrafts((prev) => ({
+                        ...prev,
+                        [k]: {
+                          ...prev[k],
+                          fr: {
+                            ...(prev[k]?.fr ?? { type: "text", value: "", is_published: false }),
+                            type: e.target.value,
+                          },
+                        },
+                      }))
+                    }
+                    disabled={isBusy}
+                    className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    {TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-end gap-2">
+                  <Button
+                    type="button"
+                    className="w-full rounded-xl"
+                    onClick={() => saveLocale(k, "fr")}
+                    disabled={isBusy}
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    Enregistrer FR
+                  </Button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] text-muted-foreground">Contenu (FR)</label>
+                <Textarea
+                  value={(dfr?.value ?? fr?.value ?? "").toString()}
+                  onChange={(e) =>
+                    setDrafts((prev) => ({
+                      ...prev,
+                      [k]: {
+                        ...prev[k],
+                        fr: {
+                          ...(prev[k]?.fr ?? { type: "text", value: "", is_published: false }),
+                          value: e.target.value,
+                        },
+                      },
+                    }))
+                  }
+                  rows={10}
+                  placeholder="Saisissez le contenu FR…"
+                  disabled={isBusy}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => deleteLocale(k, "fr")}
+                  disabled={isBusy}
+                  className="rounded-xl"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Supprimer FR
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setDrafts((prev) => ({
+                      ...prev,
+                      [k]: {
+                        ...prev[k],
+                        fr: {
+                          ...(prev[k]?.fr ?? { type: "text", value: "", is_published: false }),
+                          is_published: true,
+                        },
+                      },
+                    }))
+                  }
+                  disabled={isBusy}
+                  className="rounded-xl"
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Marquer “Publié” (draft)
+                </Button>
+              </div>
+            </div>
+
+            {/* EN */}
+            <div className="rounded-2xl border p-3 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold">EN</span>
+                  {en ? (
+                    <span
+                      className={[
+                        "inline-flex text-[11px] px-2 py-0.5 rounded-full border",
+                        badgeStatus(enStatus),
+                      ].join(" ")}
+                    >
+                      {enStatus ? "Publié" : "Brouillon"}
+                    </span>
+                  ) : (
+                    <span className="inline-flex text-[11px] px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">
+                      Absent
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {!en && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => createMissingLocale(k, "en")}
+                      disabled={isBusy}
+                    >
+                      <Languages className="h-4 w-4 mr-2" />
+                      Créer EN
+                    </Button>
+                  )}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPublishLocale(k, "en", true)}
+                    disabled={isBusy}
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Publier
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPublishLocale(k, "en", false)}
+                    disabled={isBusy}
+                  >
+                    <EyeOff className="h-4 w-4 mr-2" />
+                    Dépublier
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid gap-2 md:grid-cols-2">
+                <div>
+                  <label className="text-[11px] text-muted-foreground">Type (EN)</label>
+                  <select
+                    value={(den?.type ?? en?.type ?? "text").toString()}
+                    onChange={(e) =>
+                      setDrafts((prev) => ({
+                        ...prev,
+                        [k]: {
+                          ...prev[k],
+                          en: {
+                            ...(prev[k]?.en ?? { type: "text", value: "", is_published: false }),
+                            type: e.target.value,
+                          },
+                        },
+                      }))
+                    }
+                    disabled={isBusy}
+                    className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    {TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-end gap-2">
+                  <Button
+                    type="button"
+                    className="w-full rounded-xl"
+                    onClick={() => saveLocale(k, "en")}
+                    disabled={isBusy}
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    Enregistrer EN
+                  </Button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] text-muted-foreground">Contenu (EN)</label>
+                <Textarea
+                  value={(den?.value ?? en?.value ?? "").toString()}
+                  onChange={(e) =>
+                    setDrafts((prev) => ({
+                      ...prev,
+                      [k]: {
+                        ...prev[k],
+                        en: {
+                          ...(prev[k]?.en ?? { type: "text", value: "", is_published: false }),
+                          value: e.target.value,
+                        },
+                      },
+                    }))
+                  }
+                  rows={10}
+                  placeholder="Enter EN content…"
+                  disabled={isBusy}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => deleteLocale(k, "en")}
+                  disabled={isBusy}
+                  className="rounded-xl"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Supprimer EN
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setDrafts((prev) => ({
+                      ...prev,
+                      [k]: {
+                        ...prev[k],
+                        en: {
+                          ...(prev[k]?.en ?? { type: "text", value: "", is_published: false }),
+                          is_published: true,
+                        },
+                      },
+                    }))
+                  }
+                  disabled={isBusy}
+                  className="rounded-xl"
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Marquer “Publié” (draft)
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const categoryOrder: (Category | "All")[] = [
+    "All",
+    "Header",
+    "Home",
+    "Footer",
+    "Company",
+    "Services",
+    "Contact",
+    "Legal",
+    "Other",
+  ];
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      {/* ✅ Bandeau diagnostic toujours visible */}
+      {/* ✅ Bandeau diagnostic */}
       <Card className="border-dashed">
         <CardContent className="p-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2 text-sm">
@@ -611,7 +1253,16 @@ export default function AdminContent() {
               </span>
             )}
 
-            <Button type="button" variant="outline" size="sm" onClick={() => { runDiag(); list.refetch(); }} disabled={isBusy}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                runDiag();
+                list.refetch();
+              }}
+              disabled={isBusy}
+            >
               <Bug className="h-4 w-4 mr-2" />
               Rafraîchir diag
             </Button>
@@ -625,21 +1276,32 @@ export default function AdminContent() {
         </CardContent>
       </Card>
 
+      {/* ✅ Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <h1 className="text-xl font-semibold">Back-Office — Contenu du site</h1>
+          <h1 className="text-xl font-semibold">Back-Office — Contenu du site (mode CMS)</h1>
           <p className="text-sm text-muted-foreground">
-            CMS FR/EN : clés (catalogue + DB), recherche, filtres, manquants, copie, traduction, publication.
+            Tout le contenu est visible par sections et éditable directement (FR + EN côte à côte).
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" onClick={() => list.refetch()} disabled={isBusy}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => list.refetch()}
+            disabled={isBusy}
+          >
             <RefreshCw className="h-4 w-4 mr-2" />
             Actualiser
           </Button>
 
-          <Button type="button" variant="outline" onClick={resetFilters} disabled={isBusy}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={resetFilters}
+            disabled={isBusy}
+          >
             <RotateCcw className="h-4 w-4 mr-2" />
             Réinitialiser
           </Button>
@@ -649,13 +1311,19 @@ export default function AdminContent() {
             Nouvelle clé
           </Button>
 
-          <Button type="button" variant="outline" onClick={seedMissingDefaults} disabled={isBusy}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={seedMissingDefaults}
+            disabled={isBusy}
+          >
             <ListPlus className="h-4 w-4 mr-2" />
             Initialiser clés manquantes
           </Button>
         </div>
       </div>
 
+      {/* ✅ Barre de recherche/filtre */}
       <Card>
         <CardContent className="p-4 md:p-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -678,15 +1346,11 @@ export default function AdminContent() {
                 className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                 disabled={isBusy}
               >
-                <option value="All">Toutes catégories</option>
-                <option value="Header">Header</option>
-                <option value="Home">Home</option>
-                <option value="Footer">Footer</option>
-                <option value="Company">Company</option>
-                <option value="Legal">Legal</option>
-                <option value="Contact">Contact</option>
-                <option value="Services">Services</option>
-                <option value="Other">Other</option>
+                {categoryOrder.map((c) => (
+                  <option key={c} value={c}>
+                    {c === "All" ? "Toutes catégories" : c}
+                  </option>
+                ))}
               </select>
 
               <select
@@ -696,16 +1360,25 @@ export default function AdminContent() {
                 disabled={isBusy}
               >
                 <option value="all">{missingLabel("all")}</option>
-                <option value="en_missing">{missingLabel("en_missing")} ({missingEn})</option>
-                <option value="fr_missing">{missingLabel("fr_missing")} ({missingFr})</option>
-                <option value="both_missing">{missingLabel("both_missing")} ({missingBoth})</option>
+                <option value="en_missing">
+                  {missingLabel("en_missing")} ({missingEn})
+                </option>
+                <option value="fr_missing">
+                  {missingLabel("fr_missing")} ({missingFr})
+                </option>
+                <option value="both_missing">
+                  {missingLabel("both_missing")} ({missingBoth})
+                </option>
               </select>
             </div>
           </div>
 
           <div className="mt-3 text-xs text-muted-foreground">
-            {list.isLoading ? "Chargement…" : `${filteredKeys.length} clé(s) (catalogue + DB) — DB rows: ${rows.length}`}
+            {list.isLoading
+              ? "Chargement…"
+              : `${filteredKeys.length} clé(s) — DB rows: ${rows.length}`}
           </div>
+
           {list.isError ? (
             <div className="mt-2 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
               {(list.error as any)?.message ?? "Erreur de chargement"}
@@ -714,300 +1387,39 @@ export default function AdminContent() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
-        <Card className="overflow-hidden">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Contenus</CardTitle>
-          </CardHeader>
+      {/* ✅ Affichage CMS par sections */}
+      <div className="space-y-3">
+        {(category === "All"
+          ? ([
+              "Header",
+              "Home",
+              "Footer",
+              "Company",
+              "Services",
+              "Contact",
+              "Legal",
+              "Other",
+            ] as Category[])
+          : ([category] as Category[])
+        ).map((sec) => {
+          const items = keysByCategory[sec] ?? [];
+          if (!items.length) return null;
 
-          <CardContent className="pt-0">
-            <div className="overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-background z-10">
-                  <tr className="text-left border-b">
-                    <th className="py-2 pr-3 font-semibold">Clé</th>
-                    <th className="py-2 pr-3 font-semibold">Catégorie</th>
-                    <th className="py-2 pr-3 font-semibold">FR</th>
-                    <th className="py-2 pr-3 font-semibold">EN</th>
-                    <th className="py-2 pr-3 font-semibold">Actions</th>
-                  </tr>
-                </thead>
+          const open = Boolean(openSections[sec]);
 
-                <tbody>
-                  {filteredKeys.map((k) => {
-                    const fr = getRow(k, "fr");
-                    const en = getRow(k, "en");
-                    const cat = detectCategory(k);
-
-                    const frText = (fr?.value ?? "").trim();
-                    const enText = (en?.value ?? "").trim();
-
-                    return (
-                      <tr
-                        key={k}
-                        onClick={() => setSelectedKey(k)}
-                        className={[
-                          "border-b align-top cursor-pointer",
-                          selectedKey === k ? "bg-muted/40" : "hover:bg-muted/20",
-                        ].join(" ")}
-                      >
-                        <td className="py-3 pr-3">
-                          <div className="font-medium">{k}</div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {fr || en ? (
-                              <>
-                                {fr && en ? "Complet FR+EN" : "Incomplet"}
-                                {!en && (
-                                  <span className="ml-2 inline-flex items-center gap-1 text-amber-700">
-                                    <AlertTriangle className="h-3 w-3" /> EN manquant
-                                  </span>
-                                )}
-                                {!fr && (
-                                  <span className="ml-2 inline-flex items-center gap-1 text-amber-700">
-                                    <AlertTriangle className="h-3 w-3" /> FR manquant
-                                  </span>
-                                )}
-                              </>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-amber-700">
-                                <AlertTriangle className="h-3 w-3" /> Absent (FR+EN)
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        <td className="py-3 pr-3">
-                          <span className="inline-flex rounded-full border px-2 py-0.5 text-xs">{cat}</span>
-                        </td>
-
-                        <td className="py-3 pr-3">
-                          {fr ? (
-                            <span className={["inline-flex text-[11px] px-2 py-0.5 rounded-full border", badgeStatus(Boolean(fr.is_published))].join(" ")}>
-                              {fr.is_published ? "Publié" : "Brouillon"}
-                            </span>
-                          ) : (
-                            <span className="inline-flex text-[11px] px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">
-                              Absent
-                            </span>
-                          )}
-                          <div className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap break-words line-clamp-3">
-                            {frText || "—"}
-                          </div>
-                        </td>
-
-                        <td className="py-3 pr-3">
-                          {en ? (
-                            <span className={["inline-flex text-[11px] px-2 py-0.5 rounded-full border", badgeStatus(Boolean(en.is_published))].join(" ")}>
-                              {en.is_published ? "Publié" : "Brouillon"}
-                            </span>
-                          ) : (
-                            <span className="inline-flex text-[11px] px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">
-                              Absent
-                            </span>
-                          )}
-                          <div className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap break-words line-clamp-3">
-                            {enText || "—"}
-                          </div>
-                        </td>
-
-                        <td className="py-3 pr-3" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex flex-wrap gap-2">
-                            <Button type="button" variant="outline" size="sm" onClick={() => copyLocaleToLocale(k, "fr", "en")} disabled={isBusy || !fr}>
-                              <Copy className="h-4 w-4 mr-2" />
-                              FR→EN
-                            </Button>
-
-                            <Button type="button" variant="outline" size="sm" onClick={() => copyLocaleToLocale(k, "en", "fr")} disabled={isBusy || !en}>
-                              <Copy className="h-4 w-4 mr-2" />
-                              EN→FR
-                            </Button>
-
-                            <Button type="button" variant="outline" size="sm" onClick={() => createMissingLocale(k, "en")} disabled={isBusy || !!en}>
-                              <Languages className="h-4 w-4 mr-2" />
-                              Créer EN
-                            </Button>
-
-                            <Button type="button" variant="outline" size="sm" onClick={() => createMissingLocale(k, "fr")} disabled={isBusy || !!fr}>
-                              <Languages className="h-4 w-4 mr-2" />
-                              Créer FR
-                            </Button>
-
-                            <Button type="button" variant="outline" size="sm" onClick={() => setPublishBoth(k, true)} disabled={isBusy || !isComplete(k)}>
-                              <CheckCircle2 className="h-4 w-4 mr-2" />
-                              Publier
-                            </Button>
-
-                            <Button type="button" variant="outline" size="sm" onClick={() => setPublishBoth(k, false)} disabled={isBusy}>
-                              <EyeOff className="h-4 w-4 mr-2" />
-                              Dépublier
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {!list.isLoading && filteredKeys.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
-                        Aucun résultat.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+          return (
+            <div key={sec} className="space-y-3">
+              <SectionHeader name={sec} count={items.length} />
+              {open ? (
+                <div className="space-y-4">
+                  {items.map((k) => (
+                    <ContentCard key={k} k={k} />
+                  ))}
+                </div>
+              ) : null}
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Éditeur</CardTitle>
-          </CardHeader>
-
-          <CardContent className="space-y-4">
-            {!selectedKey ? (
-              <div className="rounded-xl border p-4 text-sm text-muted-foreground">
-                Sélectionne une clé à gauche pour voir et modifier son contenu.
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium truncate">{selectedKey}</div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Catégorie : {detectCategory(selectedKey)}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {LOCALES.map((loc) => (
-                      <Button
-                        key={loc}
-                        type="button"
-                        variant={activeLocale === loc ? "default" : "outline"}
-                        onClick={() => setActiveLocale(loc)}
-                        className="rounded-xl"
-                        disabled={isBusy}
-                      >
-                        {loc.toUpperCase()}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div>
-                    <label className="text-xs text-muted-foreground">Type ({activeLocale.toUpperCase()})</label>
-                    <select
-                      value={typeByLocale[activeLocale]}
-                      onChange={(e) => setTypeByLocale((s) => ({ ...s, [activeLocale]: e.target.value }))}
-                      disabled={isBusy}
-                      className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      {TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex items-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setPublishedByLocale((p) => ({ ...p, [activeLocale]: true }))}
-                      disabled={isBusy}
-                      className="rounded-xl w-full"
-                    >
-                      <CheckCircle2 className="h-4 w-4 mr-2" />
-                      Publié
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setPublishedByLocale((p) => ({ ...p, [activeLocale]: false }))}
-                      disabled={isBusy}
-                      className="rounded-xl w-full"
-                    >
-                      <EyeOff className="h-4 w-4 mr-2" />
-                      Brouillon
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/10 p-3">
-                  <div className="text-xs text-muted-foreground mr-2 inline-flex items-center gap-2">
-                    <Wand2 className="h-4 w-4" />
-                    Traduction (Edge Function)
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => translateEditor(selectedKey, "fr", "en", { addReviewNote: true })}
-                    disabled={isBusy}
-                  >
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    Traduire FR→EN
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => translateEditor(selectedKey, "en", "fr", { addReviewNote: true })}
-                    disabled={isBusy}
-                  >
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    Traduire EN→FR
-                  </Button>
-
-                  <div className="text-xs text-muted-foreground">Génère dans l’éditeur, puis enregistre.</div>
-                </div>
-
-                <div>
-                  <label className="text-xs text-muted-foreground">Contenu ({activeLocale.toUpperCase()})</label>
-                  <Textarea
-                    value={valueByLocale[activeLocale]}
-                    onChange={(e) => setValueByLocale((s) => ({ ...s, [activeLocale]: e.target.value }))}
-                    rows={16}
-                    placeholder="Saisissez le contenu…"
-                    disabled={isBusy}
-                  />
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button type="button" onClick={() => saveLocale(selectedKey, activeLocale)} disabled={isBusy} className="rounded-xl">
-                    <Save className="h-4 w-4 mr-2" />
-                    Enregistrer {activeLocale.toUpperCase()}
-                  </Button>
-
-                  {!getRow(selectedKey, activeLocale) && (
-                    <Button type="button" variant="outline" onClick={() => createMissingLocale(selectedKey, activeLocale)} disabled={isBusy} className="rounded-xl">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Créer {activeLocale.toUpperCase()}
-                    </Button>
-                  )}
-
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={() => deleteLocale(selectedKey, activeLocale)}
-                    disabled={isBusy || (!selectedFr && activeLocale === "fr") || (!selectedEn && activeLocale === "en")}
-                    className="rounded-xl"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Supprimer {activeLocale.toUpperCase()}
-                  </Button>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+          );
+        })}
       </div>
     </div>
   );
