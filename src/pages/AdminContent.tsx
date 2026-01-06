@@ -10,10 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 
-import {
-  useUpsertSiteContent,
-  useTogglePublishSiteContent,
-} from "@/hooks/useSiteContent";
+import { useUpsertSiteContent, useTogglePublishSiteContent } from "@/hooks/useSiteContent";
 
 import {
   RefreshCw,
@@ -60,8 +57,7 @@ type SectionDef = {
   title: string;
   description?: string;
   fields: FieldDef[];
-  // optionnel: aide à l’UX (affichage “où ça s’affiche”)
-  location?: string; // ex: "Accueil > Hero"
+  location?: string;
 };
 
 const LOCALES: Locale[] = ["fr", "en"];
@@ -71,30 +67,30 @@ const LOCALES: Locale[] = ["fr", "en"];
  * Ajoute/ajuste ici les clés pour couvrir 100% du contenu de ton site.
  */
 const SECTIONS: SectionDef[] = [
-{
-  id: "header",
-  title: "Header (Barre du haut)",
-  description: "Logo, tagline, boutons, langue et menu mobile.",
-  fields: [
-    { key: "brand.name", label: "Nom de la marque (logo)", type: "text", placeholder: "ProxiServices" },
+  {
+    id: "header",
+    title: "Header (Barre du haut)",
+    description: "Logo, tagline, boutons, langue et menu mobile.",
+    fields: [
+      { key: "brand.name", label: "Nom de la marque (logo)", type: "text", placeholder: "ProxiServices" },
 
-    { key: "header.tagline", label: "Tagline (sous le logo)", type: "text", placeholder: "Prestataires vérifiés, proches de vous" },
+      { key: "header.tagline", label: "Tagline (sous le logo)", type: "text", placeholder: "Prestataires vérifiés, proches de vous" },
 
-    { key: "header.btn_login", label: "Bouton (non connecté)", type: "text", placeholder: "Se connecter" },
-    { key: "header.btn_account", label: "Bouton (connecté)", type: "text", placeholder: "Mon compte" },
-    { key: "header.btn_account_short", label: "Bouton mobile (court)", type: "text", placeholder: "Compte" },
+      { key: "header.btn_login", label: "Bouton (non connecté)", type: "text", placeholder: "Se connecter" },
+      { key: "header.btn_account", label: "Bouton (connecté)", type: "text", placeholder: "Mon compte" },
+      { key: "header.btn_account_short", label: "Bouton mobile (court)", type: "text", placeholder: "Compte" },
 
-    { key: "header.admin_badge", label: "Badge Admin", type: "text", placeholder: "Admin" },
+      { key: "header.admin_badge", label: "Badge Admin", type: "text", placeholder: "Admin" },
 
-    { key: "header.lang.aria", label: "Accessibilité - changer langue (aria-label)", type: "text", placeholder: "Changer de langue" },
-    { key: "header.lang.fr", label: "Langue - Français (label)", type: "text", placeholder: "Français" },
-    { key: "header.lang.en", label: "Langue - Anglais (label)", type: "text", placeholder: "Anglais" },
+      { key: "header.lang.aria", label: "Accessibilité - changer langue (aria-label)", type: "text", placeholder: "Changer de langue" },
+      { key: "header.lang.fr", label: "Langue - Français (label)", type: "text", placeholder: "Français" },
+      { key: "header.lang.en", label: "Langue - Anglais (label)", type: "text", placeholder: "Anglais" },
 
-    { key: "header.mobile_menu.aria", label: "Menu mobile (aria-label)", type: "text", placeholder: "Menu mobile" },
-    { key: "header.mobile_close.aria", label: "Fermer menu (aria-label)", type: "text", placeholder: "Fermer le menu" },
-    { key: "header.mobile_menu.title", label: "Titre du drawer mobile", type: "text", placeholder: "Menu" },
-  ],
-},
+      { key: "header.mobile_menu.aria", label: "Menu mobile (aria-label)", type: "text", placeholder: "Menu mobile" },
+      { key: "header.mobile_close.aria", label: "Fermer menu (aria-label)", type: "text", placeholder: "Fermer le menu" },
+      { key: "header.mobile_menu.title", label: "Titre du drawer mobile", type: "text", placeholder: "Menu" },
+    ],
+  },
 
   {
     id: "home_hero",
@@ -214,6 +210,20 @@ const SECTIONS: SectionDef[] = [
       { key: "pricing.plan.yearly.f2", label: "Plan 3 — Avantage 2", type: "text", placeholder: "Contacts clients illimités" },
       { key: "pricing.plan.yearly.f3", label: "Plan 3 — Avantage 3", type: "text", placeholder: "Statistiques détaillées" },
       { key: "pricing.plan.yearly.f4", label: "Plan 3 — Avantage 4", type: "text", placeholder: "Support prioritaire" },
+
+      // --- Bénéfices (3 blocs sous les cartes) ---
+      { key: "pricing.benefit1.title", label: "Bénéfice 1 — Titre", type: "text", placeholder: "Profil vérifié" },
+      { key: "pricing.benefit1.desc", label: "Bénéfice 1 — Description", type: "textarea", placeholder: "Badge de confiance sur votre profil" },
+
+      { key: "pricing.benefit2.title", label: "Bénéfice 2 — Titre", type: "text", placeholder: "Analytics détaillés" },
+      { key: "pricing.benefit2.desc", label: "Bénéfice 2 — Description", type: "textarea", placeholder: "Suivez vos performances et optimisez" },
+
+      { key: "pricing.benefit3.title", label: "Bénéfice 3 — Titre", type: "text", placeholder: "Support dédié" },
+      { key: "pricing.benefit3.desc", label: "Bénéfice 3 — Description", type: "textarea", placeholder: "Assistance prioritaire 7j/7" },
+
+      // --- Reco: devise + séparateur prix/période ---
+      { key: "pricing.currency", label: "Devise affichée (ex: FG / GNF)", type: "text", placeholder: "FG" },
+      { key: "pricing.price_separator", label: "Séparateur prix/période (ex: /)", type: "text", placeholder: "/" },
     ],
   },
 
@@ -350,13 +360,7 @@ function badgeClasses(kind: "published" | "draft" | "missing" | "auto") {
   }
 }
 
-function Pill({
-  children,
-  kind,
-}: {
-  children: React.ReactNode;
-  kind: "published" | "draft" | "missing" | "auto";
-}) {
+function Pill({ children, kind }: { children: React.ReactNode; kind: "published" | "draft" | "missing" | "auto" }) {
   return (
     <span
       className={[
@@ -375,7 +379,7 @@ export default function AdminContent() {
   const togglePublish = useTogglePublishSiteContent();
 
   const [mode, setMode] = React.useState<LocaleMode>("fr");
-  const activeLocale: Locale = mode === "en" ? "en" : "fr"; // utile pour filtres/indicateurs
+  const activeLocale: Locale = mode === "en" ? "en" : "fr";
   const [q, setQ] = React.useState("");
   const [activeSectionId, setActiveSectionId] = React.useState<string>(SECTIONS[0]?.id ?? "header");
 
@@ -416,19 +420,16 @@ export default function AdminContent() {
     [rowByKeyLocale]
   );
 
-  // drafts[locale][sectionId][key] = value
   const [drafts, setDrafts] = React.useState<Record<Locale, Record<string, Record<string, string>>>>({
     fr: {},
     en: {},
   });
 
-  // visibleByLocale[locale][sectionId] = boolean (publish status)
   const [visibleByLocale, setVisibleByLocale] = React.useState<Record<Locale, Record<string, boolean>>>({
     fr: {},
     en: {},
   });
 
-  // Load DB into drafts when data changes
   React.useEffect(() => {
     const nextDrafts: Record<Locale, Record<string, Record<string, string>>> = { fr: {}, en: {} };
     const nextVisible: Record<Locale, Record<string, boolean>> = { fr: {}, en: {} };
@@ -468,13 +469,11 @@ export default function AdminContent() {
     }));
   };
 
-  const sectionVisible = (loc: Locale, sectionId: string) =>
-    Boolean((visibleByLocale[loc] ?? {})[sectionId]);
+  const sectionVisible = (loc: Locale, sectionId: string) => Boolean((visibleByLocale[loc] ?? {})[sectionId]);
 
   const toggleSectionVisible = async (loc: Locale, sectionId: string, next: boolean) => {
     setVisibleByLocale((p) => ({ ...p, [loc]: { ...(p[loc] ?? {}), [sectionId]: next } }));
 
-    // applique immédiatement sur les rows existantes (si elles existent déjà)
     try {
       const section = SECTIONS.find((s) => s.id === sectionId);
       if (!section) return;
@@ -487,7 +486,7 @@ export default function AdminContent() {
       if (tasks.length) await Promise.all(tasks);
       await list.refetch();
     } catch {
-      // tolérant: UI conserve l’état, save consolidera
+      // tolérant
     }
   };
 
@@ -579,11 +578,14 @@ export default function AdminContent() {
       await navigator.clipboard.writeText(text);
       toast({ title: "Copié", description: "La clé a été copiée dans le presse-papiers." });
     } catch {
-      toast({ title: "Copie impossible", description: "Votre navigateur a bloqué l’accès au presse-papiers.", variant: "destructive" });
+      toast({
+        title: "Copie impossible",
+        description: "Votre navigateur a bloqué l’accès au presse-papiers.",
+        variant: "destructive",
+      });
     }
   };
 
-  // ---- Qualité / stats ----
   const globalStats = React.useMemo(() => {
     let published = 0;
     let draft = 0;
@@ -608,7 +610,6 @@ export default function AdminContent() {
     return { published, draft, missingFR, missingEN, autoEN };
   }, [getRow]);
 
-  // ---- Sections filtrées (recherche sur titre, description, clés, valeurs) ----
   const filteredSections = React.useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return SECTIONS;
@@ -634,7 +635,6 @@ export default function AdminContent() {
   }, [q, drafts, activeLocale]);
 
   React.useEffect(() => {
-    // si la section active n’est plus dans la liste filtrée, basculer sur la 1ère
     if (!filteredSections.some((s) => s.id === activeSectionId)) {
       setActiveSectionId(filteredSections[0]?.id ?? SECTIONS[0]?.id ?? "header");
     }
@@ -660,17 +660,14 @@ export default function AdminContent() {
         if (!rEN) missing.push("EN");
         if (rEN?.en_is_auto) autoCount += 1;
 
-        // si row existe mais value vide, compter comme “manquant”
         if (rFR && isEmptyValue(rFR.value)) missing.push("FR");
         if (rEN && isEmptyValue(rEN.value)) missing.push("EN");
       }
 
-      // déduplique missing labels
       const missingSet = new Set(missing);
       const visibleFR = sectionVisible("fr", section.id);
       const visibleEN = sectionVisible("en", section.id);
 
-      // last updated = max(updated_at) du set de clés (locale active)
       let lastUpdated: string | null = null;
       for (const f of section.fields) {
         const r = getRow(f.key, loc);
@@ -709,9 +706,7 @@ export default function AdminContent() {
             <Pill kind="published">{globalStats.published} publié(s)</Pill>
             <Pill kind="draft">{globalStats.draft} brouillon(s)</Pill>
             {(globalStats.missingFR + globalStats.missingEN) > 0 ? (
-              <Pill kind="missing">
-                {globalStats.missingFR + globalStats.missingEN} clé(s) manquante(s)
-              </Pill>
+              <Pill kind="missing">{globalStats.missingFR + globalStats.missingEN} clé(s) manquante(s)</Pill>
             ) : null}
             {globalStats.autoEN > 0 ? <Pill kind="auto">{globalStats.autoEN} EN auto</Pill> : null}
           </div>
@@ -799,8 +794,16 @@ export default function AdminContent() {
 
                 const visibleLabel =
                   mode === "compare"
-                    ? (info.visibleFR || info.visibleEN ? "Visible" : "Masqué")
-                    : (mode === "en" ? (info.visibleEN ? "Visible" : "Masqué") : (info.visibleFR ? "Visible" : "Masqué"));
+                    ? info.visibleFR || info.visibleEN
+                      ? "Visible"
+                      : "Masqué"
+                    : mode === "en"
+                    ? info.visibleEN
+                      ? "Visible"
+                      : "Masqué"
+                    : info.visibleFR
+                    ? "Visible"
+                    : "Masqué";
 
                 const missingLabel = (() => {
                   if (info.missingSet.size === 0) return null;
@@ -835,7 +838,7 @@ export default function AdminContent() {
                           <span
                             className={[
                               "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px]",
-                              (visibleLabel === "Visible" ? badgeClasses("published") : badgeClasses("draft")),
+                              visibleLabel === "Visible" ? badgeClasses("published") : badgeClasses("draft"),
                             ].join(" ")}
                           >
                             {visibleLabel}
@@ -846,26 +849,38 @@ export default function AdminContent() {
                           </span>
 
                           {missingLabel ? (
-                            <span className={["inline-flex items-center rounded-full border px-2 py-0.5 text-[11px]", badgeClasses("missing")].join(" ")}>
+                            <span
+                              className={[
+                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px]",
+                                badgeClasses("missing"),
+                              ].join(" ")}
+                            >
                               Manquant {missingLabel}
                             </span>
                           ) : null}
 
                           {info.autoCount > 0 ? (
-                            <span className={["inline-flex items-center rounded-full border px-2 py-0.5 text-[11px]", badgeClasses("auto")].join(" ")}>
+                            <span
+                              className={[
+                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px]",
+                                badgeClasses("auto"),
+                              ].join(" ")}
+                            >
                               EN auto {info.autoCount}
                             </span>
                           ) : null}
                         </div>
 
                         {info.lastUpdated ? (
-                          <div className="mt-1 text-[11px] text-muted-foreground">
-                            Dernière maj: {fmtDate(info.lastUpdated)}
-                          </div>
+                          <div className="mt-1 text-[11px] text-muted-foreground">Dernière maj: {fmtDate(info.lastUpdated)}</div>
                         ) : null}
                       </div>
 
-                      <ChevronRight className={["h-4 w-4 mt-1 shrink-0", isActive ? "text-slate-700" : "text-muted-foreground"].join(" ")} />
+                      <ChevronRight
+                        className={["h-4 w-4 mt-1 shrink-0", isActive ? "text-slate-700" : "text-muted-foreground"].join(
+                          " "
+                        )}
+                      />
                     </div>
                   </button>
                 );
@@ -929,12 +944,7 @@ export default function AdminContent() {
                   )}
                 </div>
 
-                <Button
-                  type="button"
-                  onClick={() => saveSection(activeSectionId)}
-                  disabled={isBusy}
-                  className="sm:w-auto w-full"
-                >
+                <Button type="button" onClick={() => saveSection(activeSectionId)} disabled={isBusy} className="sm:w-auto w-full">
                   <Save className="h-4 w-4 mr-2" />
                   Enregistrer{mode === "compare" ? " FR + EN" : ""}
                 </Button>
@@ -960,7 +970,9 @@ export default function AdminContent() {
               ) : (
                 <span className="inline-flex items-center gap-1">
                   {sectionVisible(mode, activeSectionId) ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                  {sectionVisible(mode, activeSectionId) ? "Visible (publié à l’enregistrement)" : "Masqué (brouillon à l’enregistrement)"}
+                  {sectionVisible(mode, activeSectionId)
+                    ? "Visible (publié à l’enregistrement)"
+                    : "Masqué (brouillon à l’enregistrement)"}
                 </span>
               )}
             </div>
@@ -1043,9 +1055,7 @@ export default function AdminContent() {
                           </Button>
                         </div>
 
-                        {f.help ? (
-                          <div className="mt-1 text-[12px] text-muted-foreground">{f.help}</div>
-                        ) : null}
+                        {f.help ? <div className="mt-1 text-[12px] text-muted-foreground">{f.help}</div> : null}
                       </div>
 
                       {/* Meta right */}
@@ -1100,20 +1110,11 @@ export default function AdminContent() {
                 Astuce: utilise “Comparer” pour voir FR/EN côte à côte et copier FR → EN.
               </div>
               <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => list.refetch()}
-                  disabled={isBusy}
-                >
+                <Button type="button" variant="outline" onClick={() => list.refetch()} disabled={isBusy}>
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Recharger
                 </Button>
-                <Button
-                  type="button"
-                  onClick={() => saveSection(activeSectionId)}
-                  disabled={isBusy}
-                >
+                <Button type="button" onClick={() => saveSection(activeSectionId)} disabled={isBusy}>
                   <Save className="h-4 w-4 mr-2" />
                   Enregistrer{mode === "compare" ? " FR + EN" : ""}
                 </Button>
