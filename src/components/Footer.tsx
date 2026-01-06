@@ -41,7 +41,11 @@ const Footer = () => {
   const emailValue = cms("footer.contact.email_value", "contact@proxiservices.com", "contact@proxiservices.com");
   const phoneTel = cms("footer.contact.phone_tel", "+33123456789", "+33123456789");
   const phoneValue = cms("footer.contact.phone_value", "+33 1 23 45 67 89", "+33 1 23 45 67 89");
-  const hoursValue = cms("footer.hours.value", "Lun–Ven : 09:00–18:00", "Mon–Fri: 09:00–18:00");
+
+  // IMPORTANT: ta DB contient déjà footer.contact.hours_value (pas footer.hours.value)
+  const hoursValue = cms("footer.contact.hours_value", "Lun–Ven • 09:00–18:00", "Mon–Fri • 09:00–18:00");
+
+  // Tu as déjà footer.location.value dans ta DB
   const locationValue = cms("footer.location.value", "Conakry (et environs)", "Conakry (and nearby)");
 
   return (
@@ -226,7 +230,11 @@ const Footer = () => {
 
         <div className="mt-8 border-t border-white/10 pt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <p className="text-xs text-white/55">
-            {cms("footer.bottom.rights", `© ${year} ProxiServices. Tous droits réservés.`, `© ${year} ProxiServices. All rights reserved.`)}
+            {cms(
+              "footer.bottom.rights",
+              `© ${year} ProxiServices. Tous droits réservés.`,
+              `© ${year} ProxiServices. All rights reserved.`
+            )}
           </p>
 
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-white/60">
@@ -243,7 +251,11 @@ const Footer = () => {
         </div>
       </div>
 
-      <ContactModal open={contactOpen} onOpenChange={setContactOpen} defaultSubject={cms("contact.modal.title", "Support ProxiServices", "ProxiServices Support")} />
+      <ContactModal
+        open={contactOpen}
+        onOpenChange={setContactOpen}
+        defaultSubject={cms("contact.modal.title", "Support ProxiServices", "ProxiServices Support")}
+      />
     </footer>
   );
 };
