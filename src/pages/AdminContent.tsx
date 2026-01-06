@@ -3,7 +3,7 @@ import * as React from "react";
 import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,9 +22,17 @@ import {
   Eye,
   EyeOff,
   Search,
+  Copy,
+  ExternalLink,
+  ChevronRight,
+  LayoutList,
+  Globe,
+  AlertTriangle,
 } from "lucide-react";
 
 type Locale = "fr" | "en";
+type LocaleMode = "fr" | "en" | "compare";
+
 type SiteContentRow = {
   id: string;
   key: string;
@@ -32,7 +40,10 @@ type SiteContentRow = {
   type: string | null;
   value: string | null;
   is_published: boolean | null;
+  created_at?: string | null;
   updated_at?: string | null;
+  updated_by?: string | null;
+  en_is_auto?: boolean | null;
 };
 
 type FieldType = "text" | "textarea" | "url" | "number";
@@ -49,6 +60,8 @@ type SectionDef = {
   title: string;
   description?: string;
   fields: FieldDef[];
+  // optionnel: aide à l’UX (affichage “où ça s’affiche”)
+  location?: string; // ex: "Accueil > Hero"
 };
 
 const LOCALES: Locale[] = ["fr", "en"];
@@ -56,17 +69,12 @@ const LOCALES: Locale[] = ["fr", "en"];
 /**
  * ✅ SECTIONS = “CMS style capture”
  * Ajoute/ajuste ici les clés pour couvrir 100% du contenu de ton site.
- *
- * IMPORTANT:
- * - Certaines clés existent déjà chez toi (home.hero.title, footer.*, legal.*, contact.*, company.*...)
- * - D’autres clés ci-dessous sont “nouvelles” (ex: search.page.title, pricing.plan.monthly.price, etc.)
- *   => “Initialiser les sections” les crée en DB pour que tu puisses les éditer.
- *   => Ensuite, il faudra que ton FRONT utilise ces clés (si ce n’est pas déjà le cas).
  */
 const SECTIONS: SectionDef[] = [
   {
     id: "header",
     title: "Header (Barre du haut)",
+    location: "Back-office > Navigation",
     description: "Texte sous le logo, labels d’actions et navigation.",
     fields: [
       { key: "header.tagline", label: "Tagline (sous le logo)", type: "text", placeholder: "Prestataires vérifiés, proches de vous" },
@@ -83,6 +91,7 @@ const SECTIONS: SectionDef[] = [
   {
     id: "home_hero",
     title: "Accueil — Hero (Bannière bleue)",
+    location: "Accueil > Hero",
     description: "Titre, sous-titre et zone de recherche.",
     fields: [
       { key: "home.hero.title", label: "Titre (H1)", type: "text", placeholder: "Trouvez des prestataires fiables près de chez vous" },
@@ -96,6 +105,7 @@ const SECTIONS: SectionDef[] = [
   {
     id: "home_why",
     title: "Accueil — Section “Pourquoi ProxiServices ?”",
+    location: "Accueil > Pourquoi",
     description: "Titre + sous-titre au-dessus des cartes.",
     fields: [
       { key: "home.features.title", label: "Titre", type: "text", placeholder: "Pourquoi ProxiServices ?" },
@@ -106,6 +116,7 @@ const SECTIONS: SectionDef[] = [
   {
     id: "home_cards",
     title: "Accueil — 3 cartes (avantages)",
+    location: "Accueil > Avantages",
     description: "Les trois blocs principaux (titre + description).",
     fields: [
       { key: "home.features.card1.title", label: "Carte 1 — Titre", type: "text", placeholder: "Prestataires vérifiés" },
@@ -122,6 +133,7 @@ const SECTIONS: SectionDef[] = [
   {
     id: "home_stats",
     title: "Accueil — Statistiques (4 valeurs)",
+    location: "Accueil > Statistiques",
     description: "La ligne 2 500+, 4.8/5, 24h, 100%.",
     fields: [
       { key: "home.stats.item1.value", label: "Stat 1 — Valeur", type: "text", placeholder: "2 500+" },
@@ -141,6 +153,7 @@ const SECTIONS: SectionDef[] = [
   {
     id: "search_page",
     title: "Page Recherche — En-tête & filtres",
+    location: "Recherche > En-tête & Filtres",
     description: "Titre et micro-textes de la page “Trouvez votre professionnel”.",
     fields: [
       { key: "search.page.title", label: "Titre", type: "text", placeholder: "Trouvez votre professionnel" },
@@ -158,6 +171,7 @@ const SECTIONS: SectionDef[] = [
   {
     id: "pricing",
     title: "Abonnements — Cartes (Gratuit / Mensuel / Annuel)",
+    location: "Accueil > Abonnements",
     description: "Titres, prix, boutons, avantages.",
     fields: [
       { key: "pricing.section.title", label: "Titre section", type: "text", placeholder: "Rejoignez ProxiServices" },
@@ -198,6 +212,7 @@ const SECTIONS: SectionDef[] = [
   {
     id: "footer",
     title: "Footer — Colonnes + Contact",
+    location: "Toutes pages > Footer",
     description: "Brand, colonnes Services/Entreprise/Ressources/Contact + valeurs.",
     fields: [
       { key: "footer.brand.tagline", label: "Brand — Tagline", type: "text", placeholder: "Marketplace de services" },
@@ -231,6 +246,7 @@ const SECTIONS: SectionDef[] = [
   {
     id: "company",
     title: "Entreprise — À propos / Partenaires",
+    location: "Entreprise > Page",
     description: "Contenus de la page Entreprise.",
     fields: [
       { key: "company.about.title", label: "À propos — Titre", type: "text", placeholder: "À propos" },
@@ -243,6 +259,7 @@ const SECTIONS: SectionDef[] = [
   {
     id: "contact",
     title: "Contact — Modal / Formulaire",
+    location: "Toutes pages > Modale Contact",
     description: "Labels et messages du formulaire de contact.",
     fields: [
       { key: "contact.modal.title", label: "Titre modal", type: "text", placeholder: "Contact" },
@@ -259,6 +276,7 @@ const SECTIONS: SectionDef[] = [
   {
     id: "legal",
     title: "Pages légales — Conditions / Confidentialité / Cookies",
+    location: "Pages légales",
     description: "Titres + contenus (longs).",
     fields: [
       { key: "legal.terms.title", label: "Conditions — Titre", type: "text", placeholder: "Conditions d’utilisation" },
@@ -286,10 +304,61 @@ function normalizeNumberString(v: string) {
   return Number.isFinite(n) ? String(n) : s;
 }
 
-function pillClasses(visible: boolean) {
-  return visible
-    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-    : "border-slate-200 bg-slate-50 text-slate-600";
+function fmtDate(ts?: string | null) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return ts;
+  return d.toLocaleString();
+}
+
+function isEmptyValue(v: unknown) {
+  return (v ?? "").toString().trim().length === 0;
+}
+
+function sectionCategory(sectionId: string) {
+  if (sectionId.startsWith("home_")) return "Accueil";
+  if (sectionId.startsWith("search_")) return "Recherche";
+  if (sectionId === "pricing") return "Abonnements";
+  if (sectionId === "footer") return "Footer";
+  if (sectionId === "legal") return "Légal";
+  if (sectionId === "company") return "Entreprise";
+  if (sectionId === "contact") return "Contact";
+  if (sectionId === "header") return "Header";
+  return "Autres";
+}
+
+function badgeClasses(kind: "published" | "draft" | "missing" | "auto") {
+  switch (kind) {
+    case "published":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "draft":
+      return "border-slate-200 bg-slate-50 text-slate-700";
+    case "missing":
+      return "border-amber-200 bg-amber-50 text-amber-800";
+    case "auto":
+      return "border-indigo-200 bg-indigo-50 text-indigo-700";
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-700";
+  }
+}
+
+function Pill({
+  children,
+  kind,
+}: {
+  children: React.ReactNode;
+  kind: "published" | "draft" | "missing" | "auto";
+}) {
+  return (
+    <span
+      className={[
+        "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium",
+        badgeClasses(kind),
+      ].join(" ")}
+    >
+      {children}
+    </span>
+  );
 }
 
 export default function AdminContent() {
@@ -297,8 +366,10 @@ export default function AdminContent() {
   const upsert = useUpsertSiteContent();
   const togglePublish = useTogglePublishSiteContent();
 
-  const [activeLocale, setActiveLocale] = React.useState<Locale>("fr");
+  const [mode, setMode] = React.useState<LocaleMode>("fr");
+  const activeLocale: Locale = mode === "en" ? "en" : "fr"; // utile pour filtres/indicateurs
   const [q, setQ] = React.useState("");
+  const [activeSectionId, setActiveSectionId] = React.useState<string>(SECTIONS[0]?.id ?? "header");
 
   const ALL_KEYS = React.useMemo(
     () => Array.from(new Set(SECTIONS.flatMap((s) => s.fields.map((f) => f.key)))).sort(),
@@ -306,11 +377,11 @@ export default function AdminContent() {
   );
 
   const list = useQuery({
-    queryKey: ["site_content_sections_full", ALL_KEYS.join("|")],
+    queryKey: ["site_content_sections_full_v2", ALL_KEYS.join("|")],
     queryFn: async (): Promise<SiteContentRow[]> => {
       const { data, error } = await supabase
         .from("site_content")
-        .select("id,key,locale,type,value,is_published,updated_at")
+        .select("id,key,locale,type,value,is_published,created_at,updated_at,updated_by,en_is_auto")
         .in("key", ALL_KEYS)
         .in("locale", LOCALES)
         .order("key", { ascending: true })
@@ -389,10 +460,13 @@ export default function AdminContent() {
     }));
   };
 
+  const sectionVisible = (loc: Locale, sectionId: string) =>
+    Boolean((visibleByLocale[loc] ?? {})[sectionId]);
+
   const toggleSectionVisible = async (loc: Locale, sectionId: string, next: boolean) => {
     setVisibleByLocale((p) => ({ ...p, [loc]: { ...(p[loc] ?? {}), [sectionId]: next } }));
 
-    // appliquer immédiatement sur les rows existantes (si elles existent déjà)
+    // applique immédiatement sur les rows existantes (si elles existent déjà)
     try {
       const section = SECTIONS.find((s) => s.id === sectionId);
       if (!section) return;
@@ -405,34 +479,39 @@ export default function AdminContent() {
       if (tasks.length) await Promise.all(tasks);
       await list.refetch();
     } catch {
-      // si erreur, l’état UI reste, et la sauvegarde consolidera
+      // tolérant: UI conserve l’état, save consolidera
     }
   };
 
-  const saveSection = async (loc: Locale, sectionId: string) => {
+  const saveSection = async (sectionId: string) => {
     const section = SECTIONS.find((s) => s.id === sectionId);
     if (!section) return;
 
     try {
-      const visible = Boolean((visibleByLocale[loc] ?? {})[sectionId]);
-      const values = ((drafts[loc] ?? {})[sectionId] ?? {}) as Record<string, string>;
+      const doSaveLocale = async (loc: Locale) => {
+        const visible = sectionVisible(loc, sectionId);
+        const values = ((drafts[loc] ?? {})[sectionId] ?? {}) as Record<string, string>;
 
-      await Promise.all(
-        section.fields.map((f) =>
-          upsert.mutateAsync({
-            key: f.key,
-            locale: loc,
-            type: "text",
-            value: (values[f.key] ?? "").toString(),
-            is_published: visible,
-          })
-        )
-      );
+        await Promise.all(
+          section.fields.map((f) =>
+            upsert.mutateAsync({
+              key: f.key,
+              locale: loc,
+              type: "text",
+              value: (values[f.key] ?? "").toString(),
+              is_published: visible,
+            })
+          )
+        );
+      };
 
-      toast({
-        title: "Enregistré",
-        description: `${section.title} (${loc.toUpperCase()}) mis à jour.`,
-      });
+      if (mode === "compare") {
+        await Promise.all([doSaveLocale("fr"), doSaveLocale("en")]);
+        toast({ title: "Enregistré", description: `${section.title} (FR + EN) mis à jour.` });
+      } else {
+        await doSaveLocale(mode);
+        toast({ title: "Enregistré", description: `${section.title} (${mode.toUpperCase()}) mis à jour.` });
+      }
 
       await list.refetch();
     } catch (e: any) {
@@ -487,6 +566,41 @@ export default function AdminContent() {
     }
   };
 
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "Copié", description: "La clé a été copiée dans le presse-papiers." });
+    } catch {
+      toast({ title: "Copie impossible", description: "Votre navigateur a bloqué l’accès au presse-papiers.", variant: "destructive" });
+    }
+  };
+
+  // ---- Qualité / stats ----
+  const globalStats = React.useMemo(() => {
+    let published = 0;
+    let draft = 0;
+    let missingFR = 0;
+    let missingEN = 0;
+    let autoEN = 0;
+
+    for (const section of SECTIONS) {
+      for (const f of section.fields) {
+        const fr = getRow(f.key, "fr");
+        const en = getRow(f.key, "en");
+        if (!fr) missingFR += 1;
+        if (!en) missingEN += 1;
+        if (en?.en_is_auto) autoEN += 1;
+
+        const anyPublished = Boolean(fr?.is_published) || Boolean(en?.is_published);
+        if (anyPublished) published += 1;
+        else draft += 1;
+      }
+    }
+
+    return { published, draft, missingFR, missingEN, autoEN };
+  }, [getRow]);
+
+  // ---- Sections filtrées (recherche sur titre, description, clés, valeurs) ----
   const filteredSections = React.useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return SECTIONS;
@@ -494,193 +608,516 @@ export default function AdminContent() {
     return SECTIONS.filter((s) => {
       if (s.title.toLowerCase().includes(query)) return true;
       if ((s.description ?? "").toLowerCase().includes(query)) return true;
+      if ((s.location ?? "").toLowerCase().includes(query)) return true;
 
-      // cherche aussi dans les labels / clés / contenu du locale actif
-      const d = (drafts[activeLocale]?.[s.id] ?? {}) as Record<string, string>;
+      const dFR = (drafts.fr?.[s.id] ?? {}) as Record<string, string>;
+      const dEN = (drafts.en?.[s.id] ?? {}) as Record<string, string>;
+      const dActive = (drafts[activeLocale]?.[s.id] ?? {}) as Record<string, string>;
+
       return s.fields.some((f) => {
         if (f.label.toLowerCase().includes(query)) return true;
         if (f.key.toLowerCase().includes(query)) return true;
-        const v = (d[f.key] ?? "").toLowerCase();
-        return v.includes(query);
+        const vActive = (dActive[f.key] ?? "").toLowerCase();
+        const vFr = (dFR[f.key] ?? "").toLowerCase();
+        const vEn = (dEN[f.key] ?? "").toLowerCase();
+        return vActive.includes(query) || vFr.includes(query) || vEn.includes(query);
       });
     });
   }, [q, drafts, activeLocale]);
 
-  const sectionVisible = (loc: Locale, sectionId: string) =>
-    Boolean((visibleByLocale[loc] ?? {})[sectionId]);
+  React.useEffect(() => {
+    // si la section active n’est plus dans la liste filtrée, basculer sur la 1ère
+    if (!filteredSections.some((s) => s.id === activeSectionId)) {
+      setActiveSectionId(filteredSections[0]?.id ?? SECTIONS[0]?.id ?? "header");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
 
+  const activeSection = React.useMemo(
+    () => SECTIONS.find((s) => s.id === activeSectionId) ?? SECTIONS[0],
+    [activeSectionId]
+  );
+
+  const sectionSummary = React.useCallback(
+    (section: SectionDef) => {
+      const loc = mode === "en" ? "en" : "fr";
+      const d = (drafts[loc]?.[section.id] ?? {}) as Record<string, string>;
+      const missing: string[] = [];
+      let autoCount = 0;
+
+      for (const f of section.fields) {
+        const rFR = getRow(f.key, "fr");
+        const rEN = getRow(f.key, "en");
+        if (!rFR) missing.push("FR");
+        if (!rEN) missing.push("EN");
+        if (rEN?.en_is_auto) autoCount += 1;
+
+        // si row existe mais value vide, compter comme “manquant”
+        if (rFR && isEmptyValue(rFR.value)) missing.push("FR");
+        if (rEN && isEmptyValue(rEN.value)) missing.push("EN");
+      }
+
+      // déduplique missing labels
+      const missingSet = new Set(missing);
+      const visibleFR = sectionVisible("fr", section.id);
+      const visibleEN = sectionVisible("en", section.id);
+
+      // last updated = max(updated_at) du set de clés (locale active)
+      let lastUpdated: string | null = null;
+      for (const f of section.fields) {
+        const r = getRow(f.key, loc);
+        const ts = r?.updated_at ?? null;
+        if (!ts) continue;
+        if (!lastUpdated || new Date(ts).getTime() > new Date(lastUpdated).getTime()) lastUpdated = ts;
+      }
+
+      const filledCount = section.fields.reduce((acc, f) => {
+        const v = (d[f.key] ?? "").toString().trim();
+        return acc + (v ? 1 : 0);
+      }, 0);
+
+      return {
+        category: sectionCategory(section.id),
+        filledCount,
+        totalCount: section.fields.length,
+        missingSet,
+        autoCount,
+        visibleFR,
+        visibleEN,
+        lastUpdated,
+      };
+    },
+    [drafts, getRow, mode, sectionVisible]
+  );
+
+  // ---- UI ----
   return (
     <div className="p-4 md:p-6 space-y-4">
-      {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      {/* Top Bar */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold">Contenu du site</h1>
-          <p className="text-sm text-muted-foreground">
-            Modifie toutes les sections visibles sur ton site (accueil, recherche, abonnements, footer, pages légales…).
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold">Contenu du site</h1>
+            <Pill kind="published">{globalStats.published} publié(s)</Pill>
+            <Pill kind="draft">{globalStats.draft} brouillon(s)</Pill>
+            {(globalStats.missingFR + globalStats.missingEN) > 0 ? (
+              <Pill kind="missing">
+                {globalStats.missingFR + globalStats.missingEN} clé(s) manquante(s)
+              </Pill>
+            ) : null}
+            {globalStats.autoEN > 0 ? <Pill kind="auto">{globalStats.autoEN} EN auto</Pill> : null}
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">
+            Gère les textes visibles (Accueil, Recherche, Abonnements, Footer, Légal…). Consulte les clés, statuts et historiques.
           </p>
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-          <Tabs value={activeLocale} onValueChange={(v) => setActiveLocale(v as Locale)}>
-            <TabsList className="grid grid-cols-2">
+          <Tabs value={mode} onValueChange={(v) => setMode(v as LocaleMode)}>
+            <TabsList className="grid grid-cols-3">
               <TabsTrigger value="fr">FR</TabsTrigger>
               <TabsTrigger value="en">EN</TabsTrigger>
+              <TabsTrigger value="compare">Comparer</TabsTrigger>
             </TabsList>
           </Tabs>
 
           <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => window.open("/", "_blank", "noopener,noreferrer")}
+              disabled={isBusy}
+              title="Ouvrir le site"
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Retour au site
+            </Button>
+
             <Button type="button" variant="outline" onClick={() => list.refetch()} disabled={isBusy}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Recharger
             </Button>
+
             <Button type="button" variant="outline" onClick={initSections} disabled={isBusy}>
               <ListPlus className="h-4 w-4 mr-2" />
-              Initialiser les sections
+              Initialiser
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Search */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="relative max-w-2xl">
-            <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Rechercher une section, un label, une clé, ou un contenu…"
-              className="pl-9"
-              disabled={isBusy}
-            />
-          </div>
-          <div className="mt-2 text-xs text-muted-foreground">
-            {list.isLoading ? "Chargement…" : `${filteredSections.length} section(s)`}
-          </div>
-          {list.isError ? (
-            <div className="mt-2 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
-              {(list.error as any)?.message ?? "Erreur de chargement"}
+      {/* Main layout: 2 panels */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* LEFT: navigation */}
+        <Card className="lg:col-span-4 xl:col-span-3">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <LayoutList className="h-4 w-4" />
+              Sections
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-3">
+            <div className="relative">
+              <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+              <Input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Rechercher (section, clé, texte)…"
+                className="pl-9"
+                disabled={isBusy}
+              />
             </div>
-          ) : null}
-        </CardContent>
-      </Card>
 
-      {/* Sections grid (responsive like capture) */}
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3">
-        {filteredSections.map((section) => {
-          const visible = sectionVisible(activeLocale, section.id);
-          const d = (drafts[activeLocale]?.[section.id] ?? {}) as Record<string, string>;
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{list.isLoading ? "Chargement…" : `${filteredSections.length} section(s)`}</span>
+              {list.isError ? (
+                <span className="text-rose-700 inline-flex items-center gap-1">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Erreur
+                </span>
+              ) : null}
+            </div>
 
-          return (
-            <Card key={section.id} className="min-w-0">
-              <CardContent className="p-4 space-y-4">
-                {/* Section header */}
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <div className="text-xs text-muted-foreground">SECTION</div>
-                    <div className="text-sm font-semibold">{section.title}</div>
-                    {section.description ? (
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {section.description}
+            {list.isError ? (
+              <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
+                {(list.error as any)?.message ?? "Erreur de chargement"}
+              </div>
+            ) : null}
+
+            <div className="max-h-[62vh] overflow-auto pr-1 space-y-1">
+              {filteredSections.map((s) => {
+                const info = sectionSummary(s);
+                const isActive = s.id === activeSectionId;
+
+                const visibleLabel =
+                  mode === "compare"
+                    ? (info.visibleFR || info.visibleEN ? "Visible" : "Masqué")
+                    : (mode === "en" ? (info.visibleEN ? "Visible" : "Masqué") : (info.visibleFR ? "Visible" : "Masqué"));
+
+                const missingLabel = (() => {
+                  if (info.missingSet.size === 0) return null;
+                  const labels = Array.from(info.missingSet).sort().join("/");
+                  return labels.includes("FR") && labels.includes("EN") ? "FR+EN" : labels;
+                })();
+
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setActiveSectionId(s.id)}
+                    className={[
+                      "w-full text-left rounded-lg border px-3 py-2 transition",
+                      isActive ? "border-slate-300 bg-slate-50" : "border-slate-200 hover:bg-slate-50",
+                    ].join(" ")}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-[11px] text-muted-foreground flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1">
+                            <Globe className="h-3.5 w-3.5" />
+                            {info.category}
+                          </span>
+                          <span className="text-muted-foreground/70">•</span>
+                          <span className="truncate">{s.location ?? "—"}</span>
+                        </div>
+
+                        <div className="mt-0.5 font-medium text-sm truncate">{s.title}</div>
+
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          <span
+                            className={[
+                              "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px]",
+                              (visibleLabel === "Visible" ? badgeClasses("published") : badgeClasses("draft")),
+                            ].join(" ")}
+                          >
+                            {visibleLabel}
+                          </span>
+
+                          <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] border-slate-200 bg-white text-slate-700">
+                            {info.filledCount}/{info.totalCount} champs
+                          </span>
+
+                          {missingLabel ? (
+                            <span className={["inline-flex items-center rounded-full border px-2 py-0.5 text-[11px]", badgeClasses("missing")].join(" ")}>
+                              Manquant {missingLabel}
+                            </span>
+                          ) : null}
+
+                          {info.autoCount > 0 ? (
+                            <span className={["inline-flex items-center rounded-full border px-2 py-0.5 text-[11px]", badgeClasses("auto")].join(" ")}>
+                              EN auto {info.autoCount}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        {info.lastUpdated ? (
+                          <div className="mt-1 text-[11px] text-muted-foreground">
+                            Dernière maj: {fmtDate(info.lastUpdated)}
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
-                  </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span
-                      className={[
-                        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium",
-                        pillClasses(visible),
-                      ].join(" ")}
-                    >
-                      {visible ? "Affichée" : "Masquée"}
-                    </span>
+                      <ChevronRight className={["h-4 w-4 mt-1 shrink-0", isActive ? "text-slate-700" : "text-muted-foreground"].join(" ")} />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
 
+        {/* RIGHT: editor */}
+        <Card className="lg:col-span-8 xl:col-span-9">
+          <CardHeader className="pb-2">
+            <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0">
+                <CardTitle className="text-base font-semibold">{activeSection?.title ?? "Section"}</CardTitle>
+                <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
+                  <span className="inline-flex items-center gap-1">
+                    <Globe className="h-3.5 w-3.5" />
+                    {activeSection?.location ?? "—"}
+                  </span>
+                  {activeSection?.description ? <span>• {activeSection.description}</span> : null}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                {/* Visibilité */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {mode === "compare" ? (
+                    <>
+                      <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={sectionVisible("fr", activeSectionId)}
+                          onChange={(e) => toggleSectionVisible("fr", activeSectionId, e.target.checked)}
+                          disabled={isBusy}
+                        />
+                        Visible FR
+                      </label>
+                      <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={sectionVisible("en", activeSectionId)}
+                          onChange={(e) => toggleSectionVisible("en", activeSectionId, e.target.checked)}
+                          disabled={isBusy}
+                        />
+                        Visible EN
+                      </label>
+                    </>
+                  ) : (
                     <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
                       <input
                         type="checkbox"
                         className="h-4 w-4"
-                        checked={visible}
-                        onChange={(e) => toggleSectionVisible(activeLocale, section.id, e.target.checked)}
+                        checked={sectionVisible(mode, activeSectionId)}
+                        onChange={(e) => toggleSectionVisible(mode, activeSectionId, e.target.checked)}
                         disabled={isBusy}
                       />
                       Visible sur le site
                     </label>
-                  </div>
+                  )}
                 </div>
 
-                {/* Fields */}
-                <div className="grid gap-3">
-                  {section.fields.map((f) => {
-                    const val = (d[f.key] ?? "").toString();
+                <Button
+                  type="button"
+                  onClick={() => saveSection(activeSectionId)}
+                  disabled={isBusy}
+                  className="sm:w-auto w-full"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Enregistrer{mode === "compare" ? " FR + EN" : ""}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
 
-                    if (f.type === "textarea") {
-                      return (
-                        <div key={f.key} className="space-y-1">
-                          <div className="text-xs text-muted-foreground">{f.label}</div>
-                          <Textarea
-                            value={val}
-                            onChange={(e) => setDraft(activeLocale, section.id, f.key, e.target.value)}
-                            placeholder={f.placeholder}
-                            rows={4}
-                            className="min-h-[110px]"
-                            disabled={isBusy}
-                          />
-                          {f.help ? (
-                            <div className="text-[11px] text-muted-foreground">{f.help}</div>
-                          ) : null}
-                        </div>
-                      );
-                    }
+          <CardContent className="pt-0">
+            {/* helper line */}
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mb-3">
+              {mode === "compare" ? (
+                <>
+                  <span className="inline-flex items-center gap-1">
+                    <Eye className="h-3.5 w-3.5" />
+                    FR: {sectionVisible("fr", activeSectionId) ? "visible" : "masqué"}
+                  </span>
+                  <span className="text-muted-foreground/70">•</span>
+                  <span className="inline-flex items-center gap-1">
+                    <Eye className="h-3.5 w-3.5" />
+                    EN: {sectionVisible("en", activeSectionId) ? "visible" : "masqué"}
+                  </span>
+                </>
+              ) : (
+                <span className="inline-flex items-center gap-1">
+                  {sectionVisible(mode, activeSectionId) ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                  {sectionVisible(mode, activeSectionId) ? "Visible (publié à l’enregistrement)" : "Masqué (brouillon à l’enregistrement)"}
+                </span>
+              )}
+            </div>
 
+            {/* Fields */}
+            <div className="space-y-4">
+              {(activeSection?.fields ?? []).map((f) => {
+                const frVal = ((drafts.fr?.[activeSectionId] ?? {}) as Record<string, string>)[f.key] ?? "";
+                const enVal = ((drafts.en?.[activeSectionId] ?? {}) as Record<string, string>)[f.key] ?? "";
+
+                const frRow = getRow(f.key, "fr");
+                const enRow = getRow(f.key, "en");
+
+                const missingFR = !frRow || isEmptyValue(frRow.value);
+                const missingEN = !enRow || isEmptyValue(enRow.value);
+
+                const autoEN = Boolean(enRow?.en_is_auto);
+
+                const metaLine = (loc: Locale) => {
+                  const r = loc === "fr" ? frRow : enRow;
+                  const bits: string[] = [];
+                  if (r?.updated_at) bits.push(`maj: ${fmtDate(r.updated_at)}`);
+                  if (r?.updated_by) bits.push(`par: ${r.updated_by}`);
+                  if (loc === "en" && r?.en_is_auto) bits.push("EN auto");
+                  if (!r) bits.push("non créé");
+                  return bits.length ? bits.join(" • ") : "—";
+                };
+
+                const renderInput = (loc: Locale, value: string) => {
+                  const disabled = isBusy;
+                  if (f.type === "textarea") {
                     return (
-                      <div key={f.key} className="space-y-1">
-                        <div className="text-xs text-muted-foreground">{f.label}</div>
-                        <Input
-                          type={inputType(f.type)}
-                          value={val}
-                          onChange={(e) => setDraft(activeLocale, section.id, f.key, e.target.value)}
-                          placeholder={f.placeholder}
-                          disabled={isBusy}
-                        />
+                      <Textarea
+                        value={value}
+                        onChange={(e) => setDraft(loc, activeSectionId, f.key, e.target.value)}
+                        placeholder={f.placeholder}
+                        rows={4}
+                        className="min-h-[120px]"
+                        disabled={disabled}
+                      />
+                    );
+                  }
+
+                  return (
+                    <Input
+                      type={inputType(f.type)}
+                      value={value}
+                      onChange={(e) => setDraft(loc, activeSectionId, f.key, e.target.value)}
+                      placeholder={f.placeholder}
+                      disabled={disabled}
+                    />
+                  );
+                };
+
+                return (
+                  <div key={f.key} className="rounded-xl border border-slate-200 p-4">
+                    {/* Field header */}
+                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex items-center flex-wrap gap-2">
+                          <div className="text-sm font-medium">{f.label}</div>
+                          {missingFR ? <Pill kind="missing">FR manquant</Pill> : null}
+                          {missingEN ? <Pill kind="missing">EN manquant</Pill> : null}
+                          {autoEN ? <Pill kind="auto">EN auto</Pill> : null}
+                        </div>
+
+                        <div className="mt-1 text-[12px] text-muted-foreground flex flex-wrap items-center gap-2">
+                          <span className="font-mono">{f.key}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2"
+                            onClick={() => copyText(f.key)}
+                            disabled={isBusy}
+                            title="Copier la clé"
+                          >
+                            <Copy className="h-3.5 w-3.5 mr-1" />
+                            Copier
+                          </Button>
+                        </div>
+
                         {f.help ? (
-                          <div className="text-[11px] text-muted-foreground">{f.help}</div>
+                          <div className="mt-1 text-[12px] text-muted-foreground">{f.help}</div>
                         ) : null}
                       </div>
-                    );
-                  })}
-                </div>
 
-                {/* Footer actions */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    {visible ? (
-                      <>
-                        <Eye className="h-4 w-4" />
-                        Visible (publié à l’enregistrement)
-                      </>
-                    ) : (
-                      <>
-                        <EyeOff className="h-4 w-4" />
-                        Masqué (brouillon à l’enregistrement)
-                      </>
-                    )}
+                      {/* Meta right */}
+                      <div className="text-[11px] text-muted-foreground md:text-right space-y-1">
+                        <div>FR: {metaLine("fr")}</div>
+                        <div>EN: {metaLine("en")}</div>
+                      </div>
+                    </div>
+
+                    {/* Inputs */}
+                    <div className="mt-3">
+                      {mode === "compare" ? (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <div className="text-xs text-muted-foreground">FR</div>
+                            {renderInput("fr", frVal)}
+                            <div className="flex justify-end">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8"
+                                disabled={isBusy || isEmptyValue(frVal)}
+                                onClick={() => setDraft("en", activeSectionId, f.key, frVal)}
+                                title="Copier FR → EN"
+                              >
+                                Copier FR → EN
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="text-xs text-muted-foreground">EN</div>
+                            {renderInput("en", enVal)}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <div className="text-xs text-muted-foreground">{mode.toUpperCase()}</div>
+                          {renderInput(mode, mode === "fr" ? frVal : enVal)}
+                        </div>
+                      )}
+                    </div>
                   </div>
+                );
+              })}
+            </div>
 
-                  <Button
-                    type="button"
-                    onClick={() => saveSection(activeLocale, section.id)}
-                    disabled={isBusy}
-                    className="sm:w-auto w-full"
-                  >
-                    <Save className="h-4 w-4 mr-2" />
-                    Enregistrer
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+            {/* Footer actions */}
+            <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="text-xs text-muted-foreground">
+                Astuce: utilise “Comparer” pour voir FR/EN côte à côte et copier FR → EN.
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => list.refetch()}
+                  disabled={isBusy}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Recharger
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => saveSection(activeSectionId)}
+                  disabled={isBusy}
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Enregistrer{mode === "compare" ? " FR + EN" : ""}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* small bottom note */}
+      <div className="text-[12px] text-muted-foreground">
+        Notes: “EN auto” correspond à <span className="font-mono">en_is_auto</span>. Les champs “non créé” indiquent que la clé n’existe pas encore en base (bouton Initialiser).
       </div>
     </div>
   );
