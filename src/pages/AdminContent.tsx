@@ -71,22 +71,30 @@ const LOCALES: Locale[] = ["fr", "en"];
  * Ajoute/ajuste ici les clés pour couvrir 100% du contenu de ton site.
  */
 const SECTIONS: SectionDef[] = [
-  {
-    id: "header",
-    title: "Header (Barre du haut)",
-    location: "Back-office > Navigation",
-    description: "Texte sous le logo, labels d’actions et navigation.",
-    fields: [
-      { key: "header.tagline", label: "Tagline (sous le logo)", type: "text", placeholder: "Prestataires vérifiés, proches de vous" },
-      { key: "header.btn_login", label: "Bouton Connexion", type: "text", placeholder: "Se connecter" },
-      { key: "header.nav.dashboard", label: "Menu: Tableau de bord", type: "text", placeholder: "Tableau de bord" },
-      { key: "header.nav.contact", label: "Menu: Demandes de contact", type: "text", placeholder: "Demandes de contact" },
-      { key: "header.nav.providers", label: "Menu: Inscriptions prestataires", type: "text", placeholder: "Inscriptions prestataires" },
-      { key: "header.nav.ads", label: "Menu: Publicités", type: "text", placeholder: "Publicités" },
-      { key: "header.nav.faq", label: "Menu: Questions FAQ", type: "text", placeholder: "Questions FAQ" },
-      { key: "header.nav.content", label: "Menu: Contenu du site", type: "text", placeholder: "Contenu du site" },
-    ],
-  },
+{
+  id: "header",
+  title: "Header (Barre du haut)",
+  description: "Logo, tagline, boutons, langue et menu mobile.",
+  fields: [
+    { key: "brand.name", label: "Nom de la marque (logo)", type: "text", placeholder: "ProxiServices" },
+
+    { key: "header.tagline", label: "Tagline (sous le logo)", type: "text", placeholder: "Prestataires vérifiés, proches de vous" },
+
+    { key: "header.btn_login", label: "Bouton (non connecté)", type: "text", placeholder: "Se connecter" },
+    { key: "header.btn_account", label: "Bouton (connecté)", type: "text", placeholder: "Mon compte" },
+    { key: "header.btn_account_short", label: "Bouton mobile (court)", type: "text", placeholder: "Compte" },
+
+    { key: "header.admin_badge", label: "Badge Admin", type: "text", placeholder: "Admin" },
+
+    { key: "header.lang.aria", label: "Accessibilité - changer langue (aria-label)", type: "text", placeholder: "Changer de langue" },
+    { key: "header.lang.fr", label: "Langue - Français (label)", type: "text", placeholder: "Français" },
+    { key: "header.lang.en", label: "Langue - Anglais (label)", type: "text", placeholder: "Anglais" },
+
+    { key: "header.mobile_menu.aria", label: "Menu mobile (aria-label)", type: "text", placeholder: "Menu mobile" },
+    { key: "header.mobile_close.aria", label: "Fermer menu (aria-label)", type: "text", placeholder: "Fermer le menu" },
+    { key: "header.mobile_menu.title", label: "Titre du drawer mobile", type: "text", placeholder: "Menu" },
+  ],
+},
 
   {
     id: "home_hero",
