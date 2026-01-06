@@ -14,14 +14,19 @@ import { useAuthProfile } from "@/hooks/useAuthProfile";
 import ContactModal from "@/components/contact/ContactModal";
 
 const Header = () => {
-  const { language, setLanguage } = useLanguage();
+  const { t, language, setLanguage } = useLanguage();
   const { user, isAdmin, isWorker } = useAuthProfile();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // ✅ Modal Contact (sans navigation) — on le garde (mais sans bouton header)
   const [contactOpen, setContactOpen] = useState(false);
 
   const location = useLocation();
+
+  const cms = (key: string, fallbackFr: string, fallbackEn: string) => {
+    const v = t(key);
+    if (!v || v === key) return language === "fr" ? fallbackFr : fallbackEn;
+    return v;
+  };
 
   useEffect(() => setMobileOpen(false), [location.pathname, location.search, location.hash]);
 
@@ -37,9 +42,9 @@ const Header = () => {
   }, [mobileOpen]);
 
   const accountLabel = useMemo(() => {
-    if (user) return language === "fr" ? "Mon compte" : "My account";
-    return language === "fr" ? "Se connecter" : "Sign in";
-  }, [user, language]);
+    if (user) return cms("header.btn_account", "Mon compte", "My account");
+    return cms("header.btn_login", "Se connecter", "Sign in");
+  }, [user, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const accountPath = useMemo(() => {
     if (!user) return "/mon-compte";
@@ -61,17 +66,15 @@ const Header = () => {
                 </div>
                 <div className="min-w-0 leading-tight">
                   <span className="block text-base sm:text-xl font-extrabold text-pro-gray truncate">
-                    ProxiServices
+                    {cms("brand.name", "ProxiServices", "ProxiServices")}
                   </span>
                   <span className="hidden sm:block text-[11px] text-gray-500 truncate">
-                    {language === "fr"
-                      ? "Prestataires vérifiés, proches de vous"
-                      : "Verified providers, near you"}
+                    {cms("header.tagline", "Prestataires vérifiés, proches de vous", "Verified providers, near you")}
                   </span>
                 </div>
               </Link>
 
-              {/* ✅ Navigation Desktop retirée (Rechercher supprimé) */}
+              {/* Navigation Desktop (vide volontairement) */}
               <nav className="hidden md:flex" aria-hidden="true" />
 
               {/* Actions Desktop */}
@@ -81,7 +84,7 @@ const Header = () => {
                     to="/admin/dashboard"
                     className="inline-flex items-center rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-colors whitespace-nowrap"
                   >
-                    Admin
+                    {cms("header.admin_badge", "Admin", "Admin")}
                   </Link>
                 )}
 
@@ -92,11 +95,9 @@ const Header = () => {
                   >
                     <User className="w-4 h-4" />
                     <span className="hidden lg:inline">{accountLabel}</span>
-                    <span className="lg:hidden">{language === "fr" ? "Compte" : "Account"}</span>
+                    <span className="lg:hidden">{cms("header.btn_account_short", "Compte", "Account")}</span>
                   </Button>
                 </Link>
-
-                {/* ✅ Contact icon retiré (encadré sur ta capture) */}
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -104,7 +105,7 @@ const Header = () => {
                       variant="outline"
                       size="sm"
                       className="rounded-full flex items-center gap-1 whitespace-nowrap"
-                      aria-label={language === "fr" ? "Changer de langue" : "Change language"}
+                      aria-label={cms("header.lang.aria", "Changer de langue", "Change language")}
                     >
                       <Languages className="w-4 h-4" />
                       <span className="uppercase">{language}</span>
@@ -112,10 +113,10 @@ const Header = () => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="bg-white">
                     <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
-                      Français
+                      {cms("header.lang.fr", "Français", "French")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
-                      English
+                      {cms("header.lang.en", "English", "English")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -123,25 +124,19 @@ const Header = () => {
 
               {/* Mobile actions */}
               <div className="md:hidden min-w-0 flex items-center gap-2">
-                {/* ✅ Contact icon mobile retiré */}
-
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-full flex items-center gap-1 whitespace-nowrap"
-                    >
+                    <Button variant="outline" size="sm" className="rounded-full flex items-center gap-1 whitespace-nowrap">
                       <Languages className="w-4 h-4" />
                       <span className="uppercase">{language}</span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="bg-white">
                     <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
-                      Français
+                      {cms("header.lang.fr", "Français", "French")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
-                      English
+                      {cms("header.lang.en", "English", "English")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -150,7 +145,7 @@ const Header = () => {
                   variant="outline"
                   size="sm"
                   onClick={() => setMobileOpen((v) => !v)}
-                  aria-label="Menu mobile"
+                  aria-label={cms("header.mobile_menu.aria", "Menu mobile", "Mobile menu")}
                   className="rounded-full px-3 whitespace-nowrap"
                 >
                   {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
@@ -159,7 +154,6 @@ const Header = () => {
             </div>
           </div>
 
-          {/* liseré premium */}
           <div className="h-1 w-full bg-gradient-to-r from-pro-blue/90 via-blue-600/90 to-pro-blue/90" />
         </div>
 
@@ -169,7 +163,7 @@ const Header = () => {
             <button
               type="button"
               className="absolute inset-0 bg-black/35"
-              aria-label="Fermer le menu"
+              aria-label={cms("header.mobile_close.aria", "Fermer le menu", "Close menu")}
               onClick={() => setMobileOpen(false)}
             />
 
@@ -177,21 +171,14 @@ const Header = () => {
               <div className="w-full px-4 sm:px-6 py-3">
                 <div className="flex items-center justify-between gap-3 min-w-0">
                   <span className="text-sm font-semibold text-pro-gray">
-                    {language === "fr" ? "Menu" : "Menu"}
+                    {cms("header.mobile_menu.title", "Menu", "Menu")}
                   </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setMobileOpen(false)}
-                    className="rounded-full"
-                  >
+                  <Button variant="outline" size="sm" onClick={() => setMobileOpen(false)} className="rounded-full">
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
 
                 <div className="mt-3 flex flex-col gap-1 min-w-0">
-                  {/* ✅ Rechercher/FAQ/Contact retirés du drawer pour correspondre au header minimal */}
-
                   {isAdmin && (
                     <Link
                       to="/admin/dashboard"
@@ -199,7 +186,7 @@ const Header = () => {
                       className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue min-w-0"
                     >
                       <User className="w-4 h-4 flex-shrink-0" />
-                      <span className="truncate">Admin</span>
+                      <span className="truncate">{cms("header.admin_badge", "Admin", "Admin")}</span>
                     </Link>
                   )}
 
@@ -220,8 +207,6 @@ const Header = () => {
         )}
       </header>
 
-      {/* ✅ Modal Contact toujours disponible (ouvert depuis footer/CTA/sidebar),
-          mais plus de bouton dans le header. */}
       <ContactModal open={contactOpen} onOpenChange={setContactOpen} cooldownSeconds={30} />
     </>
   );
