@@ -9,32 +9,29 @@ import { Check, Star, BarChart3, Headphones, User } from "lucide-react";
 const SubscriptionSection = () => {
   const { t, language } = useLanguage();
 
-  /**
-   * Retourne UNIQUEMENT la valeur CMS.
-   * - Si la clé est absente / non publiée / non chargée, `t(key)` renvoie souvent `key`
-   *   => on renvoie "" pour pouvoir masquer réellement.
-   */
   const cmsValue = (key: string) => {
     const v = t(key);
     if (!v || v === key) return "";
     return String(v);
   };
 
-  /**
-   * Fallback autorisé seulement si la section est activée.
-   */
   const cmsOrFallback = (key: string, fallbackFr: string, fallbackEn: string) => {
     const v = cmsValue(key);
     if (v.trim().length > 0) return v;
     return language === "fr" ? fallbackFr : fallbackEn;
   };
 
-  // ✅ Garde-fou: si la section n'est pas "publiée" côté CMS, on ne l'affiche PAS du tout.
-  // Pour l'activer plus tard: publie au moins pricing.section.title ou pricing.section.subtitle.
+  // ✅ Switch CMS explicite (prioritaire)
+  // Active si pricing.section.enabled vaut "1" / "true" / "yes" / "on"
+  const enabledRaw = cmsValue("pricing.section.enabled").trim().toLowerCase();
+  const enabledBySwitch = ["1", "true", "yes", "on", "enabled"].includes(enabledRaw);
+
+  // ✅ Fallback si tu n'as pas encore créé la clé (compatible avec ton ancien comportement)
   const sectionTitle = cmsValue("pricing.section.title");
   const sectionSubtitle = cmsValue("pricing.section.subtitle");
-  const isEnabled = sectionTitle.trim().length > 0 || sectionSubtitle.trim().length > 0;
+  const enabledByTitleOrSubtitle = sectionTitle.trim().length > 0 || sectionSubtitle.trim().length > 0;
 
+  const isEnabled = enabledBySwitch || enabledByTitleOrSubtitle;
   if (!isEnabled) return null;
 
   const parseAmount = (s: string, fallback: number) => {
@@ -106,29 +103,17 @@ const SubscriptionSection = () => {
     {
       icon: User,
       title: cmsOrFallback("pricing.benefit1.title", "Profil vérifié", "Verified profile"),
-      description: cmsOrFallback(
-        "pricing.benefit1.desc",
-        "Badge de confiance sur votre profil",
-        "Trust badge on your profile"
-      ),
+      description: cmsOrFallback("pricing.benefit1.desc", "Badge de confiance sur votre profil", "Trust badge on your profile"),
     },
     {
       icon: BarChart3,
       title: cmsOrFallback("pricing.benefit2.title", "Analytics détaillés", "Detailed analytics"),
-      description: cmsOrFallback(
-        "pricing.benefit2.desc",
-        "Suivez vos performances et optimisez",
-        "Track performance and optimize"
-      ),
+      description: cmsOrFallback("pricing.benefit2.desc", "Suivez vos performances et optimisez", "Track performance and optimize"),
     },
     {
       icon: Headphones,
       title: cmsOrFallback("pricing.benefit3.title", "Support dédié", "Dedicated support"),
-      description: cmsOrFallback(
-        "pricing.benefit3.desc",
-        "Assistance prioritaire 7j/7",
-        "Priority support 7 days a week"
-      ),
+      description: cmsOrFallback("pricing.benefit3.desc", "Assistance prioritaire 7j/7", "Priority support 7 days a week"),
     },
   ];
 
@@ -144,11 +129,7 @@ const SubscriptionSection = () => {
           <p className="text-sm sm:text-base md:text-xl text-gray-600 max-w-3xl mx-auto">
             {sectionSubtitle.trim().length > 0
               ? sectionSubtitle
-              : cmsOrFallback(
-                  "pricing.section.subtitle",
-                  "Développez votre activité avec plus de visibilité",
-                  "Grow your business with more visibility"
-                )}
+              : cmsOrFallback("pricing.section.subtitle", "Développez votre activité avec plus de visibilité", "Grow your business with more visibility")}
           </p>
         </div>
 
@@ -156,9 +137,7 @@ const SubscriptionSection = () => {
           {plans.map((plan, index) => (
             <Card
               key={index}
-              className={`relative overflow-hidden transition-transform md:hover:scale-[1.02] ${
-                plan.popular ? "ring-2 ring-pro-blue shadow-xl" : "shadow-lg"
-              }`}
+              className={`relative overflow-hidden transition-transform md:hover:scale-[1.02] ${plan.popular ? "ring-2 ring-pro-blue shadow-xl" : "shadow-lg"}`}
             >
               {plan.popular && (
                 <div className="absolute top-0 left-0 right-0 bg-pro-blue text-white text-center py-2">
@@ -198,11 +177,7 @@ const SubscriptionSection = () => {
 
                 <Button
                   className={`w-full py-3 text-sm sm:text-base ${
-                    plan.popular
-                      ? "bg-pro-blue hover:bg-blue-700"
-                      : plan.isFree
-                      ? "bg-gray-800 hover:bg-gray-900"
-                      : "bg-gray-700 hover:bg-gray-800"
+                    plan.popular ? "bg-pro-blue hover:bg-blue-700" : plan.isFree ? "bg-gray-800 hover:bg-gray-900" : "bg-gray-700 hover:bg-gray-800"
                   }`}
                   onClick={() => {
                     window.location.href = `/inscription-ouvrier?plan=${plan.code}`;
