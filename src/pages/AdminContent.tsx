@@ -361,16 +361,19 @@ export default function AdminContent() {
     return res;
   }, [filteredKeys]);
 
+  // Selection
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
   React.useEffect(() => {
     if (!selectedKey && filteredKeys.length) setSelectedKey(filteredKeys[0]);
   }, [filteredKeys, selectedKey]);
 
+  // Draft editor
   const [activeLocale, setActiveLocale] = React.useState<Locale>("fr");
   const [draftType, setDraftType] = React.useState<string>("text");
   const [draftValue, setDraftValue] = React.useState<string>("");
   const [draftPublished, setDraftPublished] = React.useState<boolean>(false);
 
+  // Load selection into editor
   React.useEffect(() => {
     if (!selectedKey) return;
     const row = getRow(selectedKey, activeLocale);
@@ -416,10 +419,7 @@ export default function AdminContent() {
     setDraftType("text");
     setDraftValue("");
     setDraftPublished(false);
-    toast({
-      title: "Clé prête",
-      description: `Renseigne le contenu puis enregistre.`,
-    });
+    toast({ title: "Clé prête", description: `Renseigne le contenu puis enregistre.` });
   };
 
   const seedMissingDefaults = async () => {
@@ -584,7 +584,11 @@ export default function AdminContent() {
     const srcValue = (fromRow?.value ?? "").toString();
 
     if (!srcValue.trim()) {
-      toast({ title: "Traduction impossible", description: `${from.toUpperCase()} est vide/absent.`, variant: "destructive" });
+      toast({
+        title: "Traduction impossible",
+        description: `${from.toUpperCase()} est vide/absent.`,
+        variant: "destructive",
+      });
       return;
     }
 
@@ -616,14 +620,14 @@ export default function AdminContent() {
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      {/* Top diagnostic (compact) */}
-      <Card className="border-dashed">
-        <CardContent className="p-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-2 text-sm">
-            <Database className="h-4 w-4" />
+      {/* Top diagnostic */}
+      <Card className="border-dashed min-w-0">
+        <CardContent className="p-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between min-w-0">
+          <div className="flex items-center gap-2 text-sm min-w-0">
+            <Database className="h-4 w-4 shrink-0" />
             <span className="font-medium">Diagnostic</span>
             <span className="text-muted-foreground">|</span>
-            <span className="text-xs text-muted-foreground break-all font-mono">
+            <span className="text-xs text-muted-foreground break-all font-mono min-w-0">
               {diag.supabaseUrl || "Supabase URL inconnue"}
             </span>
           </div>
@@ -661,9 +665,9 @@ export default function AdminContent() {
         </CardContent>
       </Card>
 
-      {/* Title + actions (responsive) */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+      {/* Title + actions */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between min-w-0">
+        <div className="min-w-0">
           <h1 className="text-xl font-semibold">Contenu du site</h1>
           <p className="text-sm text-muted-foreground">
             Navigation à gauche, édition au centre, aperçu à droite (style CMS moderne).
@@ -690,18 +694,18 @@ export default function AdminContent() {
         </div>
       </div>
 
-      {/* Main layout: 1 col (mobile) / 2 cols (lg) / 3 cols (xl) */}
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[340px_1fr_420px]">
-        {/* Sidebar (sticky desktop) */}
-        <Card className="rounded-2xl lg:sticky lg:top-4 lg:self-start">
-          <CardContent className="p-4 space-y-3">
-            <div className="relative">
+      {/* ✅ CRITICAL: responsive grid + minmax(0,1fr) to prevent overflow/non-responsive shrink */}
+      <div className="grid gap-4 grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)_minmax(0,420px)] min-w-0">
+        {/* Sidebar */}
+        <Card className="rounded-2xl min-w-0 lg:sticky lg:top-4 lg:self-start">
+          <CardContent className="p-4 space-y-3 min-w-0">
+            <div className="relative min-w-0">
               <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
               <Input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Rechercher…"
-                className="pl-9"
+                className="pl-9 w-full"
               />
             </div>
 
@@ -727,9 +731,15 @@ export default function AdminContent() {
                 disabled={isBusy}
               >
                 <option value="all">{missingLabel("all")}</option>
-                <option value="en_missing">{missingLabel("en_missing")} ({missingEn})</option>
-                <option value="fr_missing">{missingLabel("fr_missing")} ({missingFr})</option>
-                <option value="both_missing">{missingLabel("both_missing")} ({missingBoth})</option>
+                <option value="en_missing">
+                  {missingLabel("en_missing")} ({missingEn})
+                </option>
+                <option value="fr_missing">
+                  {missingLabel("fr_missing")} ({missingFr})
+                </option>
+                <option value="both_missing">
+                  {missingLabel("both_missing")} ({missingBoth})
+                </option>
               </select>
             </div>
 
@@ -737,8 +747,8 @@ export default function AdminContent() {
               {list.isLoading ? "Chargement…" : `${filteredKeys.length} clé(s)`}
             </div>
 
-            {/* Responsive height: avoid squeezed columns on medium screens */}
-            <div className="h-[52vh] sm:h-[56vh] lg:h-[70vh] overflow-auto rounded-xl border">
+            {/* Height responsive */}
+            <div className="h-[52vh] sm:h-[56vh] lg:h-[70vh] overflow-auto rounded-xl border min-w-0">
               {((category === "All" ? categories : [category]) as Category[]).map((cat) => {
                 const items = keysByCategory[cat] ?? [];
                 if (!items.length) return null;
@@ -761,7 +771,7 @@ export default function AdminContent() {
                             type="button"
                             onClick={() => setSelectedKey(k)}
                             className={[
-                              "w-full text-left px-3 py-2 rounded-lg flex items-start gap-2",
+                              "w-full text-left px-3 py-2 rounded-lg flex items-start gap-2 min-w-0",
                               selectedKey === k ? "bg-muted" : "hover:bg-muted/30",
                             ].join(" ")}
                           >
@@ -784,17 +794,17 @@ export default function AdminContent() {
         </Card>
 
         {/* Editor */}
-        <Card className="rounded-2xl">
-          <CardContent className="p-4 space-y-4">
+        <Card className="rounded-2xl min-w-0">
+          <CardContent className="p-4 space-y-4 min-w-0">
             {!selectedKey ? (
               <div className="rounded-xl border p-4 text-sm text-muted-foreground">
                 Sélectionne une clé dans la colonne de gauche.
               </div>
             ) : (
               <>
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 min-w-0">
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold break-all">{selectedKey}</div>
+                    <div className="text-sm font-semibold break-words">{selectedKey}</div>
                     <div className="text-xs text-muted-foreground mt-1">
                       Catégorie : {detectCategory(selectedKey)}
                       <span className="mx-2">•</span>
@@ -865,11 +875,9 @@ export default function AdminContent() {
                           </div>
                         </div>
 
-                        <div className="grid gap-2 grid-cols-1 md:grid-cols-[220px_1fr]">
-                          <div>
-                            <label className="text-xs text-muted-foreground">
-                              Type ({loc.toUpperCase()})
-                            </label>
+                        <div className="grid gap-2 grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)] min-w-0">
+                          <div className="min-w-0">
+                            <label className="text-xs text-muted-foreground">Type ({loc.toUpperCase()})</label>
                             <select
                               value={draftType}
                               onChange={(e) => setDraftType(e.target.value)}
@@ -884,7 +892,7 @@ export default function AdminContent() {
                             </select>
                           </div>
 
-                          <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+                          <div className="flex flex-col sm:flex-row sm:items-end gap-2 min-w-0">
                             <Button type="button" className="w-full rounded-xl" onClick={saveActive} disabled={isBusy}>
                               <Save className="h-4 w-4 mr-2" />
                               Enregistrer
@@ -897,10 +905,8 @@ export default function AdminContent() {
                           </div>
                         </div>
 
-                        <div>
-                          <label className="text-xs text-muted-foreground">
-                            Contenu ({loc.toUpperCase()})
-                          </label>
+                        <div className="min-w-0">
+                          <label className="text-xs text-muted-foreground">Contenu ({loc.toUpperCase()})</label>
                           <Textarea
                             value={draftValue}
                             onChange={(e) => setDraftValue(e.target.value)}
@@ -923,11 +929,11 @@ export default function AdminContent() {
           </CardContent>
         </Card>
 
-        {/* Preview: below on lg, right on xl */}
-        <Card className="rounded-2xl lg:col-span-2 xl:col-span-1">
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
+        {/* Preview: stacks below on lg, stays right on xl */}
+        <Card className="rounded-2xl min-w-0 lg:col-span-2 xl:col-span-1">
+          <CardContent className="p-4 space-y-3 min-w-0">
+            <div className="flex items-center justify-between min-w-0">
+              <div className="min-w-0">
                 <div className="text-sm font-semibold">Aperçu</div>
                 <div className="text-xs text-muted-foreground">
                   {draftType === "markdown"
@@ -951,10 +957,8 @@ export default function AdminContent() {
               </Button>
             </div>
 
-            <div className="h-[38vh] sm:h-[42vh] lg:h-[40vh] xl:h-[70vh] overflow-auto rounded-xl border bg-muted/10 p-3">
-              <pre className="text-xs whitespace-pre-wrap break-words">
-                {previewValue || "—"}
-              </pre>
+            <div className="h-[38vh] sm:h-[42vh] lg:h-[40vh] xl:h-[70vh] overflow-auto rounded-xl border bg-muted/10 p-3 min-w-0">
+              <pre className="text-xs whitespace-pre-wrap break-words">{previewValue || "—"}</pre>
             </div>
 
             {!diag.selectOk ? (
