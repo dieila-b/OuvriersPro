@@ -53,6 +53,10 @@ const Header = () => {
     return "/espace-client";
   }, [user, isAdmin, isWorker]);
 
+  const becomeProviderLabel = useMemo(() => {
+    return cms("header.btn_become_provider", "Devenir Prestataire", "Become a Provider");
+  }, [language]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <>
       <header className="sticky top-0 z-40 w-full max-w-full">
@@ -69,7 +73,11 @@ const Header = () => {
                     {cms("brand.name", "ProxiServices", "ProxiServices")}
                   </span>
                   <span className="hidden sm:block text-[11px] text-gray-500 truncate">
-                    {cms("header.tagline", "Prestataires vérifiés, proches de vous", "Verified providers, near you")}
+                    {cms(
+                      "header.tagline",
+                      "Prestataires vérifiés, proches de vous",
+                      "Verified providers, near you"
+                    )}
                   </span>
                 </div>
               </Link>
@@ -79,6 +87,17 @@ const Header = () => {
 
               {/* Actions Desktop */}
               <div className="hidden md:flex min-w-0 items-center gap-2">
+                {/* ✅ Nouveau bouton : Devenir Prestataire */}
+                <Link to="/forfaits" className="min-w-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full whitespace-nowrap"
+                  >
+                    {becomeProviderLabel}
+                  </Button>
+                </Link>
+
                 {isAdmin && (
                   <Link
                     to="/admin/dashboard"
@@ -126,7 +145,11 @@ const Header = () => {
               <div className="md:hidden min-w-0 flex items-center gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="rounded-full flex items-center gap-1 whitespace-nowrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full flex items-center gap-1 whitespace-nowrap"
+                    >
                       <Languages className="w-4 h-4" />
                       <span className="uppercase">{language}</span>
                     </Button>
@@ -179,6 +202,15 @@ const Header = () => {
                 </div>
 
                 <div className="mt-3 flex flex-col gap-1 min-w-0">
+                  {/* ✅ Nouveau bouton mobile : Devenir Prestataire */}
+                  <Link
+                    to="/forfaits"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue min-w-0"
+                  >
+                    <span className="truncate font-medium">{becomeProviderLabel}</span>
+                  </Link>
+
                   {isAdmin && (
                     <Link
                       to="/admin/dashboard"
