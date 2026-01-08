@@ -16,6 +16,9 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MonCompte from "./pages/MonCompte";
 
+// ✅ Forfaits (nouveau)
+import Forfaits from "./pages/Forfaits";
+
 // ✅ FAQ + pages publiques
 import Faq from "./pages/Faq";
 import About from "./pages/About";
@@ -100,6 +103,9 @@ const AppRoutes = () => (
       {/* 🔎 Recherche : on reste sur Index (home) */}
       <Route path="/search" element={<Index />} />
       <Route path="/rechercher" element={<Index />} />
+
+      {/* ✅ Forfaits */}
+      <Route path="/forfaits" element={<Forfaits />} />
 
       {/* ❓ FAQ */}
       <Route path="/faq" element={<Faq />} />
