@@ -1,5 +1,6 @@
+// src/pages/InscriptionOuvrier.tsx
 import React, { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -173,6 +174,7 @@ const getCurrencyForCountry = (countryCode: string): CurrencyInfo => {
 const InscriptionOuvrier: React.FC = () => {
   const { language, t } = useLanguage();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const rawPlan = (searchParams.get("plan") || "").toUpperCase();
   const plan: PlanCode =
@@ -193,7 +195,6 @@ const InscriptionOuvrier: React.FC = () => {
     profession: "",
     description: "",
     hourlyRate: "",
-
     latitude: "",
     longitude: "",
     accuracy: "",
@@ -404,7 +405,11 @@ const InscriptionOuvrier: React.FC = () => {
       window.location.href = data.redirectUrl as string;
     } catch (err: any) {
       console.error("Erreur démarrage paiement:", err);
-      setError(language === "fr" ? "Erreur lors du démarrage du paiement. Merci de réessayer." : "Error while starting payment. Please try again.");
+      setError(
+        language === "fr"
+          ? "Erreur lors du démarrage du paiement. Merci de réessayer."
+          : "Error while starting payment. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -518,7 +523,9 @@ const InscriptionOuvrier: React.FC = () => {
 
       const user = authData.user;
       if (!user) {
-        throw new Error(language === "fr" ? "Impossible de créer le compte. Veuillez réessayer." : "Could not create account. Please try again.");
+        throw new Error(
+          language === "fr" ? "Impossible de créer le compte. Veuillez réessayer." : "Could not create account. Please try again."
+        );
       }
 
       // 2) Upload avatar (optionnel)
@@ -550,7 +557,6 @@ const InscriptionOuvrier: React.FC = () => {
         { id: user.id, role: "worker", full_name: fullNameForUser },
         { onConflict: "id" }
       );
-
       if (opUserError) throw opUserError;
 
       // 4) Insert profil ouvrier
@@ -601,7 +607,6 @@ const InscriptionOuvrier: React.FC = () => {
         payment_at: isPaymentReallyPaid ? new Date().toISOString() : null,
       };
 
-      // Ajout conditionnel
       if (lat !== null && Number.isFinite(lat) && lng !== null && Number.isFinite(lng)) {
         payload.latitude = lat;
         payload.longitude = lng;
@@ -665,9 +670,21 @@ const InscriptionOuvrier: React.FC = () => {
 
   const canSubmit = !loading && (!isPaidPlan || paymentCompleted);
 
+  const handleBackToPlans = () => {
+    // ✅ on renvoie vers /forfaits en gardant le plan dans l’URL (utile pour présélection)
+    navigate(`/forfaits${plan ? `?plan=${encodeURIComponent(plan)}` : ""}`);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-12">
       <div className="container mx-auto px-4 max-w-5xl">
+        {/* ✅ Bouton retour */}
+        <div className="mb-4 flex items-center justify-start">
+          <Button type="button" variant="outline" onClick={handleBackToPlans}>
+            {language === "fr" ? "← Retour aux forfaits" : "← Back to plans"}
+          </Button>
+        </div>
+
         {/* En-tête */}
         <div className="mb-8 text-center">
           <h1 className="text-3xl md:text-4xl font-bold text-pro-gray mb-2">
@@ -862,7 +879,6 @@ const InscriptionOuvrier: React.FC = () => {
                       </Button>
                     </div>
 
-                    {/* ✅ Affichage “Position détectée” */}
                     {form.latitude && form.longitude && (
                       <div className="mt-2 text-xs text-emerald-700">
                         {language === "fr" ? "Position détectée" : "Location detected"} —{" "}
