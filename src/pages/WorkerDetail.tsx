@@ -53,6 +53,8 @@ type ReviewVoteRow = {
   vote_type: VoteType;
 };
 
+type ViewerRole = "client" | "worker" | null;
+
 const WorkerDetail: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
@@ -63,8 +65,9 @@ const WorkerDetail: React.FC = () => {
   const [loadingWorker, setLoadingWorker] = useState(true);
   const [workerError, setWorkerError] = useState<string | null>(null);
 
-  // Auth (pour voter)
+  // Auth (pour voter / permissions)
   const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [viewerRole, setViewerRole] = useState<ViewerRole>(null);
 
   // Formulaire de contact
   const [clientName, setClientName] = useState("");
@@ -144,6 +147,64 @@ const WorkerDetail: React.FC = () => {
       sub.subscription.unsubscribe();
     };
   }, []);
+
+  // ✅ Déterminer le rôle du viewer (client/worker) pour contrôler le signalement
+  useEffect(() => {
+    let cancelled = false;
+
+    const detectRole = async () => {
+      if (!authUserId) {
+        if (!cancelled) setViewerRole(null);
+        return;
+      }
+
+      // 1) client ?
+      const { data: clientRow, error: clientErr } = await supabase
+        .from("op_clients")
+        .select("id")
+        .eq("user_id", authUserId)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (clientErr) {
+        console.error("detectRole client error", clientErr);
+        setViewerRole(null);
+        return;
+      }
+
+      if (clientRow?.id) {
+        setViewerRole("client");
+        return;
+      }
+
+      // 2) worker ?
+      const { data: workerRow, error: workerErr } = await supabase
+        .from("op_ouvriers")
+        .select("id")
+        .eq("user_id", authUserId)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (workerErr) {
+        console.error("detectRole worker error", workerErr);
+        setViewerRole(null);
+        return;
+      }
+
+      setViewerRole(workerRow?.id ? "worker" : null);
+    };
+
+    detectRole().catch((e) => {
+      console.error("detectRole error", e);
+      setViewerRole(null);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authUserId]);
 
   // Profil ouvrier
   useEffect(() => {
@@ -310,6 +371,13 @@ const WorkerDetail: React.FC = () => {
     reviews.length > 0
       ? Math.round((reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length) * 10) / 10
       : 0;
+
+  // ✅ Règle: seul un client connecté peut signaler un ouvrier (pas d'ouvrier->ouvrier, pas d'anonyme)
+  const canClientReportWorker =
+    Boolean(authUserId) &&
+    viewerRole === "client" &&
+    Boolean(worker?.user_id) &&
+    worker.user_id !== authUserId;
 
   // -----------------------
   // Votes (op_review_votes)
@@ -488,12 +556,15 @@ const WorkerDetail: React.FC = () => {
 
       if (!clientProfileId) {
         throw new Error(
-          language === "fr" ? "Profil client introuvable. Veuillez réessayer." : "Client profile not found. Please try again."
+          language === "fr"
+            ? "Profil client introuvable. Veuillez réessayer."
+            : "Client profile not found. Please try again."
         );
       }
 
       const detailedMessageLines: string[] = [];
-      if (requestType) detailedMessageLines.push(`${language === "fr" ? "Type de demande" : "Request type"} : ${requestType}`);
+      if (requestType)
+        detailedMessageLines.push(`${language === "fr" ? "Type de demande" : "Request type"} : ${requestType}`);
       if (approxBudget)
         detailedMessageLines.push(
           `${language === "fr" ? "Budget approximatif (facultatif)" : "Approx. budget (optional)"} : ${approxBudget}`
@@ -523,11 +594,15 @@ const WorkerDetail: React.FC = () => {
       if (contactError) {
         console.error("insert contact error", contactError);
         throw new Error(
-          language === "fr" ? "Une erreur est survenue lors de l'envoi de votre demande." : "An error occurred while sending your request."
+          language === "fr"
+            ? "Une erreur est survenue lors de l'envoi de votre demande."
+            : "An error occurred while sending your request."
         );
       }
 
-      setSubmitSuccess(language === "fr" ? "Votre demande a été envoyée à cet ouvrier." : "Your request has been sent to this worker.");
+      setSubmitSuccess(
+        language === "fr" ? "Votre demande a été envoyée à cet ouvrier." : "Your request has been sent to this worker."
+      );
       setRequestType("Demande de devis");
       setApproxBudget("");
       setDesiredDate("");
@@ -553,7 +628,9 @@ const WorkerDetail: React.FC = () => {
       const user = authData?.user;
 
       if (authError || !user) {
-        throw new Error(language === "fr" ? "Vous devez être connecté pour laisser un avis." : "You must be logged in to leave a review.");
+        throw new Error(
+          language === "fr" ? "Vous devez être connecté pour laisser un avis." : "You must be logged in to leave a review."
+        );
       }
 
       const { data: newReview, error: insertReviewError } = await supabase
@@ -672,9 +749,7 @@ const WorkerDetail: React.FC = () => {
 
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                     <div className="text-sm font-semibold text-slate-900">0</div>
-                    <div className="text-[11px] text-slate-500">
-                      {language === "fr" ? "ans d'expérience" : "years experience"}
-                    </div>
+                    <div className="text-[11px] text-slate-500">{language === "fr" ? "ans d'expérience" : "years experience"}</div>
                   </div>
 
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
@@ -686,11 +761,11 @@ const WorkerDetail: React.FC = () => {
                 </div>
               </div>
 
-              {/* ✅ Signaler le compte (affiché uniquement si user_id existe) */}
-              {worker.user_id && (
+              {/* ✅ Signaler le compte (UNIQUEMENT client connecté) */}
+              {canClientReportWorker && (
                 <div className="mt-4 flex justify-end">
                   <ReportAccountDialog
-                    reportedUserId={worker.user_id}
+                    reportedUserId={worker.user_id as string}
                     reportedRole="worker"
                     triggerLabel={language === "fr" ? "Signaler ce compte" : "Report this account"}
                   />
@@ -756,9 +831,7 @@ const WorkerDetail: React.FC = () => {
               </p>
 
               {photosError && (
-                <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
-                  {photosError}
-                </div>
+                <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{photosError}</div>
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -789,9 +862,7 @@ const WorkerDetail: React.FC = () => {
 
             {/* Avis clients */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-1">
-                {language === "fr" ? "Avis clients" : "Customer reviews"}
-              </h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-1">{language === "fr" ? "Avis clients" : "Customer reviews"}</h2>
 
               {reviewsError && (
                 <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{reviewsError}</div>
@@ -907,8 +978,12 @@ const WorkerDetail: React.FC = () => {
 
                 <Button type="submit" size="sm" className="bg-pro-blue hover:bg-blue-700" disabled={submitReviewLoading || newRating === 0}>
                   {submitReviewLoading
-                    ? language === "fr" ? "Envoi de l’avis..." : "Sending review..."
-                    : language === "fr" ? "Envoyer l’avis" : "Submit review"}
+                    ? language === "fr"
+                      ? "Envoi de l’avis..."
+                      : "Sending review..."
+                    : language === "fr"
+                      ? "Envoyer l’avis"
+                      : "Submit review"}
                 </Button>
               </form>
             </div>
@@ -917,9 +992,7 @@ const WorkerDetail: React.FC = () => {
           {/* Colonne droite */}
           <div className="w-full lg:w-[360px] space-y-4">
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-3">
-                {language === "fr" ? "Coordonnées directes" : "Direct contact"}
-              </h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-3">{language === "fr" ? "Coordonnées directes" : "Direct contact"}</h2>
               <div className="space-y-2 text-xs">
                 {worker.phone && (
                   <Button variant="outline" size="sm" className="w-full justify-start" asChild>
@@ -950,18 +1023,20 @@ const WorkerDetail: React.FC = () => {
 
             {/* Formulaire contact (inchangé) */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-1">
-                {language === "fr" ? "Contacter cet ouvrier" : "Contact this worker"}
-              </h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-1">{language === "fr" ? "Contacter cet ouvrier" : "Contact this worker"}</h2>
               <p className="text-xs text-slate-500 mb-3">
-                {language === "fr" ? "Remplissez le formulaire ci-dessous pour être recontacté." : "Fill in the form below to be contacted back."}
+                {language === "fr"
+                  ? "Remplissez le formulaire ci-dessous pour être recontacté."
+                  : "Fill in the form below to be contacted back."}
               </p>
 
               {submitError && (
                 <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{submitError}</div>
               )}
               {submitSuccess && (
-                <div className="mb-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">{submitSuccess}</div>
+                <div className="mb-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">
+                  {submitSuccess}
+                </div>
               )}
 
               <form onSubmit={handleSubmitContact} className="space-y-3 text-sm">
@@ -994,16 +1069,12 @@ const WorkerDetail: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">
-                    {language === "fr" ? "Budget approximatif (facultatif)" : "Approx. budget (optional)"}
-                  </label>
+                  <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Budget approximatif (facultatif)" : "Approx. budget (optional)"}</label>
                   <Input type="number" value={approxBudget} onChange={(e) => setApproxBudget(e.target.value)} placeholder="5000000" />
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">
-                    {language === "fr" ? "Date souhaitée (facultatif)" : "Desired date (optional)"}
-                  </label>
+                  <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Date souhaitée (facultatif)" : "Desired date (optional)"}</label>
                   <Input type="date" value={desiredDate} onChange={(e) => setDesiredDate(e.target.value)} />
                 </div>
 
@@ -1039,15 +1110,17 @@ const WorkerDetail: React.FC = () => {
 
                 <Button type="submit" className="w-full bg-pro-blue hover:bg-blue-700" disabled={submitting}>
                   {submitting
-                    ? language === "fr" ? "Envoi de la demande..." : "Sending request..."
-                    : language === "fr" ? "Envoyer la demande" : "Send request"}
+                    ? language === "fr"
+                      ? "Envoi de la demande..."
+                      : "Sending request..."
+                    : language === "fr"
+                      ? "Envoyer la demande"
+                      : "Send request"}
                 </Button>
               </form>
 
               <p className="mt-3 text-[11px] text-slate-400">
-                {language === "fr"
-                  ? "Vos données sont uniquement transmises à ce professionnel."
-                  : "Your data is only shared with this professional."}
+                {language === "fr" ? "Vos données sont uniquement transmises à ce professionnel." : "Your data is only shared with this professional."}
               </p>
             </div>
           </div>
