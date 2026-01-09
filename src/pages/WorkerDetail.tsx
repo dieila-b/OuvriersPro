@@ -6,6 +6,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import ReportAccountDialog from "@/components/ReportAccountDialog";
 import { Mail, Phone, MessageCircle, MapPin, Star, ExternalLink } from "lucide-react";
 
 type WorkerProfile = {
@@ -664,7 +665,9 @@ const WorkerDetail: React.FC = () => {
                       <span className="text-sm font-semibold">{averageRating > 0 ? averageRating.toFixed(1) : "—"}</span>
                     </div>
                     <div className="text-[11px] text-slate-500">{language === "fr" ? "avis" : "reviews"}</div>
-                    <div className="text-[11px] text-slate-400">{reviews.length} {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}</div>
+                    <div className="text-[11px] text-slate-400">
+                      {reviews.length} {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
+                    </div>
                   </div>
 
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
@@ -682,6 +685,17 @@ const WorkerDetail: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* ✅ Signaler le compte (affiché uniquement si user_id existe) */}
+              {worker.user_id && (
+                <div className="mt-4 flex justify-end">
+                  <ReportAccountDialog
+                    reportedUserId={worker.user_id}
+                    reportedRole="worker"
+                    triggerLabel={language === "fr" ? "Signaler ce compte" : "Report this account"}
+                  />
+                </div>
+              )}
             </div>
 
             {/* ✅ Google Maps (lat/lng > adresse) */}
