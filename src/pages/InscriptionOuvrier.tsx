@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -173,10 +173,33 @@ const getCurrencyForCountry = (countryCode: string): CurrencyInfo => {
 const InscriptionOuvrier: React.FC = () => {
   const { language, t } = useLanguage();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  /**
+   * ✅ Garde-fou: plans payants masqués sur le site → on force FREE même si l’URL contient plan=MONTHLY/YEARLY
+   * Pour réactiver plus tard, mets ces flags à true (en cohérence avec Forfaits.tsx).
+   */
+  const SHOW_MONTHLY = false;
+  const SHOW_YEARLY = false;
 
   const rawPlan = (searchParams.get("plan") || "").toUpperCase();
-  const plan: PlanCode =
+  const requestedPlan: PlanCode =
     rawPlan === "MONTHLY" || rawPlan === "YEARLY" ? (rawPlan as PlanCode) : "FREE";
+
+  const plan: PlanCode = useMemo(() => {
+    if (requestedPlan === "MONTHLY" && !SHOW_MONTHLY) return "FREE";
+    if (requestedPlan === "YEARLY" && !SHOW_YEARLY) return "FREE";
+    return requestedPlan;
+  }, [requestedPlan]);
+
+  // Optionnel mais recommandé: si quelqu’un arrive avec ?plan=MONTHLY/YEARLY, on normalise l’URL proprement vers FREE
+  useEffect(() => {
+    if (plan !== requestedPlan) {
+      // remplace l’URL actuelle pour éviter les états incohérents (paiement, UI, etc.)
+      navigate(`/inscription-ouvrier?plan=FREE`, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan, requestedPlan]);
 
   const [form, setForm] = useState<WorkerFormState>({
     firstName: "",
@@ -207,14 +230,19 @@ const InscriptionOuvrier: React.FC = () => {
 
   // Paiement
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("");
-  const [paymentCompleted, setPaymentCompleted] = useState(
-    searchParams.get("payment_status") === "success"
-  );
-  const [paymentReference, setPaymentReference] = useState<string | null>(
-    searchParams.get("payment_ref")
-  );
+  const [paymentCompleted, setPaymentCompleted] = useState(searchParams.get("payment_status") === "success");
+  const [paymentReference, setPaymentReference] = useState<string | null>(searchParams.get("payment_ref"));
 
   const isPaidPlan = plan === "MONTHLY" || plan === "YEARLY";
+
+  // Sécurité: si on force FREE, on neutralise l’état paiement
+  useEffect(() => {
+    if (!isPaidPlan) {
+      setPaymentMethod("");
+      setPaymentReference(null);
+      setPaymentCompleted(false);
+    }
+  }, [isPaidPlan]);
 
   const planMeta = useMemo(() => {
     if (plan === "MONTHLY") {
@@ -253,33 +281,20 @@ const InscriptionOuvrier: React.FC = () => {
   const currency = useMemo(() => getCurrencyForCountry(form.country), [form.country]);
 
   // Guinée : région → ville → commune → quartier
-  const selectedRegion = useMemo(
-    () => GUINEA_REGIONS.find((r) => r.name === form.region) || null,
-    [form.region]
-  );
+  const selectedRegion = useMemo(() => GUINEA_REGIONS.find((r) => r.name === form.region) || null, [form.region]);
 
-  const availableCities: GuineaCity[] =
-    form.country === "GN" && selectedRegion ? selectedRegion.cities : [];
+  const availableCities: GuineaCity[] = form.country === "GN" && selectedRegion ? selectedRegion.cities : [];
 
-  const selectedCity = useMemo(
-    () => availableCities.find((c) => c.name === form.city) || null,
-    [availableCities, form.city]
-  );
+  const selectedCity = useMemo(() => availableCities.find((c) => c.name === form.city) || null, [availableCities, form.city]);
 
-  const availableCommunes: GuineaCommune[] =
-    form.country === "GN" && selectedCity ? selectedCity.communes : [];
+  const availableCommunes: GuineaCommune[] = form.country === "GN" && selectedCity ? selectedCity.communes : [];
 
-  const selectedCommune = useMemo(
-    () => availableCommunes.find((c) => c.name === form.commune) || null,
-    [availableCommunes, form.commune]
-  );
+  const selectedCommune = useMemo(() => availableCommunes.find((c) => c.name === form.commune) || null, [availableCommunes, form.commune]);
 
-  const availableDistricts: string[] =
-    form.country === "GN" && selectedCommune ? selectedCommune.districts : [];
+  const availableDistricts: string[] = form.country === "GN" && selectedCommune ? selectedCommune.districts : [];
 
   const handleChange =
-    (field: keyof WorkerFormState) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    (field: keyof WorkerFormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
     };
 
@@ -357,6 +372,7 @@ const InscriptionOuvrier: React.FC = () => {
   };
 
   const handleStartPayment = async () => {
+    // ✅ Plans payants désactivés → pas de paiement possible
     if (!isPaidPlan) return;
 
     if (!paymentMethod) {
@@ -404,7 +420,11 @@ const InscriptionOuvrier: React.FC = () => {
       window.location.href = data.redirectUrl as string;
     } catch (err: any) {
       console.error("Erreur démarrage paiement:", err);
-      setError(language === "fr" ? "Erreur lors du démarrage du paiement. Merci de réessayer." : "Error while starting payment. Please try again.");
+      setError(
+        language === "fr"
+          ? "Erreur lors du démarrage du paiement. Merci de réessayer."
+          : "Error while starting payment. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -444,6 +464,7 @@ const InscriptionOuvrier: React.FC = () => {
       if (!form.city.trim()) return language === "fr" ? "La ville est obligatoire." : "City is required.";
     }
 
+    // ✅ Tant que les plans payants sont masqués, plan est forcé à FREE → pas de contrôle paiement requis.
     if (isPaidPlan && !paymentCompleted) {
       return language === "fr"
         ? "Votre paiement n'a pas encore été confirmé. Effectuez le paiement puis revenez avec payment_status=success."
@@ -518,7 +539,9 @@ const InscriptionOuvrier: React.FC = () => {
 
       const user = authData.user;
       if (!user) {
-        throw new Error(language === "fr" ? "Impossible de créer le compte. Veuillez réessayer." : "Could not create account. Please try again.");
+        throw new Error(
+          language === "fr" ? "Impossible de créer le compte. Veuillez réessayer." : "Could not create account. Please try again."
+        );
       }
 
       // 2) Upload avatar (optionnel)
@@ -528,9 +551,7 @@ const InscriptionOuvrier: React.FC = () => {
           const fileExt = profileFile.name.split(".").pop() || "jpg";
           const fileName = `${user.id}-${Date.now()}.${fileExt}`;
 
-          const { data: storageData, error: storageError } = await supabase.storage
-            .from("op_avatars")
-            .upload(fileName, profileFile);
+          const { data: storageData, error: storageError } = await supabase.storage.from("op_avatars").upload(fileName, profileFile);
 
           if (storageError) {
             console.warn("Erreur upload avatar:", storageError);
@@ -589,7 +610,7 @@ const InscriptionOuvrier: React.FC = () => {
         postal_code: form.postalCode || null,
         profession: form.profession,
         description: form.description,
-        plan_code: plan,
+        plan_code: plan, // ✅ plan forcé à FREE tant que payants masqués
         status: "pending",
         hourly_rate: hourlyRateNumber,
         currency: currency.code,
@@ -1020,7 +1041,12 @@ const InscriptionOuvrier: React.FC = () => {
                           <label className="block text-sm font-medium text-gray-700 mb-1">
                             {language === "fr" ? "Ville" : "City"}
                           </label>
-                          <Input required value={form.city} onChange={handleChange("city")} placeholder={language === "fr" ? "Votre ville" : "Your city"} />
+                          <Input
+                            required
+                            value={form.city}
+                            onChange={handleChange("city")}
+                            placeholder={language === "fr" ? "Votre ville" : "Your city"}
+                          />
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1124,7 +1150,7 @@ const InscriptionOuvrier: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Paiement */}
+                  {/* Paiement (ne s’affichera pas tant que plan est FREE) */}
                   {plan !== "FREE" && (
                     <div className="border border-amber-100 bg-amber-50 rounded-lg p-4 mb-3">
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
