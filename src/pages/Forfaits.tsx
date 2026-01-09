@@ -10,7 +10,15 @@ type PlanCode = "FREE" | "MONTHLY" | "YEARLY";
 const Forfaits: React.FC = () => {
   const navigate = useNavigate();
 
+  // ✅ Désactivation temporaire des plans payants
+  const ENABLED_PLANS: Record<PlanCode, boolean> = {
+    FREE: true,
+    MONTHLY: false,
+    YEARLY: false,
+  };
+
   const go = (plan: PlanCode) => {
+    if (!ENABLED_PLANS[plan]) return; // ✅ sécurité
     navigate(`/inscription-ouvrier?plan=${plan}`);
   };
 
@@ -24,6 +32,11 @@ const Forfaits: React.FC = () => {
           <p className="text-gray-600 mt-2">
             Sélectionnez un forfait pour accéder au formulaire d’inscription prestataire.
           </p>
+
+          {/* ✅ Info temporaire */}
+          <div className="mt-4 inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-800">
+            Forfaits Mensuel & Annuel temporairement indisponibles.
+          </div>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
@@ -45,10 +58,15 @@ const Forfaits: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* MONTHLY */}
-          <Card className="shadow-sm border-blue-200">
+          {/* MONTHLY (désactivé) */}
+          <Card className="shadow-sm border-blue-200 opacity-60 grayscale">
             <CardHeader>
-              <CardTitle className="text-lg">Mensuel</CardTitle>
+              <CardTitle className="text-lg flex items-center justify-between gap-2">
+                <span>Mensuel</span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+                  Indisponible
+                </span>
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="text-2xl font-bold">5 000 FG / mois</div>
@@ -57,16 +75,27 @@ const Forfaits: React.FC = () => {
                 <li>Mise en avant dans la recherche</li>
                 <li>Contacts illimités</li>
               </ul>
-              <Button className="w-full bg-pro-blue hover:bg-blue-700" onClick={() => go("MONTHLY")}>
-                Choisir ce forfait
+
+              <Button
+                className="w-full bg-pro-blue hover:bg-blue-700"
+                disabled
+                onClick={() => go("MONTHLY")}
+                title="Temporairement indisponible"
+              >
+                Bientôt disponible
               </Button>
             </CardContent>
           </Card>
 
-          {/* YEARLY */}
-          <Card className="shadow-sm">
+          {/* YEARLY (désactivé) */}
+          <Card className="shadow-sm opacity-60 grayscale">
             <CardHeader>
-              <CardTitle className="text-lg">Annuel</CardTitle>
+              <CardTitle className="text-lg flex items-center justify-between gap-2">
+                <span>Annuel</span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+                  Indisponible
+                </span>
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="text-2xl font-bold">50 000 FG / an</div>
@@ -75,8 +104,14 @@ const Forfaits: React.FC = () => {
                 <li>Profil complet + mise en avant</li>
                 <li>Contacts illimités</li>
               </ul>
-              <Button className="w-full bg-pro-blue hover:bg-blue-700" onClick={() => go("YEARLY")}>
-                Choisir ce forfait
+
+              <Button
+                className="w-full bg-pro-blue hover:bg-blue-700"
+                disabled
+                onClick={() => go("YEARLY")}
+                title="Temporairement indisponible"
+              >
+                Bientôt disponible
               </Button>
             </CardContent>
           </Card>
