@@ -7,7 +7,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import ReportAccountDialog from "@/components/ReportAccountDialog";
 import { User, ArrowLeft, Save, Star, Send, MessageCircle } from "lucide-react";
 
 type Profile = {
@@ -66,7 +65,9 @@ const ClientProfile: React.FC = () => {
 
   // Avis
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
-  const [repliesByReviewId, setRepliesByReviewId] = useState<Record<string, ReviewReplyRow[]>>({});
+  const [repliesByReviewId, setRepliesByReviewId] = useState<
+    Record<string, ReviewReplyRow[]>
+  >({});
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviewsError, setReviewsError] = useState<string | null>(null);
 
@@ -86,7 +87,8 @@ const ClientProfile: React.FC = () => {
     phoneLabel: language === "fr" ? "Téléphone" : "Phone",
     countryLabel: language === "fr" ? "Pays" : "Country",
     cityLabel: language === "fr" ? "Ville" : "City",
-    preferredContactLabel: language === "fr" ? "Préférences de contact" : "Contact preferences",
+    preferredContactLabel:
+      language === "fr" ? "Préférences de contact" : "Contact preferences",
     preferredContactPlaceholder:
       language === "fr"
         ? "Ex : Contact de préférence par WhatsApp en soirée…"
@@ -94,11 +96,24 @@ const ClientProfile: React.FC = () => {
     save: language === "fr" ? "Enregistrer" : "Save",
     saving: language === "fr" ? "Enregistrement..." : "Saving...",
 
-    backToClientArea: language === "fr" ? "Retour à l’espace client / particulier" : "Back to client area",
+    // ✅ bouton demandé (libellé plus explicite)
+    backToClientArea:
+      language === "fr"
+        ? "Retour à l’espace client / particulier"
+        : "Back to client area",
 
-    success: language === "fr" ? "Profil mis à jour avec succès." : "Profile updated successfully.",
-    errorLoad: language === "fr" ? "Impossible de charger votre profil." : "Unable to load your profile.",
-    errorSave: language === "fr" ? "Erreur lors de l’enregistrement de votre profil." : "Error while saving your profile.",
+    success:
+      language === "fr"
+        ? "Profil mis à jour avec succès."
+        : "Profile updated successfully.",
+    errorLoad:
+      language === "fr"
+        ? "Impossible de charger votre profil."
+        : "Unable to load your profile.",
+    errorSave:
+      language === "fr"
+        ? "Erreur lors de l’enregistrement de votre profil."
+        : "Error while saving your profile.",
 
     // Avis
     reviewsTitle: language === "fr" ? "Avis reçus" : "Reviews received",
@@ -106,12 +121,21 @@ const ClientProfile: React.FC = () => {
       language === "fr"
         ? "Les avis laissés par les ouvriers à propos de vous (visibles publiquement)."
         : "Reviews left by workers about you (publicly visible).",
-    reviewsLoading: language === "fr" ? "Chargement des avis..." : "Loading reviews...",
-    reviewsEmpty: language === "fr" ? "Aucun avis pour le moment." : "No reviews yet.",
-    replyPlaceholder: language === "fr" ? "Réagir / répondre à cet avis…" : "React / reply to this review…",
+    reviewsLoading:
+      language === "fr" ? "Chargement des avis..." : "Loading reviews...",
+    reviewsEmpty:
+      language === "fr" ? "Aucun avis pour le moment." : "No reviews yet.",
+    replyPlaceholder:
+      language === "fr"
+        ? "Réagir / répondre à cet avis…"
+        : "React / reply to this review…",
     replySend: language === "fr" ? "Envoyer" : "Send",
-    replyError: language === "fr" ? "Impossible d'envoyer votre réponse." : "Unable to send your reply.",
-    reviewsError: language === "fr" ? "Impossible de charger les avis." : "Unable to load reviews.",
+    replyError:
+      language === "fr"
+        ? "Impossible d'envoyer votre réponse."
+        : "Unable to send your reply.",
+    reviewsError:
+      language === "fr" ? "Impossible de charger les avis." : "Unable to load reviews.",
   };
 
   const formatDateTime = (iso: string) => {
@@ -127,14 +151,19 @@ const ClientProfile: React.FC = () => {
 
   const fullWorkerName = (w?: ReviewRow["worker"] | null) => {
     if (!w) return language === "fr" ? "Ouvrier" : "Worker";
-    const n = `${w.first_name || ""} ${w.last_name || ""}`.trim();
+    const n = ${w.first_name || ""} ${w.last_name || ""}.trim();
     return n || (language === "fr" ? "Ouvrier" : "Worker");
   };
 
   const stars = (rating: number | null) => {
     const r = Math.max(0, Math.min(5, Number(rating || 0)));
     return Array.from({ length: 5 }).map((_, i) => (
-      <Star key={i} className={`w-4 h-4 ${i < r ? "text-amber-500 fill-amber-500" : "text-slate-300"}`} />
+      <Star
+        key={i}
+        className={w-4 h-4 ${
+          i < r ? "text-amber-500 fill-amber-500" : "text-slate-300"
+        }}
+      />
     ));
   };
 
@@ -197,7 +226,7 @@ const ClientProfile: React.FC = () => {
       const { data: reviewsData, error: reviewsErr } = await supabase
         .from("op_worker_client_reviews")
         .select(
-          `
+          
           id,
           worker_id,
           client_id,
@@ -213,7 +242,7 @@ const ClientProfile: React.FC = () => {
             profession,
             city
           )
-        `
+        
         )
         .eq("client_id", clientId)
         .order("created_at", { ascending: false });
@@ -256,7 +285,9 @@ const ClientProfile: React.FC = () => {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
     setProfile((prev) => (prev ? { ...prev, [name]: value } : prev));
   };
@@ -337,7 +368,9 @@ const ClientProfile: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-sm text-slate-500">{language === "fr" ? "Chargement du profil..." : "Loading profile..."}</div>
+        <div className="text-sm text-slate-500">
+          {language === "fr" ? "Chargement du profil..." : "Loading profile..."}
+        </div>
       </div>
     );
   }
@@ -355,36 +388,35 @@ const ClientProfile: React.FC = () => {
       <div className="max-w-3xl mx-auto px-4 py-8 md:py-10">
         <div className="mb-6 flex items-center justify-between gap-3">
           {/* ✅ Bouton demandé */}
-          <Button variant="outline" size="sm" className="flex items-center gap-2" onClick={() => navigate("/espace-client")}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+            onClick={() => navigate("/espace-client")}
+          >
             <ArrowLeft className="w-4 h-4" />
             {t.backToClientArea}
           </Button>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-full bg-pro-blue/10 flex items-center justify-center">
-                <User className="w-4 h-4 text-pro-blue" />
-              </div>
-              <div>
-                <h1 className="text-lg md:text-xl font-semibold text-slate-900">{t.title}</h1>
-                <p className="text-xs md:text-sm text-slate-600">{t.subtitle}</p>
-              </div>
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-full bg-pro-blue/10 flex items-center justify-center">
+              <User className="w-4 h-4 text-pro-blue" />
             </div>
-
-            {/* ✅ Signaler (sur le compte client courant) */}
-            <ReportAccountDialog
-              reportedUserId={profile.id}
-              reportedRole="client"
-              triggerLabel={language === "fr" ? "Signaler" : "Report"}
-              className="h-9"
-            />
+            <div>
+              <h1 className="text-lg md:text-xl font-semibold text-slate-900">
+                {t.title}
+              </h1>
+              <p className="text-xs md:text-sm text-slate-600">{t.subtitle}</p>
+            </div>
           </div>
         </div>
 
         {/* PROFIL */}
         <Card className="p-6 md:p-7 rounded-2xl bg-white/90 shadow-sm border-slate-200 space-y-6">
           {error && (
-            <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">{error}</div>
+            <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+              {error}
+            </div>
           )}
           {success && (
             <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2">
@@ -394,35 +426,58 @@ const ClientProfile: React.FC = () => {
 
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
-              <h2 className="text-sm font-semibold text-slate-800 mb-3">{t.mainInfo}</h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-3">
+                {t.mainInfo}
+              </h2>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">{t.fullNameLabel}</label>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    {t.fullNameLabel}
+                  </label>
                   <Input
                     name="full_name"
                     value={profile.full_name ?? ""}
                     onChange={handleChange}
-                    placeholder={language === "fr" ? "Ex : Mamadou Diallo" : "e.g. John Doe"}
+                    placeholder={
+                      language === "fr" ? "Ex : Mamadou Diallo" : "e.g. John Doe"
+                    }
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">{t.emailLabel}</label>
-                  <Input value={profile.email ?? ""} disabled className="bg-slate-50 cursor-not-allowed" />
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    {t.emailLabel}
+                  </label>
+                  <Input
+                    value={profile.email ?? ""}
+                    disabled
+                    className="bg-slate-50 cursor-not-allowed"
+                  />
                 </div>
               </div>
             </div>
 
             <div>
-              <h2 className="text-sm font-semibold text-slate-800 mb-3">{t.contactInfo}</h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-3">
+                {t.contactInfo}
+              </h2>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">{t.phoneLabel}</label>
-                  <Input name="phone" value={profile.phone ?? ""} onChange={handleChange} placeholder="+224 6X XX XX XX" />
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    {t.phoneLabel}
+                  </label>
+                  <Input
+                    name="phone"
+                    value={profile.phone ?? ""}
+                    onChange={handleChange}
+                    placeholder="+224 6X XX XX XX"
+                  />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">{t.countryLabel}</label>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    {t.countryLabel}
+                  </label>
                   <Input
                     name="country"
                     value={profile.country ?? ""}
@@ -432,19 +487,25 @@ const ClientProfile: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">{t.cityLabel}</label>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    {t.cityLabel}
+                  </label>
                   <Input
                     name="city"
                     value={profile.city ?? ""}
                     onChange={handleChange}
-                    placeholder={language === "fr" ? "Ex : Conakry" : "e.g. Conakry"}
+                    placeholder={
+                      language === "fr" ? "Ex : Conakry" : "e.g. Conakry"
+                    }
                   />
                 </div>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">{t.preferredContactLabel}</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                {t.preferredContactLabel}
+              </label>
               <Textarea
                 name="preferred_contact"
                 value={profile.preferred_contact ?? ""}
@@ -482,12 +543,16 @@ const ClientProfile: React.FC = () => {
           </div>
 
           {reviewsError && (
-            <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">{reviewsError}</div>
+            <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+              {reviewsError}
+            </div>
           )}
 
           {reviewsLoading && <div className="text-sm text-slate-500">{t.reviewsLoading}</div>}
 
-          {!reviewsLoading && reviews.length === 0 && <div className="text-sm text-slate-500">{t.reviewsEmpty}</div>}
+          {!reviewsLoading && reviews.length === 0 && (
+            <div className="text-sm text-slate-500">{t.reviewsEmpty}</div>
+          )}
 
           {!reviewsLoading && reviews.length > 0 && (
             <div className="space-y-4">
@@ -501,14 +566,18 @@ const ClientProfile: React.FC = () => {
                   <div key={r.id} className="rounded-xl border border-slate-200 p-4 bg-white">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-slate-900 truncate">{workerLabel}</div>
+                        <div className="text-sm font-semibold text-slate-900 truncate">
+                          {workerLabel}
+                        </div>
                         <div className="text-xs text-slate-500 mt-0.5">
                           {[r.worker?.profession, r.worker?.city].filter(Boolean).join(" • ")}
                         </div>
 
                         <div className="mt-2 flex items-center gap-2">
                           <div className="flex items-center gap-1">{stars(r.rating)}</div>
-                          <span className="text-xs text-slate-400">• {formatDateTime(r.created_at)}</span>
+                          <span className="text-xs text-slate-400">
+                            • {formatDateTime(r.created_at)}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -523,12 +592,18 @@ const ClientProfile: React.FC = () => {
                     {replies.length > 0 && (
                       <div className="mt-4 space-y-2">
                         {replies.map((rep) => (
-                          <div key={rep.id} className="rounded-lg bg-slate-50 border border-slate-100 p-3">
+                          <div
+                            key={rep.id}
+                            className="rounded-lg bg-slate-50 border border-slate-100 p-3"
+                          >
                             <div className="text-xs text-slate-500 flex items-center gap-2">
                               <MessageCircle className="w-4 h-4 text-slate-400" />
-                              {language === "fr" ? "Votre réponse" : "Your reply"} • {formatDateTime(rep.created_at)}
+                              {language === "fr" ? "Votre réponse" : "Your reply"} •{" "}
+                              {formatDateTime(rep.created_at)}
                             </div>
-                            <div className="mt-1 text-sm text-slate-800 whitespace-pre-line">{rep.content}</div>
+                            <div className="mt-1 text-sm text-slate-800 whitespace-pre-line">
+                              {rep.content}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -539,7 +614,9 @@ const ClientProfile: React.FC = () => {
                         rows={2}
                         placeholder={t.replyPlaceholder}
                         value={draft}
-                        onChange={(e) => setReplyDraft((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                        onChange={(e) =>
+                          setReplyDraft((prev) => ({ ...prev, [r.id]: e.target.value }))
+                        }
                         disabled={!canReply || sendingThis}
                       />
                       <div className="mt-2 flex justify-end">
