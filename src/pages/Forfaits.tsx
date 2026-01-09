@@ -14,6 +14,10 @@ const Forfaits: React.FC = () => {
     navigate(`/inscription-ouvrier?plan=${plan}`);
   };
 
+  // ✅ Masquage temporaire des forfaits payants
+  const SHOW_MONTHLY = false;
+  const SHOW_YEARLY = false;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -26,9 +30,10 @@ const Forfaits: React.FC = () => {
           </p>
         </div>
 
+        {/* ✅ 1 seul forfait affiché */}
         <div className="grid md:grid-cols-3 gap-6">
           {/* FREE */}
-          <Card className="shadow-sm">
+          <Card className="shadow-sm md:col-start-2">
             <CardHeader>
               <CardTitle className="text-lg">Gratuit</CardTitle>
             </CardHeader>
@@ -45,47 +50,6 @@ const Forfaits: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* MONTHLY */}
-          <Card className="shadow-sm border-blue-200">
-            <CardHeader>
-              <CardTitle className="text-lg">Mensuel</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="text-2xl font-bold">5 000 FG / mois</div>
-              <ul className="text-sm text-gray-700 list-disc list-inside space-y-1">
-                <li>Profil complet</li>
-                <li>Mise en avant dans la recherche</li>
-                <li>Contacts illimités</li>
-              </ul>
-              <Button className="w-full bg-pro-blue hover:bg-blue-700" onClick={() => go("MONTHLY")}>
-                Choisir ce forfait
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* YEARLY */}
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg">Annuel</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="text-2xl font-bold">50 000 FG / an</div>
-              <ul className="text-sm text-gray-700 list-disc list-inside space-y-1">
-                <li>Meilleure valeur</li>
-                <li>Profil complet + mise en avant</li>
-                <li>Contacts illimités</li>
-              </ul>
-              <Button className="w-full bg-pro-blue hover:bg-blue-700" onClick={() => go("YEARLY")}>
-                Choisir ce forfait
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
-
-      <Footer />
-    </div>
-  );
-};
-
-export default Forfaits;
+          {/* MONTHLY (masqué) */}
+          {SHOW_MONTHLY && (
+           
