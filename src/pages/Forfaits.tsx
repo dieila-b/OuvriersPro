@@ -14,11 +14,13 @@ const Forfaits: React.FC = () => {
     navigate(`/inscription-ouvrier?plan=${plan}`);
   };
 
-  // ✅ Masquage temporaire des forfaits payants
+  /**
+   * ✅ Masquage provisoire des forfaits payants sur le site
+   * Quand tu voudras les réactiver, mets à true.
+   */
   const SHOW_MONTHLY = false;
   const SHOW_YEARLY = false;
 
-  // ✅ Si on masque les 2, on centre la carte FREE
   const onlyFree = !SHOW_MONTHLY && !SHOW_YEARLY;
 
   return (
@@ -34,8 +36,8 @@ const Forfaits: React.FC = () => {
         </div>
 
         <div className={`grid gap-6 ${onlyFree ? "md:grid-cols-1" : "md:grid-cols-3"}`}>
-          {/* FREE */}
-          <Card className={`shadow-sm ${onlyFree ? "max-w-md mx-auto w-full" : ""}`}>
+          {/* ✅ FREE (actif) */}
+          <Card className={`shadow-sm ${onlyFree ? "max-w-xl mx-auto w-full" : ""}`}>
             <CardHeader>
               <CardTitle className="text-lg">Gratuit</CardTitle>
             </CardHeader>
@@ -45,14 +47,15 @@ const Forfaits: React.FC = () => {
                 <li>1 métier affiché</li>
                 <li>Profil simplifié</li>
                 <li>Contacts limités</li>
+                <li>Pas de mise en avant</li>
               </ul>
               <Button className="w-full bg-pro-blue hover:bg-blue-700" onClick={() => go("FREE")}>
-                Choisir ce forfait
+                Choisir ce plan
               </Button>
             </CardContent>
           </Card>
 
-          {/* MONTHLY (masqué temporairement) */}
+          {/* ⛔ Mensuel (masqué provisoirement) */}
           {SHOW_MONTHLY && (
             <Card className="shadow-sm border-blue-200">
               <CardHeader>
@@ -66,13 +69,13 @@ const Forfaits: React.FC = () => {
                   <li>Contacts illimités</li>
                 </ul>
                 <Button className="w-full bg-pro-blue hover:bg-blue-700" onClick={() => go("MONTHLY")}>
-                  Choisir ce forfait
+                  Choisir ce plan
                 </Button>
               </CardContent>
             </Card>
           )}
 
-          {/* YEARLY (masqué temporairement) */}
+          {/* ⛔ Annuel (masqué provisoirement) */}
           {SHOW_YEARLY && (
             <Card className="shadow-sm">
               <CardHeader>
@@ -86,7 +89,7 @@ const Forfaits: React.FC = () => {
                   <li>Contacts illimités</li>
                 </ul>
                 <Button className="w-full bg-pro-blue hover:bg-blue-700" onClick={() => go("YEARLY")}>
-                  Choisir ce forfait
+                  Choisir ce plan
                 </Button>
               </CardContent>
             </Card>
