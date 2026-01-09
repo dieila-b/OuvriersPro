@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import ReportAccountDialog from "@/components/ReportAccountDialog";
 import {
   Mail,
   Phone,
@@ -96,6 +97,11 @@ const WorkerMessagesPage: React.FC = () => {
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
 
+  // --- Mapping client_id (op_clients.id) -> client_user_id (auth.users / op_users id)
+  const [clientUserIdByClientId, setClientUserIdByClientId] = useState<Record<string, string>>(
+    {}
+  );
+
   // Avis (ouvrier -> client)
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
@@ -140,8 +146,7 @@ const WorkerMessagesPage: React.FC = () => {
     since: language === "fr" ? "Client depuis" : "Client since",
     webForm: language === "fr" ? "Formulaire site web" : "Web form",
     requestType: language === "fr" ? "Demande de devis" : "Quote request",
-    requestOrigin:
-      language === "fr" ? "Demande de devis via OuvrierPro" : "Request via OuvrierPro",
+    requestOrigin: language === "fr" ? "Demande de devis via OuvrierPro" : "Request via OuvrierPro",
     contactInfo: language === "fr" ? "Informations de contact" : "Contact information",
     clientNameLabel: language === "fr" ? "Nom du client" : "Client name",
     noClientSelected:
@@ -161,8 +166,7 @@ const WorkerMessagesPage: React.FC = () => {
     savingReview: language === "fr" ? "Publication..." : "Publishing...",
     close: language === "fr" ? "Fermer" : "Close",
     reviewLoadError: language === "fr" ? "Impossible de charger l'avis." : "Unable to load the review.",
-    reviewSendError:
-      language === "fr" ? "Impossible de publier l'avis." : "Unable to publish the review.",
+    reviewSendError: language === "fr" ? "Impossible de publier l'avis." : "Unable to publish the review.",
     ratingLabel: language === "fr" ? "Note" : "Rating",
     alreadyPublished: language === "fr" ? "Déjà publié" : "Already published",
     publicLabel: language === "fr" ? "Public" : "Public",
@@ -171,8 +175,7 @@ const WorkerMessagesPage: React.FC = () => {
     // Replies
     repliesTitle: language === "fr" ? "Réponses" : "Replies",
     repliesEmpty: language === "fr" ? "Aucune réponse pour le moment." : "No reply yet.",
-    repliesLoadError:
-      language === "fr" ? "Impossible de charger les réponses." : "Unable to load replies.",
+    repliesLoadError: language === "fr" ? "Impossible de charger les réponses." : "Unable to load replies.",
     repliesLoading: language === "fr" ? "Chargement des réponses..." : "Loading replies...",
 
     // Ouvrier réagit
@@ -180,8 +183,7 @@ const WorkerMessagesPage: React.FC = () => {
     replyHere: language === "fr" ? "Écrivez votre réponse..." : "Write your reply...",
     sendReply: language === "fr" ? "Répondre" : "Reply",
     sendingReply: language === "fr" ? "Envoi..." : "Sending...",
-    replySendError:
-      language === "fr" ? "Impossible d'envoyer votre réponse." : "Unable to send your reply.",
+    replySendError: language === "fr" ? "Impossible d'envoyer votre réponse." : "Unable to send your reply.",
 
     // Votes
     like: language === "fr" ? "J’aime" : "Like",
@@ -240,12 +242,18 @@ const WorkerMessagesPage: React.FC = () => {
     [contacts, selectedContactId]
   );
 
+  const selectedClientUserId = useMemo(() => {
+    const cid = selectedContact?.client_id || "";
+    if (!cid) return null;
+    return clientUserIdByClientId[cid] || null;
+  }, [selectedContact?.client_id, clientUserIdByClientId]);
+
   // 0) Auth user id
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setAuthUserId(data.user?.id ?? null));
   }, []);
 
-  // 1) Load worker + contacts
+  // 1) Load worker + contacts (+ map client_id -> user_id)
   useEffect(() => {
     const loadContacts = async () => {
       setContactsLoading(true);
@@ -277,9 +285,7 @@ const WorkerMessagesPage: React.FC = () => {
 
         const { data: contactsData, error: contactsErr } = await supabase
           .from("op_ouvrier_contacts")
-          .select(
-            "id, worker_id, client_id, client_name, client_email, client_phone, message, status, origin, created_at"
-          )
+          .select("id, worker_id, client_id, client_name, client_email, client_phone, message, status, origin, created_at")
           .eq("worker_id", w.id)
           .order("created_at", { ascending: false });
 
@@ -288,6 +294,26 @@ const WorkerMessagesPage: React.FC = () => {
         const list = (contactsData || []) as ContactRow[];
         setContacts(list);
         setSelectedContactId(list.length > 0 ? list[0].id : null);
+
+        // --- Build mapping client_id -> user_id (only for clients that contacted this worker)
+        const clientIds = Array.from(new Set(list.map((c) => c.client_id).filter(Boolean))) as string[];
+        if (clientIds.length === 0) {
+          setClientUserIdByClientId({});
+          return;
+        }
+
+        const { data: clientsRows, error: clientsErr } = await supabase
+          .from("op_clients")
+          .select("id, user_id")
+          .in("id", clientIds);
+
+        if (clientsErr) throw clientsErr;
+
+        const map: Record<string, string> = {};
+        for (const r of (clientsRows || []) as any[]) {
+          if (r?.id && r?.user_id) map[r.id] = r.user_id;
+        }
+        setClientUserIdByClientId(map);
       } catch (e: any) {
         setContactsError(
           e?.message ||
@@ -942,6 +968,16 @@ const WorkerMessagesPage: React.FC = () => {
                 <div className="px-4 py-3 border-b border-slate-100">
                   <div className="text-xs font-semibold text-slate-700 mb-1">{t.clientNameLabel}</div>
                   <div className="text-sm text-slate-800">{selectedContact.client_name || "—"}</div>
+
+                  {/* ✅ SIGNALER LE CLIENT (uniquement si l'ID user est disponible) */}
+                  {selectedClientUserId && (
+                    <div className="mt-3">
+                      <ReportAccountDialog
+                        reportedUserId={selectedClientUserId}
+                        reportedRole="client"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Bloc Avis + Réponses */}
