@@ -1,5 +1,5 @@
 // src/components/SubscriptionSection.tsx
-import React from "react";
+import React, { useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,13 @@ import { Check, Star, BarChart3, Headphones, User } from "lucide-react";
 
 const SubscriptionSection = () => {
   const { t, language } = useLanguage();
+
+  /**
+   * ✅ Plans payants masqués provisoirement (cohérent avec Forfaits.tsx et InscriptionOuvrier.tsx)
+   * Pour réactiver plus tard: passer ces flags à true.
+   */
+  const SHOW_MONTHLY = false;
+  const SHOW_YEARLY = false;
 
   const cms = (key: string, fallbackFr: string, fallbackEn: string) => {
     const v = t(key);
@@ -29,56 +36,65 @@ const SubscriptionSection = () => {
     }
   };
 
-  const plans = [
-    {
-      code: "FREE",
-      name: cms("pricing.plan.free.name", "Gratuit", "Free"),
-      price: parseAmount(cms("pricing.plan.free.price", "0", "0"), 0),
-      period: cms("pricing.plan.free.period", "FG/mois", "GNF/month"),
-      popular: false,
-      isFree: true,
-      features: [
-        cms("pricing.plan.free.f1", "1 métier affiché", "1 listed trade"),
-        cms("pricing.plan.free.f2", "Profil simplifié", "Simplified profile"),
-        cms("pricing.plan.free.f3", "Nombre de contacts limité", "Limited number of contacts"),
-        cms("pricing.plan.free.f4", "Pas de mise en avant", "No highlight in results"),
-      ],
-      btn: cms("pricing.plan.free.btn", "Choisir ce plan", "Choose this plan"),
-    },
-    {
-      code: "MONTHLY",
-      name: cms("pricing.plan.monthly.name", "Mensuel", "Monthly"),
-      price: parseAmount(cms("pricing.plan.monthly.price", "5000", "5000"), 5000),
-      period: cms("pricing.plan.monthly.period", "FG/mois", "GNF/month"),
-      popular: true,
-      isFree: false,
-      features: [
-        cms("pricing.plan.monthly.f1", "Profil professionnel complet", "Full professional profile"),
-        cms("pricing.plan.monthly.f2", "Contacts clients illimités", "Unlimited client contacts"),
-        cms("pricing.plan.monthly.f3", "Statistiques détaillées", "Detailed analytics"),
-        cms("pricing.plan.monthly.f4", "Support prioritaire", "Priority support"),
-      ],
-      savings: cms("pricing.plan.monthly.ribbon", "Sans engagement", "No commitment"),
-      badge: cms("pricing.plan.monthly.badge", "Populaire", "Popular"),
-      btn: cms("pricing.plan.monthly.btn", "Choisir ce plan", "Choose this plan"),
-    },
-    {
-      code: "YEARLY",
-      name: cms("pricing.plan.yearly.name", "Annuel", "Yearly"),
-      price: parseAmount(cms("pricing.plan.yearly.price", "50000", "50000"), 50000),
-      period: cms("pricing.plan.yearly.period", "FG/an", "GNF/year"),
-      popular: false,
-      isFree: false,
-      features: [
-        cms("pricing.plan.yearly.f1", "Profil professionnel complet", "Full professional profile"),
-        cms("pricing.plan.yearly.f2", "Contacts clients illimités", "Unlimited client contacts"),
-        cms("pricing.plan.yearly.f3", "Statistiques détaillées", "Detailed analytics"),
-        cms("pricing.plan.yearly.f4", "Support prioritaire", "Priority support"),
-      ],
-      savings: cms("pricing.plan.yearly.ribbon", "2 mois offerts", "2 months free"),
-      btn: cms("pricing.plan.yearly.btn", "Choisir ce plan", "Choose this plan"),
-    },
-  ];
+  const plans = useMemo(() => {
+    const all = [
+      {
+        code: "FREE" as const,
+        name: cms("pricing.plan.free.name", "Gratuit", "Free"),
+        price: parseAmount(cms("pricing.plan.free.price", "0", "0"), 0),
+        period: cms("pricing.plan.free.period", "FG/mois", "GNF/month"),
+        popular: false,
+        isFree: true,
+        features: [
+          cms("pricing.plan.free.f1", "1 métier affiché", "1 listed trade"),
+          cms("pricing.plan.free.f2", "Profil simplifié", "Simplified profile"),
+          cms("pricing.plan.free.f3", "Nombre de contacts limité", "Limited number of contacts"),
+          cms("pricing.plan.free.f4", "Pas de mise en avant", "No highlight in results"),
+        ],
+        btn: cms("pricing.plan.free.btn", "Choisir ce plan", "Choose this plan"),
+      },
+      {
+        code: "MONTHLY" as const,
+        name: cms("pricing.plan.monthly.name", "Mensuel", "Monthly"),
+        price: parseAmount(cms("pricing.plan.monthly.price", "5000", "5000"), 5000),
+        period: cms("pricing.plan.monthly.period", "FG/mois", "GNF/month"),
+        popular: true,
+        isFree: false,
+        features: [
+          cms("pricing.plan.monthly.f1", "Profil professionnel complet", "Full professional profile"),
+          cms("pricing.plan.monthly.f2", "Contacts clients illimités", "Unlimited client contacts"),
+          cms("pricing.plan.monthly.f3", "Statistiques détaillées", "Detailed analytics"),
+          cms("pricing.plan.monthly.f4", "Support prioritaire", "Priority support"),
+        ],
+        savings: cms("pricing.plan.monthly.ribbon", "Sans engagement", "No commitment"),
+        badge: cms("pricing.plan.monthly.badge", "Populaire", "Popular"),
+        btn: cms("pricing.plan.monthly.btn", "Choisir ce plan", "Choose this plan"),
+      },
+      {
+        code: "YEARLY" as const,
+        name: cms("pricing.plan.yearly.name", "Annuel", "Yearly"),
+        price: parseAmount(cms("pricing.plan.yearly.price", "50000", "50000"), 50000),
+        period: cms("pricing.plan.yearly.period", "FG/an", "GNF/year"),
+        popular: false,
+        isFree: false,
+        features: [
+          cms("pricing.plan.yearly.f1", "Profil professionnel complet", "Full professional profile"),
+          cms("pricing.plan.yearly.f2", "Contacts clients illimités", "Unlimited client contacts"),
+          cms("pricing.plan.yearly.f3", "Statistiques détaillées", "Detailed analytics"),
+          cms("pricing.plan.yearly.f4", "Support prioritaire", "Priority support"),
+        ],
+        savings: cms("pricing.plan.yearly.ribbon", "2 mois offerts", "2 months free"),
+        btn: cms("pricing.plan.yearly.btn", "Choisir ce plan", "Choose this plan"),
+      },
+    ];
+
+    // ✅ Masquage provisoire des plans payants
+    return all.filter((p) => {
+      if (p.code === "MONTHLY") return SHOW_MONTHLY;
+      if (p.code === "YEARLY") return SHOW_YEARLY;
+      return true;
+    });
+  }, [language, t]);
 
   const benefits = [
     {
@@ -98,25 +114,40 @@ const SubscriptionSection = () => {
     },
   ];
 
+  // ✅ Centrer la carte si on n’affiche que "Gratuit"
+  const onlyFree = plans.length === 1 && plans[0].code === "FREE";
+  const gridClass = onlyFree
+    ? "flex justify-center"
+    : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 min-w-0";
+
   return (
-    <section id="subscription" className="w-full py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-gray-50 to-gray-100">
+    <section
+      id="subscription"
+      className="w-full py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-gray-50 to-gray-100"
+    >
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div className="text-center mb-10 sm:mb-12 lg:mb-16">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray mb-3 sm:mb-4">
             {cms("pricing.section.title", "Rejoignez ProxiServices", "Join ProxiServices")}
           </h2>
           <p className="text-sm sm:text-base md:text-xl text-gray-600 max-w-3xl mx-auto">
-            {cms("pricing.section.subtitle", "Développez votre activité avec plus de visibilité", "Grow your business with more visibility")}
+            {cms(
+              "pricing.section.subtitle",
+              "Développez votre activité avec plus de visibilité",
+              "Grow your business with more visibility"
+            )}
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 min-w-0">
+        <div className={gridClass}>
           {plans.map((plan, index) => (
             <Card
               key={index}
-              className={`relative overflow-hidden transition-transform md:hover:scale-[1.02] ${
-                plan.popular ? "ring-2 ring-pro-blue shadow-xl" : "shadow-lg"
-              }`}
+              className={[
+                "relative overflow-hidden transition-transform md:hover:scale-[1.02]",
+                plan.popular ? "ring-2 ring-pro-blue shadow-xl" : "shadow-lg",
+                onlyFree ? "w-full max-w-xl" : "",
+              ].join(" ")}
             >
               {plan.popular && (
                 <div className="absolute top-0 left-0 right-0 bg-pro-blue text-white text-center py-2">
@@ -128,9 +159,7 @@ const SubscriptionSection = () => {
               )}
 
               <CardHeader className={`text-center ${plan.popular ? "pt-12" : "pt-6"}`}>
-                <CardTitle className="text-xl sm:text-2xl font-bold text-pro-gray">
-                  {plan.name}
-                </CardTitle>
+                <CardTitle className="text-xl sm:text-2xl font-bold text-pro-gray">{plan.name}</CardTitle>
 
                 <div className="mt-4">
                   <span className="text-3xl sm:text-4xl font-bold text-pro-blue">
@@ -139,9 +168,9 @@ const SubscriptionSection = () => {
                   <span className="text-gray-600 text-sm sm:text-base">/{plan.period}</span>
                 </div>
 
-                {plan.savings && (
+                {"savings" in plan && (plan as any).savings && (
                   <Badge variant="secondary" className="mt-2 bg-green-100 text-green-700">
-                    {plan.savings}
+                    {(plan as any).savings}
                   </Badge>
                 )}
               </CardHeader>
@@ -165,6 +194,7 @@ const SubscriptionSection = () => {
                       : "bg-gray-700 hover:bg-gray-800"
                   }`}
                   onClick={() => {
+                    // ✅ Si quelqu’un essaie d’ouvrir un plan payant (quand réactivé), l’inscription fera aussi le garde-fou.
                     window.location.href = `/inscription-ouvrier?plan=${plan.code}`;
                   }}
                 >
