@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
 
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- ✅ Responsive + safe-area + meilleur comportement mobile -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover, interactive-widget=resizes-content"
+    />
 
     <title>ProxiServices — Trouvez rapidement le bon prestataire</title>
     <meta
@@ -19,6 +23,10 @@
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- Perf (optionnel mais safe) -->
+    <link rel="preconnect" href="https://bvezcivihjpscatsgrvu.supabase.co" crossorigin />
+    <link rel="dns-prefetch" href="https://bvezcivihjpscatsgrvu.supabase.co" />
 
     <meta property="og:locale" content="fr_FR" />
     <meta property="og:site_name" content="ProxiServices" />
