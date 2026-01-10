@@ -1,5 +1,5 @@
 // src/pages/AdminOuvrierContacts.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,6 @@ import {
   CalendarDays,
   Search,
   Filter,
-  CheckCircle2,
   Clock,
   Sparkles,
   Smartphone,
@@ -74,6 +73,11 @@ function StatCard({
     </div>
   );
 }
+
+const normalizeStatus = (s: string | null | undefined): ContactStatus => {
+  if (s === "in_progress" || s === "done" || s === "new") return s;
+  return "new";
+};
 
 const AdminOuvrierContacts: React.FC = () => {
   const { language } = useLanguage();
@@ -138,41 +142,109 @@ const AdminOuvrierContacts: React.FC = () => {
     };
   }, [navigate]);
 
-  // 🔹 Chargement des demandes
-  useEffect(() => {
+  const formatDate = useCallback(
+    (value: string) => {
+      const d = new Date(value);
+      return d.toLocaleString(language === "fr" ? "fr-FR" : "en-GB", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    },
+    [language]
+  );
+
+  const statusLabel = useCallback(
+    (s: string | null | undefined) => {
+      const v = normalizeStatus(s);
+
+      if (language === "fr") {
+        if (v === "in_progress") return "En cours";
+        if (v === "done") return "Traité";
+        return "Nouveau";
+      } else {
+        if (v === "in_progress") return "In progress";
+        if (v === "done") return "Done";
+        return "New";
+      }
+    },
+    [language]
+  );
+
+  const statusColor = (s: string | null | undefined) => {
+    const v = normalizeStatus(s);
+    if (v === "done") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (v === "in_progress")
+      return "bg-amber-50 text-amber-700 border-amber-200";
+    return "bg-sky-50 text-sky-700 border-sky-200";
+  };
+
+  const originLabel = useCallback(
+    (o: string | null | undefined) => {
+      if (!o || o === "web") return "web";
+      if (o === "mobile") return "mobile";
+      if (o === "other") return language === "fr" ? "autre" : "other";
+      return o;
+    },
+    [language]
+  );
+
+  const originIcon = useCallback(
+    (o: string | null | undefined) => {
+      const key = originLabel(o);
+      if (key === "mobile") return Smartphone;
+      if (key === "web") return Globe;
+      return Layers;
+    },
+    [originLabel]
+  );
+
+  // 🔹 Chargement (factorisé pour refresh + useEffect)
+  const fetchContacts = useCallback(async () => {
     if (authLoading || !isAdmin) return;
 
-    const fetchContacts = async () => {
-      setLoading(true);
-      setError(null);
+    setLoading(true);
+    setError(null);
 
-      const { data, error } = await supabase
-        .from("op_ouvrier_contacts")
-        .select("*")
-        .order("created_at", { ascending: false});
+    const { data, error } = await supabase
+      .from("op_ouvrier_contacts")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error(error);
-        setError(
-          language === "fr"
-            ? `Impossible de charger les demandes. (${error.message})`
-            : `Unable to load contact requests. (${error.message})`
-        );
-        setLoading(false);
-        return;
-      }
-
-      setContacts((data as DbContact[]) ?? []);
+    if (error) {
+      console.error(error);
+      setError(
+        language === "fr"
+          ? `Impossible de charger les demandes. (${error.message})`
+          : `Unable to load contact requests. (${error.message})`
+      );
       setLoading(false);
-    };
+      return;
+    }
 
+    const rows = ((data as DbContact[]) ?? []).map((r) => ({
+      ...r,
+      status: normalizeStatus(r.status),
+    }));
+
+    setContacts(rows);
+    setLoading(false);
+  }, [authLoading, isAdmin, language]);
+
+  useEffect(() => {
+    if (authLoading || !isAdmin) return;
     fetchContacts();
-  }, [language, authLoading, isAdmin]);
+  }, [authLoading, isAdmin, fetchContacts]);
 
   // 🔎 Filtrage (statut, texte, dates)
   const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
     return contacts.filter((c) => {
-      const matchStatus = !statusFilter || c.status === statusFilter;
+      const st = normalizeStatus(c.status);
+      const matchStatus = !statusFilter || st === statusFilter;
 
       const haystack =
         [
@@ -181,16 +253,15 @@ const AdminOuvrierContacts: React.FC = () => {
           c.client_email,
           c.client_phone,
           c.message,
+          originLabel(c.origin),
         ]
           .filter(Boolean)
           .join(" ")
           .toLowerCase() || "";
 
-      const matchSearch =
-        !search || haystack.includes(search.trim().toLowerCase());
+      const matchSearch = !q || haystack.includes(q);
 
       const created = new Date(c.created_at);
-
       let matchDateFrom = true;
       let matchDateTo = true;
 
@@ -206,56 +277,15 @@ const AdminOuvrierContacts: React.FC = () => {
 
       return matchStatus && matchSearch && matchDateFrom && matchDateTo;
     });
-  }, [contacts, statusFilter, search, dateFrom, dateTo]);
-
-  const formatDate = (value: string) => {
-    const d = new Date(value);
-    return d.toLocaleString(language === "fr" ? "fr-FR" : "en-GB", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const statusLabel = (s: string | null | undefined) => {
-    if (language === "fr") {
-      if (s === "in_progress") return "En cours";
-      if (s === "done") return "Traité";
-      return "Nouveau";
-    } else {
-      if (s === "in_progress") return "In progress";
-      if (s === "done") return "Done";
-      return "New";
-    }
-  };
-
-  const statusColor = (s: string | null | undefined) => {
-    if (s === "done")
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    if (s === "in_progress")
-      return "bg-amber-50 text-amber-700 border-amber-200";
-    return "bg-sky-50 text-sky-700 border-sky-200";
-  };
-
-  const originLabel = (o: string | null | undefined) => {
-    if (!o || o === "web") return "web";
-    if (o === "mobile") return "mobile";
-    if (o === "other") return language === "fr" ? "autre" : "other";
-    return o;
-  };
-
-  const originIcon = (o: string | null | undefined) => {
-    const key = originLabel(o);
-    if (key === "mobile") return Smartphone;
-    if (key === "web") return Globe;
-    return Layers;
-  };
+  }, [contacts, statusFilter, search, dateFrom, dateTo, originLabel]);
 
   const handleStatusChange = async (id: string, newStatus: ContactStatus) => {
     setSavingId(id);
     setError(null);
+
+    // Optimistic update (avec rollback en cas d'erreur)
+    const prev = contacts;
+    setContacts((p) => p.map((c) => (c.id === id ? { ...c, status: newStatus } : c)));
 
     const { error } = await supabase
       .from("op_ouvrier_contacts")
@@ -264,14 +294,11 @@ const AdminOuvrierContacts: React.FC = () => {
 
     if (error) {
       console.error(error);
+      setContacts(prev);
       setError(
         language === "fr"
           ? `Erreur lors de la mise à jour du statut. (${error.message})`
           : `Error while updating status. (${error.message})`
-      );
-    } else {
-      setContacts((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, status: newStatus } : c))
       );
     }
 
@@ -302,13 +329,11 @@ const AdminOuvrierContacts: React.FC = () => {
     });
 
     return { total, today, last7, originCounts };
-  }, [filtered]);
+  }, [filtered, originLabel]);
 
   const text = {
     title:
-      language === "fr"
-        ? "Demandes de contact ouvriers"
-        : "Worker contact requests",
+      language === "fr" ? "Demandes de contact ouvriers" : "Worker contact requests",
     subtitle:
       language === "fr"
         ? "Vue d’ensemble des demandes envoyées par les particuliers."
@@ -332,44 +357,19 @@ const AdminOuvrierContacts: React.FC = () => {
     new: language === "fr" ? "Nouveau" : "New",
     inProgress: language === "fr" ? "En cours" : "In progress",
     done: language === "fr" ? "Traité" : "Done",
-    empty:
-      language === "fr"
-        ? "Aucune demande pour le moment."
-        : "No requests yet.",
+    empty: language === "fr" ? "Aucune demande pour le moment." : "No requests yet.",
     refresh: language === "fr" ? "Rafraîchir" : "Refresh",
     exportCsv: language === "fr" ? "Exporter CSV" : "Export CSV",
-    statTotal:
-      language === "fr" ? "Total (période filtrée)" : "Total (filtered)",
+    statTotal: language === "fr" ? "Total (période filtrée)" : "Total (filtered)",
     statToday: language === "fr" ? "Aujourd’hui" : "Today",
-    statLast7:
-      language === "fr" ? "7 derniers jours" : "Last 7 days",
-    statByOrigin:
-      language === "fr" ? "Par origine" : "By origin",
+    statLast7: language === "fr" ? "7 derniers jours" : "Last 7 days",
+    statByOrigin: language === "fr" ? "Par origine" : "By origin",
+    checking: language === "fr" ? "Vérification de vos droits..." : "Checking your permissions...",
+    loading: language === "fr" ? "Chargement..." : "Loading...",
   };
 
   const refresh = async () => {
-    if (authLoading || !isAdmin) return;
-
-    setLoading(true);
-    setError(null);
-
-    const { data, error } = await supabase
-      .from("op_ouvrier_contacts")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error(error);
-      setError(
-        language === "fr"
-          ? `Impossible de rafraîchir les données. (${error.message})`
-          : `Unable to refresh data. (${error.message})`
-      );
-    } else {
-      setContacts((data as DbContact[]) ?? []);
-    }
-
-    setLoading(false);
+    await fetchContacts();
   };
 
   // 🔄 Export CSV
@@ -395,7 +395,7 @@ const AdminOuvrierContacts: React.FC = () => {
       [
         c.id,
         c.created_at,
-        c.status ?? "",
+        normalizeStatus(c.status),
         originLabel(c.origin),
         c.worker_name ?? "",
         c.client_name ?? "",
@@ -405,10 +405,7 @@ const AdminOuvrierContacts: React.FC = () => {
       ].map(escapeCsv)
     );
 
-    const csvContent =
-      headers.join(";") +
-      "\n" +
-      rows.map((r) => r.join(";")).join("\n");
+    const csvContent = headers.join(";") + "\n" + rows.map((r) => r.join(";")).join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -425,18 +422,12 @@ const AdminOuvrierContacts: React.FC = () => {
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-sm text-slate-500">
-          {language === "fr"
-            ? "Vérification de vos droits..."
-            : "Checking your permissions..."}
-        </div>
+        <div className="text-sm text-slate-500">{text.checking}</div>
       </div>
     );
   }
 
-  if (!isAdmin) {
-    return null;
-  }
+  if (!isAdmin) return null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50 to-indigo-50">
@@ -494,6 +485,7 @@ const AdminOuvrierContacts: React.FC = () => {
             icon={Clock}
             gradient="from-emerald-500/10 via-emerald-400/20 to-emerald-500/40"
           />
+
           <div className={cardClass + " p-4"}>
             <div className="flex items-center gap-2 mb-2">
               <Filter className="h-4 w-4 text-slate-600" />
@@ -593,25 +585,25 @@ const AdminOuvrierContacts: React.FC = () => {
 
           {loading && (
             <div className={cardClass + " px-4 py-6 text-center text-slate-500 text-sm"}>
-              {language === "fr" ? "Chargement..." : "Loading..."}
+              {text.loading}
             </div>
           )}
 
           {!loading &&
             filtered.map((c) => {
               const OriginIcon = originIcon(c.origin);
+              const st = normalizeStatus(c.status);
+
               return (
                 <div key={c.id} className={cardClass + " p-4"}>
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="text-xs text-slate-500">
-                      {formatDate(c.created_at)}
-                    </div>
+                    <div className="text-xs text-slate-500">{formatDate(c.created_at)}</div>
                     <span
                       className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusColor(
-                        c.status
+                        st
                       )}`}
                     >
-                      {statusLabel(c.status)}
+                      {statusLabel(st)}
                     </span>
                   </div>
 
@@ -619,24 +611,16 @@ const AdminOuvrierContacts: React.FC = () => {
                     <div className="text-[11px] font-semibold text-slate-500 uppercase">
                       {text.colWorker}
                     </div>
-                    <div className="font-semibold text-slate-900">
-                      {c.worker_name || "—"}
-                    </div>
+                    <div className="font-semibold text-slate-900">{c.worker_name || "—"}</div>
                   </div>
 
                   <div className="mb-2">
                     <div className="text-[11px] font-semibold text-slate-500 uppercase">
                       {text.colClient}
                     </div>
-                    <div className="text-xs text-slate-600">
-                      {c.client_name || "—"}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {c.client_email || ""}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {c.client_phone || ""}
-                    </div>
+                    <div className="text-xs text-slate-600">{c.client_name || "—"}</div>
+                    <div className="text-xs text-slate-500">{c.client_email || ""}</div>
+                    <div className="text-xs text-slate-500">{c.client_phone || ""}</div>
                   </div>
 
                   <div className="mb-2">
@@ -656,13 +640,8 @@ const AdminOuvrierContacts: React.FC = () => {
 
                     <select
                       disabled={savingId === c.id}
-                      value={(c.status as ContactStatus) || "new"}
-                      onChange={(e) =>
-                        handleStatusChange(
-                          c.id,
-                          e.target.value as ContactStatus
-                        )
-                      }
+                      value={st}
+                      onChange={(e) => handleStatusChange(c.id, e.target.value as ContactStatus)}
                       className="text-xs border border-slate-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
                     >
                       <option value="new">{text.new}</option>
@@ -716,7 +695,7 @@ const AdminOuvrierContacts: React.FC = () => {
                 {loading && (
                   <tr>
                     <td colSpan={7} className="px-4 py-6 text-center text-slate-500 text-sm">
-                      {language === "fr" ? "Chargement..." : "Loading..."}
+                      {text.loading}
                     </td>
                   </tr>
                 )}
@@ -724,6 +703,8 @@ const AdminOuvrierContacts: React.FC = () => {
                 {!loading &&
                   filtered.map((c) => {
                     const OriginIcon = originIcon(c.origin);
+                    const st = normalizeStatus(c.status);
+
                     return (
                       <tr
                         key={c.id}
@@ -734,21 +715,13 @@ const AdminOuvrierContacts: React.FC = () => {
                         </td>
 
                         <td className="px-4 py-3 align-top text-slate-800">
-                          <div className="font-semibold">
-                            {c.worker_name || "—"}
-                          </div>
+                          <div className="font-semibold">{c.worker_name || "—"}</div>
                         </td>
 
                         <td className="px-4 py-3 align-top text-slate-800">
-                          <div className="font-medium">
-                            {c.client_name || "—"}
-                          </div>
-                          <div className="text-xs text-slate-500">
-                            {c.client_email || ""}
-                          </div>
-                          <div className="text-xs text-slate-500">
-                            {c.client_phone || ""}
-                          </div>
+                          <div className="font-medium">{c.client_name || "—"}</div>
+                          <div className="text-xs text-slate-500">{c.client_email || ""}</div>
+                          <div className="text-xs text-slate-500">{c.client_phone || ""}</div>
                         </td>
 
                         <td className="px-4 py-3 align-top text-slate-700 max-w-xs">
@@ -760,10 +733,10 @@ const AdminOuvrierContacts: React.FC = () => {
                         <td className="px-4 py-3 align-top">
                           <span
                             className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusColor(
-                              c.status
+                              st
                             )}`}
                           >
-                            {statusLabel(c.status)}
+                            {statusLabel(st)}
                           </span>
                         </td>
 
@@ -777,19 +750,14 @@ const AdminOuvrierContacts: React.FC = () => {
                         <td className="px-4 py-3 align-top text-right">
                           <select
                             disabled={savingId === c.id}
-                            value={(c.status as ContactStatus) || "new"}
+                            value={st}
                             onChange={(e) =>
-                              handleStatusChange(
-                                c.id,
-                                e.target.value as ContactStatus
-                              )
+                              handleStatusChange(c.id, e.target.value as ContactStatus)
                             }
                             className="text-xs border border-slate-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
                           >
                             <option value="new">{text.new}</option>
-                            <option value="in_progress">
-                              {text.inProgress}
-                            </option>
+                            <option value="in_progress">{text.inProgress}</option>
                             <option value="done">{text.done}</option>
                           </select>
                         </td>
