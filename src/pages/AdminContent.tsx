@@ -431,7 +431,6 @@ export default function AdminContent() {
     const map = new Map<string, SiteContentRow>();
     for (const r of rows) map.set(`${r.key}__${r.locale}`, r);
     return map;
-  emphasizes byKeyLocale
   }, [rows]);
 
   const getRow = React.useCallback(
