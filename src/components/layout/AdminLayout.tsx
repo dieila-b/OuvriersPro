@@ -42,6 +42,11 @@ export default function AdminLayout() {
                 Publicités
               </NavLink>
 
+              {/* ✅ NOUVEAU : Signalements */}
+              <NavLink to="/admin/signalements" className={navClass}>
+                Signalements
+              </NavLink>
+
               {/* ✅ Questions FAQ */}
               <NavLink to="/admin/faq-questions" className={navClass}>
                 Questions FAQ
