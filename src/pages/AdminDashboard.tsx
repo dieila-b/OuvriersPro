@@ -54,14 +54,8 @@ type ChartData = {
 };
 
 /* -----------------------------
-   ✅ UI helpers (pro + moderne)
+   ✅ UI helpers
 -------------------------------- */
-const shellBg =
-  "min-h-screen bg-gradient-to-br from-slate-50 via-sky-50 to-indigo-50";
-
-const containerClass =
-  "w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-10 py-6 md:py-10";
-
 const cardClass =
   "bg-white/85 backdrop-blur border border-slate-200/60 rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)]";
 
@@ -83,9 +77,7 @@ function StatCard({
 }) {
   return (
     <div className={statCardBase}>
-      <div
-        className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${gradient} opacity-70`}
-      />
+      <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${gradient} opacity-70`} />
       <div className="relative flex items-center justify-between mb-3 gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-[.16em] text-slate-500">
@@ -104,39 +96,12 @@ function StatCard({
 
 type PlanKey = "free" | "monthly" | "yearly" | "other";
 
-/* -----------------------------
-   🔧 normalisation du plan
--------------------------------- */
 const normalizePlan = (code: string | null | undefined): PlanKey => {
   const c = (code || "").toLowerCase().trim();
-
   if (!c) return "free";
-
-  if (
-    c.includes("free") ||
-    c.includes("gratuit") ||
-    c === "plan_free" ||
-    c === "basic"
-  )
-    return "free";
-
-  if (
-    c.includes("month") ||
-    c.includes("mensuel") ||
-    c === "monthly" ||
-    c === "pro_monthly"
-  )
-    return "monthly";
-
-  if (
-    c.includes("year") ||
-    c.includes("annuel") ||
-    c === "yearly" ||
-    c === "pro_yearly" ||
-    c === "annual"
-  )
-    return "yearly";
-
+  if (c.includes("free") || c.includes("gratuit") || c === "plan_free" || c === "basic") return "free";
+  if (c.includes("month") || c.includes("mensuel") || c === "monthly" || c === "pro_monthly") return "monthly";
+  if (c.includes("year") || c.includes("annuel") || c === "yearly" || c === "pro_yearly" || c === "annual") return "yearly";
   return "other";
 };
 
@@ -160,25 +125,20 @@ const AdminDashboard: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
 
-  // 🔐 Auth admin
   const [authLoading, setAuthLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // 🔢 Données dashboard
   const [workers, setWorkers] = useState<DbWorkerSummary[]>([]);
   const [contacts, setContacts] = useState<DbContactSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Filtres globaux
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
 
-  // 📊 Graphique
   const [chartMode, setChartMode] = useState<ChartMode>("daily");
   const [metricMode, setMetricMode] = useState<MetricMode>("volume");
 
-  // 🔐 Vérification droits admin
   useEffect(() => {
     let isMounted = true;
 
@@ -245,7 +205,9 @@ const AdminDashboard: React.FC = () => {
             ? `Erreur chargement ouvriers : ${workersError.message}`
             : `Error loading workers: ${workersError.message}`
         );
-      } else setWorkers((workersData as DbWorkerSummary[]) ?? []);
+      } else {
+        setWorkers((workersData as DbWorkerSummary[]) ?? []);
+      }
 
       if (contactsError) {
         setError((prev) => {
@@ -255,27 +217,23 @@ const AdminDashboard: React.FC = () => {
               : `Error loading contacts: ${contactsError.message}`;
           return prev ? `${prev} | ${msg}` : msg;
         });
-      } else setContacts((contactsData as DbContactSummary[]) ?? []);
+      } else {
+        setContacts((contactsData as DbContactSummary[]) ?? []);
+      }
     } catch (e: any) {
-      setError(
-        language === "fr"
-          ? "Erreur inconnue lors du chargement."
-          : "Unknown loading error."
-      );
+      setError(language === "fr" ? "Erreur inconnue lors du chargement." : "Unknown loading error.");
       console.error(e);
     } finally {
       setLoading(false);
     }
   };
 
-  // Charge data
   useEffect(() => {
     if (authLoading || !isAdmin) return;
     fetchDashboardData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, isAdmin, language]);
 
-  // 🔎 Filtrage par dates (robuste)
   const filteredWorkers = useMemo(() => {
     const from = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
     const to = dateTo ? new Date(`${dateTo}T23:59:59`) : null;
@@ -300,7 +258,6 @@ const AdminDashboard: React.FC = () => {
     });
   }, [contacts, dateFrom, dateTo]);
 
-  // 🔢 Stats
   const stats = useMemo(() => {
     let pendingWorkers = 0;
     let approvedWorkers = 0;
@@ -326,16 +283,15 @@ const AdminDashboard: React.FC = () => {
     }
 
     const totalContacts = filteredContacts.length;
-
     const todayISO = new Date().toISOString().slice(0, 10);
+
     let contactsToday = 0;
     let contactsLast7 = 0;
 
     for (const c of filteredContacts) {
       const dateStr = c.created_at.slice(0, 10);
       const created = new Date(c.created_at);
-      const diffDays =
-        (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
+      const diffDays = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
 
       if (dateStr === todayISO) contactsToday += 1;
       if (diffDays <= 7) contactsLast7 += 1;
@@ -357,7 +313,6 @@ const AdminDashboard: React.FC = () => {
     };
   }, [filteredWorkers, filteredContacts]);
 
-  // 🧮 key semaine (approx)
   const getWeekKey = (d: Date) => {
     const year = d.getFullYear();
     const start = new Date(year, 0, 1);
@@ -368,16 +323,13 @@ const AdminDashboard: React.FC = () => {
     return { key: `${year}-W${weekStr}`, week };
   };
 
-  // 📈 Volume (contacts)
   const volumeChartData: ChartData = useMemo(() => {
     if (chartMode === "daily") {
       const days: ChartPoint[] = [];
       const today = new Date();
 
       for (let i = 6; i >= 0; i--) {
-        const d = new Date(
-          Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() - i)
-        );
+        const d = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() - i));
         const key = d.toISOString().slice(0, 10);
         const label =
           language === "fr"
@@ -392,15 +344,11 @@ const AdminDashboard: React.FC = () => {
         if (day) day.value += 1;
       }
 
-      const maxValue =
-        days.reduce((max, x) => (x.value > max ? x.value : max), 0) || 1;
+      const maxValue = days.reduce((max, x) => (x.value > max ? x.value : max), 0) || 1;
       return { points: days, maxValue };
     }
 
-    const weeksMap: Record<
-      string,
-      { label: string; key: string; value: number; orderKey: string }
-    > = {};
+    const weeksMap: Record<string, { label: string; key: string; value: number; orderKey: string }> = {};
     for (const c of filteredContacts) {
       const d = new Date(c.created_at);
       const { key, week } = getWeekKey(d);
@@ -411,26 +359,20 @@ const AdminDashboard: React.FC = () => {
       weeksMap[key].value += 1;
     }
 
-    let weeks = Object.values(weeksMap).sort((a, b) =>
-      a.orderKey.localeCompare(b.orderKey)
-    );
+    let weeks = Object.values(weeksMap).sort((a, b) => a.orderKey.localeCompare(b.orderKey));
     if (weeks.length > 8) weeks = weeks.slice(weeks.length - 8);
 
-    const maxValue =
-      weeks.reduce((max, x) => (x.value > max ? x.value : max), 0) || 1;
+    const maxValue = weeks.reduce((max, x) => (x.value > max ? x.value : max), 0) || 1;
     return { points: weeks, maxValue };
   }, [filteredContacts, chartMode, language]);
 
-  // 📈 Conversion (approved/total workers)
   const conversionChartData: ChartData = useMemo(() => {
     if (chartMode === "daily") {
       const daysBase: { key: string; label: string }[] = [];
       const today = new Date();
 
       for (let i = 6; i >= 0; i--) {
-        const d = new Date(
-          Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() - i)
-        );
+        const d = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() - i));
         const key = d.toISOString().slice(0, 10);
         const label =
           language === "fr"
@@ -471,9 +413,7 @@ const AdminDashboard: React.FC = () => {
       if (w.status === "approved") weeksMeta[key].approved += 1;
     }
 
-    let weeksArr = Object.values(weeksMeta).sort((a, b) =>
-      a.orderKey.localeCompare(b.orderKey)
-    );
+    let weeksArr = Object.values(weeksMeta).sort((a, b) => a.orderKey.localeCompare(b.orderKey));
     if (weeksArr.length > 8) weeksArr = weeksArr.slice(weeksArr.length - 8);
 
     const points: ChartPoint[] = weeksArr.map((w) => {
@@ -484,8 +424,7 @@ const AdminDashboard: React.FC = () => {
     return { points, maxValue: 100 };
   }, [filteredWorkers, chartMode, language]);
 
-  const activeChartData =
-    metricMode === "volume" ? volumeChartData : conversionChartData;
+  const activeChartData = metricMode === "volume" ? volumeChartData : conversionChartData;
 
   const formatDateTime = (value: string) => {
     const d = new Date(value);
@@ -548,9 +487,7 @@ const AdminDashboard: React.FC = () => {
     dateFrom: language === "fr" ? "Du (filtre global)" : "From (global filter)",
     dateTo: language === "fr" ? "Au (filtre global)" : "To (global filter)",
     chartTitle:
-      language === "fr"
-        ? "Évolution des demandes / conversions"
-        : "Requests / conversions trend",
+      language === "fr" ? "Évolution des demandes / conversions" : "Requests / conversions trend",
     chartModeDaily: language === "fr" ? "Jour" : "Daily",
     chartModeWeekly: language === "fr" ? "Semaine" : "Weekly",
     metricModeVolume: language === "fr" ? "Volume" : "Volume",
@@ -571,18 +508,12 @@ const AdminDashboard: React.FC = () => {
       language === "fr"
         ? "Taux de conversion (validées / totales) par semaine (8 dernières semaines)."
         : "Conversion rate (approved / total) per week (last 8 weeks).",
-    statsWorkers: language === "fr" ? "Inscriptions ouvriers" : "Workers registrations",
-    goToInscriptions:
-      language === "fr" ? "Voir toutes les inscriptions" : "View all registrations",
-    goToContacts:
-      language === "fr" ? "Voir toutes les demandes" : "View all requests",
+    goToInscriptions: language === "fr" ? "Voir toutes les inscriptions" : "View all registrations",
+    goToContacts: language === "fr" ? "Voir toutes les demandes" : "View all requests",
     recentWorkers: language === "fr" ? "Dernières inscriptions" : "Latest registrations",
-    recentContacts:
-      language === "fr" ? "Dernières demandes de contact" : "Latest contact requests",
+    recentContacts: language === "fr" ? "Dernières demandes de contact" : "Latest contact requests",
     emptyPeriod:
-      language === "fr"
-        ? "Aucune donnée dans la période sélectionnée."
-        : "No data in the selected period.",
+      language === "fr" ? "Aucune donnée dans la période sélectionnée." : "No data in the selected period.",
     refresh: language === "fr" ? "Actualiser" : "Refresh",
     clearDates: language === "fr" ? "Effacer dates" : "Clear dates",
     viewAll: language === "fr" ? "Tout voir" : "View all",
@@ -590,11 +521,9 @@ const AdminDashboard: React.FC = () => {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="flex items-center justify-center py-16">
         <div className="text-sm text-slate-500">
-          {language === "fr"
-            ? "Vérification de vos droits..."
-            : "Checking your permissions..."}
+          {language === "fr" ? "Vérification de vos droits..." : "Checking your permissions..."}
         </div>
       </div>
     );
@@ -603,304 +532,260 @@ const AdminDashboard: React.FC = () => {
   if (!isAdmin) return null;
 
   return (
-    <div className={shellBg}>
-      <div className={containerClass}>
-        {/* ✅ Sous-menu supprimé : on garde uniquement le header AdminLayout */}
-
-        {/* Header + actions + filtres (responsive) */}
-        <div className="flex flex-col gap-4 md:gap-5">
-          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
-            <div className="min-w-0">
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                {text.title}
-                <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-semibold">
-                  Admin
-                </span>
-              </h1>
-              <p className="text-sm text-slate-600 mt-1">{text.subtitle}</p>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap justify-start lg:justify-end">
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={() => {
-                  setDateFrom("");
-                  setDateTo("");
-                }}
-                disabled={loading}
-              >
-                <CalendarDays className="h-4 w-4" />
-                {text.clearDates}
-              </Button>
-
-              <Button
-                className="gap-2 bg-pro-blue hover:bg-blue-700"
-                onClick={fetchDashboardData}
-                disabled={loading}
-              >
-                <RefreshCw
-                  className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-                />
-                {text.refresh}
-              </Button>
-            </div>
-          </div>
-
-          <div className={`${cardClass} p-3 sm:p-4`}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  {text.dateFrom}
-                </label>
-                <Input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="bg-white"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  {text.dateTo}
-                </label>
-                <Input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="bg-white"
-                />
-              </div>
-            </div>
-          </div>
-
-          {error && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-        </div>
-
-        {/* ✅ KPIs workers */}
-        <div className="mt-6 grid gap-4 md:gap-5 grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
-          <StatCard
-            label={language === "fr" ? "Total ouvriers" : "Total workers"}
-            value={stats.totalWorkers}
-            subtitle={language === "fr" ? "Tous statuts" : "All statuses"}
-            icon={Users}
-            gradient="from-sky-500/10 via-sky-400/20 to-sky-500/40"
-          />
-          <StatCard
-            label={language === "fr" ? "En attente" : "Pending"}
-            value={stats.pendingWorkers}
-            subtitle={language === "fr" ? "À traiter" : "To review"}
-            icon={Clock}
-            gradient="from-amber-400/10 via-amber-300/20 to-amber-500/40"
-          />
-          <StatCard
-            label={language === "fr" ? "Validés" : "Approved"}
-            value={stats.approvedWorkers}
-            subtitle={language === "fr" ? "Actifs" : "Active"}
-            icon={CheckCircle2}
-            gradient="from-emerald-400/10 via-emerald-300/20 to-emerald-500/40"
-          />
-          <StatCard
-            label={language === "fr" ? "Refusés" : "Rejected"}
-            value={stats.rejectedWorkers}
-            subtitle={language === "fr" ? "Non retenus" : "Not accepted"}
-            icon={XCircle}
-            gradient="from-rose-400/10 via-rose-300/20 to-rose-500/40"
-          />
-          <StatCard
-            label={language === "fr" ? "Suspendus" : "Suspended"}
-            value={stats.suspendedWorkers}
-            subtitle={language === "fr" ? "Masqués" : "Hidden"}
-            icon={Ban}
-            gradient="from-slate-400/10 via-slate-300/20 to-slate-500/30"
-          />
-        </div>
-
-        {/* ✅ KPIs contacts */}
-        <div className="mt-4 grid gap-4 md:gap-5 grid-cols-1 md:grid-cols-3">
-          <StatCard
-            label={language === "fr" ? "Total demandes" : "Total requests"}
-            value={stats.totalContacts}
-            subtitle={language === "fr" ? "Contacts reçus" : "Requests received"}
-            icon={PhoneCall}
-            gradient="from-indigo-500/10 via-indigo-400/20 to-indigo-500/40"
-          />
-          <StatCard
-            label={language === "fr" ? "Aujourd’hui" : "Today"}
-            value={stats.contactsToday}
-            subtitle={language === "fr" ? "Dernières 24h" : "Last 24h"}
-            icon={TrendingUp}
-            gradient="from-fuchsia-500/10 via-fuchsia-400/20 to-fuchsia-500/40"
-          />
-          <StatCard
-            label={language === "fr" ? "7 derniers jours" : "Last 7 days"}
-            value={stats.contactsLast7}
-            subtitle={language === "fr" ? "Semaine" : "Weekly"}
-            icon={TrendingUp}
-            gradient="from-teal-500/10 via-teal-400/20 to-teal-500/40"
-          />
-        </div>
-
-        {/* ✅ Plans + liens */}
-        <div
-          className={`mt-6 ${cardClass} p-4 sm:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4`}
-        >
+    <div className="space-y-6">
+      {/* Header + actions + filtres */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-slate-800">
-              {language === "fr" ? "Répartition des plans" : "Plans distribution"}
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 flex flex-wrap items-center gap-2">
+              {text.title}
+              <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-semibold">
+                Admin
+              </span>
+            </h1>
+            <p className="text-sm text-slate-600 mt-1">{text.subtitle}</p>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              className="gap-2 w-full sm:w-auto"
+              onClick={() => {
+                setDateFrom("");
+                setDateTo("");
+              }}
+              disabled={loading}
+            >
+              <CalendarDays className="h-4 w-4" />
+              {text.clearDates}
+            </Button>
+
+            <Button
+              className="gap-2 bg-pro-blue hover:bg-blue-700 w-full sm:w-auto"
+              onClick={fetchDashboardData}
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              {text.refresh}
+            </Button>
+          </div>
+        </div>
+
+        <div className={`${cardClass} p-3 sm:p-4`}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">{text.dateFrom}</label>
+              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="bg-white" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">{text.dateTo}</label>
+              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="bg-white" />
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+      </div>
+
+      {/* KPIs workers (✅ 1 colonne en mobile) */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <StatCard
+          label={language === "fr" ? "Total ouvriers" : "Total workers"}
+          value={stats.totalWorkers}
+          subtitle={language === "fr" ? "Tous statuts" : "All statuses"}
+          icon={Users}
+          gradient="from-sky-500/10 via-sky-400/20 to-sky-500/40"
+        />
+        <StatCard
+          label={language === "fr" ? "En attente" : "Pending"}
+          value={stats.pendingWorkers}
+          subtitle={language === "fr" ? "À traiter" : "To review"}
+          icon={Clock}
+          gradient="from-amber-400/10 via-amber-300/20 to-amber-500/40"
+        />
+        <StatCard
+          label={language === "fr" ? "Validés" : "Approved"}
+          value={stats.approvedWorkers}
+          subtitle={language === "fr" ? "Actifs" : "Active"}
+          icon={CheckCircle2}
+          gradient="from-emerald-400/10 via-emerald-300/20 to-emerald-500/40"
+        />
+        <StatCard
+          label={language === "fr" ? "Refusés" : "Rejected"}
+          value={stats.rejectedWorkers}
+          subtitle={language === "fr" ? "Non retenus" : "Not accepted"}
+          icon={XCircle}
+          gradient="from-rose-400/10 via-rose-300/20 to-rose-500/40"
+        />
+        <StatCard
+          label={language === "fr" ? "Suspendus" : "Suspended"}
+          value={stats.suspendedWorkers}
+          subtitle={language === "fr" ? "Masqués" : "Hidden"}
+          icon={Ban}
+          gradient="from-slate-400/10 via-slate-300/20 to-slate-500/30"
+        />
+      </div>
+
+      {/* KPIs contacts */}
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+        <StatCard
+          label={language === "fr" ? "Total demandes" : "Total requests"}
+          value={stats.totalContacts}
+          subtitle={language === "fr" ? "Contacts reçus" : "Requests received"}
+          icon={PhoneCall}
+          gradient="from-indigo-500/10 via-indigo-400/20 to-indigo-500/40"
+        />
+        <StatCard
+          label={language === "fr" ? "Aujourd’hui" : "Today"}
+          value={stats.contactsToday}
+          subtitle={language === "fr" ? "Dernières 24h" : "Last 24h"}
+          icon={TrendingUp}
+          gradient="from-fuchsia-500/10 via-fuchsia-400/20 to-fuchsia-500/40"
+        />
+        <StatCard
+          label={language === "fr" ? "7 derniers jours" : "Last 7 days"}
+          value={stats.contactsLast7}
+          subtitle={language === "fr" ? "Semaine" : "Weekly"}
+          icon={TrendingUp}
+          gradient="from-teal-500/10 via-teal-400/20 to-teal-500/40"
+        />
+      </div>
+
+      {/* Plans + liens */}
+      <div className={`${cardClass} p-4 sm:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4`}>
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-slate-800">
+            {language === "fr" ? "Répartition des plans" : "Plans distribution"}
+          </h2>
+
+          <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass("free")}`}>
+              <span>{language === "fr" ? "Gratuit" : "Free"}</span>
+              <span className="font-semibold">{stats.planFree}</span>
+            </span>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass("monthly")}`}>
+              <span>{language === "fr" ? "Mensuel" : "Monthly"}</span>
+              <span className="font-semibold">{stats.planMonthly}</span>
+            </span>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass("yearly")}`}>
+              <span>{language === "fr" ? "Annuel" : "Yearly"}</span>
+              <span className="font-semibold">{stats.planYearly}</span>
+            </span>
+            {stats.planOther > 0 && (
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass("other")}`}>
+                <span>{language === "fr" ? "Autre" : "Other"}</span>
+                <span className="font-semibold">{stats.planOther}</span>
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+          <Link to="/admin/ouvriers" className="w-full sm:w-auto">
+            <Button size="sm" variant="outline" className="gap-2 w-full sm:w-auto">
+              {text.goToInscriptions}
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
+          <Link to="/admin/ouvrier-contacts" className="w-full sm:w-auto">
+            <Button size="sm" variant="outline" className="gap-2 w-full sm:w-auto">
+              {text.goToContacts}
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      {/* Graphique + Roadmap */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Graphique */}
+        <div className={`${cardClass} p-4 sm:p-5`}>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-2">
+            <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+              {text.chartTitle}
+              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200">
+                {metricMode === "volume" ? (
+                  <span className="inline-flex items-center gap-1">
+                    <TrendingUp className="h-3 w-3" />
+                    {text.metricModeVolume}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1">
+                    <Percent className="h-3 w-3" />
+                    {text.metricModeConversion}
+                  </span>
+                )}
+              </span>
             </h2>
 
-            <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-              <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass(
-                  "free"
-                )}`}
-              >
-                <span>{language === "fr" ? "Gratuit" : "Free"}</span>
-                <span className="font-semibold">{stats.planFree}</span>
-              </span>
-              <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass(
-                  "monthly"
-                )}`}
-              >
-                <span>{language === "fr" ? "Mensuel" : "Monthly"}</span>
-                <span className="font-semibold">{stats.planMonthly}</span>
-              </span>
-              <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass(
-                  "yearly"
-                )}`}
-              >
-                <span>{language === "fr" ? "Annuel" : "Yearly"}</span>
-                <span className="font-semibold">{stats.planYearly}</span>
-              </span>
-              {stats.planOther > 0 && (
-                <span
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass(
-                    "other"
-                  )}`}
+            <div className="flex flex-col sm:items-end gap-2">
+              <div className="inline-flex items-center rounded-full bg-slate-100/80 p-1 text-[11px] shadow-inner">
+                <button
+                  type="button"
+                  onClick={() => setChartMode("daily")}
+                  className={`px-3 py-1 rounded-full transition ${
+                    chartMode === "daily" ? "bg-white shadow text-slate-900 font-medium" : "text-slate-500 hover:text-slate-900"
+                  }`}
                 >
-                  <span>{language === "fr" ? "Autre" : "Other"}</span>
-                  <span className="font-semibold">{stats.planOther}</span>
-                </span>
-              )}
-            </div>
-          </div>
+                  {text.chartModeDaily}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartMode("weekly")}
+                  className={`px-3 py-1 rounded-full transition ${
+                    chartMode === "weekly" ? "bg-white shadow text-slate-900 font-medium" : "text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  {text.chartModeWeekly}
+                </button>
+              </div>
 
-          <div className="flex flex-wrap gap-2">
-            <Link to="/admin/ouvriers">
-              <Button size="sm" variant="outline" className="gap-2">
-                {text.goToInscriptions}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-            <Link to="/admin/ouvrier-contacts">
-              <Button size="sm" variant="outline" className="gap-2">
-                {text.goToContacts}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-
-        {/* Graphique + roadmap (responsive) */}
-        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {/* Graphique */}
-          <div className={`${cardClass} p-4 sm:p-5`}>
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-2">
-              <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                {text.chartTitle}
-                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200">
-                  {metricMode === "volume" ? (
-                    <span className="inline-flex items-center gap-1">
-                      <TrendingUp className="h-3 w-3" />
-                      {text.metricModeVolume}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1">
-                      <Percent className="h-3 w-3" />
-                      {text.metricModeConversion}
-                    </span>
-                  )}
-                </span>
-              </h2>
-
-              <div className="flex flex-col sm:items-end gap-2">
-                <div className="inline-flex items-center rounded-full bg-slate-100/80 p-1 text-[11px] shadow-inner">
-                  <button
-                    type="button"
-                    onClick={() => setChartMode("daily")}
-                    className={`px-3 py-1 rounded-full transition ${
-                      chartMode === "daily"
-                        ? "bg-white shadow text-slate-900 font-medium"
-                        : "text-slate-500 hover:text-slate-900"
-                    }`}
-                  >
-                    {text.chartModeDaily}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setChartMode("weekly")}
-                    className={`px-3 py-1 rounded-full transition ${
-                      chartMode === "weekly"
-                        ? "bg-white shadow text-slate-900 font-medium"
-                        : "text-slate-500 hover:text-slate-900"
-                    }`}
-                  >
-                    {text.chartModeWeekly}
-                  </button>
-                </div>
-
-                <div className="inline-flex items-center rounded-full bg-slate-100/80 p-1 text-[11px] shadow-inner">
-                  <button
-                    type="button"
-                    onClick={() => setMetricMode("volume")}
-                    className={`px-3 py-1 rounded-full transition ${
-                      metricMode === "volume"
-                        ? "bg-white shadow text-slate-900 font-medium"
-                        : "text-slate-500 hover:text-slate-900"
-                    }`}
-                  >
-                    {text.metricModeVolume}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMetricMode("conversion")}
-                    className={`px-3 py-1 rounded-full transition ${
-                      metricMode === "conversion"
-                        ? "bg-white shadow text-slate-900 font-medium"
-                        : "text-slate-500 hover:text-slate-900"
-                    }`}
-                  >
-                    {text.metricModeConversion}
-                  </button>
-                </div>
+              <div className="inline-flex items-center rounded-full bg-slate-100/80 p-1 text-[11px] shadow-inner">
+                <button
+                  type="button"
+                  onClick={() => setMetricMode("volume")}
+                  className={`px-3 py-1 rounded-full transition ${
+                    metricMode === "volume" ? "bg-white shadow text-slate-900 font-medium" : "text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  {text.metricModeVolume}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMetricMode("conversion")}
+                  className={`px-3 py-1 rounded-full transition ${
+                    metricMode === "conversion" ? "bg-white shadow text-slate-900 font-medium" : "text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  {text.metricModeConversion}
+                </button>
               </div>
             </div>
+          </div>
 
-            <p className="text-xs text-slate-500 mb-4">
-              {chartMode === "daily"
-                ? metricMode === "volume"
-                  ? text.chartSubtitleDailyVolume
-                  : text.chartSubtitleDailyConversion
-                : metricMode === "volume"
-                ? text.chartSubtitleWeeklyVolume
-                : text.chartSubtitleWeeklyConversion}
-            </p>
+          <p className="text-xs text-slate-500 mb-4">
+            {chartMode === "daily"
+              ? metricMode === "volume"
+                ? text.chartSubtitleDailyVolume
+                : text.chartSubtitleDailyConversion
+              : metricMode === "volume"
+              ? text.chartSubtitleWeeklyVolume
+              : text.chartSubtitleWeeklyConversion}
+          </p>
 
-            <div className="h-44 flex items-end gap-2 border-b border-slate-100 pb-3">
+          {/* ✅ barre chart responsive : scroll horizontal si trop serré */}
+          <div className="w-full overflow-x-auto">
+            <div className="min-w-[520px] h-44 flex items-end gap-2 border-b border-slate-100 pb-3">
               {activeChartData.points.length === 0 ? (
                 <div className="text-xs text-slate-400">{text.emptyPeriod}</div>
               ) : (
                 activeChartData.points.map((p) => {
                   const height = (p.value / activeChartData.maxValue) * 140;
-                  const labelValue =
-                    metricMode === "volume" ? p.value : `${Math.round(p.value)}%`;
+                  const labelValue = metricMode === "volume" ? p.value : `${Math.round(p.value)}%`;
 
                   const barClass =
                     metricMode === "volume"
@@ -926,209 +811,176 @@ const AdminDashboard: React.FC = () => {
               )}
             </div>
           </div>
-
-          {/* Roadmap mobile */}
-          <div className={`${cardClass} p-4 sm:p-5`}>
-            <h2 className="text-sm font-semibold text-slate-800 mb-1">
-              {language === "fr"
-                ? "Prochains développements mobile"
-                : "Upcoming mobile features"}
-            </h2>
-            <p className="text-xs text-slate-500 mb-4">
-              {language === "fr"
-                ? "Roadmap indicative pour l’app mobile OuvriersPro."
-                : "Indicative roadmap for the OuvriersPro mobile app."}
-            </p>
-
-            <ul className="space-y-3 text-xs text-slate-700">
-              <li className="flex items-start gap-2">
-                <span className="mt-[3px] h-2 w-2 rounded-full bg-emerald-500" />
-                <div>
-                  <span className="font-semibold">
-                    {language === "fr"
-                      ? "Phase 1 – API / Back-end prêt pour mobile"
-                      : "Phase 1 – API / backend ready"}
-                  </span>
-                  <div className="text-slate-500">
-                    {language === "fr"
-                      ? "Réutiliser Supabase + endpoints existants pour une future app React Native / Expo."
-                      : "Reuse Supabase + existing endpoints for a future React Native / Expo app."}
-                  </div>
-                </div>
-              </li>
-
-              <li className="flex items-start gap-2">
-                <span className="mt-[3px] h-2 w-2 rounded-full bg-amber-500" />
-                <div>
-                  <span className="font-semibold">
-                    {language === "fr"
-                      ? "Phase 2 – App mobile ouvriers"
-                      : "Phase 2 – Workers mobile app"}
-                  </span>
-                  <div className="text-slate-500">
-                    {language === "fr"
-                      ? "Gestion profil, abonnement, zones et réponses aux demandes depuis le téléphone."
-                      : "Manage profile, subscription, areas and answer requests from mobile."}
-                  </div>
-                </div>
-              </li>
-
-              <li className="flex items-start gap-2">
-                <span className="mt-[3px] h-2 w-2 rounded-full bg-slate-400" />
-                <div>
-                  <span className="font-semibold">
-                    {language === "fr"
-                      ? "Phase 3 – App mobile clients"
-                      : "Phase 3 – Clients mobile app"}
-                  </span>
-                  <div className="text-slate-500">
-                    {language === "fr"
-                      ? "Recherche, notes, notifications et suivi des interventions."
-                      : "Search, ratings, notifications and intervention tracking."}
-                  </div>
-                </div>
-              </li>
-
-              <li className="flex items-start gap-2">
-                <span className="mt-[3px] h-2 w-2 rounded-full bg-sky-500" />
-                <div>
-                  <span className="font-semibold">
-                    {language === "fr"
-                      ? "Phase 4 – Stats & reporting mobile"
-                      : "Phase 4 – Mobile analytics"}
-                  </span>
-                  <div className="text-slate-500">
-                    {language === "fr"
-                      ? "Dashboards sur mobile pour suivre inscriptions, demandes et revenus d’abonnements."
-                      : "Mobile dashboards for registrations, requests and subscription revenue."}
-                  </div>
-                </div>
-              </li>
-            </ul>
-          </div>
         </div>
 
-        {/* Listes récentes */}
-        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {/* Dernières inscriptions */}
-          <div className={`${cardClass} p-4 sm:p-5`}>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-slate-800">{text.recentWorkers}</h2>
-              <Link to="/admin/ouvriers" className="text-[11px] text-pro-blue hover:underline">
-                {text.viewAll}
-              </Link>
-            </div>
+        {/* Roadmap */}
+        <div className={`${cardClass} p-4 sm:p-5`}>
+          <h2 className="text-sm font-semibold text-slate-800 mb-1">
+            {language === "fr" ? "Prochains développements mobile" : "Upcoming mobile features"}
+          </h2>
+          <p className="text-xs text-slate-500 mb-4">
+            {language === "fr"
+              ? "Roadmap indicative pour l’app mobile OuvriersPro."
+              : "Indicative roadmap for the OuvriersPro mobile app."}
+          </p>
 
-            {recentWorkers.length === 0 && !loading && (
-              <div className="text-sm text-slate-500">
-                {language === "fr"
-                  ? "Aucune inscription dans la période sélectionnée."
-                  : "No registrations in selected period."}
+          <ul className="space-y-3 text-xs text-slate-700">
+            <li className="flex items-start gap-2">
+              <span className="mt-[3px] h-2 w-2 rounded-full bg-emerald-500" />
+              <div>
+                <span className="font-semibold">
+                  {language === "fr"
+                    ? "Phase 1 – API / Back-end prêt pour mobile"
+                    : "Phase 1 – API / backend ready"}
+                </span>
+                <div className="text-slate-500">
+                  {language === "fr"
+                    ? "Réutiliser Supabase + endpoints existants pour une future app React Native / Expo."
+                    : "Reuse Supabase + existing endpoints for a future React Native / Expo app."}
+                </div>
               </div>
-            )}
+            </li>
 
-            {loading && (
-              <div className="text-sm text-slate-500">
-                {language === "fr" ? "Chargement..." : "Loading..."}
+            <li className="flex items-start gap-2">
+              <span className="mt-[3px] h-2 w-2 rounded-full bg-amber-500" />
+              <div>
+                <span className="font-semibold">
+                  {language === "fr" ? "Phase 2 – App mobile ouvriers" : "Phase 2 – Workers mobile app"}
+                </span>
+                <div className="text-slate-500">
+                  {language === "fr"
+                    ? "Gestion profil, abonnement, zones et réponses aux demandes depuis le téléphone."
+                    : "Manage profile, subscription, areas and answer requests from mobile."}
+                </div>
               </div>
-            )}
+            </li>
 
-            {!loading && recentWorkers.length > 0 && (
-              <ul className="divide-y divide-slate-100">
-                {recentWorkers.map((w) => {
-                  const fullName = `${w.first_name ?? ""}${w.last_name ? ` ${w.last_name}` : ""}`.trim();
-                  return (
-                    <li key={w.id} className="py-3 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-semibold text-slate-800 text-sm truncate">
-                          {fullName || "—"}
-                        </div>
-                        <div className="text-xs text-slate-500 truncate">{w.profession || ""}</div>
-                        <div className="text-xs text-slate-400">{formatDateTime(w.created_at)}</div>
-                        <div className="mt-1">
-                          <Link to={`/ouvrier/${w.id}`} className="text-[11px] text-pro-blue hover:underline">
-                            {language === "fr" ? "Voir la fiche ouvrier" : "Open worker profile"}
-                          </Link>
-                        </div>
-                      </div>
+            <li className="flex items-start gap-2">
+              <span className="mt-[3px] h-2 w-2 rounded-full bg-slate-400" />
+              <div>
+                <span className="font-semibold">
+                  {language === "fr" ? "Phase 3 – App mobile clients" : "Phase 3 – Clients mobile app"}
+                </span>
+                <div className="text-slate-500">
+                  {language === "fr"
+                    ? "Recherche, notes, notifications et suivi des interventions."
+                    : "Search, ratings, notifications and intervention tracking."}
+                </div>
+              </div>
+            </li>
 
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${workerStatusClass(
-                            w.status
-                          )}`}
-                        >
-                          {workerStatusLabel(w.status)}
-                        </span>
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full border ${planBadgeClass(
-                            w.plan_code
-                          )}`}
-                        >
-                          {planLabel(w.plan_code, language)}
-                        </span>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+            <li className="flex items-start gap-2">
+              <span className="mt-[3px] h-2 w-2 rounded-full bg-sky-500" />
+              <div>
+                <span className="font-semibold">
+                  {language === "fr" ? "Phase 4 – Stats & reporting mobile" : "Phase 4 – Mobile analytics"}
+                </span>
+                <div className="text-slate-500">
+                  {language === "fr"
+                    ? "Dashboards sur mobile pour suivre inscriptions, demandes et revenus d’abonnements."
+                    : "Mobile dashboards for registrations, requests and subscription revenue."}
+                </div>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      {/* Listes récentes */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Dernières inscriptions */}
+        <div className={`${cardClass} p-4 sm:p-5`}>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-slate-800">{text.recentWorkers}</h2>
+            <Link to="/admin/ouvriers" className="text-[11px] text-pro-blue hover:underline">
+              {text.viewAll}
+            </Link>
           </div>
 
-          {/* Dernières demandes */}
-          <div className={`${cardClass} p-4 sm:p-5`}>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-slate-800">{text.recentContacts}</h2>
-              <Link
-                to="/admin/ouvrier-contacts"
-                className="text-[11px] text-pro-blue hover:underline"
-              >
-                {text.viewAll}
-              </Link>
+          {recentWorkers.length === 0 && !loading && (
+            <div className="text-sm text-slate-500">
+              {language === "fr"
+                ? "Aucune inscription dans la période sélectionnée."
+                : "No registrations in selected period."}
             </div>
+          )}
 
-            {recentContacts.length === 0 && !loading && (
-              <div className="text-sm text-slate-500">
-                {language === "fr"
-                  ? "Aucune demande dans la période sélectionnée."
-                  : "No requests in selected period."}
-              </div>
-            )}
+          {loading && <div className="text-sm text-slate-500">{language === "fr" ? "Chargement..." : "Loading..."}</div>}
 
-            {loading && (
-              <div className="text-sm text-slate-500">
-                {language === "fr" ? "Chargement..." : "Loading..."}
-              </div>
-            )}
-
-            {!loading && recentContacts.length > 0 && (
-              <ul className="divide-y divide-slate-100">
-                {recentContacts.map((c) => (
-                  <li key={c.id} className="py-3 flex items-start justify-between gap-3">
+          {!loading && recentWorkers.length > 0 && (
+            <ul className="divide-y divide-slate-100">
+              {recentWorkers.map((w) => {
+                const fullName = `${w.first_name ?? ""}${w.last_name ? ` ${w.last_name}` : ""}`.trim();
+                return (
+                  <li key={w.id} className="py-3 flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="font-semibold text-slate-800 text-sm truncate">{c.worker_name || "—"}</div>
-                      <div className="text-xs text-slate-500 truncate">{c.client_name || "—"}</div>
-                      <div className="text-xs text-slate-400">
-                        {formatDateTime(c.created_at)} • {originLabel(c.origin)}
-                      </div>
+                      <div className="font-semibold text-slate-800 text-sm truncate">{fullName || "—"}</div>
+                      <div className="text-xs text-slate-500 truncate">{w.profession || ""}</div>
+                      <div className="text-xs text-slate-400">{formatDateTime(w.created_at)}</div>
                       <div className="mt-1">
-                        <Link to="/admin/ouvrier-contacts" className="text-[11px] text-pro-blue hover:underline">
-                          {language === "fr" ? "Ouvrir dans le back-office" : "Open in back-office"}
+                        <Link to={`/ouvrier/${w.id}`} className="text-[11px] text-pro-blue hover:underline">
+                          {language === "fr" ? "Voir la fiche ouvrier" : "Open worker profile"}
                         </Link>
                       </div>
                     </div>
 
-                    <span className="shrink-0 inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-50 text-slate-700 border-slate-200">
-                      {contactStatusLabel(c.status)}
-                    </span>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${workerStatusClass(w.status)}`}>
+                        {workerStatusLabel(w.status)}
+                      </span>
+                      <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full border ${planBadgeClass(w.plan_code)}`}>
+                        {planLabel(w.plan_code, language)}
+                      </span>
+                    </div>
                   </li>
-                ))}
-              </ul>
-            )}
-          </div>
+                );
+              })}
+            </ul>
+          )}
         </div>
 
-        <div className="mt-10" />
+        {/* Dernières demandes */}
+        <div className={`${cardClass} p-4 sm:p-5`}>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-slate-800">{text.recentContacts}</h2>
+            <Link to="/admin/ouvrier-contacts" className="text-[11px] text-pro-blue hover:underline">
+              {text.viewAll}
+            </Link>
+          </div>
+
+          {recentContacts.length === 0 && !loading && (
+            <div className="text-sm text-slate-500">
+              {language === "fr" ? "Aucune demande dans la période sélectionnée." : "No requests in selected period."}
+            </div>
+          )}
+
+          {loading && <div className="text-sm text-slate-500">{language === "fr" ? "Chargement..." : "Loading..."}</div>}
+
+          {!loading && recentContacts.length > 0 && (
+            <ul className="divide-y divide-slate-100">
+              {recentContacts.map((c) => (
+                <li key={c.id} className="py-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-800 text-sm truncate">{c.worker_name || "—"}</div>
+                    <div className="text-xs text-slate-500 truncate">{c.client_name || "—"}</div>
+                    <div className="text-xs text-slate-400">
+                      {formatDateTime(c.created_at)} • {originLabel(c.origin)}
+                    </div>
+                    <div className="mt-1">
+                      <Link to="/admin/ouvrier-contacts" className="text-[11px] text-pro-blue hover:underline">
+                        {language === "fr" ? "Ouvrir dans le back-office" : "Open in back-office"}
+                      </Link>
+                    </div>
+                  </div>
+
+                  <span className="shrink-0 inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-50 text-slate-700 border-slate-200">
+                    {contactStatusLabel(c.status)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
