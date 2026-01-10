@@ -148,14 +148,64 @@ const WorkerDetail: React.FC = () => {
     };
   }, []);
 
-  // ✅ Déterminer le rôle du viewer (client/worker) pour contrôler le signalement
+  /**
+   * ✅ Déterminer le rôle du viewer (client/worker) pour contrôler le signalement
+   *
+   * Problème courant: RLS bloque op_clients/op_ouvriers => viewerRole reste null.
+   * Solution: tenter d'abord op_users (self row), puis fallback vers op_clients/op_ouvriers.
+   * (Aucune modification UI/structure ailleurs.)
+   */
   useEffect(() => {
     let cancelled = false;
+
+    const normalizeRole = (raw: any): ViewerRole => {
+      const s = String(raw ?? "").toLowerCase().trim();
+      if (!s) return null;
+
+      // client / customer / particulier
+      if (s.includes("client") || s.includes("customer") || s.includes("particulier")) return "client";
+
+      // worker / ouvrier / prestataire / provider / seller
+      if (
+        s.includes("worker") ||
+        s.includes("ouvrier") ||
+        s.includes("prestataire") ||
+        s.includes("provider") ||
+        s.includes("seller")
+      )
+        return "worker";
+
+      return null;
+    };
 
     const detectRole = async () => {
       if (!authUserId) {
         if (!cancelled) setViewerRole(null);
         return;
+      }
+
+      // 0) tentative via op_users (souvent autorisé par RLS pour l'utilisateur courant)
+      try {
+        const { data: u, error: uErr } = await supabase
+          .from("op_users")
+          .select("id, role, user_type, account_type")
+          .eq("id", authUserId)
+          .maybeSingle();
+
+        if (!cancelled && !uErr && u) {
+          const r =
+            normalizeRole((u as any).role) ||
+            normalizeRole((u as any).user_type) ||
+            normalizeRole((u as any).account_type);
+
+          if (r) {
+            setViewerRole(r);
+            return;
+          }
+        }
+      } catch (e) {
+        // op_users peut ne pas exister dans certains projets: on ignore et on fallback
+        console.warn("detectRole: op_users not available or blocked", e);
       }
 
       // 1) client ?
@@ -167,13 +217,7 @@ const WorkerDetail: React.FC = () => {
 
       if (cancelled) return;
 
-      if (clientErr) {
-        console.error("detectRole client error", clientErr);
-        setViewerRole(null);
-        return;
-      }
-
-      if (clientRow?.id) {
+      if (!clientErr && clientRow?.id) {
         setViewerRole("client");
         return;
       }
@@ -187,13 +231,12 @@ const WorkerDetail: React.FC = () => {
 
       if (cancelled) return;
 
-      if (workerErr) {
-        console.error("detectRole worker error", workerErr);
-        setViewerRole(null);
+      if (!workerErr && workerRow?.id) {
+        setViewerRole("worker");
         return;
       }
 
-      setViewerRole(workerRow?.id ? "worker" : null);
+      setViewerRole(null);
     };
 
     detectRole().catch((e) => {
@@ -372,7 +415,12 @@ const WorkerDetail: React.FC = () => {
       ? Math.round((reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length) * 10) / 10
       : 0;
 
-  // ✅ Règle: seul un client connecté peut signaler un ouvrier (pas d'ouvrier->ouvrier, pas d'anonyme)
+  /**
+   * ✅ Règle: seul un client connecté peut signaler un ouvrier
+   * (pas d'anonyme, pas auto-signalement).
+   *
+   * NB: si worker.user_id est NULL, impossible de signaler (pas d'ID auth à cibler).
+   */
   const canClientReportWorker =
     Boolean(authUserId) &&
     viewerRole === "client" &&
