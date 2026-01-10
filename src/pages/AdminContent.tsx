@@ -11,7 +11,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 
-import { useUpsertSiteContent, useTogglePublishSiteContent } from "@/hooks/useSiteContent";
+import {
+  useUpsertSiteContent,
+  useTogglePublishSiteContent,
+} from "@/hooks/useSiteContent";
 
 import {
   RefreshCw,
@@ -75,22 +78,77 @@ const SECTIONS: SectionDef[] = [
     title: "Header (Barre du haut)",
     description: "Logo, tagline, boutons, langue et menu mobile.",
     fields: [
-      { key: "brand.name", label: "Nom de la marque (logo)", type: "text", placeholder: "ProxiServices" },
-      { key: "header.tagline", label: "Tagline (sous le logo)", type: "text", placeholder: "Prestataires vérifiés, proches de vous" },
+      {
+        key: "brand.name",
+        label: "Nom de la marque (logo)",
+        type: "text",
+        placeholder: "ProxiServices",
+      },
+      {
+        key: "header.tagline",
+        label: "Tagline (sous le logo)",
+        type: "text",
+        placeholder: "Prestataires vérifiés, proches de vous",
+      },
 
-      { key: "header.btn_login", label: "Bouton (non connecté)", type: "text", placeholder: "Se connecter" },
-      { key: "header.btn_account", label: "Bouton (connecté)", type: "text", placeholder: "Mon compte" },
-      { key: "header.btn_account_short", label: "Bouton mobile (court)", type: "text", placeholder: "Compte" },
+      {
+        key: "header.btn_login",
+        label: "Bouton (non connecté)",
+        type: "text",
+        placeholder: "Se connecter",
+      },
+      {
+        key: "header.btn_account",
+        label: "Bouton (connecté)",
+        type: "text",
+        placeholder: "Mon compte",
+      },
+      {
+        key: "header.btn_account_short",
+        label: "Bouton mobile (court)",
+        type: "text",
+        placeholder: "Compte",
+      },
 
       { key: "header.admin_badge", label: "Badge Admin", type: "text", placeholder: "Admin" },
 
-      { key: "header.lang.aria", label: "Accessibilité - changer langue (aria-label)", type: "text", placeholder: "Changer de langue" },
-      { key: "header.lang.fr", label: "Langue - Français (label)", type: "text", placeholder: "Français" },
-      { key: "header.lang.en", label: "Langue - Anglais (label)", type: "text", placeholder: "Anglais" },
+      {
+        key: "header.lang.aria",
+        label: "Accessibilité - changer langue (aria-label)",
+        type: "text",
+        placeholder: "Changer de langue",
+      },
+      {
+        key: "header.lang.fr",
+        label: "Langue - Français (label)",
+        type: "text",
+        placeholder: "Français",
+      },
+      {
+        key: "header.lang.en",
+        label: "Langue - Anglais (label)",
+        type: "text",
+        placeholder: "Anglais",
+      },
 
-      { key: "header.mobile_menu.aria", label: "Menu mobile (aria-label)", type: "text", placeholder: "Menu mobile" },
-      { key: "header.mobile_close.aria", label: "Fermer menu (aria-label)", type: "text", placeholder: "Fermer le menu" },
-      { key: "header.mobile_menu.title", label: "Titre du drawer mobile", type: "text", placeholder: "Menu" },
+      {
+        key: "header.mobile_menu.aria",
+        label: "Menu mobile (aria-label)",
+        type: "text",
+        placeholder: "Menu mobile",
+      },
+      {
+        key: "header.mobile_close.aria",
+        label: "Fermer menu (aria-label)",
+        type: "text",
+        placeholder: "Fermer le menu",
+      },
+      {
+        key: "header.mobile_menu.title",
+        label: "Titre du drawer mobile",
+        type: "text",
+        placeholder: "Menu",
+      },
     ],
   },
 
@@ -100,11 +158,36 @@ const SECTIONS: SectionDef[] = [
     location: "Accueil > Hero",
     description: "Titre, sous-titre et zone de recherche.",
     fields: [
-      { key: "home.hero.title", label: "Titre (H1)", type: "text", placeholder: "Trouvez des prestataires fiables près de chez vous" },
-      { key: "home.hero.subtitle", label: "Sous-titre", type: "text", placeholder: "Comparez, contactez et réservez en toute confiance." },
-      { key: "home.search.placeholder_keyword", label: "Placeholder métier", type: "text", placeholder: "Ex : plombier, électricien..." },
-      { key: "home.search.placeholder_district", label: "Placeholder quartier/commune", type: "text", placeholder: "Quartier / commune" },
-      { key: "home.search.btn_search", label: "Bouton Rechercher", type: "text", placeholder: "Rechercher" },
+      {
+        key: "home.hero.title",
+        label: "Titre (H1)",
+        type: "text",
+        placeholder: "Trouvez des prestataires fiables près de chez vous",
+      },
+      {
+        key: "home.hero.subtitle",
+        label: "Sous-titre",
+        type: "text",
+        placeholder: "Comparez, contactez et réservez en toute confiance.",
+      },
+      {
+        key: "home.search.placeholder_keyword",
+        label: "Placeholder métier",
+        type: "text",
+        placeholder: "Ex : plombier, électricien...",
+      },
+      {
+        key: "home.search.placeholder_district",
+        label: "Placeholder quartier/commune",
+        type: "text",
+        placeholder: "Quartier / commune",
+      },
+      {
+        key: "home.search.btn_search",
+        label: "Bouton Rechercher",
+        type: "text",
+        placeholder: "Rechercher",
+      },
     ],
   },
 
@@ -115,7 +198,12 @@ const SECTIONS: SectionDef[] = [
     description: "Titre + sous-titre au-dessus des cartes.",
     fields: [
       { key: "home.features.title", label: "Titre", type: "text", placeholder: "Pourquoi ProxiServices ?" },
-      { key: "home.features.subtitle", label: "Sous-titre", type: "text", placeholder: "Des pros vérifiés, un contact simple, des avis utiles." },
+      {
+        key: "home.features.subtitle",
+        label: "Sous-titre",
+        type: "text",
+        placeholder: "Des pros vérifiés, un contact simple, des avis utiles.",
+      },
     ],
   },
 
@@ -125,14 +213,34 @@ const SECTIONS: SectionDef[] = [
     location: "Accueil > Avantages",
     description: "Les trois blocs principaux (titre + description).",
     fields: [
-      { key: "home.features.card1.title", label: "Carte 1 — Titre", type: "text", placeholder: "Prestataires vérifiés" },
-      { key: "home.features.card1.desc", label: "Carte 1 — Description", type: "textarea", placeholder: "Profils contrôlés et informations utiles." },
+      {
+        key: "home.features.card1.title",
+        label: "Carte 1 — Titre",
+        type: "text",
+        placeholder: "Prestataires vérifiés",
+      },
+      {
+        key: "home.features.card1.desc",
+        label: "Carte 1 — Description",
+        type: "textarea",
+        placeholder: "Profils contrôlés et informations utiles.",
+      },
 
       { key: "home.features.card2.title", label: "Carte 2 — Titre", type: "text", placeholder: "Contact rapide" },
-      { key: "home.features.card2.desc", label: "Carte 2 — Description", type: "textarea", placeholder: "Discutez et obtenez un devis simplement." },
+      {
+        key: "home.features.card2.desc",
+        label: "Carte 2 — Description",
+        type: "textarea",
+        placeholder: "Discutez et obtenez un devis simplement.",
+      },
 
       { key: "home.features.card3.title", label: "Carte 3 — Titre", type: "text", placeholder: "Avis & confiance" },
-      { key: "home.features.card3.desc", label: "Carte 3 — Description", type: "textarea", placeholder: "Évaluations pour choisir en toute sérénité." },
+      {
+        key: "home.features.card3.desc",
+        label: "Carte 3 — Description",
+        type: "textarea",
+        placeholder: "Évaluations pour choisir en toute sérénité.",
+      },
     ],
   },
 
@@ -163,10 +271,20 @@ const SECTIONS: SectionDef[] = [
     description: "Titre et micro-textes de la page “Trouvez votre professionnel”.",
     fields: [
       { key: "search.page.title", label: "Titre", type: "text", placeholder: "Trouvez votre professionnel" },
-      { key: "search.page.subtitle", label: "Sous-titre", type: "text", placeholder: "Modifiez vos filtres pour lancer la recherche automatiquement." },
+      {
+        key: "search.page.subtitle",
+        label: "Sous-titre",
+        type: "text",
+        placeholder: "Modifiez vos filtres pour lancer la recherche automatiquement.",
+      },
       { key: "search.filters.title", label: "Bloc filtres — Titre", type: "text", placeholder: "Filtres" },
       { key: "search.filters.btn_reset", label: "Bouton Réinitialiser", type: "text", placeholder: "Réinitialiser" },
-      { key: "search.filters.btn_geolocate", label: "Bouton Utiliser ma position", type: "text", placeholder: "Utiliser ma position" },
+      {
+        key: "search.filters.btn_geolocate",
+        label: "Bouton Utiliser ma position",
+        type: "text",
+        placeholder: "Utiliser ma position",
+      },
       { key: "search.view.list", label: "Affichage — Liste", type: "text", placeholder: "Liste" },
       { key: "search.view.grid", label: "Affichage — Mosaïque", type: "text", placeholder: "Mosaïque" },
       { key: "search.card.btn_contact", label: "Bouton Contacter (carte)", type: "text", placeholder: "Contacter" },
@@ -181,7 +299,12 @@ const SECTIONS: SectionDef[] = [
     description: "Titres, prix, boutons, avantages.",
     fields: [
       { key: "pricing.section.title", label: "Titre section", type: "text", placeholder: "Rejoignez ProxiServices" },
-      { key: "pricing.section.subtitle", label: "Sous-titre", type: "text", placeholder: "Développez votre activité avec plus de visibilité" },
+      {
+        key: "pricing.section.subtitle",
+        label: "Sous-titre",
+        type: "text",
+        placeholder: "Développez votre activité avec plus de visibilité",
+      },
 
       { key: "pricing.plan.free.name", label: "Plan 1 — Nom", type: "text", placeholder: "Gratuit" },
       { key: "pricing.plan.free.price", label: "Plan 1 — Prix", type: "text", placeholder: "0" },
@@ -198,8 +321,18 @@ const SECTIONS: SectionDef[] = [
       { key: "pricing.plan.monthly.period", label: "Plan 2 — Période", type: "text", placeholder: "FG/mois" },
       { key: "pricing.plan.monthly.ribbon", label: "Plan 2 — Bandeau", type: "text", placeholder: "Sans engagement" },
       { key: "pricing.plan.monthly.btn", label: "Plan 2 — Bouton", type: "text", placeholder: "Choisir ce plan" },
-      { key: "pricing.plan.monthly.f1", label: "Plan 2 — Avantage 1", type: "text", placeholder: "Profil professionnel complet" },
-      { key: "pricing.plan.monthly.f2", label: "Plan 2 — Avantage 2", type: "text", placeholder: "Contacts clients illimités" },
+      {
+        key: "pricing.plan.monthly.f1",
+        label: "Plan 2 — Avantage 1",
+        type: "text",
+        placeholder: "Profil professionnel complet",
+      },
+      {
+        key: "pricing.plan.monthly.f2",
+        label: "Plan 2 — Avantage 2",
+        type: "text",
+        placeholder: "Contacts clients illimités",
+      },
       { key: "pricing.plan.monthly.f3", label: "Plan 2 — Avantage 3", type: "text", placeholder: "Statistiques détaillées" },
       { key: "pricing.plan.monthly.f4", label: "Plan 2 — Avantage 4", type: "text", placeholder: "Support prioritaire" },
 
@@ -208,22 +341,52 @@ const SECTIONS: SectionDef[] = [
       { key: "pricing.plan.yearly.period", label: "Plan 3 — Période", type: "text", placeholder: "FG/an" },
       { key: "pricing.plan.yearly.ribbon", label: "Plan 3 — Bandeau", type: "text", placeholder: "2 mois offerts" },
       { key: "pricing.plan.yearly.btn", label: "Plan 3 — Bouton", type: "text", placeholder: "Choisir ce plan" },
-      { key: "pricing.plan.yearly.f1", label: "Plan 3 — Avantage 1", type: "text", placeholder: "Profil professionnel complet" },
-      { key: "pricing.plan.yearly.f2", label: "Plan 3 — Avantage 2", type: "text", placeholder: "Contacts clients illimités" },
+      {
+        key: "pricing.plan.yearly.f1",
+        label: "Plan 3 — Avantage 1",
+        type: "text",
+        placeholder: "Profil professionnel complet",
+      },
+      {
+        key: "pricing.plan.yearly.f2",
+        label: "Plan 3 — Avantage 2",
+        type: "text",
+        placeholder: "Contacts clients illimités",
+      },
       { key: "pricing.plan.yearly.f3", label: "Plan 3 — Avantage 3", type: "text", placeholder: "Statistiques détaillées" },
       { key: "pricing.plan.yearly.f4", label: "Plan 3 — Avantage 4", type: "text", placeholder: "Support prioritaire" },
 
       { key: "pricing.benefit1.title", label: "Bénéfice 1 — Titre", type: "text", placeholder: "Profil vérifié" },
-      { key: "pricing.benefit1.desc", label: "Bénéfice 1 — Description", type: "textarea", placeholder: "Badge de confiance sur votre profil" },
+      {
+        key: "pricing.benefit1.desc",
+        label: "Bénéfice 1 — Description",
+        type: "textarea",
+        placeholder: "Badge de confiance sur votre profil",
+      },
 
       { key: "pricing.benefit2.title", label: "Bénéfice 2 — Titre", type: "text", placeholder: "Analytics détaillés" },
-      { key: "pricing.benefit2.desc", label: "Bénéfice 2 — Description", type: "textarea", placeholder: "Suivez vos performances et optimisez" },
+      {
+        key: "pricing.benefit2.desc",
+        label: "Bénéfice 2 — Description",
+        type: "textarea",
+        placeholder: "Suivez vos performances et optimisez",
+      },
 
       { key: "pricing.benefit3.title", label: "Bénéfice 3 — Titre", type: "text", placeholder: "Support dédié" },
-      { key: "pricing.benefit3.desc", label: "Bénéfice 3 — Description", type: "textarea", placeholder: "Assistance prioritaire 7j/7" },
+      {
+        key: "pricing.benefit3.desc",
+        label: "Bénéfice 3 — Description",
+        type: "textarea",
+        placeholder: "Assistance prioritaire 7j/7",
+      },
 
       { key: "pricing.currency", label: "Devise affichée (ex: FG / GNF)", type: "text", placeholder: "FG" },
-      { key: "pricing.price_separator", label: "Séparateur prix/période (ex: /)", type: "text", placeholder: "/" },
+      {
+        key: "pricing.price_separator",
+        label: "Séparateur prix/période (ex: /)",
+        type: "text",
+        placeholder: "/",
+      },
     ],
   },
 
@@ -234,7 +397,12 @@ const SECTIONS: SectionDef[] = [
     description: "Brand, colonnes Services/Entreprise/Ressources/Contact + valeurs.",
     fields: [
       { key: "footer.brand.tagline", label: "Brand — Tagline", type: "text", placeholder: "Marketplace de services" },
-      { key: "footer.brand.desc", label: "Brand — Description", type: "textarea", placeholder: "Trouvez des prestataires fiables près de chez vous, en quelques minutes." },
+      {
+        key: "footer.brand.desc",
+        label: "Brand — Description",
+        type: "textarea",
+        placeholder: "Trouvez des prestataires fiables près de chez vous, en quelques minutes.",
+      },
 
       { key: "footer.services.title", label: "Colonne Services — Titre", type: "text", placeholder: "Services" },
       { key: "footer.services.more", label: "Services — Lien “Découvrir”", type: "text", placeholder: "Découvrir →" },
@@ -242,7 +410,12 @@ const SECTIONS: SectionDef[] = [
       { key: "footer.company.title", label: "Colonne Entreprise — Titre", type: "text", placeholder: "Entreprise" },
       { key: "footer.resources.title", label: "Colonne Ressources — Titre", type: "text", placeholder: "Ressources" },
       { key: "footer.contact.title", label: "Colonne Contact — Titre", type: "text", placeholder: "Contact" },
-      { key: "footer.contact.cta", label: "Contact — Phrase support", type: "text", placeholder: "Support sous 24–48h (jours ouvrés)." },
+      {
+        key: "footer.contact.cta",
+        label: "Contact — Phrase support",
+        type: "text",
+        placeholder: "Support sous 24–48h (jours ouvrés).",
+      },
 
       { key: "footer.contact.label_email", label: "Label Email", type: "text", placeholder: "Email" },
       { key: "footer.contact.label_phone", label: "Label Téléphone", type: "text", placeholder: "Téléphone" },
@@ -255,8 +428,18 @@ const SECTIONS: SectionDef[] = [
       { key: "footer.contact.button", label: "Bouton Contact support", type: "text", placeholder: "Contacter le support" },
 
       { key: "footer.bottom.rights", label: "Bas de page — Droits", type: "text", placeholder: "© 2026 ProxiServices. Tous droits réservés." },
-      { key: "legal.terms.title", label: "Lien bas — Conditions d’utilisation", type: "text", placeholder: "Conditions d’utilisation" },
-      { key: "legal.privacy.title", label: "Lien bas — Politique de confidentialité", type: "text", placeholder: "Politique de confidentialité" },
+      {
+        key: "legal.terms.title",
+        label: "Lien bas — Conditions d’utilisation",
+        type: "text",
+        placeholder: "Conditions d’utilisation",
+      },
+      {
+        key: "legal.privacy.title",
+        label: "Lien bas — Politique de confidentialité",
+        type: "text",
+        placeholder: "Politique de confidentialité",
+      },
       { key: "legal.cookies.title", label: "Lien bas — Cookies", type: "text", placeholder: "Cookies" },
     ],
   },
@@ -268,7 +451,12 @@ const SECTIONS: SectionDef[] = [
     description: "Contenus de la page Entreprise.",
     fields: [
       { key: "company.about.title", label: "À propos — Titre", type: "text", placeholder: "À propos" },
-      { key: "company.about.body", label: "À propos — Texte", type: "textarea", placeholder: "ProxiServices connecte clients et prestataires vérifiés..." },
+      {
+        key: "company.about.body",
+        label: "À propos — Texte",
+        type: "textarea",
+        placeholder: "ProxiServices connecte clients et prestataires vérifiés...",
+      },
       { key: "company.partners.title", label: "Partenaires — Titre", type: "text", placeholder: "Partenaires" },
       { key: "company.partners.body", label: "Partenaires — Texte", type: "textarea", placeholder: "Texte partenaires..." },
     ],
@@ -360,7 +548,13 @@ function badgeClasses(kind: "published" | "draft" | "missing" | "auto") {
   }
 }
 
-function Pill({ children, kind }: { children: React.ReactNode; kind: "published" | "draft" | "missing" | "auto" }) {
+function Pill({
+  children,
+  kind,
+}: {
+  children: React.ReactNode;
+  kind: "published" | "draft" | "missing" | "auto";
+}) {
   return (
     <span
       className={[
@@ -383,7 +577,9 @@ export default function AdminContent() {
   const activeLocale: Locale = mode === "en" ? "en" : "fr";
 
   const [q, setQ] = React.useState("");
-  const [activeSectionId, setActiveSectionId] = React.useState<string>(SECTIONS[0]?.id ?? "header");
+  const [activeSectionId, setActiveSectionId] = React.useState<string>(
+    SECTIONS[0]?.id ?? "header"
+  );
 
   // ✅ Déconnexion admin
   const [logoutLoading, setLogoutLoading] = React.useState(false);
@@ -425,7 +621,8 @@ export default function AdminContent() {
   });
 
   const rows = list.data ?? [];
-  const isBusy = list.isLoading || upsert.isPending || togglePublish.isPending || logoutLoading;
+  const isBusy =
+    list.isLoading || upsert.isPending || togglePublish.isPending || logoutLoading;
 
   const rowByKeyLocale = React.useMemo(() => {
     const map = new Map<string, SiteContentRow>();
@@ -438,18 +635,25 @@ export default function AdminContent() {
     [rowByKeyLocale]
   );
 
-  const [drafts, setDrafts] = React.useState<Record<Locale, Record<string, Record<string, string>>>>({
+  const [drafts, setDrafts] = React.useState<
+    Record<Locale, Record<string, Record<string, string>>>
+  >({
     fr: {},
     en: {},
   });
 
-  const [visibleByLocale, setVisibleByLocale] = React.useState<Record<Locale, Record<string, boolean>>>({
+  const [visibleByLocale, setVisibleByLocale] = React.useState<
+    Record<Locale, Record<string, boolean>>
+  >({
     fr: {},
     en: {},
   });
 
   React.useEffect(() => {
-    const nextDrafts: Record<Locale, Record<string, Record<string, string>>> = { fr: {}, en: {} };
+    const nextDrafts: Record<Locale, Record<string, Record<string, string>>> = {
+      fr: {},
+      en: {},
+    };
     const nextVisible: Record<Locale, Record<string, boolean>> = { fr: {}, en: {} };
 
     for (const loc of LOCALES) {
@@ -487,7 +691,8 @@ export default function AdminContent() {
     }));
   };
 
-  const sectionVisible = (loc: Locale, sectionId: string) => Boolean((visibleByLocale[loc] ?? {})[sectionId]);
+  const sectionVisible = (loc: Locale, sectionId: string) =>
+    Boolean((visibleByLocale[loc] ?? {})[sectionId]);
 
   const toggleSectionVisible = async (loc: Locale, sectionId: string, next: boolean) => {
     setVisibleByLocale((p) => ({ ...p, [loc]: { ...(p[loc] ?? {}), [sectionId]: next } }));
@@ -569,7 +774,10 @@ export default function AdminContent() {
         toast({ title: "Enregistré", description: `${section.title} (FR + EN) mis à jour.` });
       } else {
         await doSaveLocale(mode);
-        toast({ title: "Enregistré", description: `${section.title} (${mode.toUpperCase()}) mis à jour.` });
+        toast({
+          title: "Enregistré",
+          description: `${section.title} (${mode.toUpperCase()}) mis à jour.`,
+        });
       }
 
       await list.refetch();
@@ -729,7 +937,7 @@ export default function AdminContent() {
       setActiveSectionId(filteredSections[0]?.id ?? SECTIONS[0]?.id ?? "header");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
+  }, [q, filteredSections, activeSectionId]);
 
   const activeSection = React.useMemo(
     () => SECTIONS.find((s) => s.id === activeSectionId) ?? SECTIONS[0],
@@ -780,11 +988,18 @@ export default function AdminContent() {
         lastUpdated,
       };
     },
-    [drafts, getRow, mode]
+    [drafts, getRow, mode, visibleByLocale]
   );
 
+  // ✅ Responsive: panneau "Sections" en accordéon sur mobile
+  const [mobileSectionsOpen, setMobileSectionsOpen] = React.useState(false);
+  React.useEffect(() => {
+    // Quand on change de section, on referme le panneau en mobile (UX)
+    setMobileSectionsOpen(false);
+  }, [activeSectionId]);
+
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    <div className="p-3 sm:p-4 md:p-6 space-y-4">
       {/* Top Bar */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
@@ -792,54 +1007,84 @@ export default function AdminContent() {
             <h1 className="text-lg font-semibold">Contenu du site</h1>
             <Pill kind="published">{globalStats.published} publié(s)</Pill>
             <Pill kind="draft">{globalStats.draft} brouillon(s)</Pill>
-            {(globalStats.missingFR + globalStats.missingEN) > 0 ? (
-              <Pill kind="missing">{globalStats.missingFR + globalStats.missingEN} clé(s) manquante(s)</Pill>
+            {globalStats.missingFR + globalStats.missingEN > 0 ? (
+              <Pill kind="missing">
+                {globalStats.missingFR + globalStats.missingEN} clé(s) manquante(s)
+              </Pill>
             ) : null}
             {globalStats.autoEN > 0 ? <Pill kind="auto">{globalStats.autoEN} EN auto</Pill> : null}
           </div>
+
           <p className="text-sm text-muted-foreground mt-1">
-            Gère les textes visibles (Accueil, Recherche, Abonnements, Footer, Légal…). Les “manquants” sont des clés non créées en base.
+            Gère les textes visibles (Accueil, Recherche, Abonnements, Footer, Légal…). Les “manquants” sont des clés non
+            créées en base.
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        {/* ✅ Responsive actions: wrap + full width sur mobile */}
+        <div className="flex flex-col gap-2 lg:items-end">
           <Tabs value={mode} onValueChange={(v) => setMode(v as LocaleMode)}>
-            <TabsList className="grid grid-cols-3">
+            <TabsList className="grid grid-cols-3 w-full sm:w-auto">
               <TabsTrigger value="fr">FR</TabsTrigger>
               <TabsTrigger value="en">EN</TabsTrigger>
               <TabsTrigger value="compare">Comparer</TabsTrigger>
             </TabsList>
           </Tabs>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
             <Button
               type="button"
               variant="outline"
               onClick={() => window.open("/", "_blank", "noopener,noreferrer")}
               disabled={isBusy}
               title="Ouvrir le site"
+              className="w-full sm:w-auto"
             >
               <ExternalLink className="h-4 w-4 mr-2" />
               Retour au site
             </Button>
 
-            <Button type="button" variant="outline" onClick={() => list.refetch()} disabled={isBusy}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => list.refetch()}
+              disabled={isBusy}
+              className="w-full sm:w-auto"
+            >
               <RefreshCw className="h-4 w-4 mr-2" />
               Recharger
             </Button>
 
-            <Button type="button" variant="outline" onClick={initSections} disabled={isBusy}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={initSections}
+              disabled={isBusy}
+              className="w-full sm:w-auto"
+            >
               <ListPlus className="h-4 w-4 mr-2" />
               Initialiser
             </Button>
 
-            <Button type="button" variant="outline" onClick={repairMissingAll} disabled={isBusy}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={repairMissingAll}
+              disabled={isBusy}
+              className="w-full sm:w-auto"
+            >
               <Wrench className="h-4 w-4 mr-2" />
               Réparer clés manquantes
             </Button>
 
-            {/* ✅ Bouton Déconnexion */}
-            <Button type="button" variant="outline" onClick={handleLogout} disabled={isBusy} title="Se déconnecter">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleLogout}
+              disabled={isBusy}
+              title="Se déconnecter"
+              className="w-full sm:w-auto"
+            >
               <LogOut className="h-4 w-4 mr-2" />
               {logoutLoading ? "Déconnexion..." : "Déconnexion"}
             </Button>
@@ -847,10 +1092,167 @@ export default function AdminContent() {
         </div>
       </div>
 
-      {/* Main layout: 2 panels */}
+      {/* ✅ Mobile: panneau "Sections" en accordéon (évite l’écrasement) */}
+      <div className="lg:hidden">
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <LayoutList className="h-4 w-4" />
+                Sections
+              </CardTitle>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setMobileSectionsOpen((v) => !v)}
+                disabled={isBusy}
+              >
+                {mobileSectionsOpen ? "Masquer" : "Afficher"}
+              </Button>
+            </div>
+          </CardHeader>
+
+          {mobileSectionsOpen ? (
+            <CardContent className="pt-0 space-y-3">
+              <div className="relative">
+                <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                <Input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Rechercher (section, clé, texte)…"
+                  className="pl-9"
+                  disabled={isBusy}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{list.isLoading ? "Chargement…" : `${filteredSections.length} section(s)`}</span>
+                {list.isError ? (
+                  <span className="text-rose-700 inline-flex items-center gap-1">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Erreur
+                  </span>
+                ) : null}
+              </div>
+
+              {list.isError ? (
+                <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
+                  {(list.error as any)?.message ?? "Erreur de chargement"}
+                </div>
+              ) : null}
+
+              <div className="max-h-[45vh] overflow-auto pr-1 space-y-1">
+                {filteredSections.map((s) => {
+                  const info = sectionSummary(s);
+                  const isActive = s.id === activeSectionId;
+
+                  const visibleLabel =
+                    mode === "compare"
+                      ? info.visibleFR || info.visibleEN
+                        ? "Visible"
+                        : "Masqué"
+                      : mode === "en"
+                      ? info.visibleEN
+                        ? "Visible"
+                        : "Masqué"
+                      : info.visibleFR
+                      ? "Visible"
+                      : "Masqué";
+
+                  const missingLabel = (() => {
+                    if (info.missingLocales.size === 0) return null;
+                    const labels = Array.from(info.missingLocales).sort().join("+");
+                    return labels === "EN+FR" ? "FR+EN" : labels;
+                  })();
+
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setActiveSectionId(s.id)}
+                      className={[
+                        "w-full text-left rounded-lg border px-3 py-2 transition",
+                        isActive ? "border-slate-300 bg-slate-50" : "border-slate-200 hover:bg-slate-50",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-[11px] text-muted-foreground flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1">
+                              <Globe className="h-3.5 w-3.5" />
+                              {info.category}
+                            </span>
+                            <span className="text-muted-foreground/70">•</span>
+                            <span className="truncate">{s.location ?? "—"}</span>
+                          </div>
+
+                          <div className="mt-0.5 font-medium text-sm truncate">{s.title}</div>
+
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            <span
+                              className={[
+                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px]",
+                                visibleLabel === "Visible" ? badgeClasses("published") : badgeClasses("draft"),
+                              ].join(" ")}
+                            >
+                              {visibleLabel}
+                            </span>
+
+                            <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] border-slate-200 bg-white text-slate-700">
+                              {info.filledCount}/{info.totalCount} champs
+                            </span>
+
+                            {missingLabel ? (
+                              <span
+                                className={[
+                                  "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px]",
+                                  badgeClasses("missing"),
+                                ].join(" ")}
+                              >
+                                Manquant {missingLabel}
+                              </span>
+                            ) : null}
+
+                            {info.autoCount > 0 ? (
+                              <span
+                                className={[
+                                  "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px]",
+                                  badgeClasses("auto"),
+                                ].join(" ")}
+                              >
+                                EN auto {info.autoCount}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {info.lastUpdated ? (
+                            <div className="mt-1 text-[11px] text-muted-foreground">
+                              Dernière maj: {fmtDate(info.lastUpdated)}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <ChevronRight
+                          className={[
+                            "h-4 w-4 mt-1 shrink-0",
+                            isActive ? "text-slate-700" : "text-muted-foreground",
+                          ].join(" ")}
+                        />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          ) : null}
+        </Card>
+      </div>
+
+      {/* Main layout: desktop 2 panels */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* LEFT: navigation */}
-        <Card className="lg:col-span-4 xl:col-span-3">
+        {/* LEFT: navigation (desktop only) */}
+        <Card className="hidden lg:block lg:col-span-4 xl:col-span-3">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <LayoutList className="h-4 w-4" />
@@ -970,12 +1372,17 @@ export default function AdminContent() {
                         </div>
 
                         {info.lastUpdated ? (
-                          <div className="mt-1 text-[11px] text-muted-foreground">Dernière maj: {fmtDate(info.lastUpdated)}</div>
+                          <div className="mt-1 text-[11px] text-muted-foreground">
+                            Dernière maj: {fmtDate(info.lastUpdated)}
+                          </div>
                         ) : null}
                       </div>
 
                       <ChevronRight
-                        className={["h-4 w-4 mt-1 shrink-0", isActive ? "text-slate-700" : "text-muted-foreground"].join(" ")}
+                        className={[
+                          "h-4 w-4 mt-1 shrink-0",
+                          isActive ? "text-slate-700" : "text-muted-foreground",
+                        ].join(" ")}
                       />
                     </div>
                   </button>
@@ -986,11 +1393,13 @@ export default function AdminContent() {
         </Card>
 
         {/* RIGHT: editor */}
-        <Card className="lg:col-span-8 xl:col-span-9">
+        <Card className="lg:col-span-8 xl:col-span-9 min-w-0">
           <CardHeader className="pb-2">
             <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
               <div className="min-w-0">
-                <CardTitle className="text-base font-semibold">{activeSection?.title ?? "Section"}</CardTitle>
+                <CardTitle className="text-base font-semibold">
+                  {activeSection?.title ?? "Section"}
+                </CardTitle>
                 <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
                   <span className="inline-flex items-center gap-1">
                     <Globe className="h-3.5 w-3.5" />
@@ -1000,9 +1409,9 @@ export default function AdminContent() {
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                {/* Visibilité */}
-                <div className="flex flex-wrap items-center gap-2">
+              {/* ✅ Actions editor: wrap + full width sur mobile */}
+              <div className="flex flex-col gap-2 w-full md:w-auto">
+                <div className="flex flex-wrap items-center gap-3">
                   {mode === "compare" ? (
                     <>
                       <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
@@ -1010,7 +1419,9 @@ export default function AdminContent() {
                           type="checkbox"
                           className="h-4 w-4"
                           checked={sectionVisible("fr", activeSectionId)}
-                          onChange={(e) => toggleSectionVisible("fr", activeSectionId, e.target.checked)}
+                          onChange={(e) =>
+                            toggleSectionVisible("fr", activeSectionId, e.target.checked)
+                          }
                           disabled={isBusy}
                         />
                         Visible FR
@@ -1020,7 +1431,9 @@ export default function AdminContent() {
                           type="checkbox"
                           className="h-4 w-4"
                           checked={sectionVisible("en", activeSectionId)}
-                          onChange={(e) => toggleSectionVisible("en", activeSectionId, e.target.checked)}
+                          onChange={(e) =>
+                            toggleSectionVisible("en", activeSectionId, e.target.checked)
+                          }
                           disabled={isBusy}
                         />
                         Visible EN
@@ -1032,7 +1445,9 @@ export default function AdminContent() {
                         type="checkbox"
                         className="h-4 w-4"
                         checked={sectionVisible(mode, activeSectionId)}
-                        onChange={(e) => toggleSectionVisible(mode, activeSectionId, e.target.checked)}
+                        onChange={(e) =>
+                          toggleSectionVisible(mode, activeSectionId, e.target.checked)
+                        }
                         disabled={isBusy}
                       />
                       Visible sur le site
@@ -1040,15 +1455,28 @@ export default function AdminContent() {
                   )}
                 </div>
 
-                <Button type="button" variant="outline" onClick={() => repairMissingSection(activeSectionId)} disabled={isBusy}>
-                  <Wrench className="h-4 w-4 mr-2" />
-                  Créer clés manquantes
-                </Button>
+                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => repairMissingSection(activeSectionId)}
+                    disabled={isBusy}
+                    className="w-full sm:w-auto"
+                  >
+                    <Wrench className="h-4 w-4 mr-2" />
+                    Créer clés manquantes
+                  </Button>
 
-                <Button type="button" onClick={() => saveSection(activeSectionId)} disabled={isBusy} className="sm:w-auto w-full">
-                  <Save className="h-4 w-4 mr-2" />
-                  Enregistrer{mode === "compare" ? " FR + EN" : ""}
-                </Button>
+                  <Button
+                    type="button"
+                    onClick={() => saveSection(activeSectionId)}
+                    disabled={isBusy}
+                    className="w-full sm:w-auto"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    Enregistrer{mode === "compare" ? " FR + EN" : ""}
+                  </Button>
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -1070,7 +1498,11 @@ export default function AdminContent() {
                 </>
               ) : (
                 <span className="inline-flex items-center gap-1">
-                  {sectionVisible(mode, activeSectionId) ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                  {sectionVisible(mode, activeSectionId) ? (
+                    <Eye className="h-3.5 w-3.5" />
+                  ) : (
+                    <EyeOff className="h-3.5 w-3.5" />
+                  )}
                   {sectionVisible(mode, activeSectionId)
                     ? "Visible (publié à l’enregistrement)"
                     : "Masqué (brouillon à l’enregistrement)"}
@@ -1081,8 +1513,10 @@ export default function AdminContent() {
             {/* Fields */}
             <div className="space-y-4">
               {(activeSection?.fields ?? []).map((f) => {
-                const frVal = ((drafts.fr?.[activeSectionId] ?? {}) as Record<string, string>)[f.key] ?? "";
-                const enVal = ((drafts.en?.[activeSectionId] ?? {}) as Record<string, string>)[f.key] ?? "";
+                const frVal =
+                  ((drafts.fr?.[activeSectionId] ?? {}) as Record<string, string>)[f.key] ?? "";
+                const enVal =
+                  ((drafts.en?.[activeSectionId] ?? {}) as Record<string, string>)[f.key] ?? "";
 
                 const frRow = getRow(f.key, "fr");
                 const enRow = getRow(f.key, "en");
@@ -1140,8 +1574,11 @@ export default function AdminContent() {
                           {autoEN ? <Pill kind="auto">EN auto</Pill> : null}
                         </div>
 
+                        {/* ✅ important: overflow-x-auto pour la clé mono */}
                         <div className="mt-1 text-[12px] text-muted-foreground flex flex-wrap items-center gap-2">
-                          <span className="font-mono">{f.key}</span>
+                          <span className="font-mono max-w-full overflow-x-auto whitespace-nowrap">
+                            {f.key}
+                          </span>
                           <Button
                             type="button"
                             variant="ghost"
@@ -1156,7 +1593,9 @@ export default function AdminContent() {
                           </Button>
                         </div>
 
-                        {f.help ? <div className="mt-1 text-[12px] text-muted-foreground">{f.help}</div> : null}
+                        {f.help ? (
+                          <div className="mt-1 text-[12px] text-muted-foreground">{f.help}</div>
+                        ) : null}
                       </div>
 
                       {/* Meta right */}
@@ -1206,16 +1645,27 @@ export default function AdminContent() {
             </div>
 
             {/* Footer actions */}
-            <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-xs text-muted-foreground">
                 Astuce: “Créer clés manquantes” enlève “Manquant FR+EN”. Ensuite tu peux “Visible” + “Enregistrer”.
               </div>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => list.refetch()} disabled={isBusy}>
+              <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => list.refetch()}
+                  disabled={isBusy}
+                  className="w-full sm:w-auto"
+                >
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Recharger
                 </Button>
-                <Button type="button" onClick={() => saveSection(activeSectionId)} disabled={isBusy}>
+                <Button
+                  type="button"
+                  onClick={() => saveSection(activeSectionId)}
+                  disabled={isBusy}
+                  className="w-full sm:w-auto"
+                >
                   <Save className="h-4 w-4 mr-2" />
                   Enregistrer{mode === "compare" ? " FR + EN" : ""}
                 </Button>
@@ -1227,7 +1677,8 @@ export default function AdminContent() {
 
       {/* small bottom note */}
       <div className="text-[12px] text-muted-foreground">
-        Notes: “EN auto” correspond à <span className="font-mono">en_is_auto</span>. “non créé” signifie que la clé n’existe pas encore en base.
+        Notes: “EN auto” correspond à <span className="font-mono">en_is_auto</span>. “non créé” signifie que la clé
+        n’existe pas encore en base.
       </div>
     </div>
   );
