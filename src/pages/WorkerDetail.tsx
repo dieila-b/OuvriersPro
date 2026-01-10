@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import ReportAccountDialog from "@/components/ReportAccountDialog";
-import { Mail, Phone, MessageCircle, MapPin, Star, ExternalLink } from "lucide-react";
+import { Mail, Phone, MessageCircle, MapPin, Star, ExternalLink, AlertTriangle } from "lucide-react";
 
 type WorkerProfile = {
   id: string;
@@ -125,7 +125,7 @@ const WorkerDetail: React.FC = () => {
 
   const tReport = useMemo(() => {
     return {
-      report: language === "fr" ? "Signaler ce compte" : "Report this account",
+      report: language === "fr" ? "Signaler ce profil" : "Report this profile",
       loginToReport: language === "fr" ? "Se connecter pour signaler" : "Log in to report",
     };
   }, [language]);
@@ -153,7 +153,7 @@ const WorkerDetail: React.FC = () => {
     };
   }, []);
 
-  // Détecter le rôle (on le garde, mais on ne bloque plus le bouton dessus)
+  // Détecter le rôle (on le garde, mais on ne bloque pas le signalement dessus)
   useEffect(() => {
     let cancelled = false;
 
@@ -367,11 +367,8 @@ const WorkerDetail: React.FC = () => {
       ? Math.round((reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length) * 10) / 10
       : 0;
 
-  // ✅ FIX PRINCIPAL:
-  // On n’utilise PLUS viewerRole pour décider d’afficher le bouton.
-  // On affiche dès que l’utilisateur est connecté et que ce n’est pas son propre compte.
-  const canReportWorker =
-    Boolean(authUserId) && Boolean(worker?.user_id) && worker!.user_id !== authUserId;
+  // Affiche le signalement uniquement si connecté + pas son propre compte
+  const canReportWorker = Boolean(authUserId) && Boolean(worker?.user_id) && worker!.user_id !== authUserId;
 
   // -----------------------
   // Votes (op_review_votes)
@@ -550,7 +547,9 @@ const WorkerDetail: React.FC = () => {
 
       if (!clientProfileId) {
         throw new Error(
-          language === "fr" ? "Profil client introuvable. Veuillez réessayer." : "Client profile not found. Please try again."
+          language === "fr"
+            ? "Profil client introuvable. Veuillez réessayer."
+            : "Client profile not found. Please try again."
         );
       }
 
@@ -592,7 +591,11 @@ const WorkerDetail: React.FC = () => {
         );
       }
 
-      setSubmitSuccess(language === "fr" ? "Votre demande a été envoyée à cet ouvrier." : "Your request has been sent to this worker.");
+      setSubmitSuccess(
+        language === "fr"
+          ? "Votre demande a été envoyée à cet ouvrier."
+          : "Your request has been sent to this worker."
+      );
       setRequestType("Demande de devis");
       setApproxBudget("");
       setDesiredDate("");
@@ -618,7 +621,9 @@ const WorkerDetail: React.FC = () => {
       const user = authData?.user;
 
       if (authError || !user) {
-        throw new Error(language === "fr" ? "Vous devez être connecté pour laisser un avis." : "You must be logged in to leave a review.");
+        throw new Error(
+          language === "fr" ? "Vous devez être connecté pour laisser un avis." : "You must be logged in to leave a review."
+        );
       }
 
       const { data: newReview, error: insertReviewError } = await supabase
@@ -751,31 +756,7 @@ const WorkerDetail: React.FC = () => {
                 </div>
               </div>
 
-              {/* ✅ SIGNALER: affichage fiable */}
-              <div className="mt-4 flex justify-end">
-                {canReportWorker ? (
-                  <ReportAccountDialog
-                    reportedUserId={worker.user_id as string}
-                    reportedRole="worker"
-                    triggerLabel={tReport.report}
-                  />
-                ) : authUserId ? null : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => navigate("/login")}
-                    title={language === "fr" ? "Connectez-vous pour signaler ce compte" : "Log in to report this account"}
-                  >
-                    {tReport.loginToReport}
-                  </Button>
-                )}
-              </div>
-
-              {/* (optionnel) Debug discret si tu veux vérifier rapidement le rôle détecté :
-                  <div className="mt-2 text-[11px] text-slate-400">
-                    viewerRole: {String(viewerRole)} • authUserId: {String(authUserId)} • worker.user_id: {String(worker.user_id)}
-                  </div>
-              */}
+              {/* NOTE: On retire le bouton signalement ici pour l'avoir à l'endroit attendu (colonne droite). */}
             </div>
 
             {/* Google Maps */}
@@ -1002,7 +983,32 @@ const WorkerDetail: React.FC = () => {
           {/* Colonne droite */}
           <div className="w-full lg:w-[360px] space-y-4">
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-3">{language === "fr" ? "Coordonnées directes" : "Direct contact"}</h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-3">
+                {language === "fr" ? "Coordonnées directes" : "Direct contact"}
+              </h2>
+
+              {/* ✅ SIGNALER (au bon endroit, visible sur ta capture) */}
+              <div className="mb-3">
+                {canReportWorker ? (
+                  <ReportAccountDialog
+                    reportedUserId={worker.user_id as string}
+                    reportedRole="worker"
+                    triggerLabel={tReport.report}
+                  />
+                ) : authUserId ? null : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => navigate("/login")}
+                    title={language === "fr" ? "Connectez-vous pour signaler ce profil" : "Log in to report this profile"}
+                  >
+                    <AlertTriangle className="w-4 h-4 mr-2" />
+                    {tReport.loginToReport}
+                  </Button>
+                )}
+              </div>
+
               <div className="space-y-2 text-xs">
                 {worker.phone && (
                   <Button variant="outline" size="sm" className="w-full justify-start" asChild>
@@ -1032,7 +1038,9 @@ const WorkerDetail: React.FC = () => {
             </div>
 
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-1">{language === "fr" ? "Contacter cet ouvrier" : "Contact this worker"}</h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-1">
+                {language === "fr" ? "Contacter cet ouvrier" : "Contact this worker"}
+              </h2>
               <p className="text-xs text-slate-500 mb-3">
                 {language === "fr"
                   ? "Remplissez le formulaire ci-dessous pour être recontacté."
@@ -1060,7 +1068,9 @@ const WorkerDetail: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Votre email (facultatif)" : "Your email (optional)"}</label>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr" ? "Votre email (facultatif)" : "Your email (optional)"}
+                  </label>
                   <Input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} />
                 </div>
 
@@ -1078,12 +1088,16 @@ const WorkerDetail: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Budget approximatif (facultatif)" : "Approx. budget (optional)"}</label>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr" ? "Budget approximatif (facultatif)" : "Approx. budget (optional)"}
+                  </label>
                   <Input type="number" value={approxBudget} onChange={(e) => setApproxBudget(e.target.value)} placeholder="5000000" />
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Date souhaitée (facultatif)" : "Desired date (optional)"}</label>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr" ? "Date souhaitée (facultatif)" : "Desired date (optional)"}
+                  </label>
                   <Input type="date" value={desiredDate} onChange={(e) => setDesiredDate(e.target.value)} />
                 </div>
 
@@ -1129,7 +1143,9 @@ const WorkerDetail: React.FC = () => {
               </form>
 
               <p className="mt-3 text-[11px] text-slate-400">
-                {language === "fr" ? "Vos données sont uniquement transmises à ce professionnel." : "Your data is only shared with this professional."}
+                {language === "fr"
+                  ? "Vos données sont uniquement transmises à ce professionnel."
+                  : "Your data is only shared with this professional."}
               </p>
             </div>
           </div>
