@@ -26,7 +26,6 @@ type WorkerProfile = {
   hourly_rate: number | null;
   currency: string | null;
 
-  // ✅ Déjà présents dans votre table
   latitude: number | null;
   longitude: number | null;
 };
@@ -65,7 +64,7 @@ const WorkerDetail: React.FC = () => {
   const [loadingWorker, setLoadingWorker] = useState(true);
   const [workerError, setWorkerError] = useState<string | null>(null);
 
-  // Auth (pour voter / permissions)
+  // Auth
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [viewerRole, setViewerRole] = useState<ViewerRole>(null);
 
@@ -90,7 +89,7 @@ const WorkerDetail: React.FC = () => {
   const [newComment, setNewComment] = useState("");
   const [submitReviewLoading, setSubmitReviewLoading] = useState(false);
 
-  // Votes (sur reviews)
+  // Votes
   const [myVoteByReviewId, setMyVoteByReviewId] = useState<Record<string, VoteType | null>>({});
   const [countsByReviewId, setCountsByReviewId] = useState<
     Record<string, { like: number; useful: number; not_useful: number }>
@@ -108,8 +107,7 @@ const WorkerDetail: React.FC = () => {
       useful: language === "fr" ? "Utile" : "Useful",
       notUseful: language === "fr" ? "Pas utile" : "Not useful",
       mustLogin: language === "fr" ? "Connectez-vous pour réagir." : "Log in to react.",
-      voteError:
-        language === "fr" ? "Impossible d’enregistrer votre réaction." : "Unable to save your reaction.",
+      voteError: language === "fr" ? "Impossible d’enregistrer votre réaction." : "Unable to save your reaction.",
     };
   }, [language]);
 
@@ -122,6 +120,13 @@ const WorkerDetail: React.FC = () => {
           : "Approximate location / service area.",
       open: language === "fr" ? "Ouvrir dans Google Maps" : "Open in Google Maps",
       missing: language === "fr" ? "Localisation non renseignée." : "Location not provided.",
+    };
+  }, [language]);
+
+  const tReport = useMemo(() => {
+    return {
+      report: language === "fr" ? "Signaler ce compte" : "Report this account",
+      loginToReport: language === "fr" ? "Se connecter pour signaler" : "Log in to report",
     };
   }, [language]);
 
@@ -148,35 +153,9 @@ const WorkerDetail: React.FC = () => {
     };
   }, []);
 
-  /**
-   * ✅ Déterminer le rôle du viewer (client/worker) pour contrôler le signalement
-   *
-   * Problème courant: RLS bloque op_clients/op_ouvriers => viewerRole reste null.
-   * Solution: tenter d'abord op_users (self row), puis fallback vers op_clients/op_ouvriers.
-   * (Aucune modification UI/structure ailleurs.)
-   */
+  // Détecter le rôle (on le garde, mais on ne bloque plus le bouton dessus)
   useEffect(() => {
     let cancelled = false;
-
-    const normalizeRole = (raw: any): ViewerRole => {
-      const s = String(raw ?? "").toLowerCase().trim();
-      if (!s) return null;
-
-      // client / customer / particulier
-      if (s.includes("client") || s.includes("customer") || s.includes("particulier")) return "client";
-
-      // worker / ouvrier / prestataire / provider / seller
-      if (
-        s.includes("worker") ||
-        s.includes("ouvrier") ||
-        s.includes("prestataire") ||
-        s.includes("provider") ||
-        s.includes("seller")
-      )
-        return "worker";
-
-      return null;
-    };
 
     const detectRole = async () => {
       if (!authUserId) {
@@ -184,65 +163,41 @@ const WorkerDetail: React.FC = () => {
         return;
       }
 
-      // 0) tentative via op_users (souvent autorisé par RLS pour l'utilisateur courant)
       try {
-        const { data: u, error: uErr } = await supabase
-          .from("op_users")
-          .select("id, role, user_type, account_type")
-          .eq("id", authUserId)
+        const { data: clientRow, error: clientErr } = await supabase
+          .from("op_clients")
+          .select("id")
+          .eq("user_id", authUserId)
           .maybeSingle();
 
-        if (!cancelled && !uErr && u) {
-          const r =
-            normalizeRole((u as any).role) ||
-            normalizeRole((u as any).user_type) ||
-            normalizeRole((u as any).account_type);
+        if (cancelled) return;
 
-          if (r) {
-            setViewerRole(r);
-            return;
-          }
+        if (!clientErr && clientRow?.id) {
+          setViewerRole("client");
+          return;
         }
+
+        const { data: workerRow, error: workerErr } = await supabase
+          .from("op_ouvriers")
+          .select("id")
+          .eq("user_id", authUserId)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        if (!workerErr && workerRow?.id) {
+          setViewerRole("worker");
+          return;
+        }
+
+        setViewerRole(null);
       } catch (e) {
-        // op_users peut ne pas exister dans certains projets: on ignore et on fallback
-        console.warn("detectRole: op_users not available or blocked", e);
+        console.error("detectRole error", e);
+        setViewerRole(null);
       }
-
-      // 1) client ?
-      const { data: clientRow, error: clientErr } = await supabase
-        .from("op_clients")
-        .select("id")
-        .eq("user_id", authUserId)
-        .maybeSingle();
-
-      if (cancelled) return;
-
-      if (!clientErr && clientRow?.id) {
-        setViewerRole("client");
-        return;
-      }
-
-      // 2) worker ?
-      const { data: workerRow, error: workerErr } = await supabase
-        .from("op_ouvriers")
-        .select("id")
-        .eq("user_id", authUserId)
-        .maybeSingle();
-
-      if (cancelled) return;
-
-      if (!workerErr && workerRow?.id) {
-        setViewerRole("worker");
-        return;
-      }
-
-      setViewerRole(null);
     };
 
-    detectRole().catch((e) => {
-      console.error("detectRole error", e);
-      setViewerRole(null);
-    });
+    detectRole();
 
     return () => {
       cancelled = true;
@@ -372,18 +327,15 @@ const WorkerDetail: React.FC = () => {
     .filter(Boolean)
     .join(" • ");
 
-  // ✅ Localisation adresse (fallback si pas de lat/lng)
   const locationQuery = useMemo(() => {
     const parts = [worker?.district, worker?.commune, worker?.city, worker?.region, worker?.country].filter(Boolean);
     return parts.join(", ");
   }, [worker?.district, worker?.commune, worker?.city, worker?.region, worker?.country]);
 
-  // ✅ Utiliser lat/lng si disponibles
   const hasCoords = Number.isFinite(worker?.latitude as any) && Number.isFinite(worker?.longitude as any);
 
   const googleMapsUrl = useMemo(() => {
     if (hasCoords && worker?.latitude != null && worker?.longitude != null) {
-      // pin exact
       return `https://www.google.com/maps?q=${worker.latitude},${worker.longitude}`;
     }
     if (locationQuery) {
@@ -415,17 +367,11 @@ const WorkerDetail: React.FC = () => {
       ? Math.round((reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length) * 10) / 10
       : 0;
 
-  /**
-   * ✅ Règle: seul un client connecté peut signaler un ouvrier
-   * (pas d'anonyme, pas auto-signalement).
-   *
-   * NB: si worker.user_id est NULL, impossible de signaler (pas d'ID auth à cibler).
-   */
-  const canClientReportWorker =
-    Boolean(authUserId) &&
-    viewerRole === "client" &&
-    Boolean(worker?.user_id) &&
-    worker.user_id !== authUserId;
+  // ✅ FIX PRINCIPAL:
+  // On n’utilise PLUS viewerRole pour décider d’afficher le bouton.
+  // On affiche dès que l’utilisateur est connecté et que ce n’est pas son propre compte.
+  const canReportWorker =
+    Boolean(authUserId) && Boolean(worker?.user_id) && worker!.user_id !== authUserId;
 
   // -----------------------
   // Votes (op_review_votes)
@@ -604,9 +550,7 @@ const WorkerDetail: React.FC = () => {
 
       if (!clientProfileId) {
         throw new Error(
-          language === "fr"
-            ? "Profil client introuvable. Veuillez réessayer."
-            : "Client profile not found. Please try again."
+          language === "fr" ? "Profil client introuvable. Veuillez réessayer." : "Client profile not found. Please try again."
         );
       }
 
@@ -648,9 +592,7 @@ const WorkerDetail: React.FC = () => {
         );
       }
 
-      setSubmitSuccess(
-        language === "fr" ? "Votre demande a été envoyée à cet ouvrier." : "Your request has been sent to this worker."
-      );
+      setSubmitSuccess(language === "fr" ? "Votre demande a été envoyée à cet ouvrier." : "Your request has been sent to this worker.");
       setRequestType("Demande de devis");
       setApproxBudget("");
       setDesiredDate("");
@@ -676,9 +618,7 @@ const WorkerDetail: React.FC = () => {
       const user = authData?.user;
 
       if (authError || !user) {
-        throw new Error(
-          language === "fr" ? "Vous devez être connecté pour laisser un avis." : "You must be logged in to leave a review."
-        );
+        throw new Error(language === "fr" ? "Vous devez être connecté pour laisser un avis." : "You must be logged in to leave a review.");
       }
 
       const { data: newReview, error: insertReviewError } = await supabase
@@ -741,7 +681,6 @@ const WorkerDetail: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="max-w-6xl mx-auto px-4">
-        {/* ✅ bouton retour (ne dépend pas d'App.tsx) */}
         <button
           type="button"
           onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/search"))}
@@ -751,9 +690,7 @@ const WorkerDetail: React.FC = () => {
         </button>
 
         <div className="flex flex-col lg:flex-row gap-6">
-          {/* Colonne gauche */}
           <div className="flex-1 space-y-4">
-            {/* Header */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -782,12 +719,13 @@ const WorkerDetail: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Stats */}
                 <div className="grid grid-cols-3 gap-3 text-center text-xs">
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                     <div className="inline-flex items-center gap-1 text-amber-500">
                       <Star className="w-4 h-4 fill-amber-400" />
-                      <span className="text-sm font-semibold">{averageRating > 0 ? averageRating.toFixed(1) : "—"}</span>
+                      <span className="text-sm font-semibold">
+                        {averageRating > 0 ? averageRating.toFixed(1) : "—"}
+                      </span>
                     </div>
                     <div className="text-[11px] text-slate-500">{language === "fr" ? "avis" : "reviews"}</div>
                     <div className="text-[11px] text-slate-400">
@@ -797,31 +735,50 @@ const WorkerDetail: React.FC = () => {
 
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                     <div className="text-sm font-semibold text-slate-900">0</div>
-                    <div className="text-[11px] text-slate-500">{language === "fr" ? "ans d'expérience" : "years experience"}</div>
+                    <div className="text-[11px] text-slate-500">
+                      {language === "fr" ? "ans d'expérience" : "years experience"}
+                    </div>
                   </div>
 
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                     <div className="text-sm font-semibold text-slate-900">
-                      {worker.hourly_rate != null ? `${worker.hourly_rate.toLocaleString()} ${worker.currency || "GNF"}` : "—"}
+                      {worker.hourly_rate != null
+                        ? `${worker.hourly_rate.toLocaleString()} ${worker.currency || "GNF"}`
+                        : "—"}
                     </div>
                     <div className="text-[11px] text-slate-500">{language === "fr" ? "par heure" : "per hour"}</div>
                   </div>
                 </div>
               </div>
 
-              {/* ✅ Signaler le compte (UNIQUEMENT client connecté) */}
-              {canClientReportWorker && (
-                <div className="mt-4 flex justify-end">
+              {/* ✅ SIGNALER: affichage fiable */}
+              <div className="mt-4 flex justify-end">
+                {canReportWorker ? (
                   <ReportAccountDialog
                     reportedUserId={worker.user_id as string}
                     reportedRole="worker"
-                    triggerLabel={language === "fr" ? "Signaler ce compte" : "Report this account"}
+                    triggerLabel={tReport.report}
                   />
-                </div>
-              )}
+                ) : authUserId ? null : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => navigate("/login")}
+                    title={language === "fr" ? "Connectez-vous pour signaler ce compte" : "Log in to report this account"}
+                  >
+                    {tReport.loginToReport}
+                  </Button>
+                )}
+              </div>
+
+              {/* (optionnel) Debug discret si tu veux vérifier rapidement le rôle détecté :
+                  <div className="mt-2 text-[11px] text-slate-400">
+                    viewerRole: {String(viewerRole)} • authUserId: {String(authUserId)} • worker.user_id: {String(worker.user_id)}
+                  </div>
+              */}
             </div>
 
-            {/* ✅ Google Maps (lat/lng > adresse) */}
+            {/* Google Maps */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-1">{tMap.title}</h2>
               <p className="text-xs text-slate-500 mb-3">{tMap.subtitle}</p>
@@ -1024,7 +981,12 @@ const WorkerDetail: React.FC = () => {
                   onChange={(e) => setNewComment(e.target.value)}
                 />
 
-                <Button type="submit" size="sm" className="bg-pro-blue hover:bg-blue-700" disabled={submitReviewLoading || newRating === 0}>
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="bg-pro-blue hover:bg-blue-700"
+                  disabled={submitReviewLoading || newRating === 0}
+                >
                   {submitReviewLoading
                     ? language === "fr"
                       ? "Envoi de l’avis..."
@@ -1069,7 +1031,6 @@ const WorkerDetail: React.FC = () => {
               </div>
             </div>
 
-            {/* Formulaire contact (inchangé) */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-1">{language === "fr" ? "Contacter cet ouvrier" : "Contact this worker"}</h2>
               <p className="text-xs text-slate-500 mb-3">
