@@ -5,8 +5,6 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useNavigate, Link } from "react-router-dom";
-// ✅ IMPORTANT: on retire le sous-menu
-// import AdminNavTabs from "@/components/AdminNavTabs";
 
 import {
   Users,
@@ -61,7 +59,8 @@ type ChartData = {
 const shellBg =
   "min-h-screen bg-gradient-to-br from-slate-50 via-sky-50 to-indigo-50";
 
-const containerClass = "w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-10 py-6 md:py-10";
+const containerClass =
+  "w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-10 py-6 md:py-10";
 
 const cardClass =
   "bg-white/85 backdrop-blur border border-slate-200/60 rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)]";
@@ -84,7 +83,9 @@ function StatCard({
 }) {
   return (
     <div className={statCardBase}>
-      <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${gradient} opacity-70`} />
+      <div
+        className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${gradient} opacity-70`}
+      />
       <div className="relative flex items-center justify-between mb-3 gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-[.16em] text-slate-500">
@@ -111,10 +112,20 @@ const normalizePlan = (code: string | null | undefined): PlanKey => {
 
   if (!c) return "free";
 
-  if (c.includes("free") || c.includes("gratuit") || c === "plan_free" || c === "basic")
+  if (
+    c.includes("free") ||
+    c.includes("gratuit") ||
+    c === "plan_free" ||
+    c === "basic"
+  )
     return "free";
 
-  if (c.includes("month") || c.includes("mensuel") || c === "monthly" || c === "pro_monthly")
+  if (
+    c.includes("month") ||
+    c.includes("mensuel") ||
+    c === "monthly" ||
+    c === "pro_monthly"
+  )
     return "monthly";
 
   if (
@@ -214,17 +225,19 @@ const AdminDashboard: React.FC = () => {
     setError(null);
 
     try {
-      const [{ data: workersData, error: workersError }, { data: contactsData, error: contactsError }] =
-        await Promise.all([
-          supabase
-            .from("op_ouvriers")
-            .select("id, first_name, last_name, profession, status, created_at, plan_code")
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("op_ouvrier_contacts")
-            .select("id, worker_name, client_name, status, origin, created_at")
-            .order("created_at", { ascending: false }),
-        ]);
+      const [
+        { data: workersData, error: workersError },
+        { data: contactsData, error: contactsError },
+      ] = await Promise.all([
+        supabase
+          .from("op_ouvriers")
+          .select("id, first_name, last_name, profession, status, created_at, plan_code")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("op_ouvrier_contacts")
+          .select("id, worker_name, client_name, status, origin, created_at")
+          .order("created_at", { ascending: false }),
+      ]);
 
       if (workersError) {
         setError(
@@ -244,7 +257,11 @@ const AdminDashboard: React.FC = () => {
         });
       } else setContacts((contactsData as DbContactSummary[]) ?? []);
     } catch (e: any) {
-      setError(language === "fr" ? "Erreur inconnue lors du chargement." : "Unknown loading error.");
+      setError(
+        language === "fr"
+          ? "Erreur inconnue lors du chargement."
+          : "Unknown loading error."
+      );
       console.error(e);
     } finally {
       setLoading(false);
@@ -317,7 +334,8 @@ const AdminDashboard: React.FC = () => {
     for (const c of filteredContacts) {
       const dateStr = c.created_at.slice(0, 10);
       const created = new Date(c.created_at);
-      const diffDays = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
+      const diffDays =
+        (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
 
       if (dateStr === todayISO) contactsToday += 1;
       if (diffDays <= 7) contactsLast7 += 1;
@@ -357,7 +375,9 @@ const AdminDashboard: React.FC = () => {
       const today = new Date();
 
       for (let i = 6; i >= 0; i--) {
-        const d = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() - i));
+        const d = new Date(
+          Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() - i)
+        );
         const key = d.toISOString().slice(0, 10);
         const label =
           language === "fr"
@@ -372,11 +392,15 @@ const AdminDashboard: React.FC = () => {
         if (day) day.value += 1;
       }
 
-      const maxValue = days.reduce((max, x) => (x.value > max ? x.value : max), 0) || 1;
+      const maxValue =
+        days.reduce((max, x) => (x.value > max ? x.value : max), 0) || 1;
       return { points: days, maxValue };
     }
 
-    const weeksMap: Record<string, { label: string; key: string; value: number; orderKey: string }> = {};
+    const weeksMap: Record<
+      string,
+      { label: string; key: string; value: number; orderKey: string }
+    > = {};
     for (const c of filteredContacts) {
       const d = new Date(c.created_at);
       const { key, week } = getWeekKey(d);
@@ -387,10 +411,13 @@ const AdminDashboard: React.FC = () => {
       weeksMap[key].value += 1;
     }
 
-    let weeks = Object.values(weeksMap).sort((a, b) => a.orderKey.localeCompare(b.orderKey));
+    let weeks = Object.values(weeksMap).sort((a, b) =>
+      a.orderKey.localeCompare(b.orderKey)
+    );
     if (weeks.length > 8) weeks = weeks.slice(weeks.length - 8);
 
-    const maxValue = weeks.reduce((max, x) => (x.value > max ? x.value : max), 0) || 1;
+    const maxValue =
+      weeks.reduce((max, x) => (x.value > max ? x.value : max), 0) || 1;
     return { points: weeks, maxValue };
   }, [filteredContacts, chartMode, language]);
 
@@ -401,7 +428,9 @@ const AdminDashboard: React.FC = () => {
       const today = new Date();
 
       for (let i = 6; i >= 0; i--) {
-        const d = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() - i));
+        const d = new Date(
+          Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() - i)
+        );
         const key = d.toISOString().slice(0, 10);
         const label =
           language === "fr"
@@ -442,7 +471,9 @@ const AdminDashboard: React.FC = () => {
       if (w.status === "approved") weeksMeta[key].approved += 1;
     }
 
-    let weeksArr = Object.values(weeksMeta).sort((a, b) => a.orderKey.localeCompare(b.orderKey));
+    let weeksArr = Object.values(weeksMeta).sort((a, b) =>
+      a.orderKey.localeCompare(b.orderKey)
+    );
     if (weeksArr.length > 8) weeksArr = weeksArr.slice(weeksArr.length - 8);
 
     const points: ChartPoint[] = weeksArr.map((w) => {
@@ -453,7 +484,8 @@ const AdminDashboard: React.FC = () => {
     return { points, maxValue: 100 };
   }, [filteredWorkers, chartMode, language]);
 
-  const activeChartData = metricMode === "volume" ? volumeChartData : conversionChartData;
+  const activeChartData =
+    metricMode === "volume" ? volumeChartData : conversionChartData;
 
   const formatDateTime = (value: string) => {
     const d = new Date(value);
@@ -516,7 +548,9 @@ const AdminDashboard: React.FC = () => {
     dateFrom: language === "fr" ? "Du (filtre global)" : "From (global filter)",
     dateTo: language === "fr" ? "Au (filtre global)" : "To (global filter)",
     chartTitle:
-      language === "fr" ? "Évolution des demandes / conversions" : "Requests / conversions trend",
+      language === "fr"
+        ? "Évolution des demandes / conversions"
+        : "Requests / conversions trend",
     chartModeDaily: language === "fr" ? "Jour" : "Daily",
     chartModeWeekly: language === "fr" ? "Semaine" : "Weekly",
     metricModeVolume: language === "fr" ? "Volume" : "Volume",
@@ -558,7 +592,9 @@ const AdminDashboard: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-sm text-slate-500">
-          {language === "fr" ? "Vérification de vos droits..." : "Checking your permissions..."}
+          {language === "fr"
+            ? "Vérification de vos droits..."
+            : "Checking your permissions..."}
         </div>
       </div>
     );
@@ -570,7 +606,6 @@ const AdminDashboard: React.FC = () => {
     <div className={shellBg}>
       <div className={containerClass}>
         {/* ✅ Sous-menu supprimé : on garde uniquement le header AdminLayout */}
-        {/* <AdminNavTabs /> */}
 
         {/* Header + actions + filtres (responsive) */}
         <div className="flex flex-col gap-4 md:gap-5">
@@ -599,8 +634,14 @@ const AdminDashboard: React.FC = () => {
                 {text.clearDates}
               </Button>
 
-              <Button className="gap-2 bg-pro-blue hover:bg-blue-700" onClick={fetchDashboardData} disabled={loading}>
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              <Button
+                className="gap-2 bg-pro-blue hover:bg-blue-700"
+                onClick={fetchDashboardData}
+                disabled={loading}
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+                />
                 {text.refresh}
               </Button>
             </div>
@@ -609,12 +650,26 @@ const AdminDashboard: React.FC = () => {
           <div className={`${cardClass} p-3 sm:p-4`}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">{text.dateFrom}</label>
-                <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="bg-white" />
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  {text.dateFrom}
+                </label>
+                <Input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="bg-white"
+                />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">{text.dateTo}</label>
-                <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="bg-white" />
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  {text.dateTo}
+                </label>
+                <Input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="bg-white"
+                />
               </div>
             </div>
           </div>
@@ -691,27 +746,45 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         {/* ✅ Plans + liens */}
-        <div className={`mt-6 ${cardClass} p-4 sm:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4`}>
+        <div
+          className={`mt-6 ${cardClass} p-4 sm:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4`}
+        >
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-slate-800">
               {language === "fr" ? "Répartition des plans" : "Plans distribution"}
             </h2>
 
             <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass("free")}`}>
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass(
+                  "free"
+                )}`}
+              >
                 <span>{language === "fr" ? "Gratuit" : "Free"}</span>
                 <span className="font-semibold">{stats.planFree}</span>
               </span>
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass("monthly")}`}>
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass(
+                  "monthly"
+                )}`}
+              >
                 <span>{language === "fr" ? "Mensuel" : "Monthly"}</span>
                 <span className="font-semibold">{stats.planMonthly}</span>
               </span>
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass("yearly")}`}>
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass(
+                  "yearly"
+                )}`}
+              >
                 <span>{language === "fr" ? "Annuel" : "Yearly"}</span>
                 <span className="font-semibold">{stats.planYearly}</span>
               </span>
               {stats.planOther > 0 && (
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass("other")}`}>
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${planBadgeClass(
+                    "other"
+                  )}`}
+                >
                   <span>{language === "fr" ? "Autre" : "Other"}</span>
                   <span className="font-semibold">{stats.planOther}</span>
                 </span>
@@ -826,7 +899,8 @@ const AdminDashboard: React.FC = () => {
               ) : (
                 activeChartData.points.map((p) => {
                   const height = (p.value / activeChartData.maxValue) * 140;
-                  const labelValue = metricMode === "volume" ? p.value : `${Math.round(p.value)}%`;
+                  const labelValue =
+                    metricMode === "volume" ? p.value : `${Math.round(p.value)}%`;
 
                   const barClass =
                     metricMode === "volume"
@@ -853,10 +927,12 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Roadmap mobile (inchangé mais propre) */}
+          {/* Roadmap mobile */}
           <div className={`${cardClass} p-4 sm:p-5`}>
             <h2 className="text-sm font-semibold text-slate-800 mb-1">
-              {language === "fr" ? "Prochains développements mobile" : "Upcoming mobile features"}
+              {language === "fr"
+                ? "Prochains développements mobile"
+                : "Upcoming mobile features"}
             </h2>
             <p className="text-xs text-slate-500 mb-4">
               {language === "fr"
@@ -869,7 +945,9 @@ const AdminDashboard: React.FC = () => {
                 <span className="mt-[3px] h-2 w-2 rounded-full bg-emerald-500" />
                 <div>
                   <span className="font-semibold">
-                    {language === "fr" ? "Phase 1 – API / Back-end prêt pour mobile" : "Phase 1 – API / backend ready"}
+                    {language === "fr"
+                      ? "Phase 1 – API / Back-end prêt pour mobile"
+                      : "Phase 1 – API / backend ready"}
                   </span>
                   <div className="text-slate-500">
                     {language === "fr"
@@ -883,7 +961,9 @@ const AdminDashboard: React.FC = () => {
                 <span className="mt-[3px] h-2 w-2 rounded-full bg-amber-500" />
                 <div>
                   <span className="font-semibold">
-                    {language === "fr" ? "Phase 2 – App mobile ouvriers" : "Phase 2 – Workers mobile app"}
+                    {language === "fr"
+                      ? "Phase 2 – App mobile ouvriers"
+                      : "Phase 2 – Workers mobile app"}
                   </span>
                   <div className="text-slate-500">
                     {language === "fr"
@@ -897,7 +977,9 @@ const AdminDashboard: React.FC = () => {
                 <span className="mt-[3px] h-2 w-2 rounded-full bg-slate-400" />
                 <div>
                   <span className="font-semibold">
-                    {language === "fr" ? "Phase 3 – App mobile clients" : "Phase 3 – Clients mobile app"}
+                    {language === "fr"
+                      ? "Phase 3 – App mobile clients"
+                      : "Phase 3 – Clients mobile app"}
                   </span>
                   <div className="text-slate-500">
                     {language === "fr"
@@ -911,7 +993,9 @@ const AdminDashboard: React.FC = () => {
                 <span className="mt-[3px] h-2 w-2 rounded-full bg-sky-500" />
                 <div>
                   <span className="font-semibold">
-                    {language === "fr" ? "Phase 4 – Stats & reporting mobile" : "Phase 4 – Mobile analytics"}
+                    {language === "fr"
+                      ? "Phase 4 – Stats & reporting mobile"
+                      : "Phase 4 – Mobile analytics"}
                   </span>
                   <div className="text-slate-500">
                     {language === "fr"
@@ -944,7 +1028,9 @@ const AdminDashboard: React.FC = () => {
             )}
 
             {loading && (
-              <div className="text-sm text-slate-500">{language === "fr" ? "Chargement..." : "Loading..."}</div>
+              <div className="text-sm text-slate-500">
+                {language === "fr" ? "Chargement..." : "Loading..."}
+              </div>
             )}
 
             {!loading && recentWorkers.length > 0 && (
@@ -967,10 +1053,18 @@ const AdminDashboard: React.FC = () => {
                       </div>
 
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${workerStatusClass(w.status)}`}>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${workerStatusClass(
+                            w.status
+                          )}`}
+                        >
                           {workerStatusLabel(w.status)}
                         </span>
-                        <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full border ${planBadgeClass(w.plan_code)}`}>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full border ${planBadgeClass(
+                            w.plan_code
+                          )}`}
+                        >
                           {planLabel(w.plan_code, language)}
                         </span>
                       </div>
@@ -985,19 +1079,26 @@ const AdminDashboard: React.FC = () => {
           <div className={`${cardClass} p-4 sm:p-5`}>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-slate-800">{text.recentContacts}</h2>
-              <Link to="/admin/ouvrier-contacts" className="text-[11px] text-pro-blue hover:underline">
+              <Link
+                to="/admin/ouvrier-contacts"
+                className="text-[11px] text-pro-blue hover:underline"
+              >
                 {text.viewAll}
               </Link>
             </div>
 
             {recentContacts.length === 0 && !loading && (
               <div className="text-sm text-slate-500">
-                {language === "fr" ? "Aucune demande dans la période sélectionnée." : "No requests in selected period."}
+                {language === "fr"
+                  ? "Aucune demande dans la période sélectionnée."
+                  : "No requests in selected period."}
               </div>
             )}
 
             {loading && (
-              <div className="text-sm text-slate-500">{language === "fr" ? "Chargement..." : "Loading..."}</div>
+              <div className="text-sm text-slate-500">
+                {language === "fr" ? "Chargement..." : "Loading..."}
+              </div>
             )}
 
             {!loading && recentContacts.length > 0 && (
@@ -1027,7 +1128,6 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Footer spacing */}
         <div className="mt-10" />
       </div>
     </div>
