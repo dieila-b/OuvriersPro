@@ -4,9 +4,14 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
-const root = document.getElementById("root") as HTMLElement;
+// ✅ Sécurité si root absent
+const rootEl = document.getElementById("root");
+if (!rootEl) {
+  throw new Error("Root element #root not found");
+}
 
-ReactDOM.createRoot(root).render(
+ReactDOM.createRoot(rootEl).render(
+  // ✅ StrictMode OK (tu peux enlever si tu veux éviter le double render en dev)
   <React.StrictMode>
     <App />
   </React.StrictMode>
