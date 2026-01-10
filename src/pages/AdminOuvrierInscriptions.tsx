@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/components/ui/use-toast";
-import AdminNavTabs from "@/components/AdminNavTabs";
+
 import {
   Sparkles,
   BadgeCheck,
@@ -106,9 +106,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [statusFilter, setStatusFilter] = useState<WorkerStatus | "all">(
-    "pending"
-  );
+  const [statusFilter, setStatusFilter] = useState<WorkerStatus | "all">("pending");
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
@@ -248,8 +246,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
           .join(" ")
           .toLowerCase() || "";
 
-      const matchSearch =
-        !search || haystack.includes(search.trim().toLowerCase());
+      const matchSearch = !search || haystack.includes(search.trim().toLowerCase());
 
       const created = new Date(w.created_at);
       let matchDateFrom = true;
@@ -312,12 +309,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
   };
 
   const statusBadgeClass = (s: string | null | undefined) => {
-    if (s === "approved")
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    if (s === "rejected")
-      return "bg-rose-50 text-rose-700 border-rose-200";
-    if (s === "suspended")
-      return "bg-slate-100 text-slate-700 border-slate-300";
+    if (s === "approved") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (s === "rejected") return "bg-rose-50 text-rose-700 border-rose-200";
+    if (s === "suspended") return "bg-slate-100 text-slate-700 border-slate-300";
     return "bg-amber-50 text-amber-700 border-amber-200";
   };
 
@@ -332,12 +326,9 @@ const AdminOuvrierInscriptions: React.FC = () => {
 
   const planBadgeClass = (code: string | null | undefined) => {
     const c = code?.toLowerCase() || "";
-    if (["free", "gratuit"].includes(c))
-      return "bg-slate-50 text-slate-700 border-slate-200";
-    if (["monthly", "mensuel", "month"].includes(c))
-      return "bg-sky-50 text-sky-700 border-sky-200";
-    if (["yearly", "annuel", "annual"].includes(c))
-      return "bg-indigo-50 text-indigo-700 border-indigo-200";
+    if (["free", "gratuit"].includes(c)) return "bg-slate-50 text-slate-700 border-slate-200";
+    if (["monthly", "mensuel", "month"].includes(c)) return "bg-sky-50 text-sky-700 border-sky-200";
+    if (["yearly", "annuel", "annual"].includes(c)) return "bg-indigo-50 text-indigo-700 border-indigo-200";
     return "bg-slate-50 text-slate-400 border-slate-200";
   };
 
@@ -355,10 +346,8 @@ const AdminOuvrierInscriptions: React.FC = () => {
   };
 
   const paymentStatusBadgeClass = (s: string | null | undefined) => {
-    if (s === "paid")
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    if (s === "pending")
-      return "bg-amber-50 text-amber-700 border-amber-200";
+    if (s === "paid") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (s === "pending") return "bg-amber-50 text-amber-700 border-amber-200";
     return "bg-rose-50 text-rose-700 border-rose-200";
   };
 
@@ -488,10 +477,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
       console.error(error);
       toast({
         variant: "destructive",
-        title:
-          language === "fr"
-            ? "Erreur lors de la validation du paiement"
-            : "Error while confirming payment",
+        title: language === "fr" ? "Erreur lors de la validation du paiement" : "Error while confirming payment",
         description: error.message,
       });
     } else {
@@ -759,9 +745,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
       );
     } else {
       setWorkers((data as DbWorker[]) ?? []);
-      toast({
-        title: language === "fr" ? "Données actualisées" : "Data refreshed",
-      });
+      toast({ title: language === "fr" ? "Données actualisées" : "Data refreshed" });
     }
 
     setLoading(false);
@@ -836,8 +820,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
       ].map(escapeCsv)
     );
 
-    const csvContent =
-      headers.join(";") + "\n" + rows.map((r) => r.join(";")).join("\n");
+    const csvContent = headers.join(";") + "\n" + rows.map((r) => r.join(";")).join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -852,8 +835,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
 
     toast({
       title: language === "fr" ? "Export CSV créé" : "CSV export created",
-      description:
-        language === "fr" ? "Le fichier a été téléchargé." : "File downloaded.",
+      description: language === "fr" ? "Le fichier a été téléchargé." : "File downloaded.",
     });
   };
 
@@ -902,10 +884,10 @@ const AdminOuvrierInscriptions: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50 to-indigo-50">
       <div className="w-full px-3 sm:px-6 lg:px-10 py-6 md:py-10">
-        <AdminNavTabs />
+        {/* ✅ Sous-menu supprimé : on garde uniquement le header AdminLayout */}
 
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4 mt-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
               {text.title}
@@ -924,12 +906,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
             <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
               {text.refresh}
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportCsv}
-              disabled={!filtered.length}
-            >
+            <Button variant="outline" size="sm" onClick={exportCsv} disabled={!filtered.length}>
               {text.exportCsv}
             </Button>
           </div>
@@ -978,9 +955,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
               </label>
               <select
                 value={statusFilter}
-                onChange={(e) =>
-                  setStatusFilter(e.target.value as WorkerStatus | "all")
-                }
+                onChange={(e) => setStatusFilter(e.target.value as WorkerStatus | "all")}
                 className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="pending">{language === "fr" ? "En attente" : "Pending"}</option>
@@ -1048,15 +1023,8 @@ const AdminOuvrierInscriptions: React.FC = () => {
 
           {!loading &&
             filtered.map((w) => {
-              const fullName =
-                (w.first_name || "") + (w.last_name ? ` ${w.last_name}` : "");
-              const locationParts = [
-                w.country,
-                w.region,
-                w.city,
-                w.commune,
-                w.district,
-              ]
+              const fullName = (w.first_name || "") + (w.last_name ? ` ${w.last_name}` : "");
+              const locationParts = [w.country, w.region, w.city, w.commune, w.district]
                 .filter(Boolean)
                 .join(" • ");
               const needsPayment = requiresPayment(w.plan_code);
@@ -1081,16 +1049,11 @@ const AdminOuvrierInscriptions: React.FC = () => {
                     <div className="text-[11px] font-semibold text-slate-500 uppercase">
                       {text.colWorker}
                     </div>
-                    <div className="font-semibold text-slate-900">
-                      {fullName || "—"}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {w.profession || ""}
-                    </div>
+                    <div className="font-semibold text-slate-900">{fullName || "—"}</div>
+                    <div className="text-xs text-slate-500">{w.profession || ""}</div>
                     {w.years_experience != null && (
                       <div className="text-xs text-slate-500">
-                        {w.years_experience}{" "}
-                        {language === "fr" ? "ans d'expérience" : "years of experience"}
+                        {w.years_experience} {language === "fr" ? "ans d'expérience" : "years of experience"}
                       </div>
                     )}
                   </div>
@@ -1108,16 +1071,12 @@ const AdminOuvrierInscriptions: React.FC = () => {
                       <MapPin className="h-3.5 w-3.5" />
                       {text.colLocation}
                     </div>
-                    <div className="text-xs text-slate-500">
-                      {locationParts || "—"}
-                    </div>
+                    <div className="text-xs text-slate-500">{locationParts || "—"}</div>
                   </div>
 
                   <div className="mb-2 flex flex-wrap gap-2 items-start">
                     <div>
-                      <div className="text-[11px] font-semibold text-slate-500 uppercase">
-                        {text.colPlan}
-                      </div>
+                      <div className="text-[11px] font-semibold text-slate-500 uppercase">{text.colPlan}</div>
                       <span
                         className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${planBadgeClass(
                           w.plan_code
@@ -1167,9 +1126,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
                       size="sm"
                       variant="outline"
                       disabled={
-                        actionLoadingId === w.id ||
-                        w.status === "approved" ||
-                        w.status === "suspended"
+                        actionLoadingId === w.id || w.status === "approved" || w.status === "suspended"
                       }
                       onClick={() => handleValidate(w)}
                     >
@@ -1220,30 +1177,14 @@ const AdminOuvrierInscriptions: React.FC = () => {
             <table className="min-w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">
-                    {text.colDate}
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">
-                    {text.colWorker}
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">
-                    {text.colContact}
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">
-                    {text.colLocation}
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">
-                    {text.colPlan}
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">
-                    {text.colPayment}
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">
-                    {text.colStatus}
-                  </th>
-                  <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">
-                    {text.colActions}
-                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">{text.colDate}</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">{text.colWorker}</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">{text.colContact}</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">{text.colLocation}</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">{text.colPlan}</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">{text.colPayment}</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">{text.colStatus}</th>
+                  <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">{text.colActions}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1265,35 +1206,22 @@ const AdminOuvrierInscriptions: React.FC = () => {
 
                 {!loading &&
                   filtered.map((w) => {
-                    const fullName =
-                      (w.first_name || "") + (w.last_name ? ` ${w.last_name}` : "");
-                    const locationParts = [
-                      w.country,
-                      w.region,
-                      w.city,
-                      w.commune,
-                      w.district,
-                    ]
+                    const fullName = (w.first_name || "") + (w.last_name ? ` ${w.last_name}` : "");
+                    const locationParts = [w.country, w.region, w.city, w.commune, w.district]
                       .filter(Boolean)
                       .join(" • ");
                     const needsPayment = requiresPayment(w.plan_code);
 
                     return (
-                      <tr
-                        key={w.id}
-                        className="border-t border-slate-100 hover:bg-slate-50/60"
-                      >
-                        <td className="px-4 py-3 align-top text-slate-700 whitespace-nowrap">
-                          {formatDateTime(w.created_at)}
-                        </td>
+                      <tr key={w.id} className="border-t border-slate-100 hover:bg-slate-50/60">
+                        <td className="px-4 py-3 align-top text-slate-700 whitespace-nowrap">{formatDateTime(w.created_at)}</td>
 
                         <td className="px-4 py-3 align-top text-slate-800">
                           <div className="font-semibold">{fullName || "—"}</div>
                           <div className="text-xs text-slate-500">{w.profession || ""}</div>
                           {w.years_experience != null && (
                             <div className="text-xs text-slate-500">
-                              {w.years_experience}{" "}
-                              {language === "fr" ? "ans d'expérience" : "years of experience"}
+                              {w.years_experience} {language === "fr" ? "ans d'expérience" : "years of experience"}
                             </div>
                           )}
                         </td>
@@ -1375,11 +1303,7 @@ const AdminOuvrierInscriptions: React.FC = () => {
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={
-                              actionLoadingId === w.id ||
-                              w.status === "approved" ||
-                              w.status === "suspended"
-                            }
+                            disabled={actionLoadingId === w.id || w.status === "approved" || w.status === "suspended"}
                             onClick={() => handleValidate(w)}
                           >
                             {language === "fr" ? "Validé" : "Approve"}
