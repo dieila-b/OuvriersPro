@@ -2,6 +2,7 @@
 import * as React from "react";
 import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ import {
   Globe,
   AlertTriangle,
   Wrench,
+  LogOut,
 } from "lucide-react";
 
 type Locale = "fr" | "en";
@@ -373,6 +375,7 @@ function Pill({ children, kind }: { children: React.ReactNode; kind: "published"
 
 export default function AdminContent() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const upsert = useUpsertSiteContent();
   const togglePublish = useTogglePublishSiteContent();
 
@@ -381,6 +384,22 @@ export default function AdminContent() {
 
   const [q, setQ] = React.useState("");
   const [activeSectionId, setActiveSectionId] = React.useState<string>(SECTIONS[0]?.id ?? "header");
+
+  // ✅ Déconnexion admin
+  const [logoutLoading, setLogoutLoading] = React.useState(false);
+  const handleLogout = async () => {
+    setLogoutLoading(true);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      navigate("/", { replace: true });
+    } catch (e) {
+      console.error("admin logout error", e);
+      navigate("/", { replace: true });
+    } finally {
+      setLogoutLoading(false);
+    }
+  };
 
   const ALL_KEYS = React.useMemo(
     () => Array.from(new Set(SECTIONS.flatMap((s) => s.fields.map((f) => f.key)))).sort(),
@@ -406,12 +425,13 @@ export default function AdminContent() {
   });
 
   const rows = list.data ?? [];
-  const isBusy = list.isLoading || upsert.isPending || togglePublish.isPending;
+  const isBusy = list.isLoading || upsert.isPending || togglePublish.isPending || logoutLoading;
 
   const rowByKeyLocale = React.useMemo(() => {
     const map = new Map<string, SiteContentRow>();
     for (const r of rows) map.set(`${r.key}__${r.locale}`, r);
     return map;
+  emphasizes byKeyLocale
   }, [rows]);
 
   const getRow = React.useCallback(
@@ -477,8 +497,6 @@ export default function AdminContent() {
       const section = SECTIONS.find((s) => s.id === sectionId);
       if (!section) return;
 
-      // Important: on ne peut publier/dépublier que ce qui existe.
-      // Si des clés manquent, elles resteront "manquantes" tant qu'elles ne sont pas créées.
       const tasks: Promise<any>[] = [];
       for (const f of section.fields) {
         const row = getRow(f.key, loc);
@@ -491,11 +509,6 @@ export default function AdminContent() {
     }
   };
 
-  /**
-   * ✅ Crée les clés manquantes (FR/EN) pour une section (ou toutes)
-   * - valeur = ""
-   * - is_published = false par défaut (ne force pas la visibilité)
-   */
   const ensureKeysExist = async (opts: { sectionId?: string; locales?: Locale[] }) => {
     const locales = opts.locales ?? LOCALES;
     const sections = opts.sectionId ? SECTIONS.filter((s) => s.id === opts.sectionId) : SECTIONS;
@@ -529,14 +542,12 @@ export default function AdminContent() {
     if (!section) return;
 
     try {
-      // ✅ 1) On crée d'abord les clés manquantes pour éviter les "Manquant FR+EN"
       if (mode === "compare") {
         await ensureKeysExist({ sectionId, locales: ["fr", "en"] });
       } else {
         await ensureKeysExist({ sectionId, locales: [mode] });
       }
 
-      // ✅ 2) Ensuite on enregistre les valeurs
       const doSaveLocale = async (loc: Locale) => {
         const visible = sectionVisible(loc, sectionId);
         const values = ((drafts[loc] ?? {})[sectionId] ?? {}) as Record<string, string>;
@@ -662,7 +673,6 @@ export default function AdminContent() {
     }
   };
 
-  // ✅ "manquant" = uniquement si la clé n'existe pas (row absent)
   const globalStats = React.useMemo(() => {
     let published = 0;
     let draft = 0;
@@ -828,6 +838,12 @@ export default function AdminContent() {
               <Wrench className="h-4 w-4 mr-2" />
               Réparer clés manquantes
             </Button>
+
+            {/* ✅ Bouton Déconnexion */}
+            <Button type="button" variant="outline" onClick={handleLogout} disabled={isBusy} title="Se déconnecter">
+              <LogOut className="h-4 w-4 mr-2" />
+              {logoutLoading ? "Déconnexion..." : "Déconnexion"}
+            </Button>
           </div>
         </div>
       </div>
@@ -960,9 +976,7 @@ export default function AdminContent() {
                       </div>
 
                       <ChevronRight
-                        className={["h-4 w-4 mt-1 shrink-0", isActive ? "text-slate-700" : "text-muted-foreground"].join(
-                          " "
-                        )}
+                        className={["h-4 w-4 mt-1 shrink-0", isActive ? "text-slate-700" : "text-muted-foreground"].join(" ")}
                       />
                     </div>
                   </button>
