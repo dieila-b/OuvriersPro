@@ -15,7 +15,7 @@ import ContactModal from "@/components/contact/ContactModal";
 
 const Header = () => {
   const { t, language, setLanguage } = useLanguage();
-  const { user, isAdmin, isWorker } = useAuthProfile();
+  const { user, isWorker } = useAuthProfile(); // ✅ on ne link plus l'admin depuis le header
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const [contactOpen, setContactOpen] = useState(false);
@@ -46,12 +46,16 @@ const Header = () => {
     return cms("header.btn_login", "Se connecter", "Sign in");
   }, [user, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * ✅ IMPORTANT:
+   * - On NE redirige PLUS vers /admin/dashboard depuis le header.
+   * - L’admin reste accessible UNIQUEMENT via /admin (URL directe).
+   */
   const accountPath = useMemo(() => {
     if (!user) return "/mon-compte";
-    if (isAdmin) return "/admin/dashboard";
     if (isWorker) return "/espace-ouvrier";
     return "/espace-client";
-  }, [user, isAdmin, isWorker]);
+  }, [user, isWorker]);
 
   const becomeProviderLabel = useMemo(() => {
     return cms("header.btn_become_provider", "Devenir Prestataire", "Become a Provider");
@@ -89,23 +93,12 @@ const Header = () => {
               <div className="hidden md:flex min-w-0 items-center gap-2">
                 {/* ✅ Nouveau bouton : Devenir Prestataire */}
                 <Link to="/forfaits" className="min-w-0">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-full whitespace-nowrap"
-                  >
+                  <Button variant="outline" size="sm" className="rounded-full whitespace-nowrap">
                     {becomeProviderLabel}
                   </Button>
                 </Link>
 
-                {isAdmin && (
-                  <Link
-                    to="/admin/dashboard"
-                    className="inline-flex items-center rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-colors whitespace-nowrap"
-                  >
-                    {cms("header.admin_badge", "Admin", "Admin")}
-                  </Link>
-                )}
+                {/* ❌ Bouton Admin retiré (accès uniquement via /admin en URL directe) */}
 
                 <Link to={accountPath} className="min-w-0">
                   <Button
@@ -145,11 +138,7 @@ const Header = () => {
               <div className="md:hidden min-w-0 flex items-center gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-full flex items-center gap-1 whitespace-nowrap"
-                    >
+                    <Button variant="outline" size="sm" className="rounded-full flex items-center gap-1 whitespace-nowrap">
                       <Languages className="w-4 h-4" />
                       <span className="uppercase">{language}</span>
                     </Button>
@@ -211,16 +200,7 @@ const Header = () => {
                     <span className="truncate font-medium">{becomeProviderLabel}</span>
                   </Link>
 
-                  {isAdmin && (
-                    <Link
-                      to="/admin/dashboard"
-                      onClick={() => setMobileOpen(false)}
-                      className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue min-w-0"
-                    >
-                      <User className="w-4 h-4 flex-shrink-0" />
-                      <span className="truncate">{cms("header.admin_badge", "Admin", "Admin")}</span>
-                    </Link>
-                  )}
+                  {/* ❌ Bouton Admin retiré (accès uniquement via /admin en URL directe) */}
 
                   <div className="pt-2">
                     <Link to={accountPath} onClick={() => setMobileOpen(false)}>
