@@ -26,6 +26,7 @@ type WorkerProfile = {
   hourly_rate: number | null;
   currency: string | null;
 
+  // ✅ Déjà présents dans votre table
   latitude: number | null;
   longitude: number | null;
 };
@@ -147,24 +148,9 @@ const WorkerDetail: React.FC = () => {
     };
   }, []);
 
-  /**
-   * ✅ Déterminer le rôle du viewer (client/worker)
-   * Priorité:
-   * 1) op_users (sur SA propre ligne) => généralement autorisé par RLS
-   * 2) fallback op_clients
-   * 3) fallback op_ouvriers
-   */
+  // ✅ Déterminer le rôle du viewer (client/worker) pour contrôler le signalement
   useEffect(() => {
     let cancelled = false;
-
-    const normalizeRole = (raw: any): ViewerRole => {
-      const s = String(raw ?? "").toLowerCase().trim();
-      if (!s) return null;
-      // tolérant multi-libellés
-      if (s.includes("client") || s.includes("particulier") || s.includes("customer")) return "client";
-      if (s.includes("worker") || s.includes("ouvrier") || s.includes("prestataire") || s.includes("seller")) return "worker";
-      return null;
-    };
 
     const detectRole = async () => {
       if (!authUserId) {
@@ -172,31 +158,7 @@ const WorkerDetail: React.FC = () => {
         return;
       }
 
-      // 1) via op_users (plus fiable avec RLS)
-      try {
-        const { data: u, error: uErr } = await supabase
-          .from("op_users")
-          .select("id, role, user_type, account_type")
-          .eq("id", authUserId)
-          .maybeSingle();
-
-        if (!cancelled) {
-          if (!uErr && u) {
-            const role1 = normalizeRole((u as any).role);
-            const role2 = normalizeRole((u as any).user_type);
-            const role3 = normalizeRole((u as any).account_type);
-            const resolved = role1 || role2 || role3;
-            if (resolved) {
-              setViewerRole(resolved);
-              return;
-            }
-          }
-        }
-      } catch (e) {
-        console.error("detectRole op_users error", e);
-      }
-
-      // 2) fallback client ?
+      // 1) client ?
       const { data: clientRow, error: clientErr } = await supabase
         .from("op_clients")
         .select("id")
@@ -205,12 +167,18 @@ const WorkerDetail: React.FC = () => {
 
       if (cancelled) return;
 
-      if (!clientErr && clientRow?.id) {
+      if (clientErr) {
+        console.error("detectRole client error", clientErr);
+        setViewerRole(null);
+        return;
+      }
+
+      if (clientRow?.id) {
         setViewerRole("client");
         return;
       }
 
-      // 3) fallback worker ?
+      // 2) worker ?
       const { data: workerRow, error: workerErr } = await supabase
         .from("op_ouvriers")
         .select("id")
@@ -219,12 +187,13 @@ const WorkerDetail: React.FC = () => {
 
       if (cancelled) return;
 
-      if (!workerErr && workerRow?.id) {
-        setViewerRole("worker");
+      if (workerErr) {
+        console.error("detectRole worker error", workerErr);
+        setViewerRole(null);
         return;
       }
 
-      setViewerRole(null);
+      setViewerRole(workerRow?.id ? "worker" : null);
     };
 
     detectRole().catch((e) => {
@@ -360,15 +329,18 @@ const WorkerDetail: React.FC = () => {
     .filter(Boolean)
     .join(" • ");
 
+  // ✅ Localisation adresse (fallback si pas de lat/lng)
   const locationQuery = useMemo(() => {
     const parts = [worker?.district, worker?.commune, worker?.city, worker?.region, worker?.country].filter(Boolean);
     return parts.join(", ");
   }, [worker?.district, worker?.commune, worker?.city, worker?.region, worker?.country]);
 
+  // ✅ Utiliser lat/lng si disponibles
   const hasCoords = Number.isFinite(worker?.latitude as any) && Number.isFinite(worker?.longitude as any);
 
   const googleMapsUrl = useMemo(() => {
     if (hasCoords && worker?.latitude != null && worker?.longitude != null) {
+      // pin exact
       return `https://www.google.com/maps?q=${worker.latitude},${worker.longitude}`;
     }
     if (locationQuery) {
@@ -400,13 +372,7 @@ const WorkerDetail: React.FC = () => {
       ? Math.round((reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length) * 10) / 10
       : 0;
 
-  /**
-   * ✅ Règle: seul un client connecté peut signaler un ouvrier
-   * (et pas auto-signalement)
-   *
-   * NOTE: Si worker.user_id est NULL, alors signalement impossible (pas d’ID user à signaler).
-   * Assurez-vous que op_ouvriers.user_id est bien renseigné à l’inscription.
-   */
+  // ✅ Règle: seul un client connecté peut signaler un ouvrier (pas d'ouvrier->ouvrier, pas d'anonyme)
   const canClientReportWorker =
     Boolean(authUserId) &&
     viewerRole === "client" &&
@@ -727,6 +693,7 @@ const WorkerDetail: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="max-w-6xl mx-auto px-4">
+        {/* ✅ bouton retour (ne dépend pas d'App.tsx) */}
         <button
           type="button"
           onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/search"))}
@@ -736,7 +703,9 @@ const WorkerDetail: React.FC = () => {
         </button>
 
         <div className="flex flex-col lg:flex-row gap-6">
+          {/* Colonne gauche */}
           <div className="flex-1 space-y-4">
+            {/* Header */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -765,6 +734,7 @@ const WorkerDetail: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Stats */}
                 <div className="grid grid-cols-3 gap-3 text-center text-xs">
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                     <div className="inline-flex items-center gap-1 text-amber-500">
@@ -779,16 +749,12 @@ const WorkerDetail: React.FC = () => {
 
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                     <div className="text-sm font-semibold text-slate-900">0</div>
-                    <div className="text-[11px] text-slate-500">
-                      {language === "fr" ? "ans d'expérience" : "years experience"}
-                    </div>
+                    <div className="text-[11px] text-slate-500">{language === "fr" ? "ans d'expérience" : "years experience"}</div>
                   </div>
 
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                     <div className="text-sm font-semibold text-slate-900">
-                      {worker.hourly_rate != null
-                        ? `${worker.hourly_rate.toLocaleString()} ${worker.currency || "GNF"}`
-                        : "—"}
+                      {worker.hourly_rate != null ? `${worker.hourly_rate.toLocaleString()} ${worker.currency || "GNF"}` : "—"}
                     </div>
                     <div className="text-[11px] text-slate-500">{language === "fr" ? "par heure" : "per hour"}</div>
                   </div>
@@ -805,22 +771,9 @@ const WorkerDetail: React.FC = () => {
                   />
                 </div>
               )}
-
-              {/* (Optionnel) aide de debug visuelle si besoin :
-                  Décommentez temporairement pour voir le rôle détecté.
-              */}
-              {/*
-              <div className="mt-3 text-[11px] text-slate-400">
-                authUserId: {String(authUserId)} • viewerRole: {String(viewerRole)} • worker.user_id: {String(worker.user_id)}
-              </div>
-              */}
             </div>
 
-            {/* ... le reste de votre fichier est inchangé ... */}
-            {/* Pour rester fidèle à votre demande "prêt à coller", je laisse tout le reste identique
-                à ce que vous aviez fourni, sans suppression fonctionnelle. */}
-
-            {/* ✅ Google Maps */}
+            {/* ✅ Google Maps (lat/lng > adresse) */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-1">{tMap.title}</h2>
               <p className="text-xs text-slate-500 mb-3">{tMap.subtitle}</p>
@@ -907,11 +860,136 @@ const WorkerDetail: React.FC = () => {
               </div>
             </div>
 
-            {/* Avis clients + contact etc... (inchangé dans votre code original) */}
-            {/* ... */}
+            {/* Avis clients */}
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-800 mb-1">{language === "fr" ? "Avis clients" : "Customer reviews"}</h2>
+
+              {reviewsError && (
+                <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{reviewsError}</div>
+              )}
+
+              <div className="flex items-center gap-2 mb-3 text-sm">
+                <div className="inline-flex items-center gap-1 text-amber-500">
+                  <Star className="w-4 h-4 fill-amber-400" />
+                  <span className="font-semibold">{averageRating > 0 ? averageRating.toFixed(1) : "—"}</span>
+                </div>
+                <span className="text-xs text-slate-500">
+                  {reviews.length} {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
+                </span>
+              </div>
+
+              {voteError && (
+                <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{voteError}</div>
+              )}
+
+              <div className="space-y-3 mb-4">
+                {reviewsLoading && (
+                  <div className="text-xs text-slate-500">{language === "fr" ? "Chargement des avis..." : "Loading reviews..."}</div>
+                )}
+
+                {!reviewsLoading && reviews.length === 0 && (
+                  <div className="text-xs text-slate-500">{language === "fr" ? "Aucun avis pour le moment." : "No review yet."}</div>
+                )}
+
+                {!reviewsLoading &&
+                  reviews.map((r) => {
+                    const myVote = myVoteByReviewId[r.id] ?? null;
+                    const counts = countsByReviewId[r.id] ?? { like: 0, useful: 0, not_useful: 0 };
+
+                    return (
+                      <div key={r.id} className="border border-slate-100 rounded-lg px-3 py-2 text-xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-slate-800">{r.client_name || "Client"}</span>
+                          <span className="text-[11px] text-slate-400">
+                            {new Date(r.created_at).toLocaleDateString(language === "fr" ? "fr-FR" : "en-GB")}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1 mb-1">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`w-3 h-3 ${(r.rating || 0) > i ? "text-amber-500 fill-amber-400" : "text-slate-200"}`}
+                            />
+                          ))}
+                        </div>
+
+                        {r.comment && <p className="text-slate-700 whitespace-pre-line">{r.comment}</p>}
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant={myVote === "like" ? "default" : "outline"}
+                            className="h-8 px-3 text-xs"
+                            onClick={() => toggleVote(r.id, "like")}
+                            disabled={!authUserId}
+                            title={!authUserId ? tVotes.mustLogin : undefined}
+                          >
+                            {tVotes.like} ({counts.like})
+                          </Button>
+
+                          <Button
+                            type="button"
+                            variant={myVote === "useful" ? "default" : "outline"}
+                            className="h-8 px-3 text-xs"
+                            onClick={() => toggleVote(r.id, "useful")}
+                            disabled={!authUserId}
+                            title={!authUserId ? tVotes.mustLogin : undefined}
+                          >
+                            {tVotes.useful} ({counts.useful})
+                          </Button>
+
+                          <Button
+                            type="button"
+                            variant={myVote === "not_useful" ? "default" : "outline"}
+                            className="h-8 px-3 text-xs"
+                            onClick={() => toggleVote(r.id, "not_useful")}
+                            disabled={!authUserId}
+                            title={!authUserId ? tVotes.mustLogin : undefined}
+                          >
+                            {tVotes.notUseful} ({counts.not_useful})
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              <form onSubmit={handleSubmitReview} className="border-t pt-3 mt-3">
+                <div className="text-xs font-semibold text-slate-700 mb-2">
+                  {language === "fr" ? "Laisser une note et un avis" : "Leave a rating and review"}
+                </div>
+
+                <div className="flex items-center gap-1 mb-2">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <button key={i} type="button" onClick={() => setNewRating(i + 1)} className="focus:outline-none">
+                      <Star className={`w-4 h-4 ${newRating > i ? "text-amber-500 fill-amber-400" : "text-slate-200"}`} />
+                    </button>
+                  ))}
+                </div>
+
+                <Textarea
+                  rows={3}
+                  className="text-sm mb-2"
+                  placeholder={language === "fr" ? "Votre avis…" : "Your review…"}
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                />
+
+                <Button type="submit" size="sm" className="bg-pro-blue hover:bg-blue-700" disabled={submitReviewLoading || newRating === 0}>
+                  {submitReviewLoading
+                    ? language === "fr"
+                      ? "Envoi de l’avis..."
+                      : "Sending review..."
+                    : language === "fr"
+                      ? "Envoyer l’avis"
+                      : "Submit review"}
+                </Button>
+              </form>
+            </div>
           </div>
 
-          {/* Colonne droite (inchangé) */}
+          {/* Colonne droite */}
           <div className="w-full lg:w-[360px] space-y-4">
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-3">{language === "fr" ? "Coordonnées directes" : "Direct contact"}</h2>
@@ -943,6 +1021,7 @@ const WorkerDetail: React.FC = () => {
               </div>
             </div>
 
+            {/* Formulaire contact (inchangé) */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-1">{language === "fr" ? "Contacter cet ouvrier" : "Contact this worker"}</h2>
               <p className="text-xs text-slate-500 mb-3">
