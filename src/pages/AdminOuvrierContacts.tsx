@@ -5,7 +5,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import AdminNavTabs from "@/components/AdminNavTabs";
+// ✅ SUPPRIMÉ : sous-menu doublon dans la page
+// import AdminNavTabs from "@/components/AdminNavTabs";
 import {
   PhoneCall,
   CalendarDays,
@@ -176,8 +177,7 @@ const AdminOuvrierContacts: React.FC = () => {
   const statusColor = (s: string | null | undefined) => {
     const v = normalizeStatus(s);
     if (v === "done") return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    if (v === "in_progress")
-      return "bg-amber-50 text-amber-700 border-amber-200";
+    if (v === "in_progress") return "bg-amber-50 text-amber-700 border-amber-200";
     return "bg-sky-50 text-sky-700 border-sky-200";
   };
 
@@ -201,7 +201,7 @@ const AdminOuvrierContacts: React.FC = () => {
     [originLabel]
   );
 
-  // 🔹 Chargement (factorisé pour refresh + useEffect)
+  // 🔹 Chargement (factorisé)
   const fetchContacts = useCallback(async () => {
     if (authLoading || !isAdmin) return;
 
@@ -238,7 +238,7 @@ const AdminOuvrierContacts: React.FC = () => {
     fetchContacts();
   }, [authLoading, isAdmin, fetchContacts]);
 
-  // 🔎 Filtrage (statut, texte, dates)
+  // 🔎 Filtrage
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
 
@@ -283,7 +283,7 @@ const AdminOuvrierContacts: React.FC = () => {
     setSavingId(id);
     setError(null);
 
-    // Optimistic update (avec rollback en cas d'erreur)
+    // Optimistic update (rollback si erreur)
     const prev = contacts;
     setContacts((p) => p.map((c) => (c.id === id ? { ...c, status: newStatus } : c)));
 
@@ -305,7 +305,7 @@ const AdminOuvrierContacts: React.FC = () => {
     setSavingId(null);
   };
 
-  // 🔢 Mini dashboard basé sur les lignes filtrées
+  // 🔢 Stats
   const stats = useMemo(() => {
     const total = filtered.length;
 
@@ -332,8 +332,7 @@ const AdminOuvrierContacts: React.FC = () => {
   }, [filtered, originLabel]);
 
   const text = {
-    title:
-      language === "fr" ? "Demandes de contact ouvriers" : "Worker contact requests",
+    title: language === "fr" ? "Demandes de contact ouvriers" : "Worker contact requests",
     subtitle:
       language === "fr"
         ? "Vue d’ensemble des demandes envoyées par les particuliers."
@@ -432,7 +431,7 @@ const AdminOuvrierContacts: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50 to-indigo-50">
       <div className="w-full px-3 sm:px-6 lg:px-10 py-6 md:py-10">
-        <AdminNavTabs />
+        {/* ✅ SUPPRIMÉ : <AdminNavTabs /> */}
 
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4 mt-4">
@@ -454,18 +453,13 @@ const AdminOuvrierContacts: React.FC = () => {
             <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
               {text.refresh}
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportCsv}
-              disabled={!filtered.length}
-            >
+            <Button variant="outline" size="sm" onClick={exportCsv} disabled={!filtered.length}>
               {text.exportCsv}
             </Button>
           </div>
         </div>
 
-        {/* Mini dashboard modernisé */}
+        {/* Mini dashboard */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatCard
             label={text.statTotal}
@@ -485,7 +479,6 @@ const AdminOuvrierContacts: React.FC = () => {
             icon={Clock}
             gradient="from-emerald-500/10 via-emerald-400/20 to-emerald-500/40"
           />
-
           <div className={cardClass + " p-4"}>
             <div className="flex items-center gap-2 mb-2">
               <Filter className="h-4 w-4 text-slate-600" />
@@ -683,6 +676,7 @@ const AdminOuvrierContacts: React.FC = () => {
                   </th>
                 </tr>
               </thead>
+
               <tbody>
                 {filtered.length === 0 && !loading && (
                   <tr>
