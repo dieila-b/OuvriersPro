@@ -1,6 +1,7 @@
 // src/components/layout/AdminLayout.tsx
 import React from "react";
 import { Outlet, NavLink, Link } from "react-router-dom";
+import AdminLogoutButton from "@/components/admin/AdminLogoutButton";
 
 function navClass({ isActive }: { isActive: boolean }) {
   return [
@@ -46,7 +47,7 @@ export default function AdminLayout() {
                 Questions FAQ
               </NavLink>
 
-              {/* ✅ Nouveau: Contenu du site (CMS) */}
+              {/* ✅ Contenu du site (CMS) */}
               <NavLink to="/admin/contenu" className={navClass}>
                 Contenu du site
               </NavLink>
@@ -57,6 +58,9 @@ export default function AdminLayout() {
               >
                 Retour au site
               </Link>
+
+              {/* ✅ Déconnexion (global admin) */}
+              <AdminLogoutButton className="ml-2 whitespace-nowrap" redirectTo="/" />
             </div>
           </div>
         </div>
