@@ -35,6 +35,9 @@ import AdminFaqQuestions from "./pages/AdminFaqQuestions";
 // ✅ Admin: CMS Contenu du site
 import AdminContent from "./pages/AdminContent";
 
+// ✅ Admin: Signalements (NOUVEAU)
+import AdminReports from "./pages/AdminReports";
+
 // Back-office Admin
 import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
 import AdminOuvrierInscriptions from "./pages/AdminOuvrierInscriptions";
@@ -239,6 +242,9 @@ const AppRoutes = () => (
         <Route path="ouvrier-contacts" element={<AdminOuvrierContacts />} />
         <Route path="ouvriers" element={<AdminOuvrierInscriptions />} />
         <Route path="publicites" element={<AdminAds />} />
+
+        {/* ✅ NOUVEAU : Signalements */}
+        <Route path="signalements" element={<AdminReports />} />
 
         {/* ✅ CMS Back Office (Contenu du site) */}
         <Route path="contenu" element={<AdminContent />} />
