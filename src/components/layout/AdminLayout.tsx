@@ -2,11 +2,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Outlet, NavLink, Link, useLocation } from "react-router-dom";
 import AdminLogoutButton from "@/components/admin/AdminLogoutButton";
-import { Menu, X } from "lucide-react";
+import { Menu, X, ExternalLink } from "lucide-react";
 
 type NavItem = { to: string; label: string; end?: boolean };
 
-function navClass({ isActive }: { isActive: boolean }) {
+function desktopNavClass({ isActive }: { isActive: boolean }) {
   return [
     "px-3 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap",
     "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
@@ -21,8 +21,8 @@ function mobileNavClass({ isActive }: { isActive: boolean }) {
     "w-full px-3 py-2 rounded-lg text-sm font-medium transition",
     "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
     isActive
-      ? "bg-white shadow-sm text-pro-gray"
-      : "text-gray-700 hover:text-pro-gray hover:bg-white/70",
+      ? "bg-slate-50 text-pro-gray border border-slate-200"
+      : "text-slate-700 hover:text-pro-gray hover:bg-slate-50",
   ].join(" ");
 }
 
@@ -43,12 +43,12 @@ export default function AdminLayout() {
     []
   );
 
-  // Ferme le menu mobile à chaque navigation
+  // Ferme le drawer à chaque navigation
   useEffect(() => {
     setOpen(false);
   }, [location.pathname]);
 
-  // Empêche le scroll du body quand le drawer est ouvert
+  // Bloque le scroll du body quand le drawer est ouvert
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -59,10 +59,10 @@ export default function AdminLayout() {
   }, [open]);
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 overflow-x-clip">
       {/* Header sticky */}
       <header className="sticky top-0 z-50 border-b bg-white/85 backdrop-blur">
-        <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-10">
+        <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10">
           <div className="flex items-center justify-between py-3 gap-3 min-w-0">
             {/* Brand */}
             <div className="flex items-center gap-2 min-w-0">
@@ -79,18 +79,20 @@ export default function AdminLayout() {
               </div>
             </div>
 
-            {/* Desktop nav */}
-            <nav className="hidden lg:flex items-center gap-1 min-w-0">
+            {/* ✅ Desktop nav seulement sur XL+ */}
+            <nav className="hidden xl:flex items-center gap-1 min-w-0">
               <div className="flex items-center gap-1 min-w-0">
                 {navItems.map((it) => (
-                  <NavLink key={it.to} to={it.to} className={navClass} end={it.end}>
+                  <NavLink key={it.to} to={it.to} className={desktopNavClass} end={it.end}>
                     {it.label}
                   </NavLink>
                 ))}
+
                 <Link
                   to="/"
                   className="ml-2 text-sm text-gray-600 hover:text-pro-gray inline-flex items-center gap-2 whitespace-nowrap"
                 >
+                  <ExternalLink className="h-4 w-4" />
                   Retour au site
                 </Link>
               </div>
@@ -100,15 +102,8 @@ export default function AdminLayout() {
               </div>
             </nav>
 
-            {/* Mobile actions */}
-            <div className="flex items-center gap-2 lg:hidden shrink-0">
-              <Link
-                to="/"
-                className="text-sm text-gray-600 hover:text-pro-gray whitespace-nowrap hidden sm:inline-flex"
-              >
-                Retour au site
-              </Link>
-
+            {/* ✅ Mobile/Tablet actions (jusqu'à XL) */}
+            <div className="flex items-center gap-2 xl:hidden shrink-0">
               <button
                 type="button"
                 className="inline-flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
@@ -121,17 +116,15 @@ export default function AdminLayout() {
           </div>
         </div>
 
-        {/* Mobile drawer */}
+        {/* Drawer (mobile/tablette) */}
         {open && (
-          <div className="lg:hidden">
-            {/* Backdrop */}
+          <div className="xl:hidden">
             <div
               className="fixed inset-0 z-40 bg-black/30"
               onClick={() => setOpen(false)}
               aria-hidden="true"
             />
 
-            {/* Panel */}
             <div className="fixed inset-y-0 right-0 z-50 w-[86vw] max-w-sm bg-white shadow-2xl border-l border-slate-200">
               <div className="p-4 border-b border-slate-200 flex items-center justify-between gap-3">
                 <div className="min-w-0">
@@ -166,8 +159,9 @@ export default function AdminLayout() {
 
                 <Link
                   to="/"
-                  className="w-full inline-flex items-center justify-center px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50"
+                  className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50"
                 >
+                  <ExternalLink className="h-4 w-4" />
                   Retour au site
                 </Link>
 
@@ -181,7 +175,7 @@ export default function AdminLayout() {
       </header>
 
       {/* Content */}
-      <main className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-10 py-6">
+      <main className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10 py-6">
         <Outlet />
       </main>
     </div>
