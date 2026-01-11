@@ -4,7 +4,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  useLocation,
+  Navigate,
+} from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 
 // Pages publiques
@@ -16,7 +22,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MonCompte from "./pages/MonCompte";
 
-// ✅ Forfaits (nouveau)
+// ✅ Forfaits
 import Forfaits from "./pages/Forfaits";
 
 // ✅ FAQ + pages publiques
@@ -35,7 +41,7 @@ import AdminFaqQuestions from "./pages/AdminFaqQuestions";
 // ✅ Admin: CMS Contenu du site
 import AdminContent from "./pages/AdminContent";
 
-// ✅ Admin: Signalements (NOUVEAU)
+// ✅ Admin: Signalements
 import AdminReports from "./pages/AdminReports";
 
 // Back-office Admin
@@ -61,7 +67,7 @@ import ClientContactForm from "./pages/ClientContactForm";
 // Protection routes
 import PrivateRoute from "./components/PrivateRoute";
 
-// ✅ Layout admin (header sticky pour toutes les pages admin)
+// ✅ Layout admin
 import AdminLayout from "@/components/layout/AdminLayout";
 
 const queryClient = new QueryClient();
@@ -85,7 +91,9 @@ function ScrollManager() {
       const headerEl = document.querySelector("header") as HTMLElement | null;
       const headerHeight = headerEl?.offsetHeight ?? 72;
 
-      const y = el.getBoundingClientRect().top + window.scrollY - headerHeight - 8;
+      const y =
+        el.getBoundingClientRect().top + window.scrollY - headerHeight - 8;
+
       window.scrollTo({ top: Math.max(y, 0), behavior: "smooth" });
     }, 50);
 
@@ -114,11 +122,11 @@ const AppRoutes = () => (
       <Route path="/faq" element={<Faq />} />
       <Route path="/aide" element={<Faq />} />
 
-      {/* ✅ Pages “réelles” (footer / entreprise) */}
+      {/* ✅ Pages “réelles” */}
       <Route path="/a-propos" element={<About />} />
       <Route path="/partenaires" element={<Partners />} />
 
-      {/* ✅ Pages légales (footer) */}
+      {/* ✅ Pages légales */}
       <Route path="/conditions" element={<Terms />} />
       <Route path="/confidentialite" element={<Privacy />} />
       <Route path="/cookies" element={<CookiesPolicy />} />
@@ -238,18 +246,15 @@ const AppRoutes = () => (
           </PrivateRoute>
         }
       >
+        {/* ✅ IMPORTANT : /admin => /admin/dashboard */}
+        <Route index element={<Navigate to="dashboard" replace />} />
+
         <Route path="dashboard" element={<AdminDashboard />} />
         <Route path="ouvrier-contacts" element={<AdminOuvrierContacts />} />
         <Route path="ouvriers" element={<AdminOuvrierInscriptions />} />
         <Route path="publicites" element={<AdminAds />} />
-
-        {/* ✅ NOUVEAU : Signalements */}
         <Route path="signalements" element={<AdminReports />} />
-
-        {/* ✅ CMS Back Office (Contenu du site) */}
         <Route path="contenu" element={<AdminContent />} />
-
-        {/* ✅ Admin FAQ Questions */}
         <Route path="faq-questions" element={<AdminFaqQuestions />} />
       </Route>
 
@@ -267,6 +272,7 @@ const App = () => (
           <Toaster />
           <Sonner />
 
+          {/* ✅ Wrapper global safe (évite débordements) */}
           <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
             <AppRoutes />
           </div>
