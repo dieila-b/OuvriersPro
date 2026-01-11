@@ -6,7 +6,7 @@ import { Menu, X, ExternalLink } from "lucide-react";
 
 type NavItem = { to: string; label: string; end?: boolean };
 
-function navItemClass({ isActive }: { isActive: boolean }) {
+function desktopNavItemClass({ isActive }: { isActive: boolean }) {
   return [
     "shrink-0",
     "px-3 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap",
@@ -70,9 +70,7 @@ export default function AdminLayout() {
   }, [open]);
 
   return (
-    // ✅ IMPORTANT : ne pas "clipper" horizontalement au root.
-    // Certaines pages ont des tables/toolbars qui doivent pouvoir scroller localement.
-    <div className="min-h-dvh bg-slate-50 w-full overflow-x-hidden">
+    <div data-admin className="min-h-dvh bg-slate-50 overflow-x-clip">
       <header className="sticky top-0 z-50 border-b bg-white/85 backdrop-blur">
         <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10">
           <div className="flex items-center gap-3 py-3 min-w-0">
@@ -85,64 +83,44 @@ export default function AdminLayout() {
                 <div className="text-sm font-semibold text-pro-gray truncate">
                   Administration
                 </div>
-                <div className="text-[11px] text-slate-500 truncate">
-                  Back-office
-                </div>
+                <div className="text-[11px] text-slate-500 truncate">Back-office</div>
               </div>
             </div>
 
-            {/* Desktop nav: scrollable */}
-            <nav className="hidden md:flex min-w-0 flex-1 items-center">
-              <div className="relative w-full min-w-0">
-                {/* zone scroll */}
-                <div
+            {/* ✅ NAV DESKTOP UNIQUEMENT SUR TRÈS GRAND ÉCRAN (xl+) */}
+            <nav className="hidden xl:flex min-w-0 flex-1 items-center">
+              <div className="flex items-center gap-1 min-w-0 overflow-x-auto admin-scrollbar pr-8">
+                {navItems.map((it) => (
+                  <NavLink key={it.to} to={it.to} className={desktopNavItemClass} end={it.end}>
+                    {it.label}
+                  </NavLink>
+                ))}
+
+                <Link
+                  to="/"
                   className={[
-                    "flex items-center gap-1",
-                    "overflow-x-auto whitespace-nowrap min-w-0",
-                    "pr-14", // espace pour le fondu à droite
-                    "scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent",
+                    "shrink-0 ml-2 inline-flex items-center gap-2",
+                    "px-3 py-2 rounded-lg text-sm text-gray-600 hover:text-pro-gray hover:bg-white/70 whitespace-nowrap",
+                    "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
                   ].join(" ")}
                 >
-                  {navItems.map((it) => (
-                    <NavLink
-                      key={it.to}
-                      to={it.to}
-                      className={navItemClass}
-                      end={it.end}
-                    >
-                      {it.label}
-                    </NavLink>
-                  ))}
-
-                  <Link
-                    to="/"
-                    className={[
-                      "shrink-0 ml-2 inline-flex items-center gap-2",
-                      "px-3 py-2 rounded-lg text-sm text-gray-600 hover:text-pro-gray hover:bg-white/70 whitespace-nowrap",
-                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
-                    ].join(" ")}
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Retour au site
-                  </Link>
-                </div>
-
-                {/* fondu droite (indique le scroll) */}
-                <div className="pointer-events-none absolute right-0 top-0 h-full w-14 bg-gradient-to-l from-white/95 to-transparent" />
+                  <ExternalLink className="h-4 w-4" />
+                  Retour au site
+                </Link>
               </div>
             </nav>
 
             {/* Actions */}
             <div className="ml-auto flex items-center gap-2 shrink-0">
-              {/* Déconnexion visible en md+ */}
-              <div className="hidden md:block">
+              {/* Déconnexion visible en xl+ */}
+              <div className="hidden xl:block">
                 <AdminLogoutButton className="whitespace-nowrap" redirectTo="/" />
               </div>
 
-              {/* Hamburger visible en mobile uniquement */}
+              {/* ✅ Hamburger sur tout ce qui est < xl (donc vrai responsive) */}
               <button
                 type="button"
-                className="md:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
+                className="xl:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
                 aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
                 aria-expanded={open}
                 onClick={() => setOpen((v) => !v)}
@@ -153,8 +131,8 @@ export default function AdminLayout() {
           </div>
         </div>
 
-        {/* Drawer mobile */}
-        <div className="md:hidden">
+        {/* ✅ Drawer (< xl) */}
+        <div className="xl:hidden">
           <div
             className={[
               "fixed inset-0 z-40 bg-black/30 transition-opacity",
@@ -176,12 +154,8 @@ export default function AdminLayout() {
           >
             <div className="p-4 border-b border-slate-200 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-slate-900 truncate">
-                  Menu admin
-                </div>
-                <div className="text-[11px] text-slate-500 truncate">
-                  Navigation back-office
-                </div>
+                <div className="text-sm font-semibold text-slate-900 truncate">Menu admin</div>
+                <div className="text-[11px] text-slate-500 truncate">Navigation back-office</div>
               </div>
 
               <button
@@ -194,14 +168,9 @@ export default function AdminLayout() {
               </button>
             </div>
 
-            <div className="p-4 space-y-2">
+            <div className="p-4 space-y-2 overflow-y-auto h-[calc(100dvh-72px)]">
               {navItems.map((it) => (
-                <NavLink
-                  key={it.to}
-                  to={it.to}
-                  className={mobileNavClass}
-                  end={it.end}
-                >
+                <NavLink key={it.to} to={it.to} className={mobileNavClass} end={it.end}>
                   {it.label}
                 </NavLink>
               ))}
@@ -222,8 +191,7 @@ export default function AdminLayout() {
         </div>
       </header>
 
-      {/* ✅ Main: laisse les pages gérer leurs scroll-x localement (tables) */}
-      <main className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10 py-6 min-w-0">
+      <main className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10 py-4 sm:py-6 min-w-0">
         <Outlet />
       </main>
     </div>
