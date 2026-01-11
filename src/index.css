@@ -93,6 +93,9 @@
   *::after {
     @apply border-border;
     box-sizing: border-box;
+
+    /* ✅ CRITIQUE: évite que flex/grid imposent une largeur minimale et cassent le responsive */
+    min-width: 0;
   }
 
   /* ✅ IMPORTANT: évite que le navigateur “simule” une largeur desktop sur mobile */
@@ -162,34 +165,36 @@
   }
 }
 
-/* ---------------------------
-   ADMIN responsive hardening
----------------------------- */
+/* -----------------------------
+   ✅ Responsive helpers (ADMIN)
+-------------------------------- */
 
-/* Scrollbar discrète pour nav horizontal */
-.admin-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.65) transparent; /* slate-400 */
-}
-.admin-scrollbar::-webkit-scrollbar {
-  height: 8px;
-}
-.admin-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.admin-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.55);
-  border-radius: 999px;
+/* Scroll horizontal SANS barre grise (Windows/Chrome) */
+@layer utilities {
+  .scrollbar-none {
+    -ms-overflow-style: none; /* IE/Edge legacy */
+    scrollbar-width: none; /* Firefox */
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none; /* Chrome/Safari */
+  }
 }
 
-/* Protection anti-débordement uniquement dans l'admin */
-[data-admin] * {
-  min-width: 0;
-}
+/* Force les zones longues (tableaux, toolbars) à ne jamais casser la page */
+@layer base {
+  /* Les pages admin utilisent souvent beaucoup de boutons + tableaux.
+     Cette règle évite le débordement horizontal global. */
+  [data-admin-root] {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+  }
 
-/* Empêche que le header admin crée du scroll horizontal */
-[data-admin] header,
-[data-admin] main {
-  max-width: 100%;
-  overflow-x: clip;
+  /* Si un composant met un tableau trop large, il doit scroller dans sa carte
+     plutôt que de forcer la page à scroller. */
+  [data-admin-root] .admin-table-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+  }
 }
