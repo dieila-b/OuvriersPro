@@ -6,9 +6,9 @@ import { Menu, X, ExternalLink } from "lucide-react";
 
 type NavItem = { to: string; label: string; end?: boolean };
 
-function desktopNavClass({ isActive }: { isActive: boolean }) {
+function navItemClass({ isActive }: { isActive: boolean }) {
   return [
-    "shrink-0", // ✅ CRITIQUE: empêche les items de se compresser et de “coller”
+    "shrink-0", // ✅ CRITIQUE: empêche la compression (le “collage”)
     "px-3 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap",
     "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
     isActive
@@ -59,7 +59,7 @@ export default function AdminLayout() {
     };
   }, [open]);
 
-  // Ferme avec ESC
+  // ESC pour fermer
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -71,7 +71,6 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-dvh bg-slate-50 overflow-x-clip">
-      {/* Header sticky */}
       <header className="sticky top-0 z-50 border-b bg-white/85 backdrop-blur">
         <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10">
           <div className="flex items-center gap-3 py-3 min-w-0">
@@ -84,21 +83,19 @@ export default function AdminLayout() {
                 <div className="text-sm font-semibold text-pro-gray truncate">
                   Administration
                 </div>
-                <div className="text-[11px] text-slate-500 truncate">
-                  Back-office
-                </div>
+                <div className="text-[11px] text-slate-500 truncate">Back-office</div>
               </div>
             </div>
 
-            {/* ✅ NAV DESKTOP uniquement sur très grands écrans (évite le “désordre”) */}
-            <nav className="hidden 2xl:flex min-w-0 flex-1 items-center">
+            {/* ✅ Menu horizontal scrollable dès md (sinon hamburger) */}
+            <nav className="hidden md:flex min-w-0 flex-1 items-center">
               <div className="relative w-full min-w-0">
-                <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap min-w-0 pr-10">
+                <div className="admin-scrollbar flex items-center gap-1 overflow-x-auto whitespace-nowrap min-w-0 pr-10">
                   {navItems.map((it) => (
                     <NavLink
                       key={it.to}
                       to={it.to}
-                      className={desktopNavClass}
+                      className={navItemClass}
                       end={it.end}
                     >
                       {it.label}
@@ -118,32 +115,22 @@ export default function AdminLayout() {
                   </Link>
                 </div>
 
-                {/* fondu droite */}
+                {/* fondu droite (indique le scroll) */}
                 <div className="pointer-events-none absolute right-0 top-0 h-full w-12 bg-gradient-to-l from-white/90 to-transparent" />
               </div>
             </nav>
 
             {/* Actions */}
             <div className="ml-auto flex items-center gap-2 shrink-0">
-              {/* Logout visible uniquement en 2XL avec nav */}
-              <div className="hidden 2xl:block">
+              {/* Déconnexion visible en md+ */}
+              <div className="hidden md:block">
                 <AdminLogoutButton className="whitespace-nowrap" redirectTo="/" />
               </div>
 
-              {/* Bouton retour au site (mobile/tablette/desktop <2XL) */}
-              <Link
-                to="/"
-                className="2xl:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
-                aria-label="Retour au site"
-                title="Retour au site"
-              >
-                <ExternalLink className="h-5 w-5" />
-              </Link>
-
-              {/* Hamburger (par défaut partout <2XL) */}
+              {/* Hamburger visible en mobile uniquement */}
               <button
                 type="button"
-                className="2xl:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
+                className="md:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
                 aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
                 aria-expanded={open}
                 onClick={() => setOpen((v) => !v)}
@@ -154,9 +141,8 @@ export default function AdminLayout() {
           </div>
         </div>
 
-        {/* Drawer (mobile/tablette/desktop <2XL) */}
-        <div className="2xl:hidden">
-          {/* Overlay */}
+        {/* Drawer mobile */}
+        <div className="md:hidden">
           <div
             className={[
               "fixed inset-0 z-40 bg-black/30 transition-opacity",
@@ -166,7 +152,6 @@ export default function AdminLayout() {
             aria-hidden="true"
           />
 
-          {/* Panel */}
           <div
             className={[
               "fixed inset-y-0 right-0 z-50 w-[88vw] max-w-sm bg-white shadow-2xl border-l border-slate-200",
@@ -225,7 +210,6 @@ export default function AdminLayout() {
         </div>
       </header>
 
-      {/* Content */}
       <main className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10 py-6 min-w-0">
         <Outlet />
       </main>
