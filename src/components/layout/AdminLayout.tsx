@@ -3,19 +3,12 @@ import React from "react";
 import { Outlet, NavLink, Link, useLocation } from "react-router-dom";
 import AdminLogoutButton from "@/components/admin/AdminLogoutButton";
 import { Button } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
 import { Menu, ExternalLink } from "lucide-react";
 
 function navClass({ isActive }: { isActive: boolean }) {
   return [
     "px-3 py-2 rounded-lg text-sm font-medium transition",
-    "min-w-0",
+    "whitespace-nowrap",
     isActive
       ? "bg-white shadow-sm text-pro-gray"
       : "text-gray-600 hover:text-pro-gray hover:bg-white/60",
@@ -34,11 +27,11 @@ const NAV_ITEMS = [
 
 export default function AdminLayout() {
   const location = useLocation();
-  const [open, setOpen] = React.useState(false);
 
-  // ✅ ferme le drawer quand on change de route
+  // ✅ ferme le menu mobile quand on change de route
+  const detailsRef = React.useRef<HTMLDetailsElement | null>(null);
   React.useEffect(() => {
-    setOpen(false);
+    if (detailsRef.current) detailsRef.current.open = false;
   }, [location.pathname]);
 
   return (
@@ -46,50 +39,61 @@ export default function AdminLayout() {
       {/* Header sticky */}
       <header className="sticky top-0 z-50 border-b bg-white/80 backdrop-blur">
         <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-3 gap-3">
+          <div className="flex items-center gap-3 py-3">
             {/* Brand */}
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="h-8 w-8 rounded-xl bg-pro-blue text-white flex items-center justify-center text-sm font-bold shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="h-9 w-9 rounded-xl bg-pro-blue text-white flex items-center justify-center text-sm font-bold">
                 PS
               </div>
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-pro-gray truncate">
+              <div className="leading-tight">
+                <div className="text-sm font-semibold text-pro-gray">
                   Administration
                 </div>
-                <div className="text-[11px] text-gray-500 truncate">
-                  Back-office
-                </div>
+                <div className="text-[11px] text-gray-500">Back-office</div>
               </div>
             </div>
 
-            {/* Desktop nav */}
-            <nav className="hidden lg:flex items-center gap-2 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap min-w-0">
-                {NAV_ITEMS.map((it) => (
-                  <NavLink
-                    key={it.to}
-                    to={it.to}
-                    end={Boolean((it as any).end)}
-                    className={navClass}
-                  >
-                    {it.label}
-                  </NavLink>
-                ))}
-              </div>
-
-              <Link
-                to="/"
-                className="ml-2 text-sm text-gray-600 hover:text-pro-gray inline-flex items-center gap-2 whitespace-nowrap"
+            {/* ✅ Desktop nav (UNE LIGNE, jamais de wrap) */}
+            <div className="hidden md:flex flex-1 min-w-0 items-center gap-3">
+              <nav
+                className={[
+                  "flex-1 min-w-0",
+                  "overflow-x-auto overflow-y-hidden",
+                  "whitespace-nowrap",
+                  // hide scrollbar (cross browser) via Tailwind arbitrary selectors
+                  "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
+                ].join(" ")}
               >
-                <ExternalLink className="h-4 w-4" />
-                Retour au site
-              </Link>
+                <div className="inline-flex items-center gap-2 pr-2">
+                  {NAV_ITEMS.map((it) => (
+                    <NavLink
+                      key={it.to}
+                      to={it.to}
+                      end={Boolean((it as any).end)}
+                      className={navClass}
+                    >
+                      {it.label}
+                    </NavLink>
+                  ))}
+                </div>
+              </nav>
 
-              <AdminLogoutButton className="ml-2 whitespace-nowrap" redirectTo="/" />
-            </nav>
+              {/* Right actions desktop */}
+              <div className="flex items-center gap-2 shrink-0">
+                <Link
+                  to="/"
+                  className="text-sm text-gray-600 hover:text-pro-gray inline-flex items-center gap-2 whitespace-nowrap"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Retour au site
+                </Link>
 
-            {/* Mobile actions */}
-            <div className="flex items-center gap-2 lg:hidden">
+                <AdminLogoutButton className="whitespace-nowrap" redirectTo="/" />
+              </div>
+            </div>
+
+            {/* ✅ Mobile menu (<md) */}
+            <div className="ml-auto flex items-center gap-2 md:hidden">
               <Link
                 to="/"
                 className="text-sm text-gray-600 hover:text-pro-gray inline-flex items-center gap-2 whitespace-nowrap"
@@ -100,46 +104,55 @@ export default function AdminLayout() {
 
               <AdminLogoutButton className="whitespace-nowrap" redirectTo="/" />
 
-              <Sheet open={open} onOpenChange={setOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="outline" size="icon" aria-label="Ouvrir le menu admin">
+              {/* Menu natif (pas de dépendance shadcn Sheet) */}
+              <details ref={detailsRef} className="relative">
+                <summary className="list-none">
+                  <Button variant="outline" size="icon" aria-label="Ouvrir le menu">
                     <Menu className="h-5 w-5" />
                   </Button>
-                </SheetTrigger>
+                </summary>
 
-                <SheetContent side="right" className="w-[320px] sm:w-[380px] p-0">
-                  <div className="p-4 border-b">
-                    <SheetHeader>
-                      <SheetTitle>Menu admin</SheetTitle>
-                    </SheetHeader>
-                    <div className="mt-2 text-xs text-gray-500">
+                {/* overlay click-away */}
+                <button
+                  type="button"
+                  className="fixed inset-0 z-40 cursor-default"
+                  onClick={() => {
+                    if (detailsRef.current) detailsRef.current.open = false;
+                  }}
+                  aria-label="Fermer le menu"
+                />
+
+                <div className="absolute right-0 mt-2 z-50 w-[320px] max-w-[calc(100vw-24px)] rounded-2xl border bg-white shadow-xl overflow-hidden">
+                  <div className="px-4 py-3 border-b">
+                    <div className="text-sm font-semibold text-slate-900">
+                      Menu admin
+                    </div>
+                    <div className="text-xs text-slate-500">
                       Navigation du back-office
                     </div>
                   </div>
 
-                  <div className="p-3">
-                    <div className="space-y-1">
-                      {NAV_ITEMS.map((it) => (
-                        <NavLink
-                          key={it.to}
-                          to={it.to}
-                          end={Boolean((it as any).end)}
-                          className={({ isActive }) =>
-                            [
-                              "block w-full rounded-lg px-3 py-2 text-sm font-medium transition",
-                              isActive
-                                ? "bg-slate-100 text-pro-gray"
-                                : "text-gray-700 hover:bg-slate-50",
-                            ].join(" ")
-                          }
-                        >
-                          {it.label}
-                        </NavLink>
-                      ))}
-                    </div>
+                  <div className="p-2">
+                    {NAV_ITEMS.map((it) => (
+                      <NavLink
+                        key={it.to}
+                        to={it.to}
+                        end={Boolean((it as any).end)}
+                        className={({ isActive }) =>
+                          [
+                            "block w-full rounded-xl px-3 py-2 text-sm font-medium transition",
+                            isActive
+                              ? "bg-slate-100 text-pro-gray"
+                              : "text-gray-700 hover:bg-slate-50",
+                          ].join(" ")
+                        }
+                      >
+                        {it.label}
+                      </NavLink>
+                    ))}
                   </div>
-                </SheetContent>
-              </Sheet>
+                </div>
+              </details>
             </div>
           </div>
         </div>
