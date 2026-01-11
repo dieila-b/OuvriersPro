@@ -8,8 +8,8 @@ type NavItem = { to: string; label: string; end?: boolean };
 
 function navItemClass({ isActive }: { isActive: boolean }) {
   return [
-    "shrink-0", // ✅ CRITIQUE: empêche la compression (le “collage”)
-    "px-3 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap",
+    "shrink-0",
+    "px-2.5 py-2 rounded-lg text-[13px] lg:text-sm font-medium transition whitespace-nowrap",
     "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
     isActive
       ? "bg-white shadow-sm text-pro-gray"
@@ -70,27 +70,52 @@ export default function AdminLayout() {
   }, [open]);
 
   return (
-    <div className="min-h-dvh bg-slate-50 overflow-x-clip">
+    <div data-admin className="min-h-dvh bg-slate-50 overflow-x-clip">
       <header className="sticky top-0 z-50 border-b bg-white/85 backdrop-blur">
         <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10">
-          <div className="flex items-center gap-3 py-3 min-w-0">
-            {/* Brand */}
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="h-9 w-9 rounded-xl bg-pro-blue text-white flex items-center justify-center text-sm font-bold">
-                PS
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-pro-gray truncate">
-                  Administration
+          {/* ✅ HEADER RESPONSIVE: 2 lignes en petit, 1 ligne en grand */}
+          <div className="flex flex-col gap-3 py-3 min-w-0 lg:flex-row lg:items-center lg:gap-4">
+            {/* Ligne 1 (brand + actions) */}
+            <div className="flex items-center gap-3 min-w-0">
+              {/* Brand */}
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="h-9 w-9 rounded-xl bg-pro-blue text-white flex items-center justify-center text-sm font-bold">
+                  PS
                 </div>
-                <div className="text-[11px] text-slate-500 truncate">Back-office</div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-pro-gray truncate">
+                    Administration
+                  </div>
+                  <div className="text-[11px] text-slate-500 truncate">
+                    Back-office
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions à droite */}
+              <div className="ml-auto flex items-center gap-2 shrink-0">
+                {/* Déconnexion visible en lg+ (pour éviter la casse sur medium) */}
+                <div className="hidden lg:block">
+                  <AdminLogoutButton className="whitespace-nowrap" redirectTo="/" />
+                </div>
+
+                {/* Hamburger visible < lg */}
+                <button
+                  type="button"
+                  className="lg:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
+                  aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
+                  aria-expanded={open}
+                  onClick={() => setOpen((v) => !v)}
+                >
+                  {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                </button>
               </div>
             </div>
 
-            {/* ✅ Menu horizontal scrollable dès md (sinon hamburger) */}
-            <nav className="hidden md:flex min-w-0 flex-1 items-center">
+            {/* Ligne 2: menu horizontal scrollable (TOUJOURS responsive) */}
+            <nav className="flex min-w-0 flex-1 items-center">
               <div className="relative w-full min-w-0">
-                <div className="admin-scrollbar flex items-center gap-1 overflow-x-auto whitespace-nowrap min-w-0 pr-10">
+                <div className="admin-scrollbar flex items-center gap-2 overflow-x-auto whitespace-nowrap min-w-0 pr-10">
                   {navItems.map((it) => (
                     <NavLink
                       key={it.to}
@@ -105,8 +130,8 @@ export default function AdminLayout() {
                   <Link
                     to="/"
                     className={[
-                      "shrink-0 ml-2 inline-flex items-center gap-2",
-                      "px-3 py-2 rounded-lg text-sm text-gray-600 hover:text-pro-gray hover:bg-white/70 whitespace-nowrap",
+                      "shrink-0 ml-1 inline-flex items-center gap-2",
+                      "px-2.5 py-2 rounded-lg text-[13px] lg:text-sm text-gray-600 hover:text-pro-gray hover:bg-white/70 whitespace-nowrap",
                       "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
                     ].join(" ")}
                   >
@@ -119,30 +144,11 @@ export default function AdminLayout() {
                 <div className="pointer-events-none absolute right-0 top-0 h-full w-12 bg-gradient-to-l from-white/90 to-transparent" />
               </div>
             </nav>
-
-            {/* Actions */}
-            <div className="ml-auto flex items-center gap-2 shrink-0">
-              {/* Déconnexion visible en md+ */}
-              <div className="hidden md:block">
-                <AdminLogoutButton className="whitespace-nowrap" redirectTo="/" />
-              </div>
-
-              {/* Hamburger visible en mobile uniquement */}
-              <button
-                type="button"
-                className="md:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
-                aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
-                aria-expanded={open}
-                onClick={() => setOpen((v) => !v)}
-              >
-                {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-              </button>
-            </div>
           </div>
         </div>
 
-        {/* Drawer mobile */}
-        <div className="md:hidden">
+        {/* ✅ Drawer mobile (< lg) */}
+        <div className="lg:hidden">
           <div
             className={[
               "fixed inset-0 z-40 bg-black/30 transition-opacity",
@@ -210,7 +216,7 @@ export default function AdminLayout() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10 py-6 min-w-0">
+      <main className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10 py-4 sm:py-6 min-w-0">
         <Outlet />
       </main>
     </div>
