@@ -93,9 +93,6 @@
   *::after {
     @apply border-border;
     box-sizing: border-box;
-
-    /* ✅ CRITIQUE: évite que flex/grid imposent une largeur minimale et cassent le responsive */
-    min-width: 0;
   }
 
   /* ✅ IMPORTANT: évite que le navigateur “simule” une largeur desktop sur mobile */
@@ -163,4 +160,36 @@
   button {
     min-width: 0;
   }
+}
+
+/* =========================
+   ✅ PATCH RESPONSIVE ADMIN (GLOBAL)
+   - empêche le “collage” des menus
+   - empêche les débordements flex/grid
+   ========================= */
+@layer base {
+  /* On applique min-width:0 seulement dans l’admin (via data-admin sur le wrapper) */
+  [data-admin],
+  [data-admin] * {
+    min-width: 0;
+  }
+}
+
+/* Scrollbar discret du menu horizontal */
+.admin-scrollbar {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(148, 163, 184, 0.8) transparent;
+}
+
+.admin-scrollbar::-webkit-scrollbar {
+  height: 8px; /* Chrome/Safari/Edge */
+}
+
+.admin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.55);
+  border-radius: 999px;
 }
