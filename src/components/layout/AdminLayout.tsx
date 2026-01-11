@@ -6,11 +6,11 @@ import { Menu, X, ExternalLink } from "lucide-react";
 
 type NavItem = { to: string; label: string; end?: boolean };
 
-function navItemClass({ isActive }: { isActive: boolean }) {
+function desktopNavClass({ isActive }: { isActive: boolean }) {
   return [
-    "px-3 py-2 rounded-lg text-sm font-medium transition",
+    "shrink-0", // ✅ CRITIQUE: empêche les items de se compresser et de “coller”
+    "px-3 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap",
     "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
-    "whitespace-nowrap",
     isActive
       ? "bg-white shadow-sm text-pro-gray"
       : "text-gray-600 hover:text-pro-gray hover:bg-white/70",
@@ -59,7 +59,7 @@ export default function AdminLayout() {
     };
   }, [open]);
 
-  // Ferme au clavier (Escape)
+  // Ferme avec ESC
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -75,31 +75,30 @@ export default function AdminLayout() {
       <header className="sticky top-0 z-50 border-b bg-white/85 backdrop-blur">
         <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10">
           <div className="flex items-center gap-3 py-3 min-w-0">
-            {/* Brand (jamais compressé) */}
+            {/* Brand */}
             <div className="flex items-center gap-2 shrink-0">
               <div className="h-9 w-9 rounded-xl bg-pro-blue text-white flex items-center justify-center text-sm font-bold">
                 PS
               </div>
-              <div className="hidden sm:block">
-                <div className="text-sm font-semibold text-pro-gray leading-tight">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-pro-gray truncate">
                   Administration
                 </div>
-                <div className="text-[11px] text-slate-500 leading-tight">
+                <div className="text-[11px] text-slate-500 truncate">
                   Back-office
                 </div>
               </div>
             </div>
 
-            {/* ✅ Desktop nav : scroll horizontal (évite tout débordement) */}
-            <nav className="hidden lg:block min-w-0 flex-1">
-              <div className="relative">
-                {/* zone scroll */}
-                <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap min-w-0 pr-6">
+            {/* ✅ NAV DESKTOP uniquement sur très grands écrans (évite le “désordre”) */}
+            <nav className="hidden 2xl:flex min-w-0 flex-1 items-center">
+              <div className="relative w-full min-w-0">
+                <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap min-w-0 pr-10">
                   {navItems.map((it) => (
                     <NavLink
                       key={it.to}
                       to={it.to}
-                      className={navItemClass}
+                      className={desktopNavClass}
                       end={it.end}
                     >
                       {it.label}
@@ -108,39 +107,43 @@ export default function AdminLayout() {
 
                   <Link
                     to="/"
-                    className="ml-2 text-sm text-gray-600 hover:text-pro-gray inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/70"
+                    className={[
+                      "shrink-0 ml-2 inline-flex items-center gap-2",
+                      "px-3 py-2 rounded-lg text-sm text-gray-600 hover:text-pro-gray hover:bg-white/70 whitespace-nowrap",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
+                    ].join(" ")}
                   >
                     <ExternalLink className="h-4 w-4" />
                     Retour au site
                   </Link>
                 </div>
 
-                {/* petit fondu à droite (effet pro) */}
-                <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-white/90 to-transparent" />
+                {/* fondu droite */}
+                <div className="pointer-events-none absolute right-0 top-0 h-full w-12 bg-gradient-to-l from-white/90 to-transparent" />
               </div>
             </nav>
 
-            {/* Actions à droite (jamais compressées) */}
+            {/* Actions */}
             <div className="ml-auto flex items-center gap-2 shrink-0">
-              {/* Retour au site visible sur mobile aussi */}
+              {/* Logout visible uniquement en 2XL avec nav */}
+              <div className="hidden 2xl:block">
+                <AdminLogoutButton className="whitespace-nowrap" redirectTo="/" />
+              </div>
+
+              {/* Bouton retour au site (mobile/tablette/desktop <2XL) */}
               <Link
                 to="/"
-                className="lg:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
+                className="2xl:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
                 aria-label="Retour au site"
                 title="Retour au site"
               >
                 <ExternalLink className="h-5 w-5" />
               </Link>
 
-              {/* Logout visible sur desktop */}
-              <div className="hidden lg:block">
-                <AdminLogoutButton className="whitespace-nowrap" redirectTo="/" />
-              </div>
-
-              {/* Hamburger visible sur mobile/tablette */}
+              {/* Hamburger (par défaut partout <2XL) */}
               <button
                 type="button"
-                className="lg:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
+                className="2xl:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
                 aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
                 aria-expanded={open}
                 onClick={() => setOpen((v) => !v)}
@@ -151,8 +154,8 @@ export default function AdminLayout() {
           </div>
         </div>
 
-        {/* Drawer (mobile/tablette) */}
-        <div className="lg:hidden">
+        {/* Drawer (mobile/tablette/desktop <2XL) */}
+        <div className="2xl:hidden">
           {/* Overlay */}
           <div
             className={[
