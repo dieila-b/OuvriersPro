@@ -162,34 +162,34 @@
   }
 }
 
-/* =========================
-   ✅ PATCH RESPONSIVE ADMIN (GLOBAL)
-   - empêche le “collage” des menus
-   - empêche les débordements flex/grid
-   ========================= */
-@layer base {
-  /* On applique min-width:0 seulement dans l’admin (via data-admin sur le wrapper) */
-  [data-admin],
-  [data-admin] * {
-    min-width: 0;
-  }
-}
+/* ---------------------------
+   ADMIN responsive hardening
+---------------------------- */
 
-/* Scrollbar discret du menu horizontal */
+/* Scrollbar discrète pour nav horizontal */
 .admin-scrollbar {
-  scrollbar-width: thin; /* Firefox */
-  scrollbar-color: rgba(148, 163, 184, 0.8) transparent;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.65) transparent; /* slate-400 */
 }
-
 .admin-scrollbar::-webkit-scrollbar {
-  height: 8px; /* Chrome/Safari/Edge */
+  height: 8px;
 }
-
 .admin-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
-
 .admin-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(148, 163, 184, 0.55);
   border-radius: 999px;
+}
+
+/* Protection anti-débordement uniquement dans l'admin */
+[data-admin] * {
+  min-width: 0;
+}
+
+/* Empêche que le header admin crée du scroll horizontal */
+[data-admin] header,
+[data-admin] main {
+  max-width: 100%;
+  overflow-x: clip;
 }
