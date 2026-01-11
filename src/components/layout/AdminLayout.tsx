@@ -8,8 +8,10 @@ type NavItem = { to: string; label: string; end?: boolean };
 
 function desktopNavClass({ isActive }: { isActive: boolean }) {
   return [
-    "px-3 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap",
+    "px-3 py-2 rounded-lg text-sm font-medium transition",
     "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
+    // ✅ IMPORTANT: autoriser le wrap à 2 lignes au besoin (évite les débordements)
+    "whitespace-normal leading-tight",
     isActive
       ? "bg-white shadow-sm text-pro-gray"
       : "text-gray-600 hover:text-pro-gray hover:bg-white/70",
@@ -18,7 +20,7 @@ function desktopNavClass({ isActive }: { isActive: boolean }) {
 
 function mobileNavClass({ isActive }: { isActive: boolean }) {
   return [
-    "w-full px-3 py-2 rounded-lg text-sm font-medium transition",
+    "w-full px-3 py-2 rounded-lg text-sm font-medium transition text-left",
     "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
     isActive
       ? "bg-slate-50 text-pro-gray border border-slate-200"
@@ -43,12 +45,12 @@ export default function AdminLayout() {
     []
   );
 
-  // Ferme le drawer à chaque navigation
+  // ✅ Ferme le drawer à chaque navigation
   useEffect(() => {
     setOpen(false);
   }, [location.pathname]);
 
-  // Bloque le scroll du body quand le drawer est ouvert
+  // ✅ Bloque le scroll du body quand le drawer est ouvert
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -58,11 +60,21 @@ export default function AdminLayout() {
     };
   }, [open]);
 
+  // ✅ Ferme au clavier (Escape)
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
   return (
-    <div className="min-h-screen bg-slate-50 overflow-x-clip">
+    <div className="min-h-dvh bg-slate-50 overflow-x-clip">
       {/* Header sticky */}
       <header className="sticky top-0 z-50 border-b bg-white/85 backdrop-blur">
-        <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10">
+        <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 2xl:px-10">
           <div className="flex items-center justify-between py-3 gap-3 min-w-0">
             {/* Brand */}
             <div className="flex items-center gap-2 min-w-0">
@@ -79,18 +91,23 @@ export default function AdminLayout() {
               </div>
             </div>
 
-            {/* ✅ Desktop nav seulement sur XL+ */}
-            <nav className="hidden xl:flex items-center gap-1 min-w-0">
+            {/* ✅ Desktop nav uniquement en 2XL (évite le débordement sur laptop) */}
+            <nav className="hidden 2xl:flex items-center gap-1 min-w-0">
               <div className="flex items-center gap-1 min-w-0">
                 {navItems.map((it) => (
-                  <NavLink key={it.to} to={it.to} className={desktopNavClass} end={it.end}>
+                  <NavLink
+                    key={it.to}
+                    to={it.to}
+                    className={desktopNavClass}
+                    end={it.end}
+                  >
                     {it.label}
                   </NavLink>
                 ))}
 
                 <Link
                   to="/"
-                  className="ml-2 text-sm text-gray-600 hover:text-pro-gray inline-flex items-center gap-2 whitespace-nowrap"
+                  className="ml-2 text-sm text-gray-600 hover:text-pro-gray inline-flex items-center gap-2"
                 >
                   <ExternalLink className="h-4 w-4" />
                   Retour au site
@@ -102,12 +119,22 @@ export default function AdminLayout() {
               </div>
             </nav>
 
-            {/* ✅ Mobile/Tablet actions (jusqu'à XL) */}
-            <div className="flex items-center gap-2 xl:hidden shrink-0">
+            {/* ✅ Actions mobile/tablette/laptop (jusqu'à 2XL) */}
+            <div className="flex items-center gap-2 2xl:hidden shrink-0">
+              {/* Retour au site toujours visible */}
+              <Link
+                to="/"
+                className="hidden sm:inline-flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-medium text-slate-700"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Retour au site
+              </Link>
+
               <button
                 type="button"
                 className="inline-flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
                 aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
+                aria-expanded={open}
                 onClick={() => setOpen((v) => !v)}
               >
                 {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -116,66 +143,78 @@ export default function AdminLayout() {
           </div>
         </div>
 
-        {/* Drawer (mobile/tablette) */}
-        {open && (
-          <div className="xl:hidden">
-            <div
-              className="fixed inset-0 z-40 bg-black/30"
-              onClick={() => setOpen(false)}
-              aria-hidden="true"
-            />
+        {/* ✅ Drawer (mobile/tablette/laptop) - visible jusqu'à 2XL */}
+        <div className="2xl:hidden">
+          {/* Overlay */}
+          <div
+            className={[
+              "fixed inset-0 z-40 bg-black/30 transition-opacity",
+              open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
+            ].join(" ")}
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
 
-            <div className="fixed inset-y-0 right-0 z-50 w-[86vw] max-w-sm bg-white shadow-2xl border-l border-slate-200">
-              <div className="p-4 border-b border-slate-200 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-slate-900 truncate">
-                    Menu admin
-                  </div>
-                  <div className="text-[11px] text-slate-500 truncate">
-                    Navigation back-office
-                  </div>
+          {/* Panel */}
+          <div
+            className={[
+              "fixed inset-y-0 right-0 z-50 w-[88vw] max-w-sm bg-white shadow-2xl border-l border-slate-200",
+              "transition-transform duration-200 ease-out",
+              open ? "translate-x-0" : "translate-x-full",
+            ].join(" ")}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu admin"
+          >
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-slate-900 truncate">
+                  Menu admin
                 </div>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center h-9 w-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 shrink-0"
-                  aria-label="Fermer"
-                  onClick={() => setOpen(false)}
-                >
-                  <X className="h-5 w-5" />
-                </button>
+                <div className="text-[11px] text-slate-500 truncate">
+                  Navigation back-office
+                </div>
               </div>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center h-9 w-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 shrink-0"
+                aria-label="Fermer"
+                onClick={() => setOpen(false)}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
 
-              <div className="p-4 space-y-2">
-                {navItems.map((it) => (
-                  <NavLink
-                    key={it.to}
-                    to={it.to}
-                    className={mobileNavClass}
-                    end={it.end}
-                  >
-                    {it.label}
-                  </NavLink>
-                ))}
-
-                <Link
-                  to="/"
-                  className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50"
+            <div className="p-4 space-y-2">
+              {navItems.map((it) => (
+                <NavLink
+                  key={it.to}
+                  to={it.to}
+                  className={mobileNavClass}
+                  end={it.end}
                 >
-                  <ExternalLink className="h-4 w-4" />
-                  Retour au site
-                </Link>
+                  {it.label}
+                </NavLink>
+              ))}
 
-                <div className="pt-2">
-                  <AdminLogoutButton className="w-full justify-center" redirectTo="/" />
-                </div>
+              <Link
+                to="/"
+                className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Retour au site
+              </Link>
+
+              <div className="pt-2">
+                <AdminLogoutButton className="w-full justify-center" redirectTo="/" />
               </div>
             </div>
           </div>
-        )}
+        </div>
       </header>
 
       {/* Content */}
-      <main className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10 py-6">
+      <main className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 2xl:px-10 py-6 min-w-0">
         <Outlet />
       </main>
     </div>
