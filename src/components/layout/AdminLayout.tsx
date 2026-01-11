@@ -70,10 +70,11 @@ export default function AdminLayout() {
   }, [open]);
 
   return (
-    <div data-admin-root className="min-h-dvh bg-slate-50 overflow-x-clip">
+    // ✅ IMPORTANT : ne pas "clipper" horizontalement au root.
+    // Certaines pages ont des tables/toolbars qui doivent pouvoir scroller localement.
+    <div className="min-h-dvh bg-slate-50 w-full overflow-x-hidden">
       <header className="sticky top-0 z-50 border-b bg-white/85 backdrop-blur">
         <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10">
-          {/* ✅ On passe en layout “3 zones” robustes */}
           <div className="flex items-center gap-3 py-3 min-w-0">
             {/* Brand */}
             <div className="flex items-center gap-2 shrink-0">
@@ -90,40 +91,58 @@ export default function AdminLayout() {
               </div>
             </div>
 
-            {/* ✅ Desktop nav (lg+) : scrollable SANS scrollbar visible */}
-            <nav className="hidden lg:flex min-w-0 flex-1 items-center">
-              <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-none">
-                {navItems.map((it) => (
-                  <NavLink key={it.to} to={it.to} className={navItemClass} end={it.end}>
-                    {it.label}
-                  </NavLink>
-                ))}
-
-                <Link
-                  to="/"
+            {/* Desktop nav: scrollable */}
+            <nav className="hidden md:flex min-w-0 flex-1 items-center">
+              <div className="relative w-full min-w-0">
+                {/* zone scroll */}
+                <div
                   className={[
-                    "shrink-0 ml-2 inline-flex items-center gap-2",
-                    "px-3 py-2 rounded-lg text-sm text-gray-600 hover:text-pro-gray hover:bg-white/70 whitespace-nowrap",
-                    "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
+                    "flex items-center gap-1",
+                    "overflow-x-auto whitespace-nowrap min-w-0",
+                    "pr-14", // espace pour le fondu à droite
+                    "scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent",
                   ].join(" ")}
                 >
-                  <ExternalLink className="h-4 w-4" />
-                  Retour au site
-                </Link>
+                  {navItems.map((it) => (
+                    <NavLink
+                      key={it.to}
+                      to={it.to}
+                      className={navItemClass}
+                      end={it.end}
+                    >
+                      {it.label}
+                    </NavLink>
+                  ))}
+
+                  <Link
+                    to="/"
+                    className={[
+                      "shrink-0 ml-2 inline-flex items-center gap-2",
+                      "px-3 py-2 rounded-lg text-sm text-gray-600 hover:text-pro-gray hover:bg-white/70 whitespace-nowrap",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
+                    ].join(" ")}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Retour au site
+                  </Link>
+                </div>
+
+                {/* fondu droite (indique le scroll) */}
+                <div className="pointer-events-none absolute right-0 top-0 h-full w-14 bg-gradient-to-l from-white/95 to-transparent" />
               </div>
             </nav>
 
-            {/* Actions (droite) */}
+            {/* Actions */}
             <div className="ml-auto flex items-center gap-2 shrink-0">
-              {/* Déconnexion visible en lg+ */}
-              <div className="hidden lg:block">
+              {/* Déconnexion visible en md+ */}
+              <div className="hidden md:block">
                 <AdminLogoutButton className="whitespace-nowrap" redirectTo="/" />
               </div>
 
-              {/* Hamburger visible en < lg (mobile + tablette) */}
+              {/* Hamburger visible en mobile uniquement */}
               <button
                 type="button"
-                className="lg:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
+                className="md:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
                 aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
                 aria-expanded={open}
                 onClick={() => setOpen((v) => !v)}
@@ -134,8 +153,8 @@ export default function AdminLayout() {
           </div>
         </div>
 
-        {/* Drawer mobile/tablette (<lg) */}
-        <div className="lg:hidden">
+        {/* Drawer mobile */}
+        <div className="md:hidden">
           <div
             className={[
               "fixed inset-0 z-40 bg-black/30 transition-opacity",
@@ -177,7 +196,12 @@ export default function AdminLayout() {
 
             <div className="p-4 space-y-2">
               {navItems.map((it) => (
-                <NavLink key={it.to} to={it.to} className={mobileNavClass} end={it.end}>
+                <NavLink
+                  key={it.to}
+                  to={it.to}
+                  className={mobileNavClass}
+                  end={it.end}
+                >
                   {it.label}
                 </NavLink>
               ))}
@@ -198,6 +222,7 @@ export default function AdminLayout() {
         </div>
       </header>
 
+      {/* ✅ Main: laisse les pages gérer leurs scroll-x localement (tables) */}
       <main className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10 py-6 min-w-0">
         <Outlet />
       </main>
