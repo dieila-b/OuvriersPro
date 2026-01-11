@@ -205,9 +205,7 @@ const AdminDashboard: React.FC = () => {
             ? `Erreur chargement ouvriers : ${workersError.message}`
             : `Error loading workers: ${workersError.message}`
         );
-      } else {
-        setWorkers((workersData as DbWorkerSummary[]) ?? []);
-      }
+      } else setWorkers((workersData as DbWorkerSummary[]) ?? []);
 
       if (contactsError) {
         setError((prev) => {
@@ -217,10 +215,8 @@ const AdminDashboard: React.FC = () => {
               : `Error loading contacts: ${contactsError.message}`;
           return prev ? `${prev} | ${msg}` : msg;
         });
-      } else {
-        setContacts((contactsData as DbContactSummary[]) ?? []);
-      }
-    } catch (e: any) {
+      } else setContacts((contactsData as DbContactSummary[]) ?? []);
+    } catch (e) {
       setError(language === "fr" ? "Erreur inconnue lors du chargement." : "Unknown loading error.");
       console.error(e);
     } finally {
@@ -486,8 +482,7 @@ const AdminDashboard: React.FC = () => {
         : "Global view of registrations and contact requests.",
     dateFrom: language === "fr" ? "Du (filtre global)" : "From (global filter)",
     dateTo: language === "fr" ? "Au (filtre global)" : "To (global filter)",
-    chartTitle:
-      language === "fr" ? "Évolution des demandes / conversions" : "Requests / conversions trend",
+    chartTitle: language === "fr" ? "Évolution des demandes / conversions" : "Requests / conversions trend",
     chartModeDaily: language === "fr" ? "Jour" : "Daily",
     chartModeWeekly: language === "fr" ? "Semaine" : "Weekly",
     metricModeVolume: language === "fr" ? "Volume" : "Volume",
@@ -513,7 +508,9 @@ const AdminDashboard: React.FC = () => {
     recentWorkers: language === "fr" ? "Dernières inscriptions" : "Latest registrations",
     recentContacts: language === "fr" ? "Dernières demandes de contact" : "Latest contact requests",
     emptyPeriod:
-      language === "fr" ? "Aucune donnée dans la période sélectionnée." : "No data in the selected period.",
+      language === "fr"
+        ? "Aucune donnée dans la période sélectionnée."
+        : "No data in the selected period.",
     refresh: language === "fr" ? "Actualiser" : "Refresh",
     clearDates: language === "fr" ? "Effacer dates" : "Clear dates",
     viewAll: language === "fr" ? "Tout voir" : "View all",
@@ -532,12 +529,12 @@ const AdminDashboard: React.FC = () => {
   if (!isAdmin) return null;
 
   return (
-    <div className="space-y-6">
+    <div className="w-full">
       {/* Header + actions + filtres */}
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 md:gap-5">
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
               {text.title}
               <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-semibold">
                 Admin
@@ -546,10 +543,10 @@ const AdminDashboard: React.FC = () => {
             <p className="text-sm text-slate-600 mt-1">{text.subtitle}</p>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap justify-start lg:justify-end">
             <Button
               variant="outline"
-              className="gap-2 w-full sm:w-auto"
+              className="gap-2"
               onClick={() => {
                 setDateFrom("");
                 setDateTo("");
@@ -560,11 +557,7 @@ const AdminDashboard: React.FC = () => {
               {text.clearDates}
             </Button>
 
-            <Button
-              className="gap-2 bg-pro-blue hover:bg-blue-700 w-full sm:w-auto"
-              onClick={fetchDashboardData}
-              disabled={loading}
-            >
+            <Button className="gap-2 bg-pro-blue hover:bg-blue-700" onClick={fetchDashboardData} disabled={loading}>
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               {text.refresh}
             </Button>
@@ -585,14 +578,12 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         {error && (
-          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
       </div>
 
-      {/* KPIs workers (✅ 1 colonne en mobile) */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      {/* KPIs workers */}
+      <div className="mt-6 grid gap-4 md:gap-5 grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
         <StatCard
           label={language === "fr" ? "Total ouvriers" : "Total workers"}
           value={stats.totalWorkers}
@@ -631,7 +622,7 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       {/* KPIs contacts */}
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+      <div className="mt-4 grid gap-4 md:gap-5 grid-cols-1 md:grid-cols-3">
         <StatCard
           label={language === "fr" ? "Total demandes" : "Total requests"}
           value={stats.totalContacts}
@@ -656,7 +647,7 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Plans + liens */}
-      <div className={`${cardClass} p-4 sm:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4`}>
+      <div className={`mt-6 ${cardClass} p-4 sm:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4`}>
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-slate-800">
             {language === "fr" ? "Répartition des plans" : "Plans distribution"}
@@ -684,15 +675,15 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
           <Link to="/admin/ouvriers" className="w-full sm:w-auto">
-            <Button size="sm" variant="outline" className="gap-2 w-full sm:w-auto">
+            <Button size="sm" variant="outline" className="gap-2 w-full sm:w-auto justify-between sm:justify-center">
               {text.goToInscriptions}
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
           <Link to="/admin/ouvrier-contacts" className="w-full sm:w-auto">
-            <Button size="sm" variant="outline" className="gap-2 w-full sm:w-auto">
+            <Button size="sm" variant="outline" className="gap-2 w-full sm:w-auto justify-between sm:justify-center">
               {text.goToContacts}
               <ArrowRight className="h-4 w-4" />
             </Button>
@@ -700,9 +691,8 @@ const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Graphique + Roadmap */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Graphique */}
+      {/* Graph + Roadmap */}
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className={`${cardClass} p-4 sm:p-5`}>
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-2">
             <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
@@ -749,7 +739,9 @@ const AdminDashboard: React.FC = () => {
                   type="button"
                   onClick={() => setMetricMode("volume")}
                   className={`px-3 py-1 rounded-full transition ${
-                    metricMode === "volume" ? "bg-white shadow text-slate-900 font-medium" : "text-slate-500 hover:text-slate-900"
+                    metricMode === "volume"
+                      ? "bg-white shadow text-slate-900 font-medium"
+                      : "text-slate-500 hover:text-slate-900"
                   }`}
                 >
                   {text.metricModeVolume}
@@ -758,7 +750,9 @@ const AdminDashboard: React.FC = () => {
                   type="button"
                   onClick={() => setMetricMode("conversion")}
                   className={`px-3 py-1 rounded-full transition ${
-                    metricMode === "conversion" ? "bg-white shadow text-slate-900 font-medium" : "text-slate-500 hover:text-slate-900"
+                    metricMode === "conversion"
+                      ? "bg-white shadow text-slate-900 font-medium"
+                      : "text-slate-500 hover:text-slate-900"
                   }`}
                 >
                   {text.metricModeConversion}
@@ -777,8 +771,8 @@ const AdminDashboard: React.FC = () => {
               : text.chartSubtitleWeeklyConversion}
           </p>
 
-          {/* ✅ barre chart responsive : scroll horizontal si trop serré */}
-          <div className="w-full overflow-x-auto">
+          {/* ✅ scroll horizontal contrôlé si trop serré */}
+          <div className="overflow-x-auto">
             <div className="min-w-[520px] h-44 flex items-end gap-2 border-b border-slate-100 pb-3">
               {activeChartData.points.length === 0 ? (
                 <div className="text-xs text-slate-400">{text.emptyPeriod}</div>
@@ -786,7 +780,6 @@ const AdminDashboard: React.FC = () => {
                 activeChartData.points.map((p) => {
                   const height = (p.value / activeChartData.maxValue) * 140;
                   const labelValue = metricMode === "volume" ? p.value : `${Math.round(p.value)}%`;
-
                   const barClass =
                     metricMode === "volume"
                       ? "bg-gradient-to-t from-sky-200 to-sky-500/70 border-sky-300"
@@ -799,9 +792,7 @@ const AdminDashboard: React.FC = () => {
                         style={{ height: `${height || 4}px` }}
                       >
                         {p.value > 0 && (
-                          <span className="text-[10px] text-white font-semibold mb-1 drop-shadow">
-                            {labelValue}
-                          </span>
+                          <span className="text-[10px] text-white font-semibold mb-1 drop-shadow">{labelValue}</span>
                         )}
                       </div>
                       <div className="mt-1 text-[10px] text-slate-500">{p.label}</div>
@@ -813,15 +804,12 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Roadmap */}
         <div className={`${cardClass} p-4 sm:p-5`}>
           <h2 className="text-sm font-semibold text-slate-800 mb-1">
             {language === "fr" ? "Prochains développements mobile" : "Upcoming mobile features"}
           </h2>
           <p className="text-xs text-slate-500 mb-4">
-            {language === "fr"
-              ? "Roadmap indicative pour l’app mobile OuvriersPro."
-              : "Indicative roadmap for the OuvriersPro mobile app."}
+            {language === "fr" ? "Roadmap indicative pour l’app mobile OuvriersPro." : "Indicative roadmap for the OuvriersPro mobile app."}
           </p>
 
           <ul className="space-y-3 text-xs text-slate-700">
@@ -829,9 +817,7 @@ const AdminDashboard: React.FC = () => {
               <span className="mt-[3px] h-2 w-2 rounded-full bg-emerald-500" />
               <div>
                 <span className="font-semibold">
-                  {language === "fr"
-                    ? "Phase 1 – API / Back-end prêt pour mobile"
-                    : "Phase 1 – API / backend ready"}
+                  {language === "fr" ? "Phase 1 – API / Back-end prêt pour mobile" : "Phase 1 – API / backend ready"}
                 </span>
                 <div className="text-slate-500">
                   {language === "fr"
@@ -887,21 +873,18 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Listes récentes */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Dernières inscriptions */}
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className={`${cardClass} p-4 sm:p-5`}>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-3 gap-3">
             <h2 className="text-sm font-semibold text-slate-800">{text.recentWorkers}</h2>
-            <Link to="/admin/ouvriers" className="text-[11px] text-pro-blue hover:underline">
+            <Link to="/admin/ouvriers" className="text-[11px] text-pro-blue hover:underline whitespace-nowrap">
               {text.viewAll}
             </Link>
           </div>
 
           {recentWorkers.length === 0 && !loading && (
             <div className="text-sm text-slate-500">
-              {language === "fr"
-                ? "Aucune inscription dans la période sélectionnée."
-                : "No registrations in selected period."}
+              {language === "fr" ? "Aucune inscription dans la période sélectionnée." : "No registrations in selected period."}
             </div>
           )}
 
@@ -939,11 +922,10 @@ const AdminDashboard: React.FC = () => {
           )}
         </div>
 
-        {/* Dernières demandes */}
         <div className={`${cardClass} p-4 sm:p-5`}>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-3 gap-3">
             <h2 className="text-sm font-semibold text-slate-800">{text.recentContacts}</h2>
-            <Link to="/admin/ouvrier-contacts" className="text-[11px] text-pro-blue hover:underline">
+            <Link to="/admin/ouvrier-contacts" className="text-[11px] text-pro-blue hover:underline whitespace-nowrap">
               {text.viewAll}
             </Link>
           </div>
@@ -982,6 +964,8 @@ const AdminDashboard: React.FC = () => {
           )}
         </div>
       </div>
+
+      <div className="mt-8" />
     </div>
   );
 };
