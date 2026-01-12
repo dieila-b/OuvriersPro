@@ -1,3 +1,4 @@
+// src/components/workers/ReportWorkerButton.tsx
 import React, { useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -32,15 +33,59 @@ export default function ReportWorkerButton({ workerId, workerName, className }: 
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
 
+  // ✅ Validation plus stricte (évite les signalements vides)
   const canSubmit = useMemo(() => {
     if (!workerId) return false;
     if (!reason) return false;
-    return true;
-  }, [workerId, reason]);
+
+    // On accepte si:
+    // - détails >= 10 caractères, OU
+    // - au moins un contact (email/téléphone) est fourni
+    const d = details.trim();
+    const hasDetails = d.length >= 10;
+    const hasContact = Boolean(email.trim() || phone.trim() || name.trim());
+    return hasDetails || hasContact;
+  }, [workerId, reason, details, email, phone, name]);
+
+  const resetForm = () => {
+    setDetails("");
+    setName("");
+    setPhone("");
+    setEmail("");
+    setReason("Profil frauduleux / faux");
+  };
+
+  // ✅ Insert robuste : on essaye worker_reports, sinon account_reports (selon ton schéma)
+  const insertReport = async (payload: any) => {
+    // 1) worker_reports (ton code actuel)
+    const r1 = await supabase.from("worker_reports").insert(payload);
+    if (!r1.error) return;
+
+    // 2) fallback account_reports (si ta page "Signalements" est basée dessus)
+    const fallbackPayload: any = {
+      // champs "génériques" souvent utilisés
+      reported_id: payload.worker_id,
+      reported_role: "worker",
+      reporter_name: payload.reporter_name,
+      reporter_phone: payload.reporter_phone,
+      reporter_email: payload.reporter_email,
+      reason: payload.reason,
+      details: payload.details,
+      status: "new",
+      origin: "web",
+    };
+
+    const r2 = await supabase.from("account_reports").insert(fallbackPayload);
+    if (r2.error) {
+      // On renvoie l'erreur la plus utile (la 1ère si table inexistante, sinon la 2ème)
+      throw new Error(r2.error.message || r1.error?.message || "Insert failed");
+    }
+  };
 
   const submit = async () => {
     if (!canSubmit || loading) return;
     setLoading(true);
+
     try {
       const payload = {
         worker_id: workerId,
@@ -51,8 +96,7 @@ export default function ReportWorkerButton({ workerId, workerName, className }: 
         details: details.trim() || null,
       };
 
-      const { error } = await supabase.from("worker_reports").insert(payload);
-      if (error) throw error;
+      await insertReport(payload);
 
       toast({
         title: "Signalement envoyé",
@@ -60,11 +104,7 @@ export default function ReportWorkerButton({ workerId, workerName, className }: 
       });
 
       setOpen(false);
-      setDetails("");
-      setName("");
-      setPhone("");
-      setEmail("");
-      setReason("Profil frauduleux / faux");
+      resetForm();
     } catch (e: any) {
       toast({
         title: "Erreur",
@@ -84,12 +124,22 @@ export default function ReportWorkerButton({ workerId, workerName, className }: 
         onClick={() => setOpen(true)}
         className={className}
         title="Signaler ce profil"
+        disabled={!workerId}
       >
         <AlertTriangle className="h-4 w-4 mr-2" />
         Signaler
       </Button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(v) => {
+          // ✅ si on ferme pendant le chargement, on bloque
+          if (loading) return;
+          setOpen(v);
+          // ✅ si on ferme, on reset (évite de garder des valeurs d'un autre profil)
+          if (!v) resetForm();
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Signaler ce profil{workerName ? ` : ${workerName}` : ""}</DialogTitle>
@@ -113,14 +163,17 @@ export default function ReportWorkerButton({ workerId, workerName, className }: 
             </div>
 
             <div>
-              <div className="text-sm font-medium mb-1">Détails (facultatif)</div>
+              <div className="text-sm font-medium mb-1">Détails (recommandé)</div>
               <Textarea
                 value={details}
                 onChange={(e) => setDetails(e.target.value)}
-                placeholder="Explique ce qui ne va pas (preuves, contexte, etc.)"
+                placeholder="Explique ce qui ne va pas (preuves, contexte, etc.). Minimum 10 caractères si vous ne mettez pas de contact."
                 rows={4}
                 disabled={loading}
               />
+              <div className="text-[11px] text-muted-foreground mt-1">
+                {details.trim().length}/10 min
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -138,8 +191,20 @@ export default function ReportWorkerButton({ workerId, workerName, className }: 
               </div>
             </div>
 
+            {/* ✅ petit hint UX */}
+            {!canSubmit ? (
+              <div className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                Ajoute au moins <b>10 caractères</b> dans “Détails” ou un <b>contact</b> (nom/téléphone/email).
+              </div>
+            ) : null}
+
             <div className="flex items-center justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+                disabled={loading}
+              >
                 Annuler
               </Button>
               <Button type="button" onClick={submit} disabled={!canSubmit || loading}>
