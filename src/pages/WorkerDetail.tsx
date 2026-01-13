@@ -14,7 +14,7 @@ import {
   MapPin,
   Star,
   ExternalLink,
-  Loader2,
+  Image as ImageIcon,
 } from "lucide-react";
 
 type WorkerProfile = {
@@ -36,9 +36,6 @@ type WorkerProfile = {
 
   latitude: number | null;
   longitude: number | null;
-
-  experience_years?: number | null;
-  years_experience?: number | null;
 };
 
 type Review = {
@@ -54,24 +51,6 @@ type WorkerPhoto = {
   public_url: string | null;
   title: string | null;
   description?: string | null;
-  is_cover?: boolean | null;
-  created_at?: string | null;
-};
-
-type PortfolioItem = {
-  id: string;
-  worker_id: string;
-  title: string | null;
-  description: string | null;
-  location: string | null;
-  date_completed: string | null;
-  cover_photo_url: string | null;
-  created_at: string;
-
-  // champs optionnels si tu les ajoutes en DB
-  category?: string | null;
-  price?: number | null;
-  currency?: string | null;
 };
 
 type VoteType = "like" | "useful" | "not_useful";
@@ -83,6 +62,45 @@ type ReviewVoteRow = {
 };
 
 type ViewerRole = "client" | "worker" | null;
+
+// --------------------
+// Portfolio types
+// --------------------
+type PortfolioRow = {
+  id: string;
+  worker_id: string;
+  title: string | null;
+  description: string | null;
+  location: string | null;
+  date_completed: string | null;
+  cover_photo_url: string | null;
+  created_at: string;
+
+  // Optionnels (si tu les ajoutes à la table)
+  category?: string | null;
+  price?: number | null;
+  currency?: string | null;
+};
+
+type PortfolioPhotoKind = "before" | "after" | "other";
+
+type PortfolioPhotoJoinRow = {
+  portfolio_id: string;
+  kind: PortfolioPhotoKind;
+  sort_order: number | null;
+  photo: {
+    id: string;
+    public_url: string | null;
+    title: string | null;
+    description: string | null;
+  } | null;
+};
+
+type PortfolioMedia = {
+  before: WorkerPhoto[];
+  after: WorkerPhoto[];
+  other: WorkerPhoto[];
+};
 
 const WorkerDetail: React.FC = () => {
   const { language } = useLanguage();
@@ -132,14 +150,10 @@ const WorkerDetail: React.FC = () => {
   const [photosError, setPhotosError] = useState<string | null>(null);
 
   // Portfolio (réalisations)
-  const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
+  const [portfolio, setPortfolio] = useState<PortfolioRow[]>([]);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [portfolioError, setPortfolioError] = useState<string | null>(null);
-
-  // “Avant/Après” (optionnel) via table de liaison si elle existe
-  const [portfolioPhotosById, setPortfolioPhotosById] = useState<
-    Record<string, { before: WorkerPhoto[]; after: WorkerPhoto[]; other: WorkerPhoto[] }>
-  >({});
+  const [portfolioMediaById, setPortfolioMediaById] = useState<Record<string, PortfolioMedia>>({});
 
   const tVotes = useMemo(() => {
     return {
@@ -147,7 +161,10 @@ const WorkerDetail: React.FC = () => {
       useful: language === "fr" ? "Utile" : "Useful",
       notUseful: language === "fr" ? "Pas utile" : "Not useful",
       mustLogin: language === "fr" ? "Connectez-vous pour réagir." : "Log in to react.",
-      voteError: language === "fr" ? "Impossible d’enregistrer votre réaction." : "Unable to save your reaction.",
+      voteError:
+        language === "fr"
+          ? "Impossible d’enregistrer votre réaction."
+          : "Unable to save your reaction.",
     };
   }, [language]);
 
@@ -159,7 +176,29 @@ const WorkerDetail: React.FC = () => {
           ? "Localisation approximative / zone d’intervention."
           : "Approximate location / service area.",
       open: language === "fr" ? "Ouvrir dans Google Maps" : "Open in Google Maps",
-      missing: language === "fr" ? "Localisation non renseignée." : "Location not provided.",
+      missing:
+        language === "fr" ? "Localisation non renseignée." : "Location not provided.",
+    };
+  }, [language]);
+
+  const tPortfolio = useMemo(() => {
+    return {
+      title: language === "fr" ? "Portfolio" : "Portfolio",
+      subtitle:
+        language === "fr"
+          ? "Réalisations, avant/après, détails, prix, etc."
+          : "Works, before/after, details, price, etc.",
+      empty:
+        language === "fr"
+          ? "Aucune réalisation pour le moment."
+          : "No work items yet.",
+      before: language === "fr" ? "Avant" : "Before",
+      after: language === "fr" ? "Après" : "After",
+      gallery: language === "fr" ? "Galerie" : "Gallery",
+      price: language === "fr" ? "Prix" : "Price",
+      category: language === "fr" ? "Catégorie" : "Category",
+      completed: language === "fr" ? "Terminé" : "Completed",
+      location: language === "fr" ? "Lieu" : "Location",
     };
   }, [language]);
 
@@ -186,7 +225,7 @@ const WorkerDetail: React.FC = () => {
     };
   }, []);
 
-  // Détecter le rôle (non bloquant)
+  // Détecter le rôle (conservé)
   useEffect(() => {
     let cancelled = false;
 
@@ -237,7 +276,9 @@ const WorkerDetail: React.FC = () => {
     };
   }, [authUserId]);
 
-  // Profil ouvrier
+  // -----------------------
+  // Load worker (profil)
+  // -----------------------
   useEffect(() => {
     const loadWorker = async () => {
       if (!workerId) {
@@ -269,9 +310,7 @@ const WorkerDetail: React.FC = () => {
           hourly_rate,
           currency,
           latitude,
-          longitude,
-          experience_years,
-          years_experience
+          longitude
         `
         )
         .eq("id", workerId)
@@ -280,7 +319,9 @@ const WorkerDetail: React.FC = () => {
       if (error || !data) {
         console.error("loadWorker error", error);
         setWorkerError(
-          language === "fr" ? "Impossible de charger le profil de cet ouvrier." : "Unable to load this worker profile."
+          language === "fr"
+            ? "Impossible de charger le profil de cet ouvrier."
+            : "Unable to load this worker profile."
         );
       } else {
         setWorker(data as WorkerProfile);
@@ -292,7 +333,9 @@ const WorkerDetail: React.FC = () => {
     loadWorker();
   }, [workerId, language]);
 
-  // Avis
+  // -----------------------
+  // Reviews
+  // -----------------------
   useEffect(() => {
     const loadReviews = async () => {
       if (!workerId) return;
@@ -326,7 +369,9 @@ const WorkerDetail: React.FC = () => {
     loadReviews();
   }, [workerId, language]);
 
-  // Galerie photos (op_ouvrier_photos)
+  // -----------------------
+  // Photos (galerie simple)
+  // -----------------------
   useEffect(() => {
     const loadPhotos = async () => {
       if (!workerId) return;
@@ -336,15 +381,14 @@ const WorkerDetail: React.FC = () => {
 
       const { data, error } = await supabase
         .from("op_ouvrier_photos")
-        .select("id, public_url, title, description, is_cover, created_at")
+        .select("id, public_url, title, description")
         .eq("worker_id", workerId)
-        .order("is_cover", { ascending: false })
         .order("created_at", { ascending: false })
-        .limit(9);
+        .limit(12);
 
       if (error) {
         console.error("loadPhotos error", error);
-        setPhotosError(language === "fr" ? "Impossible de charger la galerie." : "Unable to load gallery.");
+        setPhotosError(language === "fr" ? "Impossible de charger les photos." : "Unable to load photos.");
       } else {
         setPhotos((data || []) as WorkerPhoto[]);
       }
@@ -355,7 +399,11 @@ const WorkerDetail: React.FC = () => {
     loadPhotos();
   }, [workerId, language]);
 
-  // Portfolio (op_ouvrier_portfolio)
+  // -----------------------
+  // Portfolio (réalisations + medias)
+  // - Table principale: op_ouvrier_portfolio
+  // - Table optionnelle de liaison: op_ouvrier_portfolio_photos
+  // -----------------------
   useEffect(() => {
     const loadPortfolio = async () => {
       if (!workerId) return;
@@ -363,78 +411,115 @@ const WorkerDetail: React.FC = () => {
       setPortfolioLoading(true);
       setPortfolioError(null);
 
-      // Sélection “tolérante”: si tu ajoutes category/price/currency plus tard, ça n’empêchera pas le reste.
-      const { data, error } = await supabase
-        .from("op_ouvrier_portfolio")
-        .select("id, worker_id, title, description, location, date_completed, cover_photo_url, created_at")
-        .eq("worker_id", workerId)
-        .order("created_at", { ascending: false })
-        .limit(12);
+      try {
+        // 1) Réalisations
+        const { data: rows, error: pErr } = await supabase
+          .from("op_ouvrier_portfolio")
+          .select(
+            `
+            id,
+            worker_id,
+            title,
+            description,
+            location,
+            date_completed,
+            cover_photo_url,
+            created_at
+          `
+          )
+          .eq("worker_id", workerId)
+          .order("created_at", { ascending: false })
+          .limit(12);
 
-      if (error) {
-        console.error("loadPortfolio error", error);
-        setPortfolioError(language === "fr" ? "Impossible de charger le portfolio." : "Unable to load portfolio.");
-      } else {
-        setPortfolio((data || []) as PortfolioItem[]);
+        if (pErr) throw pErr;
+
+        const items = (rows || []) as PortfolioRow[];
+        setPortfolio(items);
+
+        // Reset medias map
+        if (!items.length) {
+          setPortfolioMediaById({});
+          setPortfolioLoading(false);
+          return;
+        }
+
+        // 2) Tenter de charger la liaison portfolio->photos (avant/après/galerie)
+        //    Si la table n'existe pas, on fallback sans casser.
+        const portfolioIds = items.map((x) => x.id);
+
+        const { data: joinRows, error: jErr } = await supabase
+          .from("op_ouvrier_portfolio_photos")
+          .select(
+            `
+            portfolio_id,
+            kind,
+            sort_order,
+            photo:op_ouvrier_photos (
+              id,
+              public_url,
+              title,
+              description
+            )
+          `
+          )
+          .in("portfolio_id", portfolioIds);
+
+        if (jErr) {
+          // Fallback propre: on n'a pas la table de liaison (ou pas de droits),
+          // on garde les items avec cover_photo_url seulement.
+          console.warn("Portfolio join table not available or not permitted:", jErr?.message);
+          const fallbackMap: Record<string, PortfolioMedia> = {};
+          for (const it of items) {
+            fallbackMap[it.id] = { before: [], after: [], other: [] };
+          }
+          setPortfolioMediaById(fallbackMap);
+          setPortfolioLoading(false);
+          return;
+        }
+
+        const map: Record<string, PortfolioMedia> = {};
+        for (const it of items) map[it.id] = { before: [], after: [], other: [] };
+
+        const normalized = (joinRows || []) as PortfolioPhotoJoinRow[];
+        // Tri stable sort_order puis created
+        normalized
+          .slice()
+          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+          .forEach((r) => {
+            if (!r?.portfolio_id || !map[r.portfolio_id]) return;
+            const kind = (r.kind || "other") as PortfolioPhotoKind;
+            const photo = r.photo
+              ? ({
+                  id: r.photo.id,
+                  public_url: r.photo.public_url,
+                  title: r.photo.title,
+                  description: r.photo.description,
+                } as WorkerPhoto)
+              : null;
+            if (!photo) return;
+
+            if (kind === "before") map[r.portfolio_id].before.push(photo);
+            else if (kind === "after") map[r.portfolio_id].after.push(photo);
+            else map[r.portfolio_id].other.push(photo);
+          });
+
+        setPortfolioMediaById(map);
+      } catch (e: any) {
+        console.error("loadPortfolio error", e);
+        setPortfolioError(
+          language === "fr"
+            ? "Impossible de charger le portfolio."
+            : "Unable to load portfolio."
+        );
+      } finally {
+        setPortfolioLoading(false);
       }
-
-      setPortfolioLoading(false);
     };
 
     loadPortfolio();
   }, [workerId, language]);
 
-  // Charger Avant/Après via table de liaison si elle existe (op_ouvrier_portfolio_photos)
-  useEffect(() => {
-    const loadPortfolioPhotos = async () => {
-      try {
-        if (!portfolio || portfolio.length === 0) {
-          setPortfolioPhotosById({});
-          return;
-        }
-
-        // On tente la table de liaison. Si elle n’existe pas, on ne casse pas la page.
-        const portfolioIds = portfolio.map((p) => p.id);
-
-        const { data: links, error: linkErr } = await supabase
-          .from("op_ouvrier_portfolio_photos")
-          .select("portfolio_id, kind, photo_id, sort_order, op_ouvrier_photos ( id, public_url, title, description, is_cover, created_at )")
-          .in("portfolio_id", portfolioIds)
-          .order("sort_order", { ascending: true });
-
-        if (linkErr) {
-          // table inexistante ou non autorisée -> on ignore proprement
-          console.warn("loadPortfolioPhotos skipped:", linkErr.message);
-          return;
-        }
-
-        const next: Record<string, { before: WorkerPhoto[]; after: WorkerPhoto[]; other: WorkerPhoto[] }> = {};
-        for (const p of portfolioIds) next[p] = { before: [], after: [], other: [] };
-
-        for (const row of (links || []) as any[]) {
-          const pid = row.portfolio_id as string;
-          const kind = (row.kind as "before" | "after" | "other") || "other";
-          const photo: WorkerPhoto | null = row.op_ouvrier_photos ?? null;
-          if (!pid || !photo?.id) continue;
-
-          if (!next[pid]) next[pid] = { before: [], after: [], other: [] };
-          if (kind === "before") next[pid].before.push(photo);
-          else if (kind === "after") next[pid].after.push(photo);
-          else next[pid].other.push(photo);
-        }
-
-        setPortfolioPhotosById(next);
-      } catch (e) {
-        console.warn("loadPortfolioPhotos error (ignored)", e);
-      }
-    };
-
-    loadPortfolioPhotos();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [portfolio.map((p) => p.id).join(",")]);
-
-  const fullName =
-    (worker?.first_name || "") + (worker?.last_name ? ` ${worker.last_name}` : "");
+  const fullName = (worker?.first_name || "") + (worker?.last_name ? ` ${worker.last_name}` : "");
 
   const location = [worker?.country, worker?.region, worker?.city, worker?.commune, worker?.district]
     .filter(Boolean)
@@ -480,10 +565,6 @@ const WorkerDetail: React.FC = () => {
       ? Math.round((reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length) * 10) / 10
       : 0;
 
-  const experienceYears = (worker?.experience_years ?? worker?.years_experience ?? 0) || 0;
-
-  const reviewsKey = useMemo(() => reviews.map((r) => r.id).join(","), [reviews]);
-
   // -----------------------
   // Votes (op_review_votes)
   // -----------------------
@@ -528,6 +609,8 @@ const WorkerDetail: React.FC = () => {
     setMyVoteByReviewId(authUserId ? myVotesMap : {});
   };
 
+  const reviewsKey = useMemo(() => reviews.map((r) => r.id).join(","), [reviews]);
+
   useEffect(() => {
     setVoteError(null);
     loadVotesAndCounts().catch((e) => console.error("loadVotesAndCounts error", e));
@@ -559,10 +642,7 @@ const WorkerDetail: React.FC = () => {
       setMyVoteByReviewId((prev) => ({ ...prev, [reviewId]: null }));
       setCountsByReviewId((prev) => {
         const base = prev[reviewId] ?? { like: 0, useful: 0, not_useful: 0 };
-        return {
-          ...prev,
-          [reviewId]: { ...base, [voteType]: Math.max(0, base[voteType] - 1) },
-        };
+        return { ...prev, [reviewId]: { ...base, [voteType]: Math.max(0, base[voteType] - 1) } };
       });
       return;
     }
@@ -631,7 +711,9 @@ const WorkerDetail: React.FC = () => {
       if (selectClientError && selectClientError.code !== "PGRST116") {
         console.error("select client error", selectClientError);
         throw new Error(
-          language === "fr" ? "Impossible de récupérer votre profil client." : "Unable to fetch your client profile."
+          language === "fr"
+            ? "Impossible de récupérer votre profil client."
+            : "Unable to fetch your client profile."
         );
       }
 
@@ -653,7 +735,9 @@ const WorkerDetail: React.FC = () => {
         if (insertClientError || !newClient) {
           console.error("insert client error", insertClientError);
           throw new Error(
-            language === "fr" ? "Impossible de créer votre profil client." : "Unable to create your client profile."
+            language === "fr"
+              ? "Impossible de créer votre profil client."
+              : "Unable to create your client profile."
           );
         }
 
@@ -662,14 +746,23 @@ const WorkerDetail: React.FC = () => {
 
       if (!clientProfileId) {
         throw new Error(
-          language === "fr" ? "Profil client introuvable. Veuillez réessayer." : "Client profile not found. Please try again."
+          language === "fr"
+            ? "Profil client introuvable. Veuillez réessayer."
+            : "Client profile not found. Please try again."
         );
       }
 
       const detailedMessageLines: string[] = [];
-      if (requestType) detailedMessageLines.push(`${language === "fr" ? "Type de demande" : "Request type"} : ${requestType}`);
-      if (approxBudget) detailedMessageLines.push(`${language === "fr" ? "Budget approximatif (facultatif)" : "Approx. budget (optional)"} : ${approxBudget}`);
-      if (desiredDate) detailedMessageLines.push(`${language === "fr" ? "Date souhaitée (facultatif)" : "Desired date (optional)"} : ${desiredDate}`);
+      if (requestType)
+        detailedMessageLines.push(`${language === "fr" ? "Type de demande" : "Request type"} : ${requestType}`);
+      if (approxBudget)
+        detailedMessageLines.push(
+          `${language === "fr" ? "Budget approximatif (facultatif)" : "Approx. budget (optional)"} : ${approxBudget}`
+        );
+      if (desiredDate)
+        detailedMessageLines.push(
+          `${language === "fr" ? "Date souhaitée (facultatif)" : "Desired date (optional)"} : ${desiredDate}`
+        );
       if (clientMessage) detailedMessageLines.push(clientMessage);
       const detailedMessage = detailedMessageLines.join("\n");
 
@@ -691,11 +784,17 @@ const WorkerDetail: React.FC = () => {
       if (contactError) {
         console.error("insert contact error", contactError);
         throw new Error(
-          language === "fr" ? "Une erreur est survenue lors de l'envoi de votre demande." : "An error occurred while sending your request."
+          language === "fr"
+            ? "Une erreur est survenue lors de l'envoi de votre demande."
+            : "An error occurred while sending your request."
         );
       }
 
-      setSubmitSuccess(language === "fr" ? "Votre demande a été envoyée à cet ouvrier." : "Your request has been sent to this worker.");
+      setSubmitSuccess(
+        language === "fr"
+          ? "Votre demande a été envoyée à cet ouvrier."
+          : "Your request has been sent to this worker."
+      );
       setRequestType("Demande de devis");
       setApproxBudget("");
       setDesiredDate("");
@@ -722,7 +821,9 @@ const WorkerDetail: React.FC = () => {
 
       if (authError || !user) {
         throw new Error(
-          language === "fr" ? "Vous devez être connecté pour laisser un avis." : "You must be logged in to leave a review."
+          language === "fr"
+            ? "Vous devez être connecté pour laisser un avis."
+            : "You must be logged in to leave a review."
         );
       }
 
@@ -738,7 +839,9 @@ const WorkerDetail: React.FC = () => {
 
       if (insertReviewError || !newReview) {
         console.error("insert review error", insertReviewError);
-        throw new Error(language === "fr" ? "Impossible d’enregistrer votre avis." : "Unable to save your review.");
+        throw new Error(
+          language === "fr" ? "Impossible d’enregistrer votre avis." : "Unable to save your review."
+        );
       }
 
       setReviews((prev) => [
@@ -761,31 +864,10 @@ const WorkerDetail: React.FC = () => {
     }
   };
 
-  // Helpers portfolio UI
-  const formatMoney = (amount?: number | null, curr?: string | null) => {
-    if (amount == null) return "";
-    const c = curr || "GNF";
-    try {
-      return `${amount.toLocaleString()} ${c}`;
-    } catch {
-      return `${amount} ${c}`;
-    }
-  };
-
-  const formatDate = (iso?: string | null) => {
-    if (!iso) return "";
-    try {
-      return new Date(iso).toLocaleDateString(language === "fr" ? "fr-FR" : "en-GB");
-    } catch {
-      return iso;
-    }
-  };
-
   if (loadingWorker) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="flex items-center gap-2 text-sm text-slate-500">
-          <Loader2 className="h-4 w-4 animate-spin" />
+        <div className="text-sm text-slate-500">
           {language === "fr" ? "Chargement du profil ouvrier..." : "Loading worker profile..."}
         </div>
       </div>
@@ -855,12 +937,13 @@ const WorkerDetail: React.FC = () => {
                     </div>
                     <div className="text-[11px] text-slate-500">{language === "fr" ? "avis" : "reviews"}</div>
                     <div className="text-[11px] text-slate-400">
-                      {reviews.length} {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
+                      {reviews.length}{" "}
+                      {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
                     </div>
                   </div>
 
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
-                    <div className="text-sm font-semibold text-slate-900">{experienceYears}</div>
+                    <div className="text-sm font-semibold text-slate-900">0</div>
                     <div className="text-[11px] text-slate-500">
                       {language === "fr" ? "ans d'expérience" : "years experience"}
                     </div>
@@ -921,240 +1004,226 @@ const WorkerDetail: React.FC = () => {
 
             {/* À propos */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-2">{language === "fr" ? "À propos" : "About"}</h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-2">
+                {language === "fr" ? "À propos" : "About"}
+              </h2>
               <p className="text-sm text-slate-700 whitespace-pre-line">
                 {worker.description ||
-                  (language === "fr" ? "Aucune description fournie pour le moment." : "No description provided yet.")}
+                  (language === "fr"
+                    ? "Aucune description fournie pour le moment."
+                    : "No description provided yet.")}
               </p>
             </div>
 
-            {/* ✅ Portfolio complet (réalisations + avant/après + galerie) */}
+            {/* ✅ PORTFOLIO (Réalisations + Avant/Après + Galerie) */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-1">{language === "fr" ? "Portfolio" : "Portfolio"}</h2>
-              <p className="text-xs text-slate-500 mb-3">
-                {language === "fr"
-                  ? "Réalisations (titre, description, lieu, date, avant/après) et galerie."
-                  : "Work items (title, description, location, date, before/after) and gallery."}
-              </p>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-800 mb-1">{tPortfolio.title}</h2>
+                  <p className="text-xs text-slate-500">{tPortfolio.subtitle}</p>
+                </div>
+              </div>
 
               {portfolioError && (
-                <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                <div className="mt-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
                   {portfolioError}
                 </div>
               )}
 
-              {/* Réalisations */}
-              <div className="mb-4">
-                <div className="text-xs font-semibold text-slate-700 mb-2">
-                  {language === "fr" ? "Réalisations" : "Work items"}
-                </div>
-
-                {portfolioLoading ? (
+              <div className="mt-4">
+                {portfolioLoading && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="h-28 rounded-lg bg-slate-100 border border-slate-200" />
-                    <div className="h-28 rounded-lg bg-slate-100 border border-slate-200" />
+                    <div className="h-40 rounded-xl bg-slate-100 border border-slate-200" />
+                    <div className="h-40 rounded-xl bg-slate-100 border border-slate-200" />
                   </div>
-                ) : portfolio.length === 0 ? (
-                  <div className="text-xs text-slate-500">
-                    {language === "fr" ? "Aucune réalisation pour le moment." : "No work items yet."}
-                  </div>
-                ) : (
+                )}
+
+                {!portfolioLoading && portfolio.length === 0 && (
+                  <div className="text-xs text-slate-500">{tPortfolio.empty}</div>
+                )}
+
+                {!portfolioLoading && portfolio.length > 0 && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {portfolio.map((item) => {
-                      const linked = portfolioPhotosById[item.id] || { before: [], after: [], other: [] };
+                      const media = portfolioMediaById[item.id] || { before: [], after: [], other: [] };
 
-                      // visuel: cover (priorité cover_photo_url, sinon photo cover de la galerie)
-                      const fallbackCover =
-                        photos.find((p) => p.is_cover && p.public_url)?.public_url ||
-                        photos.find((p) => p.public_url)?.public_url ||
+                      const beforeCover = media.before.find((x) => x.public_url)?.public_url || null;
+                      const afterCover = media.after.find((x) => x.public_url)?.public_url || null;
+
+                      // Cover priorité: cover_photo_url > before > other > after
+                      const cover =
+                        item.cover_photo_url ||
+                        beforeCover ||
+                        media.other.find((x) => x.public_url)?.public_url ||
+                        afterCover ||
                         null;
 
-                      const coverUrl = item.cover_photo_url || fallbackCover;
+                      const hasBeforeAfter = Boolean(beforeCover || afterCover);
 
-                      const metaLine = [
-                        item.location ? item.location : null,
-                        item.date_completed ? formatDate(item.date_completed) : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" • ");
-
-                      // Champs optionnels si tu ajoutes price/category/currency en DB
-                      const priceLabel = item.price != null ? formatMoney(item.price, item.currency || worker.currency || "GNF") : "";
-                      const categoryLabel = item.category ? item.category : "";
+                      const dateLabel = item.date_completed
+                        ? new Date(item.date_completed).toLocaleDateString(language === "fr" ? "fr-FR" : "en-GB")
+                        : null;
 
                       return (
-                        <div key={item.id} className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+                        <div key={item.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white">
                           <div className="flex">
-                            <div className="w-28 h-28 bg-slate-100 border-r border-slate-200 flex-shrink-0">
-                              {coverUrl ? (
-                                <img
-                                  src={coverUrl}
-                                  alt={item.title || ""}
-                                  className="w-full h-full object-cover"
-                                  loading="lazy"
-                                />
-                              ) : null}
+                            <div className="w-[140px] sm:w-[180px] bg-slate-50 border-r border-slate-200">
+                              {cover ? (
+                                <img src={cover} alt={item.title || ""} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full min-h-[140px] flex items-center justify-center text-slate-400">
+                                  <ImageIcon className="w-6 h-6" />
+                                </div>
+                              )}
                             </div>
 
-                            <div className="p-3 flex-1">
+                            <div className="flex-1 p-3">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0">
                                   <div className="text-sm font-semibold text-slate-900 truncate">
                                     {item.title || (language === "fr" ? "Réalisation" : "Work item")}
                                   </div>
 
-                                  {metaLine ? (
-                                    <div className="mt-0.5 text-[11px] text-slate-500">{metaLine}</div>
-                                  ) : (
-                                    <div className="mt-0.5 text-[11px] text-slate-400">
-                                      {language === "fr" ? "—" : "—"}
-                                    </div>
-                                  )}
-                                </div>
-
-                                {(categoryLabel || priceLabel) ? (
-                                  <div className="text-right text-[11px] text-slate-600">
-                                    {categoryLabel ? (
-                                      <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200">
-                                        {categoryLabel}
-                                      </div>
+                                  <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-slate-500">
+                                    {item.location ? (
+                                      <span className="inline-flex items-center gap-1">
+                                        <span className="font-medium text-slate-700">{tPortfolio.location}:</span>{" "}
+                                        {item.location}
+                                      </span>
                                     ) : null}
-                                    {priceLabel ? <div className="mt-1 font-semibold text-slate-900">{priceLabel}</div> : null}
+
+                                    {dateLabel ? (
+                                      <span className="inline-flex items-center gap-1">
+                                        <span className="font-medium text-slate-700">{tPortfolio.completed}:</span>{" "}
+                                        {dateLabel}
+                                      </span>
+                                    ) : null}
                                   </div>
-                                ) : null}
+                                </div>
                               </div>
 
                               {item.description ? (
-                                <div className="mt-2 text-xs text-slate-700 line-clamp-3 whitespace-pre-line">
+                                <p className="mt-2 text-xs text-slate-700 whitespace-pre-line line-clamp-3">
                                   {item.description}
+                                </p>
+                              ) : null}
+
+                              {/* Avant/Après */}
+                              {hasBeforeAfter && (
+                                <div className="mt-3 grid grid-cols-2 gap-2">
+                                  <div className="rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
+                                    <div className="px-2 py-1 text-[10px] font-medium text-slate-600 border-b border-slate-200">
+                                      {tPortfolio.before}
+                                    </div>
+                                    <div className="aspect-[4/3]">
+                                      {beforeCover ? (
+                                        <img src={beforeCover} alt="Before" className="w-full h-full object-cover" />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                          <ImageIcon className="w-4 h-4" />
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
+                                    <div className="px-2 py-1 text-[10px] font-medium text-slate-600 border-b border-slate-200">
+                                      {tPortfolio.after}
+                                    </div>
+                                    <div className="aspect-[4/3]">
+                                      {afterCover ? (
+                                        <img src={afterCover} alt="After" className="w-full h-full object-cover" />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                          <ImageIcon className="w-4 h-4" />
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
-                              ) : (
-                                <div className="mt-2 text-xs text-slate-400">
-                                  {language === "fr" ? "Aucune description." : "No description."}
+                              )}
+
+                              {/* Galerie liée à la réalisation */}
+                              {(media.other.length > 0 || media.before.length > 1 || media.after.length > 1) && (
+                                <div className="mt-3">
+                                  <div className="text-[10px] font-medium text-slate-600 mb-1">
+                                    {tPortfolio.gallery}
+                                  </div>
+                                  <div className="flex gap-2 overflow-x-auto pb-1">
+                                    {[...media.before, ...media.after, ...media.other]
+                                      .filter((x) => x.public_url)
+                                      .slice(0, 10)
+                                      .map((ph) => (
+                                        <div
+                                          key={ph.id}
+                                          className="w-16 h-16 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 flex-shrink-0"
+                                          title={ph.title || ""}
+                                        >
+                                          <img
+                                            src={ph.public_url as string}
+                                            alt={ph.title || ""}
+                                            className="w-full h-full object-cover"
+                                          />
+                                        </div>
+                                      ))}
+                                  </div>
                                 </div>
                               )}
                             </div>
                           </div>
-
-                          {/* Avant / Après si table de liaison disponible */}
-                          {(linked.before.length > 0 || linked.after.length > 0 || linked.other.length > 0) && (
-                            <div className="border-t border-slate-200 bg-slate-50 p-3">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div>
-                                  <div className="text-[11px] font-semibold text-slate-700 mb-1">
-                                    {language === "fr" ? "Avant" : "Before"}
-                                  </div>
-                                  {linked.before.length === 0 ? (
-                                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
-                                  ) : (
-                                    <div className="grid grid-cols-2 gap-2">
-                                      {linked.before.slice(0, 2).map((p) => (
-                                        <div
-                                          key={p.id}
-                                          className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-100"
-                                        >
-                                          {p.public_url ? (
-                                            <img src={p.public_url} alt={p.title || ""} className="w-full h-full object-cover" loading="lazy" />
-                                          ) : null}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div>
-                                  <div className="text-[11px] font-semibold text-slate-700 mb-1">
-                                    {language === "fr" ? "Après" : "After"}
-                                  </div>
-                                  {linked.after.length === 0 ? (
-                                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
-                                  ) : (
-                                    <div className="grid grid-cols-2 gap-2">
-                                      {linked.after.slice(0, 2).map((p) => (
-                                        <div
-                                          key={p.id}
-                                          className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-100"
-                                        >
-                                          {p.public_url ? (
-                                            <img src={p.public_url} alt={p.title || ""} className="w-full h-full object-cover" loading="lazy" />
-                                          ) : null}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {linked.other.length > 0 && (
-                                <div className="mt-3">
-                                  <div className="text-[11px] font-semibold text-slate-700 mb-1">
-                                    {language === "fr" ? "Autres photos" : "Other photos"}
-                                  </div>
-                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                    {linked.other.slice(0, 4).map((p) => (
-                                      <div
-                                        key={p.id}
-                                        className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-100"
-                                      >
-                                        {p.public_url ? (
-                                          <img src={p.public_url} alt={p.title || ""} className="w-full h-full object-cover" loading="lazy" />
-                                        ) : null}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
                         </div>
                       );
                     })}
                   </div>
                 )}
               </div>
+            </div>
 
-              {/* Galerie photos (op_ouvrier_photos) */}
-              <div className="pt-3 border-t border-slate-200">
-                <div className="text-xs font-semibold text-slate-700 mb-2">
-                  {language === "fr" ? "Galerie photos" : "Photo gallery"}
+            {/* Galerie photos (générale) */}
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-800 mb-1">
+                {language === "fr" ? "Galerie photos" : "Photo gallery"}
+              </h2>
+              <p className="text-xs text-slate-500 mb-2">
+                {language === "fr"
+                  ? "Découvrez quelques réalisations de cet ouvrier."
+                  : "Discover some works from this worker."}
+              </p>
+
+              {photosError && (
+                <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                  {photosError}
                 </div>
+              )}
 
-                {photosError && (
-                  <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
-                    {photosError}
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {photosLoading && (
+                  <>
+                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                  </>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {photosLoading && (
-                    <>
-                      <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
-                      <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
-                      <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
-                    </>
-                  )}
+                {!photosLoading && photos.length === 0 && (
+                  <>
+                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                  </>
+                )}
 
-                  {!photosLoading && photos.length === 0 && (
-                    <>
-                      <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
-                      <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
-                      <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
-                    </>
-                  )}
-
-                  {!photosLoading &&
-                    photos.map((p) => (
-                      <div
-                        key={p.id}
-                        className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-100"
-                        title={p.title || undefined}
-                      >
-                        {p.public_url ? (
-                          <img src={p.public_url} alt={p.title || ""} className="w-full h-full object-cover" loading="lazy" />
-                        ) : null}
-                      </div>
-                    ))}
-                </div>
+                {!photosLoading &&
+                  photos.map((p) => (
+                    <div
+                      key={p.id}
+                      className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-100"
+                    >
+                      {p.public_url && (
+                        <img src={p.public_url} alt={p.title || ""} className="w-full h-full object-cover" />
+                      )}
+                    </div>
+                  ))}
               </div>
             </div>
 
@@ -1273,7 +1342,9 @@ const WorkerDetail: React.FC = () => {
                 <div className="flex items-center gap-1 mb-2">
                   {Array.from({ length: 5 }).map((_, i) => (
                     <button key={i} type="button" onClick={() => setNewRating(i + 1)} className="focus:outline-none">
-                      <Star className={`w-4 h-4 ${newRating > i ? "text-amber-500 fill-amber-400" : "text-slate-200"}`} />
+                      <Star
+                        className={`w-4 h-4 ${newRating > i ? "text-amber-500 fill-amber-400" : "text-slate-200"}`}
+                      />
                     </button>
                   ))}
                 </div>
@@ -1286,7 +1357,12 @@ const WorkerDetail: React.FC = () => {
                   onChange={(e) => setNewComment(e.target.value)}
                 />
 
-                <Button type="submit" size="sm" className="bg-pro-blue hover:bg-blue-700" disabled={submitReviewLoading || newRating === 0}>
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="bg-pro-blue hover:bg-blue-700"
+                  disabled={submitReviewLoading || newRating === 0}
+                >
                   {submitReviewLoading
                     ? language === "fr"
                       ? "Envoi de l’avis..."
@@ -1306,9 +1382,13 @@ const WorkerDetail: React.FC = () => {
                 {language === "fr" ? "Coordonnées directes" : "Direct contact"}
               </h2>
 
-              {/* ✅ Signaler (auto sur tous les profils) */}
+              {/* ✅ SIGNALER (toujours visible) */}
               <div className="mb-3">
-                <ReportWorkerButton workerId={worker.id} workerName={fullName || null} className="w-full justify-start" />
+                <ReportWorkerButton
+                  workerId={worker.id}
+                  workerName={fullName || null}
+                  className="w-full justify-start"
+                />
               </div>
 
               <div className="space-y-2 text-xs">
@@ -1362,12 +1442,16 @@ const WorkerDetail: React.FC = () => {
 
               <form onSubmit={handleSubmitContact} className="space-y-3 text-sm">
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Votre nom" : "Your name"}</label>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr" ? "Votre nom" : "Your name"}
+                  </label>
                   <Input value={clientName} onChange={(e) => setClientName(e.target.value)} required />
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Votre téléphone" : "Your phone"}</label>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr" ? "Votre téléphone" : "Your phone"}
+                  </label>
                   <Input value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} required />
                 </div>
 
@@ -1379,7 +1463,9 @@ const WorkerDetail: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Type de demande" : "Request type"}</label>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr" ? "Type de demande" : "Request type"}
+                  </label>
                   <select
                     className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-pro-blue"
                     value={requestType}
@@ -1395,7 +1481,12 @@ const WorkerDetail: React.FC = () => {
                   <label className="text-xs text-slate-500 block mb-1">
                     {language === "fr" ? "Budget approximatif (facultatif)" : "Approx. budget (optional)"}
                   </label>
-                  <Input type="number" value={approxBudget} onChange={(e) => setApproxBudget(e.target.value)} placeholder="5000000" />
+                  <Input
+                    type="number"
+                    value={approxBudget}
+                    onChange={(e) => setApproxBudget(e.target.value)}
+                    placeholder="5000000"
+                  />
                 </div>
 
                 <div>
@@ -1406,7 +1497,9 @@ const WorkerDetail: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Votre message" : "Your message"}</label>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {language === "fr" ? "Votre message" : "Your message"}
+                  </label>
                   <Textarea
                     rows={4}
                     value={clientMessage}
