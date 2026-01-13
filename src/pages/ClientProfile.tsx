@@ -93,26 +93,18 @@ const ClientProfile: React.FC = () => {
     save: language === "fr" ? "Enregistrer" : "Save",
     saving: language === "fr" ? "Enregistrement..." : "Saving...",
 
-    // ✅ bouton demandé (libellé plus explicite)
     backToClientArea:
-      language === "fr"
-        ? "Retour à l’espace client / particulier"
-        : "Back to client area",
+      language === "fr" ? "Retour à l’espace client / particulier" : "Back to client area",
 
     success:
-      language === "fr"
-        ? "Profil mis à jour avec succès."
-        : "Profile updated successfully.",
+      language === "fr" ? "Profil mis à jour avec succès." : "Profile updated successfully.",
     errorLoad:
-      language === "fr"
-        ? "Impossible de charger votre profil."
-        : "Unable to load your profile.",
+      language === "fr" ? "Impossible de charger votre profil." : "Unable to load your profile.",
     errorSave:
       language === "fr"
         ? "Erreur lors de l’enregistrement de votre profil."
         : "Error while saving your profile.",
 
-    // Avis
     reviewsTitle: language === "fr" ? "Avis reçus" : "Reviews received",
     reviewsSubtitle:
       language === "fr"
@@ -124,11 +116,10 @@ const ClientProfile: React.FC = () => {
       language === "fr" ? "Réagir / répondre à cet avis…" : "React / reply to this review…",
     replySend: language === "fr" ? "Envoyer" : "Send",
     replyError:
-      language === "fr"
-        ? "Impossible d'envoyer votre réponse."
-        : "Unable to send your reply.",
-    reviewsError:
-      language === "fr" ? "Impossible de charger les avis." : "Unable to load reviews.",
+      language === "fr" ? "Impossible d'envoyer votre réponse." : "Unable to send your reply.",
+    reviewsError: language === "fr" ? "Impossible de charger les avis." : "Unable to load reviews.",
+    mustLogin:
+      language === "fr" ? "Veuillez vous reconnecter." : "Please log in again.",
   };
 
   const formatDateTime = (iso: string) => {
@@ -151,63 +142,15 @@ const ClientProfile: React.FC = () => {
   const stars = (rating: number | null) => {
     const r = Math.max(0, Math.min(5, Number(rating || 0)));
     return Array.from({ length: 5 }).map((_, i) => (
-      <Star
-        key={i}
-        className={`w-4 h-4 ${i < r ? "text-amber-500 fill-amber-500" : "text-slate-300"}`}
-      />
+      <Star key={i} className={`w-4 h-4 ${i < r ? "text-amber-500 fill-amber-500" : "text-slate-300"}`} />
     ));
   };
 
-  useEffect(() => {
-    const loadAll = async () => {
-      setLoading(true);
-      setError(null);
-      setReviewsError(null);
-
-      try {
-        const { data: authData, error: authError } = await supabase.auth.getUser();
-        if (authError || !authData?.user) throw authError || new Error("No user");
-        const userId = authData.user.id;
-
-        const { data: userRow, error: userErr } = await supabase
-          .from("op_users")
-          .select("id, email, full_name, phone, country, city, preferred_contact")
-          .eq("id", userId)
-          .maybeSingle();
-
-        if (userErr || !userRow) throw userErr || new Error("Profile not found");
-        setProfile(userRow as Profile);
-
-        const { data: clientRow, error: clientErr } = await supabase
-          .from("op_clients")
-          .select("id, user_id")
-          .eq("user_id", userId)
-          .maybeSingle();
-
-        if (clientErr) throw clientErr;
-
-        if (!clientRow?.id) {
-          setClient(null);
-          setReviews([]);
-          setRepliesByReviewId({});
-          return;
-        }
-
-        const c = clientRow as ClientRow;
-        setClient(c);
-
-        await loadReviewsAndReplies(c.id);
-      } catch (err) {
-        console.error(err);
-        setError(t.errorLoad);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [language]);
+  const safeErrorMessage = (e: any) => {
+    const msg = e?.message || "";
+    const code = e?.code ? ` (${e.code})` : "";
+    return msg ? `${msg}${code}` : "";
+  };
 
   const loadReviewsAndReplies = async (clientId: string) => {
     setReviewsLoading(true);
@@ -270,11 +213,81 @@ const ClientProfile: React.FC = () => {
       setRepliesByReviewId(grouped);
     } catch (e) {
       console.error("loadReviewsAndReplies error", e);
-      setReviewsError(t.reviewsError);
+      setReviewsError(t.reviewsError + (safeErrorMessage(e) ? ` — ${safeErrorMessage(e)}` : ""));
     } finally {
       setReviewsLoading(false);
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadAll = async () => {
+      setLoading(true);
+      setError(null);
+      setReviewsError(null);
+
+      try {
+        // ✅ plus fiable que getUser en premier
+        const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+        if (sessionErr) throw sessionErr;
+
+        const userId = sessionData.session?.user?.id ?? null;
+        if (!userId) {
+          // pas connecté -> login
+          if (!cancelled) navigate(`/login?next=${encodeURIComponent("/espace-client")}`, { replace: true });
+          return;
+        }
+
+        const { data: userRow, error: userErr } = await supabase
+          .from("op_users")
+          .select("id, email, full_name, phone, country, city, preferred_contact")
+          .eq("id", userId)
+          .maybeSingle();
+
+        if (userErr || !userRow) throw userErr || new Error("Profile not found");
+        if (!cancelled) setProfile(userRow as Profile);
+
+        const { data: clientRow, error: clientErr } = await supabase
+          .from("op_clients")
+          .select("id, user_id")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (clientErr) throw clientErr;
+
+        if (!clientRow?.id) {
+          if (!cancelled) {
+            setClient(null);
+            setReviews([]);
+            setRepliesByReviewId({});
+          }
+          return;
+        }
+
+        const c = clientRow as ClientRow;
+        if (!cancelled) setClient(c);
+
+        await loadReviewsAndReplies(c.id);
+      } catch (err: any) {
+        console.error(err);
+        if (!cancelled) {
+          // message + détail éventuel
+          const detail = safeErrorMessage(err);
+          setError(t.errorLoad + (detail ? ` — ${detail}` : ""));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadAll();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>
@@ -306,9 +319,10 @@ const ClientProfile: React.FC = () => {
 
       if (updErr) throw updErr;
       setSuccess(t.success);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError(t.errorSave);
+      const detail = safeErrorMessage(err);
+      setError(t.errorSave + (detail ? ` — ${detail}` : ""));
     } finally {
       setSaving(false);
     }
@@ -348,9 +362,9 @@ const ClientProfile: React.FC = () => {
       });
 
       setReplyDraft((prev) => ({ ...prev, [review.id]: "" }));
-    } catch (e) {
+    } catch (e: any) {
       console.error("Reply insert error:", e);
-      setReviewsError(t.replyError);
+      setReviewsError(t.replyError + (safeErrorMessage(e) ? ` — ${safeErrorMessage(e)}` : ""));
     } finally {
       setReplySending((prev) => ({ ...prev, [review.id]: false }));
     }
@@ -378,7 +392,6 @@ const ClientProfile: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-slate-50 to-slate-100">
       <div className="max-w-3xl mx-auto px-4 py-8 md:py-10">
         <div className="mb-6 flex items-center justify-between gap-3">
-          {/* ✅ Bouton demandé */}
           <Button
             variant="outline"
             size="sm"
@@ -400,7 +413,6 @@ const ClientProfile: React.FC = () => {
           </div>
         </div>
 
-        {/* PROFIL */}
         <Card className="p-6 md:p-7 rounded-2xl bg-white/90 shadow-sm border-slate-200 space-y-6">
           {error && (
             <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
@@ -498,7 +510,6 @@ const ClientProfile: React.FC = () => {
           </form>
         </Card>
 
-        {/* AVIS */}
         <Card className="mt-6 p-6 md:p-7 rounded-2xl bg-white/90 shadow-sm border-slate-200 space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -515,7 +526,9 @@ const ClientProfile: React.FC = () => {
 
           {reviewsLoading && <div className="text-sm text-slate-500">{t.reviewsLoading}</div>}
 
-          {!reviewsLoading && reviews.length === 0 && <div className="text-sm text-slate-500">{t.reviewsEmpty}</div>}
+          {!reviewsLoading && reviews.length === 0 && (
+            <div className="text-sm text-slate-500">{t.reviewsEmpty}</div>
+          )}
 
           {!reviewsLoading && reviews.length > 0 && (
             <div className="space-y-4">
@@ -544,9 +557,7 @@ const ClientProfile: React.FC = () => {
                     {(r.title || r.content) && (
                       <div className="mt-3 text-sm text-slate-800 whitespace-pre-line">
                         {r.title ? <div className="font-semibold">{r.title}</div> : null}
-                        {r.content ? (
-                          <div className={r.title ? "mt-1" : ""}>{r.content}</div>
-                        ) : null}
+                        {r.content ? <div className={r.title ? "mt-1" : ""}>{r.content}</div> : null}
                       </div>
                     )}
 
