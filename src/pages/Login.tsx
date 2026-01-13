@@ -15,7 +15,7 @@ function safeRedirectPath(raw: string | null) {
   if (!raw) return null;
   const v = raw.trim();
 
-  // ✅ sécurité: on n'autorise que les chemins internes
+  // ✅ sécurité: uniquement chemins internes
   if (!v.startsWith("/")) return null;
   if (v.startsWith("//")) return null;
   if (v.toLowerCase().startsWith("/http")) return null;
@@ -26,39 +26,96 @@ function safeRedirectPath(raw: string | null) {
 const Login: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
-  const location = useLocation() as { state?: LocationState; search: string };
+  const location = useLocation() as { state?: LocationState; search: string; pathname: string };
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const searchParams = useMemo(
+    () => new URLSearchParams(location.search),
+    [location.search]
+  );
+
+  // ✅ IMPORTANT :
+  // - PrivateRoute (version corrigée) redirige vers /login?next=...
+  // - on garde aussi compatibilité /login?redirect=...
+  const nextParam = useMemo(
+    () => safeRedirectPath(searchParams.get("next")),
+    [searchParams]
+  );
   const redirectParam = useMemo(
     () => safeRedirectPath(searchParams.get("redirect")),
     [searchParams]
   );
 
-  // ✅ si déjà connecté, on redirige direct (utile quand on revient sur /login par erreur)
+  const stateFrom = useMemo(
+    () => safeRedirectPath(location.state?.from || null),
+    [location.state?.from]
+  );
+
+  // ✅ destination finale (priorité: next > redirect > state.from)
+  const targetAfterLogin = useMemo(
+    () => nextParam || redirectParam || stateFrom || null,
+    [nextParam, redirectParam, stateFrom]
+  );
+
+  const routeByRole = (role: string) => {
+    const r = (role || "user").toLowerCase();
+    if (r === "admin") return "/admin/dashboard";
+    if (r === "worker") return "/espace-ouvrier";
+    return "/espace-client";
+  };
+
+  // ✅ Si déjà connecté, on redirige tout de suite
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      if (data.session) {
-        if (redirectParam) {
-          navigate(redirectParam, { replace: true });
-        } else {
-          navigate("/espace-client", { replace: true });
+    const checkExistingSession = async () => {
+      setChecking(true);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!mounted) return;
+
+        if (!sessionData.session?.user) {
+          setChecking(false);
+          return;
         }
+
+        const user = sessionData.session.user;
+
+        // tenter de récupérer le rôle (sinon fallback user)
+        const { data: profile } = await supabase
+          .from("op_users")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        const role = (profile?.role as string) || "user";
+
+        // si target présent et role user -> on respecte le target
+        if (targetAfterLogin && role === "user") {
+          navigate(targetAfterLogin, { replace: true });
+          return;
+        }
+
+        navigate(routeByRole(role), { replace: true });
+      } catch (e) {
+        console.error("checkExistingSession error", e);
+      } finally {
+        if (mounted) setChecking(false);
       }
-    });
+    };
+
+    checkExistingSession();
 
     return () => {
       mounted = false;
     };
-  }, [navigate, redirectParam]);
+  }, [navigate, targetAfterLogin]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,7 +144,7 @@ const Login: React.FC = () => {
       const defaultFullName =
         (user.user_metadata?.full_name as string | undefined) ||
         (user.user_metadata?.name as string | undefined) ||
-        "";
+        null;
 
       // 2) Récupérer / créer le profil dans op_users
       let { data: profile, error: profileError } = await supabase
@@ -96,7 +153,10 @@ const Login: React.FC = () => {
         .eq("id", userId)
         .maybeSingle();
 
-      if (profileError) throw profileError;
+      // ⚠️ si ta RLS bloque la lecture, profileError peut arriver
+      if (profileError) {
+        console.warn("op_users select role error:", profileError);
+      }
 
       if (!profile) {
         const { data: inserted, error: insertError } = await supabase
@@ -104,7 +164,7 @@ const Login: React.FC = () => {
           .insert({
             id: userId,
             email: userEmail,
-            full_name: defaultFullName || null,
+            full_name: defaultFullName,
             role: "user",
           })
           .select("id, role, full_name")
@@ -114,27 +174,16 @@ const Login: React.FC = () => {
         profile = inserted;
       }
 
-      const role = (profile?.role as string) || "user";
+      const role = ((profile?.role as string) || "user").toLowerCase();
 
-      // ✅ redirect explicite (ex: /login?redirect=/ouvrier/xxx)
-      // IMPORTANT : on évite de rediriger un ouvrier vers /ouvrier/:id (fiche publique)
-      // Mais ici, ton besoin est: client non connecté -> login -> revenir sur la fiche.
-      // Donc on autorise le redirect (pour les clients), et si c'est un admin/worker, on ignore.
-      if (redirectParam && role !== "admin" && role !== "worker" && role !== "ouvrier") {
-        navigate(redirectParam, { replace: true });
+      // ✅ Si un target est demandé et que c'est un client, on y va
+      if (targetAfterLogin && role === "user") {
+        navigate(targetAfterLogin, { replace: true });
         return;
       }
 
-      // Sinon, on redirige selon le rôle
-      if (role === "admin") {
-        navigate("/admin/dashboard", { replace: true });
-      } else if (role === "worker" || role === "ouvrier") {
-        navigate("/espace-ouvrier", { replace: true });
-      } else if (role === "user" || role === "client" || role === "particulier") {
-        navigate("/espace-client", { replace: true });
-      } else {
-        navigate("/espace-client", { replace: true });
-      }
+      // sinon, redirection par rôle
+      navigate(routeByRole(role), { replace: true });
     } catch (err: any) {
       console.error(err);
       setError(
@@ -148,6 +197,17 @@ const Login: React.FC = () => {
     }
   };
 
+  // ✅ Pendant le check session, on évite un flash de formulaire
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+        <div className="text-sm text-slate-500">
+          {language === "fr" ? "Vérification de votre session..." : "Checking your session..."}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <Card className="w-full max-w-md shadow-lg">
@@ -156,11 +216,9 @@ const Login: React.FC = () => {
             {language === "fr" ? "Connexion à votre espace" : "Sign in to your account"}
           </CardTitle>
 
-          {redirectParam && (
+          {targetAfterLogin && (
             <p className="mt-2 text-sm text-slate-600">
-              {language === "fr"
-                ? "Connectez-vous pour continuer."
-                : "Sign in to continue."}
+              {language === "fr" ? "Connectez-vous pour continuer." : "Sign in to continue."}
             </p>
           )}
         </CardHeader>
@@ -175,6 +233,7 @@ const Login: React.FC = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="vous@exemple.com"
+                autoComplete="email"
               />
             </div>
 
@@ -189,6 +248,7 @@ const Login: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={language === "fr" ? "Votre mot de passe" : "Your password"}
+                autoComplete="current-password"
               />
             </div>
 
@@ -228,8 +288,8 @@ const Login: React.FC = () => {
 
             <p className="mt-2 text-xs text-slate-500">
               {language === "fr"
-                ? "Les administrateurs sont redirigés vers le back-office, les ouvriers vers leur espace personnel, et les autres utilisateurs vers leur espace client."
-                : "Admins are redirected to the back-office, workers to their dashboard, and other users to their client space."}
+                ? "Les administrateurs vont au back-office, les ouvriers à leur espace, et les autres utilisateurs à l’espace client."
+                : "Admins go to back-office, workers to their dashboard, and other users to the client space."}
             </p>
           </form>
         </CardContent>
