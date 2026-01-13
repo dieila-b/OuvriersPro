@@ -16,70 +16,76 @@ export function useAuthProfile() {
   const [profile, setProfile] = useState<OpUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Chargement initial
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      const { data, error } = await supabase.auth.getUser();
+  const loadProfile = async (u: User | null) => {
+    if (!u) {
+      setProfile(null);
+      return;
+    }
 
-      if (error) {
-        console.error("auth.getUser error", error);
+    const { data, error } = await supabase
+      .from("op_users")
+      .select("id, full_name, phone, role")
+      .eq("id", u.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("load profile error", error);
+      setProfile(null);
+      return;
+    }
+
+    setProfile((data as OpUserProfile) ?? null);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const boot = async () => {
+      setLoading(true);
+
+      try {
+        // ✅ Plus fiable pour initialiser (évite certains cas où getUser ne suffit pas)
+        const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+        if (sessionErr) throw sessionErr;
+
+        const u = sessionData.session?.user ?? null;
+
+        if (cancelled) return;
+        setUser(u);
+
+        await loadProfile(u);
+      } catch (e) {
+        console.error("auth boot error", e);
+        if (cancelled) return;
         setUser(null);
         setProfile(null);
-        setLoading(false);
-        return;
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-
-      const currentUser = data.user ?? null;
-      setUser(currentUser);
-
-      if (currentUser) {
-        const { data: rows, error: profileError } = await supabase
-          .from("op_users")
-          .select("id, full_name, phone, role")
-          .eq("id", currentUser.id)
-          .limit(1);
-
-        if (profileError) {
-          console.error("load profile error", profileError);
-          setProfile(null);
-        } else {
-          setProfile((rows?.[0] as OpUserProfile) ?? null);
-        }
-      } else {
-        setProfile(null);
-      }
-
-      setLoading(false);
     };
 
-    load();
+    boot();
 
-    // Écoute des changements de session
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        const sUser = session?.user ?? null;
-        setUser(sUser);
+    // ✅ Écoute des changements de session
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const sUser = session?.user ?? null;
 
-        if (!sUser) {
-          setProfile(null);
-          return;
-        }
+      // Important: on ne remet pas loading=true ici (sinon flicker permanent)
+      if (cancelled) return;
 
-        (async () => {
-          const { data: rows } = await supabase
-            .from("op_users")
-            .select("id, full_name, phone, role")
-            .eq("id", sUser.id)
-            .limit(1);
+      setUser(sUser);
 
-          setProfile((rows?.[0] as OpUserProfile) ?? null);
-        })();
+      try {
+        await loadProfile(sUser);
+      } catch (e) {
+        console.error("auth state loadProfile error", e);
+        if (!cancelled) setProfile(null);
       }
-    );
+    });
 
     return () => {
-      listener.subscription.unsubscribe();
+      cancelled = true;
+      listener?.subscription?.unsubscribe();
     };
   }, []);
 
