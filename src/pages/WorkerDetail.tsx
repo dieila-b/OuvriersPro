@@ -6,7 +6,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import ReportWorkerButton from "@/components/workers/ReportWorkerButton";
+import ReportAccountDialog from "@/components/ReportAccountDialog";
 import {
   Mail,
   Phone,
@@ -14,7 +14,7 @@ import {
   MapPin,
   Star,
   ExternalLink,
-  Image as ImageIcon,
+  AlertTriangle,
 } from "lucide-react";
 
 type WorkerProfile = {
@@ -50,7 +50,6 @@ type WorkerPhoto = {
   id: string;
   public_url: string | null;
   title: string | null;
-  description?: string | null;
 };
 
 type VoteType = "like" | "useful" | "not_useful";
@@ -62,45 +61,6 @@ type ReviewVoteRow = {
 };
 
 type ViewerRole = "client" | "worker" | null;
-
-// --------------------
-// Portfolio types
-// --------------------
-type PortfolioRow = {
-  id: string;
-  worker_id: string;
-  title: string | null;
-  description: string | null;
-  location: string | null;
-  date_completed: string | null;
-  cover_photo_url: string | null;
-  created_at: string;
-
-  // Optionnels (si tu les ajoutes à la table)
-  category?: string | null;
-  price?: number | null;
-  currency?: string | null;
-};
-
-type PortfolioPhotoKind = "before" | "after" | "other";
-
-type PortfolioPhotoJoinRow = {
-  portfolio_id: string;
-  kind: PortfolioPhotoKind;
-  sort_order: number | null;
-  photo: {
-    id: string;
-    public_url: string | null;
-    title: string | null;
-    description: string | null;
-  } | null;
-};
-
-type PortfolioMedia = {
-  before: WorkerPhoto[];
-  after: WorkerPhoto[];
-  other: WorkerPhoto[];
-};
 
 const WorkerDetail: React.FC = () => {
   const { language } = useLanguage();
@@ -138,22 +98,18 @@ const WorkerDetail: React.FC = () => {
   const [submitReviewLoading, setSubmitReviewLoading] = useState(false);
 
   // Votes
-  const [myVoteByReviewId, setMyVoteByReviewId] = useState<Record<string, VoteType | null>>({});
+  const [myVoteByReviewId, setMyVoteByReviewId] = useState<
+    Record<string, VoteType | null>
+  >({});
   const [countsByReviewId, setCountsByReviewId] = useState<
     Record<string, { like: number; useful: number; not_useful: number }>
   >({});
   const [voteError, setVoteError] = useState<string | null>(null);
 
-  // Photos (galerie)
+  // Photos
   const [photos, setPhotos] = useState<WorkerPhoto[]>([]);
   const [photosLoading, setPhotosLoading] = useState(false);
   const [photosError, setPhotosError] = useState<string | null>(null);
-
-  // Portfolio (réalisations)
-  const [portfolio, setPortfolio] = useState<PortfolioRow[]>([]);
-  const [portfolioLoading, setPortfolioLoading] = useState(false);
-  const [portfolioError, setPortfolioError] = useState<string | null>(null);
-  const [portfolioMediaById, setPortfolioMediaById] = useState<Record<string, PortfolioMedia>>({});
 
   const tVotes = useMemo(() => {
     return {
@@ -181,24 +137,11 @@ const WorkerDetail: React.FC = () => {
     };
   }, [language]);
 
-  const tPortfolio = useMemo(() => {
+  const tReport = useMemo(() => {
     return {
-      title: language === "fr" ? "Portfolio" : "Portfolio",
-      subtitle:
-        language === "fr"
-          ? "Réalisations, avant/après, détails, prix, etc."
-          : "Works, before/after, details, price, etc.",
-      empty:
-        language === "fr"
-          ? "Aucune réalisation pour le moment."
-          : "No work items yet.",
-      before: language === "fr" ? "Avant" : "Before",
-      after: language === "fr" ? "Après" : "After",
-      gallery: language === "fr" ? "Galerie" : "Gallery",
-      price: language === "fr" ? "Prix" : "Price",
-      category: language === "fr" ? "Catégorie" : "Category",
-      completed: language === "fr" ? "Terminé" : "Completed",
-      location: language === "fr" ? "Lieu" : "Location",
+      report: language === "fr" ? "Signaler ce profil" : "Report this profile",
+      loginToReport:
+        language === "fr" ? "Se connecter pour signaler" : "Log in to report",
     };
   }, [language]);
 
@@ -225,7 +168,7 @@ const WorkerDetail: React.FC = () => {
     };
   }, []);
 
-  // Détecter le rôle (conservé)
+  // Détecter le rôle (on le garde, mais on ne bloque pas le signalement dessus)
   useEffect(() => {
     let cancelled = false;
 
@@ -276,13 +219,13 @@ const WorkerDetail: React.FC = () => {
     };
   }, [authUserId]);
 
-  // -----------------------
-  // Load worker (profil)
-  // -----------------------
+  // Profil ouvrier
   useEffect(() => {
     const loadWorker = async () => {
       if (!workerId) {
-        setWorkerError(language === "fr" ? "Aucun ouvrier spécifié." : "No worker specified.");
+        setWorkerError(
+          language === "fr" ? "Aucun ouvrier spécifié." : "No worker specified."
+        );
         setLoadingWorker(false);
         return;
       }
@@ -333,9 +276,7 @@ const WorkerDetail: React.FC = () => {
     loadWorker();
   }, [workerId, language]);
 
-  // -----------------------
-  // Reviews
-  // -----------------------
+  // Avis
   useEffect(() => {
     const loadReviews = async () => {
       if (!workerId) return;
@@ -351,7 +292,9 @@ const WorkerDetail: React.FC = () => {
 
       if (error) {
         console.error("loadReviews error", error);
-        setReviewsError(language === "fr" ? "Impossible de charger les avis." : "Unable to load reviews.");
+        setReviewsError(
+          language === "fr" ? "Impossible de charger les avis." : "Unable to load reviews."
+        );
       } else {
         const mapped: Review[] = (data || []).map((r: any) => ({
           id: r.id,
@@ -369,9 +312,7 @@ const WorkerDetail: React.FC = () => {
     loadReviews();
   }, [workerId, language]);
 
-  // -----------------------
-  // Photos (galerie simple)
-  // -----------------------
+  // Photos
   useEffect(() => {
     const loadPhotos = async () => {
       if (!workerId) return;
@@ -381,14 +322,16 @@ const WorkerDetail: React.FC = () => {
 
       const { data, error } = await supabase
         .from("op_ouvrier_photos")
-        .select("id, public_url, title, description")
+        .select("id, public_url, title")
         .eq("worker_id", workerId)
         .order("created_at", { ascending: false })
-        .limit(12);
+        .limit(6);
 
       if (error) {
         console.error("loadPhotos error", error);
-        setPhotosError(language === "fr" ? "Impossible de charger les photos." : "Unable to load photos.");
+        setPhotosError(
+          language === "fr" ? "Impossible de charger les photos." : "Unable to load photos."
+        );
       } else {
         setPhotos((data || []) as WorkerPhoto[]);
       }
@@ -399,145 +342,41 @@ const WorkerDetail: React.FC = () => {
     loadPhotos();
   }, [workerId, language]);
 
-  // -----------------------
-  // Portfolio (réalisations + medias)
-  // - Table principale: op_ouvrier_portfolio
-  // - Table optionnelle de liaison: op_ouvrier_portfolio_photos
-  // -----------------------
-  useEffect(() => {
-    const loadPortfolio = async () => {
-      if (!workerId) return;
+  const fullName =
+    (worker?.first_name || "") + (worker?.last_name ? ` ${worker.last_name}` : "");
 
-      setPortfolioLoading(true);
-      setPortfolioError(null);
-
-      try {
-        // 1) Réalisations
-        const { data: rows, error: pErr } = await supabase
-          .from("op_ouvrier_portfolio")
-          .select(
-            `
-            id,
-            worker_id,
-            title,
-            description,
-            location,
-            date_completed,
-            cover_photo_url,
-            created_at
-          `
-          )
-          .eq("worker_id", workerId)
-          .order("created_at", { ascending: false })
-          .limit(12);
-
-        if (pErr) throw pErr;
-
-        const items = (rows || []) as PortfolioRow[];
-        setPortfolio(items);
-
-        // Reset medias map
-        if (!items.length) {
-          setPortfolioMediaById({});
-          setPortfolioLoading(false);
-          return;
-        }
-
-        // 2) Tenter de charger la liaison portfolio->photos (avant/après/galerie)
-        //    Si la table n'existe pas, on fallback sans casser.
-        const portfolioIds = items.map((x) => x.id);
-
-        const { data: joinRows, error: jErr } = await supabase
-          .from("op_ouvrier_portfolio_photos")
-          .select(
-            `
-            portfolio_id,
-            kind,
-            sort_order,
-            photo:op_ouvrier_photos (
-              id,
-              public_url,
-              title,
-              description
-            )
-          `
-          )
-          .in("portfolio_id", portfolioIds);
-
-        if (jErr) {
-          // Fallback propre: on n'a pas la table de liaison (ou pas de droits),
-          // on garde les items avec cover_photo_url seulement.
-          console.warn("Portfolio join table not available or not permitted:", jErr?.message);
-          const fallbackMap: Record<string, PortfolioMedia> = {};
-          for (const it of items) {
-            fallbackMap[it.id] = { before: [], after: [], other: [] };
-          }
-          setPortfolioMediaById(fallbackMap);
-          setPortfolioLoading(false);
-          return;
-        }
-
-        const map: Record<string, PortfolioMedia> = {};
-        for (const it of items) map[it.id] = { before: [], after: [], other: [] };
-
-        const normalized = (joinRows || []) as PortfolioPhotoJoinRow[];
-        // Tri stable sort_order puis created
-        normalized
-          .slice()
-          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-          .forEach((r) => {
-            if (!r?.portfolio_id || !map[r.portfolio_id]) return;
-            const kind = (r.kind || "other") as PortfolioPhotoKind;
-            const photo = r.photo
-              ? ({
-                  id: r.photo.id,
-                  public_url: r.photo.public_url,
-                  title: r.photo.title,
-                  description: r.photo.description,
-                } as WorkerPhoto)
-              : null;
-            if (!photo) return;
-
-            if (kind === "before") map[r.portfolio_id].before.push(photo);
-            else if (kind === "after") map[r.portfolio_id].after.push(photo);
-            else map[r.portfolio_id].other.push(photo);
-          });
-
-        setPortfolioMediaById(map);
-      } catch (e: any) {
-        console.error("loadPortfolio error", e);
-        setPortfolioError(
-          language === "fr"
-            ? "Impossible de charger le portfolio."
-            : "Unable to load portfolio."
-        );
-      } finally {
-        setPortfolioLoading(false);
-      }
-    };
-
-    loadPortfolio();
-  }, [workerId, language]);
-
-  const fullName = (worker?.first_name || "") + (worker?.last_name ? ` ${worker.last_name}` : "");
-
-  const location = [worker?.country, worker?.region, worker?.city, worker?.commune, worker?.district]
+  const location = [
+    worker?.country,
+    worker?.region,
+    worker?.city,
+    worker?.commune,
+    worker?.district,
+  ]
     .filter(Boolean)
     .join(" • ");
 
   const locationQuery = useMemo(() => {
-    const parts = [worker?.district, worker?.commune, worker?.city, worker?.region, worker?.country].filter(Boolean);
+    const parts = [
+      worker?.district,
+      worker?.commune,
+      worker?.city,
+      worker?.region,
+      worker?.country,
+    ].filter(Boolean);
     return parts.join(", ");
   }, [worker?.district, worker?.commune, worker?.city, worker?.region, worker?.country]);
 
-  const hasCoords = Number.isFinite(worker?.latitude as any) && Number.isFinite(worker?.longitude as any);
+  const hasCoords =
+    Number.isFinite(worker?.latitude as any) && Number.isFinite(worker?.longitude as any);
 
   const googleMapsUrl = useMemo(() => {
     if (hasCoords && worker?.latitude != null && worker?.longitude != null) {
       return `https://www.google.com/maps?q=${worker.latitude},${worker.longitude}`;
     }
     if (locationQuery) {
-      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationQuery)}`;
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        locationQuery
+      )}`;
     }
     return "";
   }, [hasCoords, worker?.latitude, worker?.longitude, locationQuery]);
@@ -562,8 +401,25 @@ const WorkerDetail: React.FC = () => {
 
   const averageRating =
     reviews.length > 0
-      ? Math.round((reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length) * 10) / 10
+      ? Math.round(
+          (reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length) * 10
+        ) / 10
       : 0;
+
+  /**
+   * ✅ Correctif signalement:
+   * - On autorise l’affichage même si worker.user_id est NULL (profil non lié à auth.users).
+   * - On bloque seulement si l’utilisateur connecté essaie de se signaler lui-même (quand user_id existe).
+   */
+  const canReportWorker =
+    Boolean(authUserId) && (!worker?.user_id || worker.user_id !== authUserId);
+
+  /**
+   * ✅ ID envoyé au composant de signalement:
+   * - priorité: auth.users.id (worker.user_id)
+   * - fallback: op_ouvriers.id (worker.id) => permet de signaler un profil même sans user_id
+   */
+  const reportTargetId = (worker?.user_id ?? worker?.id) as string;
 
   // -----------------------
   // Votes (op_review_votes)
@@ -576,7 +432,8 @@ const WorkerDetail: React.FC = () => {
       return;
     }
 
-    const initCounts: Record<string, { like: number; useful: number; not_useful: number }> = {};
+    const initCounts: Record<string, { like: number; useful: number; not_useful: number }> =
+      {};
     for (const id of reviewIds) initCounts[id] = { like: 0, useful: 0, not_useful: 0 };
 
     const { data: allVotes, error: votesError } = await supabase
@@ -642,7 +499,10 @@ const WorkerDetail: React.FC = () => {
       setMyVoteByReviewId((prev) => ({ ...prev, [reviewId]: null }));
       setCountsByReviewId((prev) => {
         const base = prev[reviewId] ?? { like: 0, useful: 0, not_useful: 0 };
-        return { ...prev, [reviewId]: { ...base, [voteType]: Math.max(0, base[voteType] - 1) } };
+        return {
+          ...prev,
+          [reviewId]: { ...base, [voteType]: Math.max(0, base[voteType] - 1) },
+        };
       });
       return;
     }
@@ -754,14 +614,22 @@ const WorkerDetail: React.FC = () => {
 
       const detailedMessageLines: string[] = [];
       if (requestType)
-        detailedMessageLines.push(`${language === "fr" ? "Type de demande" : "Request type"} : ${requestType}`);
+        detailedMessageLines.push(
+          `${language === "fr" ? "Type de demande" : "Request type"} : ${requestType}`
+        );
       if (approxBudget)
         detailedMessageLines.push(
-          `${language === "fr" ? "Budget approximatif (facultatif)" : "Approx. budget (optional)"} : ${approxBudget}`
+          `${
+            language === "fr"
+              ? "Budget approximatif (facultatif)"
+              : "Approx. budget (optional)"
+          } : ${approxBudget}`
         );
       if (desiredDate)
         detailedMessageLines.push(
-          `${language === "fr" ? "Date souhaitée (facultatif)" : "Desired date (optional)"} : ${desiredDate}`
+          `${
+            language === "fr" ? "Date souhaitée (facultatif)" : "Desired date (optional)"
+          } : ${desiredDate}`
         );
       if (clientMessage) detailedMessageLines.push(clientMessage);
       const detailedMessage = detailedMessageLines.join("\n");
@@ -959,6 +827,8 @@ const WorkerDetail: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* NOTE: On retire le bouton signalement ici pour l'avoir à l'endroit attendu (colonne droite). */}
             </div>
 
             {/* Google Maps */}
@@ -1015,171 +885,7 @@ const WorkerDetail: React.FC = () => {
               </p>
             </div>
 
-            {/* ✅ PORTFOLIO (Réalisations + Avant/Après + Galerie) */}
-            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-800 mb-1">{tPortfolio.title}</h2>
-                  <p className="text-xs text-slate-500">{tPortfolio.subtitle}</p>
-                </div>
-              </div>
-
-              {portfolioError && (
-                <div className="mt-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
-                  {portfolioError}
-                </div>
-              )}
-
-              <div className="mt-4">
-                {portfolioLoading && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="h-40 rounded-xl bg-slate-100 border border-slate-200" />
-                    <div className="h-40 rounded-xl bg-slate-100 border border-slate-200" />
-                  </div>
-                )}
-
-                {!portfolioLoading && portfolio.length === 0 && (
-                  <div className="text-xs text-slate-500">{tPortfolio.empty}</div>
-                )}
-
-                {!portfolioLoading && portfolio.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {portfolio.map((item) => {
-                      const media = portfolioMediaById[item.id] || { before: [], after: [], other: [] };
-
-                      const beforeCover = media.before.find((x) => x.public_url)?.public_url || null;
-                      const afterCover = media.after.find((x) => x.public_url)?.public_url || null;
-
-                      // Cover priorité: cover_photo_url > before > other > after
-                      const cover =
-                        item.cover_photo_url ||
-                        beforeCover ||
-                        media.other.find((x) => x.public_url)?.public_url ||
-                        afterCover ||
-                        null;
-
-                      const hasBeforeAfter = Boolean(beforeCover || afterCover);
-
-                      const dateLabel = item.date_completed
-                        ? new Date(item.date_completed).toLocaleDateString(language === "fr" ? "fr-FR" : "en-GB")
-                        : null;
-
-                      return (
-                        <div key={item.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-                          <div className="flex">
-                            <div className="w-[140px] sm:w-[180px] bg-slate-50 border-r border-slate-200">
-                              {cover ? (
-                                <img src={cover} alt={item.title || ""} className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full min-h-[140px] flex items-center justify-center text-slate-400">
-                                  <ImageIcon className="w-6 h-6" />
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="flex-1 p-3">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0">
-                                  <div className="text-sm font-semibold text-slate-900 truncate">
-                                    {item.title || (language === "fr" ? "Réalisation" : "Work item")}
-                                  </div>
-
-                                  <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-slate-500">
-                                    {item.location ? (
-                                      <span className="inline-flex items-center gap-1">
-                                        <span className="font-medium text-slate-700">{tPortfolio.location}:</span>{" "}
-                                        {item.location}
-                                      </span>
-                                    ) : null}
-
-                                    {dateLabel ? (
-                                      <span className="inline-flex items-center gap-1">
-                                        <span className="font-medium text-slate-700">{tPortfolio.completed}:</span>{" "}
-                                        {dateLabel}
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {item.description ? (
-                                <p className="mt-2 text-xs text-slate-700 whitespace-pre-line line-clamp-3">
-                                  {item.description}
-                                </p>
-                              ) : null}
-
-                              {/* Avant/Après */}
-                              {hasBeforeAfter && (
-                                <div className="mt-3 grid grid-cols-2 gap-2">
-                                  <div className="rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
-                                    <div className="px-2 py-1 text-[10px] font-medium text-slate-600 border-b border-slate-200">
-                                      {tPortfolio.before}
-                                    </div>
-                                    <div className="aspect-[4/3]">
-                                      {beforeCover ? (
-                                        <img src={beforeCover} alt="Before" className="w-full h-full object-cover" />
-                                      ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-slate-400">
-                                          <ImageIcon className="w-4 h-4" />
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  <div className="rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
-                                    <div className="px-2 py-1 text-[10px] font-medium text-slate-600 border-b border-slate-200">
-                                      {tPortfolio.after}
-                                    </div>
-                                    <div className="aspect-[4/3]">
-                                      {afterCover ? (
-                                        <img src={afterCover} alt="After" className="w-full h-full object-cover" />
-                                      ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-slate-400">
-                                          <ImageIcon className="w-4 h-4" />
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Galerie liée à la réalisation */}
-                              {(media.other.length > 0 || media.before.length > 1 || media.after.length > 1) && (
-                                <div className="mt-3">
-                                  <div className="text-[10px] font-medium text-slate-600 mb-1">
-                                    {tPortfolio.gallery}
-                                  </div>
-                                  <div className="flex gap-2 overflow-x-auto pb-1">
-                                    {[...media.before, ...media.after, ...media.other]
-                                      .filter((x) => x.public_url)
-                                      .slice(0, 10)
-                                      .map((ph) => (
-                                        <div
-                                          key={ph.id}
-                                          className="w-16 h-16 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 flex-shrink-0"
-                                          title={ph.title || ""}
-                                        >
-                                          <img
-                                            src={ph.public_url as string}
-                                            alt={ph.title || ""}
-                                            className="w-full h-full object-cover"
-                                          />
-                                        </div>
-                                      ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Galerie photos (générale) */}
+            {/* Galerie photos */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-1">
                 {language === "fr" ? "Galerie photos" : "Photo gallery"}
@@ -1220,7 +926,11 @@ const WorkerDetail: React.FC = () => {
                       className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-100"
                     >
                       {p.public_url && (
-                        <img src={p.public_url} alt={p.title || ""} className="w-full h-full object-cover" />
+                        <img
+                          src={p.public_url}
+                          alt={p.title || ""}
+                          className="w-full h-full object-cover"
+                        />
                       )}
                     </div>
                   ))}
@@ -1341,9 +1051,16 @@ const WorkerDetail: React.FC = () => {
 
                 <div className="flex items-center gap-1 mb-2">
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <button key={i} type="button" onClick={() => setNewRating(i + 1)} className="focus:outline-none">
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setNewRating(i + 1)}
+                      className="focus:outline-none"
+                    >
                       <Star
-                        className={`w-4 h-4 ${newRating > i ? "text-amber-500 fill-amber-400" : "text-slate-200"}`}
+                        className={`w-4 h-4 ${
+                          newRating > i ? "text-amber-500 fill-amber-400" : "text-slate-200"
+                        }`}
                       />
                     </button>
                   ))}
@@ -1382,13 +1099,27 @@ const WorkerDetail: React.FC = () => {
                 {language === "fr" ? "Coordonnées directes" : "Direct contact"}
               </h2>
 
-              {/* ✅ SIGNALER (toujours visible) */}
+              {/* ✅ SIGNALER (corrigé: visible même si worker.user_id est NULL) */}
               <div className="mb-3">
-                <ReportWorkerButton
-                  workerId={worker.id}
-                  workerName={fullName || null}
-                  className="w-full justify-start"
-                />
+                {canReportWorker ? (
+                  <ReportAccountDialog
+                    reportedUserId={reportTargetId}
+                    reportedRole="worker"
+                    triggerLabel={tReport.report}
+                    className="w-full justify-start"
+                  />
+                ) : authUserId ? null : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => navigate("/login")}
+                    title={language === "fr" ? "Connectez-vous pour signaler ce profil" : "Log in to report this profile"}
+                  >
+                    <AlertTriangle className="w-4 h-4 mr-2" />
+                    {tReport.loginToReport}
+                  </Button>
+                )}
               </div>
 
               <div className="space-y-2 text-xs">
@@ -1472,7 +1203,9 @@ const WorkerDetail: React.FC = () => {
                     onChange={(e) => setRequestType(e.target.value)}
                   >
                     <option value="Demande de devis">{language === "fr" ? "Demande de devis" : "Quote request"}</option>
-                    <option value="Demande de rappel">{language === "fr" ? "Demande de rappel" : "Call back request"}</option>
+                    <option value="Demande de rappel">
+                      {language === "fr" ? "Demande de rappel" : "Call back request"}
+                    </option>
                     <option value="Autre">{language === "fr" ? "Autre" : "Other"}</option>
                   </select>
                 </div>
