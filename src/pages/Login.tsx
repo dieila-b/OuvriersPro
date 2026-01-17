@@ -35,10 +35,7 @@ const Login: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const redirectParam = useMemo(
-    () => safeRedirectPath(searchParams.get("redirect")),
-    [searchParams]
-  );
+  const redirectParam = useMemo(() => safeRedirectPath(searchParams.get("redirect")), [searchParams]);
 
   // ✅ si déjà connecté, on redirige direct (utile quand on revient sur /login par erreur)
   useEffect(() => {
@@ -75,11 +72,7 @@ const Login: React.FC = () => {
 
       const user = data.user;
       if (!user) {
-        throw new Error(
-          language === "fr"
-            ? "Impossible de récupérer votre compte."
-            : "Could not fetch user session."
-        );
+        throw new Error(language === "fr" ? "Impossible de récupérer votre compte." : "Could not fetch user session.");
       }
 
       const userId = user.id;
@@ -117,9 +110,7 @@ const Login: React.FC = () => {
       const role = (profile?.role as string) || "user";
 
       // ✅ redirect explicite (ex: /login?redirect=/ouvrier/xxx)
-      // IMPORTANT : on évite de rediriger un ouvrier vers /ouvrier/:id (fiche publique)
-      // Mais ici, ton besoin est: client non connecté -> login -> revenir sur la fiche.
-      // Donc on autorise le redirect (pour les clients), et si c'est un admin/worker, on ignore.
+      // IMPORTANT : on évite de rediriger un ouvrier/admin vers une fiche publique.
       if (redirectParam && role !== "admin" && role !== "worker" && role !== "ouvrier") {
         navigate(redirectParam, { replace: true });
         return;
@@ -158,9 +149,7 @@ const Login: React.FC = () => {
 
           {redirectParam && (
             <p className="mt-2 text-sm text-slate-600">
-              {language === "fr"
-                ? "Connectez-vous pour continuer."
-                : "Sign in to continue."}
+              {language === "fr" ? "Connectez-vous pour continuer." : "Sign in to continue."}
             </p>
           )}
         </CardHeader>
@@ -198,15 +187,23 @@ const Login: React.FC = () => {
               </div>
             )}
 
-            <Button type="submit" disabled={loading} className="w-full bg-pro-blue hover:bg-blue-700">
-              {loading
-                ? language === "fr"
-                  ? "Connexion..."
-                  : "Signing in..."
-                : language === "fr"
-                ? "Se connecter"
-                : "Sign in"}
-            </Button>
+            {/* ✅ Boutons */}
+            <div className="space-y-2">
+              <Button type="submit" disabled={loading} className="w-full bg-pro-blue hover:bg-blue-700">
+                {loading
+                  ? language === "fr"
+                    ? "Connexion..."
+                    : "Signing in..."
+                  : language === "fr"
+                  ? "Se connecter"
+                  : "Sign in"}
+              </Button>
+
+              {/* ✅ Retour à l'accueil */}
+              <Button type="button" variant="outline" className="w-full" onClick={() => navigate("/")}>
+                {language === "fr" ? "Retour à l'accueil" : "Back to home"}
+              </Button>
+            </div>
 
             <p className="mt-3 text-sm text-center text-slate-600">
               {language === "fr" ? (
