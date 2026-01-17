@@ -38,6 +38,10 @@ export default function AdminLayout() {
       { to: "/admin/ouvriers", label: "Inscriptions prestataires" },
       { to: "/admin/publicites", label: "Publicités" },
       { to: "/admin/signalements", label: "Signalements" },
+
+      // ✅ NOUVEAU : Journal des connexions
+      { to: "/admin/journal-connexions", label: "Journal de connexions" },
+
       { to: "/admin/faq-questions", label: "Questions FAQ" },
       { to: "/admin/contenu", label: "Contenu du site" },
     ],
@@ -83,7 +87,9 @@ export default function AdminLayout() {
                 <div className="text-sm font-semibold text-pro-gray truncate">
                   Administration
                 </div>
-                <div className="text-[11px] text-slate-500 truncate">Back-office</div>
+                <div className="text-[11px] text-slate-500 truncate">
+                  Back-office
+                </div>
               </div>
             </div>
 
@@ -91,7 +97,12 @@ export default function AdminLayout() {
             <nav className="hidden xl:flex min-w-0 flex-1 items-center">
               <div className="flex items-center gap-1 min-w-0 overflow-x-auto admin-scrollbar pr-8">
                 {navItems.map((it) => (
-                  <NavLink key={it.to} to={it.to} className={desktopNavItemClass} end={it.end}>
+                  <NavLink
+                    key={it.to}
+                    to={it.to}
+                    className={desktopNavItemClass}
+                    end={it.end}
+                  >
                     {it.label}
                   </NavLink>
                 ))}
@@ -136,7 +147,9 @@ export default function AdminLayout() {
           <div
             className={[
               "fixed inset-0 z-40 bg-black/30 transition-opacity",
-              open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
+              open
+                ? "opacity-100 pointer-events-auto"
+                : "opacity-0 pointer-events-none",
             ].join(" ")}
             onClick={() => setOpen(false)}
             aria-hidden="true"
@@ -154,8 +167,12 @@ export default function AdminLayout() {
           >
             <div className="p-4 border-b border-slate-200 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-slate-900 truncate">Menu admin</div>
-                <div className="text-[11px] text-slate-500 truncate">Navigation back-office</div>
+                <div className="text-sm font-semibold text-slate-900 truncate">
+                  Menu admin
+                </div>
+                <div className="text-[11px] text-slate-500 truncate">
+                  Navigation back-office
+                </div>
               </div>
 
               <button
@@ -170,7 +187,12 @@ export default function AdminLayout() {
 
             <div className="p-4 space-y-2 overflow-y-auto h-[calc(100dvh-72px)]">
               {navItems.map((it) => (
-                <NavLink key={it.to} to={it.to} className={mobileNavClass} end={it.end}>
+                <NavLink
+                  key={it.to}
+                  to={it.to}
+                  className={mobileNavClass}
+                  end={it.end}
+                >
                   {it.label}
                 </NavLink>
               ))}
