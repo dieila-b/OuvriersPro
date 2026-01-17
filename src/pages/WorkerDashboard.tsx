@@ -9,6 +9,7 @@ import WorkerPhotosManager from "@/components/WorkerPhotosManager";
 import WorkerPortfolioManager from "@/components/WorkerPortfolioManager";
 import { useNavigate } from "react-router-dom";
 import { WorkerLocationEditor } from "@/components/workers/WorkerLocationEditor";
+import { Home, LogOut } from "lucide-react";
 
 type WorkerProfile = {
   id: string;
@@ -75,6 +76,18 @@ const WorkerDashboard: React.FC = () => {
   const [profileViews, setProfileViews] = useState<number>(0);
   const [requestsCount, setRequestsCount] = useState<number>(0);
   const [responseRate, setResponseRate] = useState<number>(0);
+
+  const handleGoHome = () => {
+    navigate("/", { replace: false });
+  };
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      navigate("/", { replace: true });
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -206,9 +219,7 @@ const WorkerDashboard: React.FC = () => {
         setResponseRate(rate);
       } catch (e) {
         console.error("loadStats error", e);
-        setStatsError(
-          language === "fr" ? "Impossible de charger les statistiques." : "Unable to load statistics."
-        );
+        setStatsError(language === "fr" ? "Impossible de charger les statistiques." : "Unable to load statistics.");
       } finally {
         setStatsLoading(false);
       }
@@ -333,24 +344,18 @@ const WorkerDashboard: React.FC = () => {
 
       if (updateError || !updated) {
         console.error(updateError);
-        setProfileUpdateError(
-          language === "fr" ? "Impossible d'enregistrer les modifications." : "Unable to save your changes."
-        );
+        setProfileUpdateError(language === "fr" ? "Impossible d'enregistrer les modifications." : "Unable to save your changes.");
       } else {
         const newProfile = updated as WorkerProfile;
         setProfile(newProfile);
         setEditProfile(newProfile);
-        setProfileUpdateSuccess(
-          language === "fr" ? "Profil mis à jour avec succès." : "Profile updated successfully."
-        );
+        setProfileUpdateSuccess(language === "fr" ? "Profil mis à jour avec succès." : "Profile updated successfully.");
         setIsEditingProfile(false);
       }
     } catch (e) {
       console.error(e);
       setProfileUpdateError(
-        language === "fr"
-          ? "Une erreur est survenue lors de la mise à jour."
-          : "An error occurred while updating your profile."
+        language === "fr" ? "Une erreur est survenue lors de la mise à jour." : "An error occurred while updating your profile."
       );
     } finally {
       setSavingProfile(false);
@@ -398,15 +403,11 @@ const WorkerDashboard: React.FC = () => {
 
       if (updateError || !updated) {
         console.error(updateError);
-        setPlanUpdateError(
-          language === "fr" ? "Impossible de mettre à jour votre abonnement." : "Unable to update your subscription."
-        );
+        setPlanUpdateError(language === "fr" ? "Impossible de mettre à jour votre abonnement." : "Unable to update your subscription.");
       } else {
         const newProfile = updated as WorkerProfile;
         setProfile(newProfile);
-        setPlanUpdateSuccess(
-          language === "fr" ? "Abonnement mis à jour avec succès." : "Subscription updated successfully."
-        );
+        setPlanUpdateSuccess(language === "fr" ? "Abonnement mis à jour avec succès." : "Subscription updated successfully.");
       }
     } catch (e) {
       console.error(e);
@@ -460,6 +461,19 @@ const WorkerDashboard: React.FC = () => {
                 ? "Gérez votre profil, votre abonnement et suivez vos statistiques."
                 : "Manage your profile, subscription and follow your stats."}
             </p>
+
+            {/* ✅ Actions globales (mobile + desktop) */}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={handleGoHome} className="gap-2">
+                <Home className="w-4 h-4" />
+                {language === "fr" ? "Accueil" : "Home"}
+              </Button>
+
+              <Button type="button" size="sm" variant="destructive" onClick={handleLogout} className="gap-2">
+                <LogOut className="w-4 h-4" />
+                {language === "fr" ? "Déconnexion" : "Sign out"}
+              </Button>
+            </div>
           </div>
 
           <div className="flex flex-col items-end gap-2">
@@ -469,18 +483,12 @@ const WorkerDashboard: React.FC = () => {
               </div>
               <div className="text-xs text-slate-500">{profile.email || ""}</div>
               <div className="mt-1 inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-50 text-slate-700 border-slate-200">
-                {language === "fr" ? "Plan" : "Plan"} :{" "}
-                <span className="font-semibold ml-1">{planLabel(profile.plan_code)}</span>
+                {language === "fr" ? "Plan" : "Plan"} : <span className="font-semibold ml-1">{planLabel(profile.plan_code)}</span>
               </div>
             </div>
 
             {/* Bouton d'accès à la messagerie */}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => navigate("/espace-ouvrier/messages")}
-            >
+            <Button type="button" size="sm" variant="outline" onClick={() => navigate("/espace-ouvrier/messages")}>
               {language === "fr" ? "Accéder à la messagerie" : "Open messaging center"}
             </Button>
           </div>
@@ -536,13 +544,7 @@ const WorkerDashboard: React.FC = () => {
                       disabled={savingProfile}
                       className="bg-pro-blue hover:bg-blue-700"
                     >
-                      {savingProfile
-                        ? language === "fr"
-                          ? "Enregistrement..."
-                          : "Saving..."
-                        : language === "fr"
-                        ? "Enregistrer"
-                        : "Save"}
+                      {savingProfile ? (language === "fr" ? "Enregistrement..." : "Saving...") : language === "fr" ? "Enregistrer" : "Save"}
                     </Button>
                   </div>
                 )}
@@ -583,35 +585,25 @@ const WorkerDashboard: React.FC = () => {
                   <div className="md:col-span-2">
                     <div className="text-xs text-slate-500">{language === "fr" ? "Localisation (texte)" : "Location (text)"}</div>
                     <div className="font-medium text-slate-900">
-                      {[profile.country, profile.region, profile.city, profile.commune, profile.district]
-                        .filter(Boolean)
-                        .join(" • ") || "—"}
+                      {[profile.country, profile.region, profile.city, profile.commune, profile.district].filter(Boolean).join(" • ") || "—"}
                     </div>
                   </div>
 
                   <div className="md:col-span-2">
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Coordonnées GPS" : "GPS coordinates"}
-                    </div>
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Coordonnées GPS" : "GPS coordinates"}</div>
                     <div className="font-medium text-slate-900">
-                      {profile.latitude != null && profile.longitude != null
-                        ? `${profile.latitude}, ${profile.longitude}`
-                        : "—"}
+                      {profile.latitude != null && profile.longitude != null ? `${profile.latitude}, ${profile.longitude}` : "—"}
                     </div>
                   </div>
 
                   <div className="md:col-span-2">
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Description de vos services" : "Services description"}
-                    </div>
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Description de vos services" : "Services description"}</div>
                     <div className="text-slate-800 whitespace-pre-line">{profile.description || "—"}</div>
                   </div>
 
                   {profile.hourly_rate != null && (
                     <div>
-                      <div className="text-xs text-slate-500">
-                        {language === "fr" ? "Tarif horaire déclaré" : "Declared hourly rate"}
-                      </div>
+                      <div className="text-xs text-slate-500">{language === "fr" ? "Tarif horaire déclaré" : "Declared hourly rate"}</div>
                       <div className="font-medium text-slate-900">
                         {profile.hourly_rate.toLocaleString()} {profile.currency || ""}/h
                       </div>
@@ -663,9 +655,7 @@ const WorkerDashboard: React.FC = () => {
                     <Input
                       type="number"
                       value={displayProfile.hourly_rate != null ? String(displayProfile.hourly_rate) : ""}
-                      onChange={(e) =>
-                        handleEditField("hourly_rate", e.target.value ? Number(e.target.value) : (null as any))
-                      }
+                      onChange={(e) => handleEditField("hourly_rate", e.target.value ? Number(e.target.value) : (null as any))}
                     />
                   </div>
                   <div>
@@ -673,9 +663,7 @@ const WorkerDashboard: React.FC = () => {
                     <Input value={displayProfile.currency ?? ""} onChange={(e) => handleEditField("currency", e.target.value)} />
                   </div>
                   <div className="md:col-span-2">
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Description de vos services" : "Services description"}
-                    </div>
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Description de vos services" : "Services description"}</div>
                     <Textarea rows={4} value={displayProfile.description ?? ""} onChange={(e) => handleEditField("description", e.target.value)} />
                   </div>
                 </div>
@@ -747,9 +735,7 @@ const WorkerDashboard: React.FC = () => {
 
                 {profile.hourly_rate != null && (
                   <div className="mt-3">
-                    <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Tarif horaire déclaré" : "Declared hourly rate"}
-                    </div>
+                    <div className="text-xs text-slate-500">{language === "fr" ? "Tarif horaire déclaré" : "Declared hourly rate"}</div>
                     <div className="font-medium text-slate-900">
                       {profile.hourly_rate.toLocaleString()} {profile.currency || ""}/h
                     </div>
@@ -765,25 +751,13 @@ const WorkerDashboard: React.FC = () => {
                   )}
 
                   {profile.plan_code !== "MONTHLY" && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={updatingPlan}
-                      className="bg-pro-blue hover:bg-blue-700"
-                      onClick={() => updatePlan("MONTHLY")}
-                    >
+                    <Button type="button" size="sm" disabled={updatingPlan} className="bg-pro-blue hover:bg-blue-700" onClick={() => updatePlan("MONTHLY")}>
                       {language === "fr" ? "Passer au plan Mensuel" : "Switch to Monthly"}
                     </Button>
                   )}
 
                   {profile.plan_code !== "YEARLY" && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={updatingPlan}
-                      className="bg-amber-500 hover:bg-amber-600"
-                      onClick={() => updatePlan("YEARLY")}
-                    >
+                    <Button type="button" size="sm" disabled={updatingPlan} className="bg-amber-500 hover:bg-amber-600" onClick={() => updatePlan("YEARLY")}>
                       {language === "fr" ? "Passer au plan Annuel" : "Switch to Yearly"}
                     </Button>
                   )}
