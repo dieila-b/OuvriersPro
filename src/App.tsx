@@ -4,14 +4,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  useLocation,
-  Navigate,
-} from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { supabase } from "@/lib/supabase";
 
 // Pages publiques
 import Index from "./pages/Index";
@@ -49,6 +44,9 @@ import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
 import AdminOuvrierInscriptions from "./pages/AdminOuvrierInscriptions";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminAds from "./pages/AdminAds";
+
+// ✅ NEW: Admin Journal de connexions (page à créer/coller)
+import AdminLoginJournalPage from "./pages/admin/AdminLoginJournalPage";
 
 // Espace ouvrier connecté
 import WorkerDashboard from "./pages/WorkerDashboard";
@@ -91,9 +89,7 @@ function ScrollManager() {
       const headerEl = document.querySelector("header") as HTMLElement | null;
       const headerHeight = headerEl?.offsetHeight ?? 72;
 
-      const y =
-        el.getBoundingClientRect().top + window.scrollY - headerHeight - 8;
-
+      const y = el.getBoundingClientRect().top + window.scrollY - headerHeight - 8;
       window.scrollTo({ top: Math.max(y, 0), behavior: "smooth" });
     }, 50);
 
@@ -103,9 +99,82 @@ function ScrollManager() {
   return null;
 }
 
+/**
+ * ✅ Journal de connexion (Edge Function) — non bloquant
+ * - LOG sur SIGNED_IN / SIGNED_OUT
+ * - ne casse jamais l'app si la function n'existe pas encore
+ */
+function AuthAuditLogger() {
+  useEffect(() => {
+    const safeCall = async (payload: any) => {
+      try {
+        // 1) Tente via supabase.functions.invoke si disponible/configuré
+        const fn = (supabase as any)?.functions?.invoke;
+        if (typeof fn === "function") {
+          await fn("log-login", { body: payload });
+          return;
+        }
+
+        // 2) Fallback HTTP (Netlify/Supabase) — garde si tu as /functions/v1/*
+        await fetch("/functions/v1/log-login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } catch {
+        // silencieux
+      }
+    };
+
+    // Log "refresh" au chargement si déjà connecté (utile si session persistée)
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        const s = data.session;
+        if (!s?.user) return;
+        safeCall({
+          event: "refresh",
+          success: true,
+          user_id: s.user.id,
+          email: s.user.email ?? null,
+          source: "web",
+        });
+      })
+      .catch(() => {});
+
+    const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
+      if (evt === "SIGNED_IN") {
+        safeCall({
+          event: "login",
+          success: true,
+          user_id: session?.user?.id ?? null,
+          email: session?.user?.email ?? null,
+          source: "web",
+        });
+      } else if (evt === "SIGNED_OUT") {
+        // email souvent null au logout (normal)
+        safeCall({
+          event: "logout",
+          success: true,
+          user_id: session?.user?.id ?? null,
+          email: session?.user?.email ?? null,
+          source: "web",
+        });
+      }
+    });
+
+    return () => {
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  return null;
+}
+
 const AppRoutes = () => (
   <>
     <ScrollManager />
+    <AuthAuditLogger />
 
     <Routes>
       {/* 🏠 Accueil */}
@@ -256,6 +325,9 @@ const AppRoutes = () => (
         <Route path="signalements" element={<AdminReports />} />
         <Route path="contenu" element={<AdminContent />} />
         <Route path="faq-questions" element={<AdminFaqQuestions />} />
+
+        {/* ✅ NEW: Journal de connexion (admin only) */}
+        <Route path="journal-connexions" element={<AdminLoginJournalPage />} />
       </Route>
 
       {/* ❌ 404 */}
