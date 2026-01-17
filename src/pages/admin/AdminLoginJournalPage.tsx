@@ -1,161 +1,731 @@
-import React, { useEffect, useMemo, useState } from "react";
+// src/pages/admin/AdminLoginJournalPage.tsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { RefreshCw } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/components/ui/use-toast";
+import { Loader2, RefreshCw, Search, Filter, Eye, X } from "lucide-react";
 
-type Row = {
-  id: number;
-  created_at: string;
-  user_id: string | null;
-  email: string | null;
-  event: string;
-  success: boolean;
-  ip: string | null;
-  country: string | null;
-  region: string | null;
-  city: string | null;
-  user_agent: string | null;
-  source: string | null;
+/**
+ * Journal de connexions (admin only)
+ *
+ * ⚠️ IMPORTANT :
+ * - On ne connaît pas encore le nom exact de ta table.
+ * - Cette page essaie plusieurs noms "probables" et choisit automatiquement celui qui existe.
+ * - Dès que tu confirmes le nom, on pourra verrouiller TABLE_CANDIDATES à 1 valeur.
+ */
+const TABLE_CANDIDATES = [
+  "op_login_journal",
+  "op_login_logs",
+  "op_auth_logins",
+  "auth_login_logs",
+  "login_journal",
+  "login_logs",
+  "op_audit_logins",
+] as const;
+
+type AnyRow = Record<string, any>;
+
+type FiltersState = {
+  q: string; // recherche globale (email, user_id, ip)
+  event: "all" | "login" | "logout" | "refresh";
+  success: "all" | "success" | "fail";
+  from: string; // date YYYY-MM-DD
+  to: string; // date YYYY-MM-DD
+  perPage: number;
 };
 
-const fmt = (iso: string) =>
-  new Date(iso).toLocaleString("fr-FR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const DEFAULT_FILTERS: FiltersState = {
+  q: "",
+  event: "all",
+  success: "all",
+  from: "",
+  to: "",
+  perPage: 25,
+};
+
+function toIsoStartOfDay(dateYYYYMMDD: string) {
+  // ex: 2026-01-17 -> 2026-01-17T00:00:00.000Z
+  if (!dateYYYYMMDD) return null;
+  const d = new Date(`${dateYYYYMMDD}T00:00:00.000Z`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function toIsoEndOfDay(dateYYYYMMDD: string) {
+  if (!dateYYYYMMDD) return null;
+  const d = new Date(`${dateYYYYMMDD}T23:59:59.999Z`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function fmtDate(ts?: string | null) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("fr-FR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function pickStr(row: AnyRow, keys: string[]) {
+  for (const k of keys) {
+    const v = row?.[k];
+    if (typeof v === "string" && v.trim()) return v;
+  }
+  return "";
+}
+
+function pickBool(row: AnyRow, keys: string[]) {
+  for (const k of keys) {
+    const v = row?.[k];
+    if (typeof v === "boolean") return v;
+  }
+  return null;
+}
+
+function pickTs(row: AnyRow, keys: string[]) {
+  for (const k of keys) {
+    const v = row?.[k];
+    if (typeof v === "string" && v.includes("T")) return v;
+  }
+  return null;
+}
+
+function truncate(s: string, n = 48) {
+  if (!s) return "";
+  if (s.length <= n) return s;
+  return s.slice(0, n - 1) + "…";
+}
 
 export default function AdminLoginJournalPage() {
-  const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState<Row[]>([]);
-  const [q, setQ] = useState("");
+  const { toast } = useToast();
+
+  const [tableName, setTableName] = useState<string | null>(null);
+  const [tableDetecting, setTableDetecting] = useState(true);
+
+  const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
+  const [page, setPage] = useState(1);
+
+  const [loading, setLoading] = useState(false);
+  const [rows, setRows] = useState<AnyRow[]>([]);
+  const [total, setTotal] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<AnyRow | null>(null);
+
+  const debounceRef = useRef<number | null>(null);
+
+  const perPage = filters.perPage;
+  const fromIdx = (page - 1) * perPage;
+  const toIdx = fromIdx + perPage - 1;
+
+  const totalPages = useMemo(() => {
+    if (!total) return 1;
+    return Math.max(1, Math.ceil(total / perPage));
+  }, [total, perPage]);
+
+  // ---------
+  // Detect table
+  // ---------
+  useEffect(() => {
+    let alive = true;
+
+    const detect = async () => {
+      setTableDetecting(true);
+      setTableName(null);
+
+      for (const t of TABLE_CANDIDATES) {
+        try {
+          const { error } = await supabase.from(t).select("*").limit(1);
+          if (!error) {
+            if (!alive) return;
+            setTableName(t);
+            setTableDetecting(false);
+            return;
+          }
+
+          // relation does not exist => on continue
+          // RLS denied => la table existe mais pas lisible. On affiche quand même le nom.
+          if ((error as any)?.code === "42P01") {
+            continue;
+          }
+
+          // Si c'est RLS denied, on considère que la table existe
+          // (ça veut dire qu'il faut corriger la policy admin)
+          const msg = (error as any)?.message ?? "";
+          if (msg.toLowerCase().includes("permission") || msg.toLowerCase().includes("rls")) {
+            if (!alive) return;
+            setTableName(t);
+            setTableDetecting(false);
+            return;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (!alive) return;
+      setTableDetecting(false);
+      setTableName(null);
+    };
+
+    detect();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [filters.q, filters.event, filters.success, filters.from, filters.to, filters.perPage]);
+
+  const buildQuery = () => {
+    if (!tableName) return null;
+
+    // ⚠️ On utilise select("*") car les colonnes exactes peuvent varier.
+    let q = supabase.from(tableName).select("*", { count: "exact" });
+
+    // event
+    if (filters.event !== "all") {
+      // selon schéma: event / action / type
+      // on teste "event" (le plus probable). Si ton schéma utilise "action", dis-le et on adapte.
+      q = q.eq("event", filters.event);
+    }
+
+    // success
+    if (filters.success !== "all") {
+      const val = filters.success === "success";
+      // "success" est le plus probable
+      q = q.eq("success", val);
+    }
+
+    // date range (created_at)
+    const isoFrom = toIsoStartOfDay(filters.from);
+    const isoTo = toIsoEndOfDay(filters.to);
+
+    if (isoFrom) q = q.gte("created_at", isoFrom);
+    if (isoTo) q = q.lte("created_at", isoTo);
+
+    // search (email / user_id / ip) : OR
+    const raw = filters.q.trim();
+    if (raw) {
+      const like = `%${raw.replace(/%/g, "\\%").replace(/_/g, "\\_")}%`;
+
+      // colonnes probables: email, user_email, ip, ip_address, user_id
+      // Supabase OR syntax: "col.ilike.%x%,col2.ilike.%x%"
+      q = q.or(
+        [
+          `email.ilike.${like}`,
+          `user_email.ilike.${like}`,
+          `user_id::text.ilike.${like}`,
+          `ip.ilike.${like}`,
+          `ip_address.ilike.${like}`,
+        ].join(",")
+      );
+    }
+
+    // order & pagination
+    q = q.order("created_at", { ascending: false }).range(fromIdx, toIdx);
+
+    return q;
+  };
+
+  const fetchData = async () => {
+    if (!tableName) {
+      setRows([]);
+      setTotal(0);
+      setError("Aucune table de journal trouvée. (Donne-moi le nom exact et je verrouille la page.)");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
-    const { data, error } = await supabase
-      .from("op_login_audit")
-      .select("id, created_at, user_id, email, event, success, ip, country, region, city, user_agent, source")
-      .order("created_at", { ascending: false })
-      .limit(300);
+    try {
+      const q = buildQuery();
+      if (!q) return;
 
-    if (error) {
-      setError(error.message);
+      const { data, error, count } = await q;
+      if (error) throw error;
+
+      setRows((data ?? []) as AnyRow[]);
+      setTotal(typeof count === "number" ? count : 0);
+    } catch (e: any) {
+      console.error(e);
       setRows([]);
-    } else {
-      setRows((data ?? []) as Row[]);
-    }
+      setTotal(0);
 
-    setLoading(false);
+      const msg = e?.message ?? "Impossible de charger le journal de connexion.";
+      setError(msg);
+
+      toast({
+        title: "Erreur",
+        description: msg,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // initial + whenever tableName/page changes
   useEffect(() => {
-    load();
-  }, []);
+    if (!tableName) return;
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableName, page]);
 
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return rows;
-    return rows.filter((r) => {
-      const loc = [r.country, r.region, r.city].filter(Boolean).join(" ").toLowerCase();
+  // debounced fetch on filters changes
+  useEffect(() => {
+    if (!tableName) return;
+
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(() => {
+      fetchData();
+    }, 350);
+
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableName, filters.q, filters.event, filters.success, filters.from, filters.to, filters.perPage]);
+
+  const openDetails = (r: AnyRow) => {
+    setSelected(r);
+    setOpen(true);
+  };
+
+  const closeDetails = () => {
+    setOpen(false);
+    setSelected(null);
+  };
+
+  const prettyRow = useMemo(() => {
+    if (!selected) return null;
+
+    const createdAt = pickTs(selected, ["created_at", "createdAt", "ts", "timestamp"]);
+    const event = pickStr(selected, ["event", "action", "type"]);
+    const success = pickBool(selected, ["success", "ok", "is_success"]);
+    const userId = pickStr(selected, ["user_id", "uid", "userId", "account_id"]);
+    const email = pickStr(selected, ["email", "user_email", "userEmail"]);
+    const ip = pickStr(selected, ["ip", "ip_address", "ipAddress"]);
+    const source = pickStr(selected, ["source", "channel", "app"]);
+    const ua = pickStr(selected, ["user_agent", "userAgent", "ua"]);
+
+    const country = pickStr(selected, ["country", "ip_country", "geo_country", "location_country"]);
+    const region = pickStr(selected, ["region", "ip_region", "geo_region", "location_region", "state"]);
+    const city = pickStr(selected, ["city", "ip_city", "geo_city", "location_city"]);
+    const lat = selected?.lat ?? selected?.latitude ?? selected?.geo_lat ?? null;
+    const lng = selected?.lng ?? selected?.longitude ?? selected?.geo_lng ?? null;
+
+    return {
+      createdAt,
+      event,
+      success,
+      userId,
+      email,
+      ip,
+      source,
+      ua,
+      country,
+      region,
+      city,
+      lat,
+      lng,
+      raw: selected,
+    };
+  }, [selected]);
+
+  const headerRight = useMemo(() => {
+    if (tableDetecting) {
       return (
-        (r.email ?? "").toLowerCase().includes(s) ||
-        (r.ip ?? "").toLowerCase().includes(s) ||
-        (r.event ?? "").toLowerCase().includes(s) ||
-        loc.includes(s)
+        <div className="inline-flex items-center gap-2 text-xs text-slate-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Détection de la table…
+        </div>
       );
-    });
-  }, [rows, q]);
+    }
+
+    if (!tableName) {
+      return <div className="text-xs text-red-600">Table introuvable</div>;
+    }
+
+    return (
+      <div className="text-xs text-slate-500">
+        Table: <span className="font-medium text-slate-700">{tableName}</span>
+      </div>
+    );
+  }, [tableDetecting, tableName]);
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 py-6">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-pro-gray">Journal de connexion</h1>
-          <p className="text-sm text-gray-600">Historique des connexions (admin uniquement).</p>
-        </div>
+    <div className="space-y-5">
+      <Card className="border-slate-200">
+        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-base sm:text-lg">Journal de connexions</CardTitle>
+            <div className="mt-1 text-xs text-slate-500">
+              Historique des connexions / déconnexions (visible uniquement côté admin).
+            </div>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Rechercher (email, ip, ville, event...)"
-            className="w-[320px] max-w-[60vw]"
-          />
-          <Button onClick={load} className="bg-pro-blue hover:bg-blue-700">
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Actualiser
-          </Button>
-        </div>
-      </div>
+          <div className="flex items-center gap-3">
+            {headerRight}
 
-      <Card className="rounded-2xl border border-gray-200">
-        <CardHeader>
-          <CardTitle className="text-base">Derniers événements</CardTitle>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={() => fetchData()}
+              disabled={loading || tableDetecting || !tableName}
+              title="Rafraîchir"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Rafraîchir
+            </Button>
+          </div>
         </CardHeader>
-        <CardContent>
+
+        <CardContent className="space-y-4">
+          {/* Filters */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+            <div className="lg:col-span-4">
+              <label className="text-xs font-medium text-slate-600">Recherche</label>
+              <div className="mt-1 relative">
+                <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Input
+                  className="pl-9"
+                  placeholder="Email, user_id, IP…"
+                  value={filters.q}
+                  onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="lg:col-span-2">
+              <label className="text-xs font-medium text-slate-600">Événement</label>
+              <select
+                className="mt-1 w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                value={filters.event}
+                onChange={(e) => setFilters((p) => ({ ...p, event: e.target.value as any }))}
+              >
+                <option value="all">Tous</option>
+                <option value="login">login</option>
+                <option value="logout">logout</option>
+                <option value="refresh">refresh</option>
+              </select>
+            </div>
+
+            <div className="lg:col-span-2">
+              <label className="text-xs font-medium text-slate-600">Statut</label>
+              <select
+                className="mt-1 w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                value={filters.success}
+                onChange={(e) => setFilters((p) => ({ ...p, success: e.target.value as any }))}
+              >
+                <option value="all">Tous</option>
+                <option value="success">Succès</option>
+                <option value="fail">Échec</option>
+              </select>
+            </div>
+
+            <div className="lg:col-span-2">
+              <label className="text-xs font-medium text-slate-600">Du</label>
+              <Input
+                className="mt-1"
+                type="date"
+                value={filters.from}
+                onChange={(e) => setFilters((p) => ({ ...p, from: e.target.value }))}
+              />
+            </div>
+
+            <div className="lg:col-span-2">
+              <label className="text-xs font-medium text-slate-600">Au</label>
+              <Input
+                className="mt-1"
+                type="date"
+                value={filters.to}
+                onChange={(e) => setFilters((p) => ({ ...p, to: e.target.value }))}
+              />
+            </div>
+
+            <div className="lg:col-span-12 flex flex-wrap items-center justify-between gap-2 pt-1">
+              <div className="inline-flex items-center gap-2 text-xs text-slate-500">
+                <Filter className="h-4 w-4" />
+                <span>
+                  {total.toLocaleString("fr-FR")} entrée{total > 1 ? "s" : ""} • Page {page} / {totalPages}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <select
+                  className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                  value={filters.perPage}
+                  onChange={(e) => setFilters((p) => ({ ...p, perPage: Number(e.target.value) }))}
+                >
+                  <option value={10}>10 / page</option>
+                  <option value={25}>25 / page</option>
+                  <option value={50}>50 / page</option>
+                  <option value={100}>100 / page</option>
+                </select>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setFilters(DEFAULT_FILTERS)}
+                  disabled={loading}
+                  className="gap-2"
+                >
+                  <X className="h-4 w-4" />
+                  Reset
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Error / Empty */}
           {error && (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
               {error}
+              {!tableName ? (
+                <div className="mt-2 text-xs text-red-700/90">
+                  Donne-moi le nom exact de la table (capture Supabase) et je t’adapte la page en 30 secondes.
+                </div>
+              ) : null}
             </div>
           )}
 
-          {loading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : (
-            <div className="w-full overflow-auto">
-              <table className="min-w-[980px] w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-gray-500 border-b">
-                    <th className="py-2 pr-3">Date</th>
-                    <th className="py-2 pr-3">Email</th>
-                    <th className="py-2 pr-3">Event</th>
-                    <th className="py-2 pr-3">IP</th>
-                    <th className="py-2 pr-3">Localisation</th>
-                    <th className="py-2 pr-3">Source</th>
-                    <th className="py-2 pr-3">User-Agent</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((r) => (
-                    <tr key={r.id} className="border-b last:border-b-0">
-                      <td className="py-2 pr-3 whitespace-nowrap">{fmt(r.created_at)}</td>
-                      <td className="py-2 pr-3 whitespace-nowrap">{r.email ?? "—"}</td>
-                      <td className="py-2 pr-3 whitespace-nowrap">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs border ${
-                          r.success ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"
-                        }`}>
-                          {r.event}
-                        </span>
-                      </td>
-                      <td className="py-2 pr-3 whitespace-nowrap">{r.ip ?? "—"}</td>
-                      <td className="py-2 pr-3 whitespace-nowrap">
-                        {[r.city, r.region, r.country].filter(Boolean).join(", ") || "—"}
-                      </td>
-                      <td className="py-2 pr-3 whitespace-nowrap">{r.source ?? "—"}</td>
-                      <td className="py-2 pr-3 max-w-[520px] truncate" title={r.user_agent ?? ""}>
-                        {r.user_agent ?? "—"}
-                      </td>
-                    </tr>
-                  ))}
-                  {filtered.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="py-6 text-center text-gray-500">
-                        Aucun événement.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+          {!error && !loading && rows.length === 0 && (
+            <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
+              Aucune entrée trouvée avec ces filtres.
             </div>
           )}
+
+          {/* Table */}
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-slate-600">
+                <tr className="text-left">
+                  <th className="px-4 py-3 whitespace-nowrap">Date</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Événement</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Statut</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Utilisateur</th>
+                  <th className="px-4 py-3 whitespace-nowrap">IP</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Localisation</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Source</th>
+                  <th className="px-4 py-3 whitespace-nowrap text-right">Détails</th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((r, idx) => {
+                  const createdAt = pickTs(r, ["created_at", "createdAt", "ts", "timestamp"]);
+                  const event = pickStr(r, ["event", "action", "type"]) || "—";
+                  const success = pickBool(r, ["success", "ok", "is_success"]);
+                  const userId = pickStr(r, ["user_id", "uid", "userId", "account_id"]);
+                  const email = pickStr(r, ["email", "user_email", "userEmail"]);
+                  const ip = pickStr(r, ["ip", "ip_address", "ipAddress"]);
+
+                  const country = pickStr(r, ["country", "ip_country", "geo_country", "location_country"]);
+                  const region = pickStr(r, ["region", "ip_region", "geo_region", "location_region", "state"]);
+                  const city = pickStr(r, ["city", "ip_city", "geo_city", "location_city"]);
+
+                  const source = pickStr(r, ["source", "channel", "app"]) || "—";
+
+                  const userLabel = email
+                    ? truncate(email, 28)
+                    : userId
+                    ? truncate(userId, 28)
+                    : "—";
+
+                  const loc = [city, region, country].filter(Boolean).join(", ") || "—";
+
+                  const ok = success === null ? null : !!success;
+
+                  return (
+                    <tr key={(r?.id as string) ?? `${idx}`} className="hover:bg-slate-50/60">
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-700">{fmtDate(createdAt)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="font-medium text-slate-800">{event}</span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {ok === null ? (
+                          <span className="text-slate-500">—</span>
+                        ) : ok ? (
+                          <Badge className="bg-emerald-600 hover:bg-emerald-600">Succès</Badge>
+                        ) : (
+                          <Badge variant="destructive">Échec</Badge>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-700" title={email || userId || ""}>
+                        {userLabel}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-700" title={ip || ""}>
+                        {truncate(ip || "—", 22) || "—"}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-600" title={loc}>
+                        {truncate(loc, 28)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-600">{truncate(source, 18)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-right">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="gap-2"
+                          onClick={() => openDetails(r)}
+                        >
+                          <Eye className="h-4 w-4" />
+                          Voir
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {loading ? (
+              <div className="p-4 text-sm text-slate-500 flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Chargement…
+              </div>
+            ) : null}
+          </div>
+
+          {/* Pagination */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="text-xs text-slate-500">
+              Affichage{" "}
+              <span className="font-medium text-slate-700">
+                {total === 0 ? 0 : fromIdx + 1}–{Math.min(toIdx + 1, total)}
+              </span>{" "}
+              sur <span className="font-medium text-slate-700">{total.toLocaleString("fr-FR")}</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={loading || page <= 1}
+              >
+                Précédent
+              </Button>
+
+              <div className="text-xs text-slate-600 px-2">
+                Page <span className="font-medium">{page}</span> / <span className="font-medium">{totalPages}</span>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={loading || page >= totalPages}
+              >
+                Suivant
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Details Dialog */}
+      <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : closeDetails())}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Détails de la connexion</DialogTitle>
+          </DialogHeader>
+
+          {!prettyRow ? (
+            <div className="text-sm text-slate-500">Aucun détail.</div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500">Date</div>
+                  <div className="font-medium text-slate-900">{fmtDate(prettyRow.createdAt)}</div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500">Événement</div>
+                  <div className="font-medium text-slate-900">{prettyRow.event || "—"}</div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500">Statut</div>
+                  <div className="mt-1">
+                    {prettyRow.success === null ? (
+                      <span className="text-slate-500">—</span>
+                    ) : prettyRow.success ? (
+                      <Badge className="bg-emerald-600 hover:bg-emerald-600">Succès</Badge>
+                    ) : (
+                      <Badge variant="destructive">Échec</Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500">Utilisateur</div>
+                  <div className="font-medium text-slate-900 break-all">
+                    {prettyRow.email || prettyRow.userId || "—"}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500">IP</div>
+                  <div className="font-medium text-slate-900 break-all">{prettyRow.ip || "—"}</div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500">Localisation</div>
+                  <div className="font-medium text-slate-900">
+                    {[prettyRow.city, prettyRow.region, prettyRow.country].filter(Boolean).join(", ") || "—"}
+                  </div>
+                  {(prettyRow.lat != null || prettyRow.lng != null) && (
+                    <div className="text-xs text-slate-500 mt-1">
+                      GPS: {String(prettyRow.lat ?? "—")}, {String(prettyRow.lng ?? "—")}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-3 md:col-span-2">
+                  <div className="text-xs text-slate-500">User-Agent</div>
+                  <div className="font-medium text-slate-900 break-all">{prettyRow.ua || "—"}</div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-3 md:col-span-2">
+                  <div className="text-xs text-slate-500">Source</div>
+                  <div className="font-medium text-slate-900">{prettyRow.source || "—"}</div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 p-3">
+                <div className="text-xs text-slate-500 mb-2">Payload brut (JSON)</div>
+                <pre className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto max-h-[40vh]">
+                  {JSON.stringify(prettyRow.raw, null, 2)}
+                </pre>
+              </div>
+
+              <div className="flex justify-end">
+                <Button type="button" variant="outline" onClick={closeDetails}>
+                  Fermer
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
