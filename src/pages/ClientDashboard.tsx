@@ -192,15 +192,9 @@ const ClientDashboard: React.FC = () => {
     }
   };
 
-  // ✅ Bouton retour (en haut à gauche)
+  // ✅ Bouton retour (en haut à gauche) -> DOIT ALLER A L'ACCUEIL
   const handleBack = () => {
-    // Si un historique existe, on revient en arrière.
-    // Sinon, on renvoie vers l’accueil.
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      navigate(-1);
-    } else {
-      navigate("/", { replace: true });
-    }
+    navigate("/", { replace: true });
   };
 
   const t = {
