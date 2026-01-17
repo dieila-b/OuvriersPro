@@ -7,17 +7,7 @@ import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import {
-  Star,
-  MapPin,
-  Search,
-  LayoutList,
-  LayoutGrid,
-  LocateFixed,
-  Info,
-  RotateCcw,
-  Check,
-} from "lucide-react";
+import { Star, MapPin, Search, LayoutList, LayoutGrid, LocateFixed, Info, RotateCcw, Check } from "lucide-react";
 
 type DbWorker = {
   id: string;
@@ -32,13 +22,19 @@ type DbWorker = {
   hourly_rate: number | null;
   currency: string | null;
   years_experience: number | null;
-  average_rating: number | null;
-  rating_count: number | null;
-  computed_average_rating: number | null;
-  computed_rating_count: number | null;
+
+  average_rating?: number | null;
+  rating_count?: number | null;
+  computed_average_rating?: number | null;
+  computed_rating_count?: number | null;
+
   status: string | null;
   latitude?: number | null;
   longitude?: number | null;
+
+  is_visible?: boolean | null;
+  is_suspended?: boolean | null;
+  deleted_at?: string | null;
 };
 
 interface WorkerCard {
@@ -214,11 +210,9 @@ const WorkerSearchSection: React.FC = () => {
 
   const isSearchRoute = location.pathname === "/search" || location.pathname === "/rechercher";
 
-  // ✅ Mesure réelle des overlays en haut (header + barres sticky/fixed)
   const getTopOverlayOffset = () => {
     const samplesX = [20, Math.floor(window.innerWidth / 2), window.innerWidth - 20];
     const yProbe = 6;
-
     let maxBottom = 0;
 
     const consider = (el: Element | null) => {
@@ -230,17 +224,13 @@ const WorkerSearchSection: React.FC = () => {
         const pos = cs.position;
         if (pos === "fixed" || pos === "sticky") {
           const r = (cur as HTMLElement).getBoundingClientRect();
-          if (r.top <= 0 && r.height > 0) {
-            maxBottom = Math.max(maxBottom, r.bottom);
-          }
+          if (r.top <= 0 && r.height > 0) maxBottom = Math.max(maxBottom, r.bottom);
         }
         cur = cur.parentElement;
       }
     };
 
-    for (const x of samplesX) {
-      consider(document.elementFromPoint(x, yProbe));
-    }
+    for (const x of samplesX) consider(document.elementFromPoint(x, yProbe));
 
     const headerEl = document.querySelector("header") as HTMLElement | null;
     if (headerEl) {
@@ -251,7 +241,6 @@ const WorkerSearchSection: React.FC = () => {
     return Math.max(0, Math.round(maxBottom));
   };
 
-  // ✅ Scroll qui “snap” sur le titre, sans espace au-dessus (même avec barres sticky)
   const scrollToResultsTop = (opts?: { behavior?: ScrollBehavior }) => {
     const el = topAnchorRef.current ?? sectionRef.current;
     if (!el) return;
@@ -262,13 +251,9 @@ const WorkerSearchSection: React.FC = () => {
     const doAdjust = () => {
       const overlay = getTopOverlayOffset();
       const targetTop = overlay + desiredGap;
-
       const rect = el.getBoundingClientRect();
       const delta = rect.top - targetTop;
-
-      if (Math.abs(delta) > 1) {
-        window.scrollBy({ top: delta, behavior: "auto" });
-      }
+      if (Math.abs(delta) > 1) window.scrollBy({ top: delta, behavior: "auto" });
     };
 
     el.scrollIntoView({ block: "start", behavior });
@@ -281,7 +266,6 @@ const WorkerSearchSection: React.FC = () => {
     window.setTimeout(doAdjust, 60);
   };
 
-  // ✅ session: pour bloquer l’accès au profil ouvrier si non connecté
   const [session, setSession] = useState<any>(null);
 
   useEffect(() => {
@@ -311,17 +295,13 @@ const WorkerSearchSection: React.FC = () => {
         description: cms("auth.login_required.desc", "Connectez-vous pour voir le profil.", "Sign in to view the profile."),
       });
 
-      window.setTimeout(() => {
-        navigate(`/login?redirect=${encodeURIComponent(target)}`, { replace: false });
-      }, 650);
-
+      window.setTimeout(() => navigate(`/login?redirect=${encodeURIComponent(target)}`, { replace: false }), 650);
       return;
     }
 
     navigate(target);
   };
 
-  // ✅ Init robuste (URL + sessionStorage + event)
   const initializedRef = useRef(false);
   const applyingExternalRef = useRef(false);
 
@@ -329,18 +309,12 @@ const WorkerSearchSection: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ Geolocation state
   const [geoLocating, setGeoLocating] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
 
-  // ✅ 1 seul état "applied" – on conserve "draft" uniquement pour l’UI
   const [applied, setApplied] = useState<Filters>(DEFAULT_FILTERS);
   const [draft, setDraft] = useState<Filters>(DEFAULT_FILTERS);
 
-  // ------------------------------------------------------------------
-  // ✅ AUTO-APPLY: dès qu’un filtre change, on applique et on met à jour l’URL,
-  // avec debounce 250ms pour éviter trop de updates.
-  // ------------------------------------------------------------------
   const applyTimerRef = useRef<number | null>(null);
 
   const clearApplyTimer = () => {
@@ -356,17 +330,10 @@ const WorkerSearchSection: React.FC = () => {
     const run = () => {
       setApplied(nextApplied);
       setSearchParams(filtersToParams(nextApplied), { replace: true });
-
-      if (isSearchRoute) {
-        scrollToResultsTop({ behavior: "auto" });
-      }
+      if (isSearchRoute) scrollToResultsTop({ behavior: "auto" });
     };
 
-    if (opts?.immediate) {
-      run();
-      return;
-    }
-
+    if (opts?.immediate) return run();
     applyTimerRef.current = window.setTimeout(run, 250);
   };
 
@@ -378,55 +345,78 @@ const WorkerSearchSection: React.FC = () => {
     });
   };
 
-  useEffect(() => {
-    return () => clearApplyTimer();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  // ------------------------------------------------------------------
+  useEffect(() => () => clearApplyTimer(), []);
 
   // ----------------------------
-  // 1) Fetch workers
+  // FETCH (robuste): view -> fallback table
   // ----------------------------
   useEffect(() => {
+    const fetchFrom = async (source: "op_ouvriers_with_ratings" | "op_ouvriers") => {
+      const baseSelect = `
+        id,
+        first_name,
+        last_name,
+        profession,
+        country,
+        region,
+        city,
+        commune,
+        district,
+        hourly_rate,
+        currency,
+        years_experience,
+        status,
+        latitude,
+        longitude
+      `;
+
+      // champs rating présents seulement sur la view
+      const ratingSelect =
+        source === "op_ouvriers_with_ratings"
+          ? `,
+            average_rating,
+            rating_count,
+            computed_average_rating,
+            computed_rating_count
+          `
+          : ``;
+
+      const q = supabase
+        .from(source)
+        .select(`${baseSelect}${ratingSelect}`)
+        .eq("status", "approved");
+
+      // Si la table a ces colonnes, ça filtre mieux (sinon PostgREST ignore pas -> ça error).
+      // On ne les met PAS pour éviter de casser si elles n'existent pas.
+
+      const res = await q;
+      return res;
+    };
+
     const fetchWorkers = async () => {
       setLoading(true);
       setError(null);
 
       try {
-        const { data, error } = await supabase
-          .from("op_ouvriers_with_ratings")
-          .select(
-            `
-            id,
-            first_name,
-            last_name,
-            profession,
-            country,
-            region,
-            city,
-            commune,
-            district,
-            hourly_rate,
-            currency,
-            years_experience,
-            average_rating,
-            rating_count,
-            computed_average_rating,
-            computed_rating_count,
-            status,
-            latitude,
-            longitude
-          `
-          )
-          .eq("status", "approved");
+        // 1) Try view
+        let res = await fetchFrom("op_ouvriers_with_ratings");
 
-        if (error) throw error;
+        // 2) Fallback table si la vue est bloquée (GRANT/RLS) ou renvoie erreur
+        if (res.error) {
+          // eslint-disable-next-line no-console
+          console.warn("[workers] view failed, fallback to table:", res.error);
+          res = await fetchFrom("op_ouvriers");
+        }
 
-        const rows = (data ?? []) as DbWorker[];
+        if (res.error) throw res.error;
+
+        const rows = (res.data ?? []) as DbWorker[];
 
         const mapped: WorkerCard[] = rows.map((w) => {
-          const effectiveRating = w.computed_average_rating ?? w.average_rating ?? 0;
-          const effectiveCount = w.computed_rating_count ?? w.rating_count ?? 0;
+          const effectiveRating =
+            (w.computed_average_rating ?? w.average_rating ?? 0) as number;
+          const effectiveCount =
+            (w.computed_rating_count ?? w.rating_count ?? 0) as number;
 
           const lat = typeof w.latitude === "number" ? w.latitude : null;
           const lng = typeof w.longitude === "number" ? w.longitude : null;
@@ -434,7 +424,8 @@ const WorkerSearchSection: React.FC = () => {
           return {
             id: w.id,
             name:
-              (((w.first_name || "") + (w.last_name ? ` ${w.last_name}` : "")).trim() || cms("search.worker.fallback_name", "Ouvrier", "Worker")) as string,
+              (((w.first_name || "") + (w.last_name ? ` ${w.last_name}` : "")).trim() ||
+                cms("search.worker.fallback_name", "Ouvrier", "Worker")) as string,
             job: w.profession ?? "",
             country: w.country ?? "",
             region: w.region ?? "",
@@ -456,13 +447,14 @@ const WorkerSearchSection: React.FC = () => {
       } catch (err: any) {
         // eslint-disable-next-line no-console
         console.error("WorkerSearchSection fetch error:", err);
+
         setWorkers([]);
         setError(
           cms(
             "search.error.load_workers",
             "Impossible de charger les professionnels pour le moment.",
             "Unable to load professionals at the moment."
-          )
+          ) + (err?.message ? ` (${err.message})` : "")
         );
       } finally {
         setLoading(false);
@@ -474,16 +466,13 @@ const WorkerSearchSection: React.FC = () => {
   }, [language]);
 
   // ----------------------------
-  // 2) Init: URL / sessionStorage / event
+  // Init: URL / sessionStorage / event
   // ----------------------------
   const applyExternalFilters = (f: Filters) => {
     applyingExternalRef.current = true;
     setApplied(f);
     setDraft(f);
-
-    window.setTimeout(() => {
-      applyingExternalRef.current = false;
-    }, 0);
+    window.setTimeout(() => (applyingExternalRef.current = false), 0);
   };
 
   useEffect(() => {
@@ -504,23 +493,19 @@ const WorkerSearchSection: React.FC = () => {
       !!searchParams.get("view");
 
     if (hasUrlCriteria) {
-      const f = paramsToFilters(searchParams);
-      applyExternalFilters(f);
+      applyExternalFilters(paramsToFilters(searchParams));
       initializedRef.current = true;
       return;
     }
 
-    // fallback sessionStorage (Index.tsx)
     const stored = safeParseJson<SearchPayload>(sessionStorage.getItem("op:last_search"));
     if (stored && (stored.keyword || stored.district || stored.lat || stored.lng || stored.near)) {
       const next = new URLSearchParams(searchParams);
-
       if (stored.keyword) next.set("keyword", stored.keyword);
       if (stored.district) next.set("district", stored.district);
       if (stored.near) next.set("near", stored.near);
       if (stored.lat) next.set("lat", stored.lat);
       if (stored.lng) next.set("lng", stored.lng);
-
       setSearchParams(next, { replace: true });
       initializedRef.current = true;
       return;
@@ -531,15 +516,11 @@ const WorkerSearchSection: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ À l’arrivée sur /search : aligner juste sous le header/sticky
   useLayoutEffect(() => {
-    if (isSearchRoute) {
-      scrollToResultsTop({ behavior: "auto" });
-    }
+    if (isSearchRoute) scrollToResultsTop({ behavior: "auto" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
-  // Ré-appliquer quand l'URL change (navigation, etc.)
   useEffect(() => {
     if (!initializedRef.current) return;
     if (applyingExternalRef.current) return;
@@ -568,7 +549,6 @@ const WorkerSearchSection: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams.toString()]);
 
-  // Support event global op:search
   useEffect(() => {
     const onSearch = (evt: any) => {
       const payload: SearchPayload | undefined = evt?.detail;
@@ -591,9 +571,7 @@ const WorkerSearchSection: React.FC = () => {
     return () => window.removeEventListener("op:search", onSearch as EventListener);
   }, [setSearchParams, isSearchRoute]);
 
-  // ----------------------------
-  // 3) Derived options
-  // ----------------------------
+  // Derived options
   const jobs = useMemo(
     () => Array.from(new Set(workers.map((w) => w.job).filter((j) => j && j.trim().length > 0))),
     [workers]
@@ -683,20 +661,9 @@ const WorkerSearchSection: React.FC = () => {
         const matchCommune = !f.commune || communeNorm === f.commune.trim().toLowerCase();
         const matchDistrict = !f.district || districtNorm === f.district.trim().toLowerCase();
 
-        const matchRadius =
-          !f.near || f.lat == null || f.lng == null || w.distanceKm == null || w.distanceKm <= f.radiusKm;
+        const matchRadius = !f.near || f.lat == null || f.lng == null || w.distanceKm == null || w.distanceKm <= f.radiusKm;
 
-        return (
-          matchKeyword &&
-          matchJob &&
-          matchPrice &&
-          matchRating &&
-          matchRegion &&
-          matchCity &&
-          matchCommune &&
-          matchDistrict &&
-          matchRadius
-        );
+        return matchKeyword && matchJob && matchPrice && matchRating && matchRegion && matchCity && matchCommune && matchDistrict && matchRadius;
       });
 
     if (f.near && f.lat != null && f.lng != null) {
@@ -713,20 +680,14 @@ const WorkerSearchSection: React.FC = () => {
     return list;
   }, [workers, applied]);
 
-  // ----------------------------
-  // 4) Actions
-  // ----------------------------
+  // Actions
   const resetAll = () => {
     applyingExternalRef.current = true;
     setDraft(DEFAULT_FILTERS);
     setApplied(DEFAULT_FILTERS);
     setSearchParams({}, { replace: true });
     setGeoError(null);
-
-    window.setTimeout(() => {
-      applyingExternalRef.current = false;
-    }, 0);
-
+    window.setTimeout(() => (applyingExternalRef.current = false), 0);
     if (isSearchRoute) scrollToResultsTop({ behavior: "auto" });
   };
 
@@ -749,23 +710,14 @@ const WorkerSearchSection: React.FC = () => {
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        updateDraft(
-          {
-            near: true,
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-          },
-          { immediate: true }
-        );
+        updateDraft({ near: true, lat: pos.coords.latitude, lng: pos.coords.longitude }, { immediate: true });
         setGeoLocating(false);
       },
       (err) => {
         // eslint-disable-next-line no-console
         console.error("geolocation error", err);
         setGeoLocating(false);
-
         updateDraft({ near: false, lat: null, lng: null }, { immediate: true });
-
         setGeoError(
           cms(
             "search.geo.error",
@@ -778,21 +730,13 @@ const WorkerSearchSection: React.FC = () => {
     );
   };
 
-  // ✅ Texts (CMS-driven)
+  // Texts
   const title = cms("search.page.title", "Trouvez votre professionnel", "Find your professional");
-  const subtitle = cms(
-    "search.page.subtitle",
-    "Modifiez vos filtres pour lancer la recherche automatiquement.",
-    "Adjust filters to automatically update results."
-  );
+  const subtitle = cms("search.page.subtitle", "Modifiez vos filtres pour lancer la recherche automatiquement.", "Adjust filters to automatically update results.");
 
   const filtersTitle = cms("search.filters.title", "Filtres", "Filters");
   const keywordLabel = cms("search.filters.keyword.label", "Métier ou nom", "Trade or name");
-  const keywordPlaceholder = cms(
-    "search.filters.keyword.placeholder",
-    "Plombier, électricien, Mamadou...",
-    "Plumber, electrician, John..."
-  );
+  const keywordPlaceholder = cms("search.filters.keyword.placeholder", "Plombier, électricien, Mamadou...", "Plumber, electrician, John...");
 
   const jobLabel = cms("search.filters.job.label", "Métier", "Job");
   const jobAll = cms("search.filters.job.all", "Tous les métiers", "All trades");
@@ -826,25 +770,13 @@ const WorkerSearchSection: React.FC = () => {
   const yearsSuffix = cms("search.card.years_suffix", "ans d'expérience", "years of experience");
   const distanceLabel = cms("search.card.distance_label", "Distance", "Distance");
 
-  const geoHint = cms(
-    "search.geo.hint",
-    "Activez la localisation pour trier et filtrer par distance.",
-    "Enable location to sort/filter by distance."
-  );
+  const geoHint = cms("search.geo.hint", "Activez la localisation pour trier et filtrer par distance.", "Enable location to sort/filter by distance.");
   const useMyPos = cms("search.filters.btn_geolocate", "Utiliser ma position", "Use my location");
   const radiusLabel = cms("search.filters.radius.label", "Rayon", "Radius");
   const kmLabel = cms("search.filters.radius.unit", "km", "km");
 
-  const noResults = cms(
-    "search.results.none",
-    "Aucun professionnel ne correspond à ces critères pour le moment.",
-    "No professional matches your criteria yet."
-  );
-  const noData = cms(
-    "search.results.nodata",
-    "Aucun professionnel n’est encore disponible.",
-    "No professionals are available yet."
-  );
+  const noResults = cms("search.results.none", "Aucun professionnel ne correspond à ces critères pour le moment.", "No professional matches your criteria yet.");
+  const noData = cms("search.results.nodata", "Aucun professionnel n’est encore disponible.", "No professionals are available yet.");
 
   const loadingShort = cms("common.loading", "Chargement...", "Loading...");
   const loadingWorkers = cms("search.loading_workers", "Chargement des professionnels...", "Loading professionals...");
@@ -865,7 +797,6 @@ const WorkerSearchSection: React.FC = () => {
   return (
     <section ref={sectionRef} id="worker-search" className="w-full pt-0 pb-10 sm:pb-14 lg:pb-16 bg-white">
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
-        {/* ✅ ancre = haut du titre */}
         <div ref={topAnchorRef} />
 
         <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-5 sm:mb-7 border-b border-gray-200 pb-3 min-w-0">
@@ -893,11 +824,7 @@ const WorkerSearchSection: React.FC = () => {
             {applied.near && appliedHasCoords && !hasAnyGeoWorkers && (
               <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-flex items-center gap-2">
                 <Info className="w-4 h-4" />
-                {cms(
-                  "search.geo.no_workers_coords",
-                  "Certains profils n'ont pas encore de position GPS.",
-                  "Some profiles do not have GPS coordinates yet."
-                )}
+                {cms("search.geo.no_workers_coords", "Certains profils n'ont pas encore de position GPS.", "Some profiles do not have GPS coordinates yet.")}
               </div>
             )}
           </div>
@@ -908,9 +835,7 @@ const WorkerSearchSection: React.FC = () => {
               <button
                 type="button"
                 onClick={() => updateDraft({ view: "list" }, { immediate: true })}
-                className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
-                  draft.view === "list" ? "bg-pro-blue text-white" : "text-gray-600 hover:bg-gray-100"
-                }`}
+                className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${draft.view === "list" ? "bg-pro-blue text-white" : "text-gray-600 hover:bg-gray-100"}`}
               >
                 <LayoutList className="w-3 h-3" />
                 {viewListLabel}
@@ -918,9 +843,7 @@ const WorkerSearchSection: React.FC = () => {
               <button
                 type="button"
                 onClick={() => updateDraft({ view: "grid" }, { immediate: true })}
-                className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
-                  draft.view === "grid" ? "bg-pro-blue text-white" : "text-gray-600 hover:bg-gray-100"
-                }`}
+                className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${draft.view === "grid" ? "bg-pro-blue text-white" : "text-gray-600 hover:bg-gray-100"}`}
               >
                 <LayoutGrid className="w-3 h-3" />
                 {viewGridLabel}
@@ -942,12 +865,7 @@ const WorkerSearchSection: React.FC = () => {
 
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">{keywordLabel}</label>
-              <Input
-                value={draft.keyword}
-                onChange={(e) => updateDraft({ keyword: e.target.value })}
-                placeholder={keywordPlaceholder}
-                className="text-sm"
-              />
+              <Input value={draft.keyword} onChange={(e) => updateDraft({ keyword: e.target.value })} placeholder={keywordPlaceholder} className="text-sm" />
             </div>
 
             <div className="mb-5">
@@ -969,11 +887,7 @@ const WorkerSearchSection: React.FC = () => {
                 {geoLocating ? cms("search.geo.locating", "Localisation...", "Locating...") : useMyPos}
               </Button>
 
-              {geoError && (
-                <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                  {geoError}
-                </div>
-              )}
+              {geoError && <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{geoError}</div>}
 
               {draft.near && draft.lat != null && draft.lng != null && (
                 <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
@@ -983,13 +897,7 @@ const WorkerSearchSection: React.FC = () => {
                       {draft.radiusKm} {kmLabel}
                     </span>
                   </div>
-                  <Slider
-                    defaultValue={[draft.radiusKm]}
-                    min={1}
-                    max={100}
-                    step={1}
-                    onValueChange={(v) => updateDraft({ radiusKm: v[0] })}
-                  />
+                  <Slider defaultValue={[draft.radiusKm]} min={1} max={100} step={1} onValueChange={(v) => updateDraft({ radiusKm: v[0] })} />
                 </div>
               )}
             </div>
@@ -1087,34 +995,18 @@ const WorkerSearchSection: React.FC = () => {
               <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                 <span>{priceLabel}</span>
                 <span className="text-[11px] text-gray-500">
-                  {draft.maxPrice >= DEFAULT_MAX_PRICE
-                    ? priceNoLimit
-                    : `${draft.maxPrice.toLocaleString("fr-FR")} GNF`}
+                  {draft.maxPrice >= DEFAULT_MAX_PRICE ? priceNoLimit : `${draft.maxPrice.toLocaleString("fr-FR")} GNF`}
                 </span>
               </div>
-              <Slider
-                defaultValue={[draft.maxPrice]}
-                min={50000}
-                max={DEFAULT_MAX_PRICE}
-                step={10000}
-                onValueChange={(v) => updateDraft({ maxPrice: v[0] })}
-              />
+              <Slider defaultValue={[draft.maxPrice]} min={50000} max={DEFAULT_MAX_PRICE} step={10000} onValueChange={(v) => updateDraft({ maxPrice: v[0] })} />
             </div>
 
             <div className="mb-2">
               <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                 <span>{ratingLabel}</span>
-                <span className="text-[11px] text-gray-500">
-                  {draft.minRating === 0 ? ratingAny : draft.minRating.toFixed(1)}
-                </span>
+                <span className="text-[11px] text-gray-500">{draft.minRating === 0 ? ratingAny : draft.minRating.toFixed(1)}</span>
               </div>
-              <Slider
-                defaultValue={[draft.minRating]}
-                min={0}
-                max={5}
-                step={0.5}
-                onValueChange={(v) => updateDraft({ minRating: v[0] })}
-              />
+              <Slider defaultValue={[draft.minRating]} min={0} max={5} step={0.5} onValueChange={(v) => updateDraft({ minRating: v[0] })} />
             </div>
           </aside>
 
@@ -1122,21 +1014,15 @@ const WorkerSearchSection: React.FC = () => {
             {error && <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">{error}</div>}
 
             {!error && !loading && workers.length === 0 && (
-              <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
-                {noData}
-              </div>
+              <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">{noData}</div>
             )}
 
             {!error && !loading && workers.length > 0 && filteredWorkers.length === 0 && (
-              <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
-                {noResults}
-              </div>
+              <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">{noResults}</div>
             )}
 
             {loading && filteredWorkers.length === 0 && (
-              <div className="border border-gray-100 rounded-xl p-6 text-sm text-gray-500">
-                {loadingWorkers}
-              </div>
+              <div className="border border-gray-100 rounded-xl p-6 text-sm text-gray-500">{loadingWorkers}</div>
             )}
 
             {applied.view === "list" && filteredWorkers.length > 0 && (
@@ -1150,32 +1036,20 @@ const WorkerSearchSection: React.FC = () => {
                     .join("");
 
                   return (
-                    <div
-                      key={w.id}
-                      className="min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4"
-                    >
+                    <div key={w.id} className="min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
                       <div className="flex-shrink-0">
-                        <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">
-                          {initials || "OP"}
-                        </div>
+                        <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">{initials || "OP"}</div>
                       </div>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 min-w-0">
                           <h3 className="font-semibold text-pro-gray text-base sm:text-lg truncate min-w-0">{w.name}</h3>
 
-                          {w.job && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-pro-blue border border-blue-100">
-                              {w.job}
-                            </span>
-                          )}
+                          {w.job && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-pro-blue border border-blue-100">{w.job}</span>}
 
                           {applied.near && appliedHasCoords && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">
-                              {distanceLabel}:{" "}
-                              <span className="font-semibold ml-1">
-                                {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
-                              </span>
+                              {distanceLabel}: <span className="font-semibold ml-1">{w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}</span>
                             </span>
                           )}
                         </div>
@@ -1183,9 +1057,7 @@ const WorkerSearchSection: React.FC = () => {
                         <div className="flex flex-wrap items-center gap-3 mt-1 text-xs sm:text-sm text-gray-600 min-w-0">
                           <span className="flex items-center gap-1 min-w-0">
                             <MapPin className="w-3 h-3 shrink-0" />
-                            <span className="truncate">
-                              {[w.region, w.city, w.commune, w.district].filter(Boolean).join(" • ")}
-                            </span>
+                            <span className="truncate">{[w.region, w.city, w.commune, w.district].filter(Boolean).join(" • ")}</span>
                           </span>
 
                           <span className="flex items-center gap-1">
@@ -1205,11 +1077,7 @@ const WorkerSearchSection: React.FC = () => {
                           <span className="text-xs sm:text-sm text-gray-600 ml-1">{perHourLabel}</span>
                         </div>
 
-                        <Button
-                          size="sm"
-                          className="w-full sm:w-auto bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm"
-                          onClick={() => goToWorkerProfile(w.id)}
-                        >
+                        <Button size="sm" className="w-full sm:w-auto bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm" onClick={() => goToWorkerProfile(w.id)}>
                           {contactLabel}
                         </Button>
                       </div>
@@ -1230,23 +1098,15 @@ const WorkerSearchSection: React.FC = () => {
                     .join("");
 
                   return (
-                    <div
-                      key={w.id}
-                      className="min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-3"
-                    >
+                    <div key={w.id} className="min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-3">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-full bg-pro-blue text-white flex items-center justify-center text-sm font-semibold shrink-0">
-                          {initials || "OP"}
-                        </div>
+                        <div className="w-10 h-10 rounded-full bg-pro-blue text-white flex items-center justify-center text-sm font-semibold shrink-0">{initials || "OP"}</div>
                         <div className="min-w-0">
                           <h3 className="font-semibold text-sm text-pro-gray truncate">{w.name}</h3>
                           {w.job && <div className="text-xs text-pro-blue mt-0.5 truncate">{w.job}</div>}
                           {applied.near && appliedHasCoords && (
                             <div className="text-[11px] text-slate-600 mt-1">
-                              {distanceLabel}:{" "}
-                              <span className="font-semibold">
-                                {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
-                              </span>
+                              {distanceLabel}: <span className="font-semibold">{w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}</span>
                             </div>
                           )}
                         </div>
@@ -1255,9 +1115,7 @@ const WorkerSearchSection: React.FC = () => {
                       <div className="text-xs text-gray-600 space-y-1 min-w-0">
                         <span className="flex items-center gap-1 min-w-0">
                           <MapPin className="w-3 h-3 shrink-0" />
-                          <span className="truncate">
-                            {[w.region, w.city, w.commune, w.district].filter(Boolean).join(" • ")}
-                          </span>
+                          <span className="truncate">{[w.region, w.city, w.commune, w.district].filter(Boolean).join(" • ")}</span>
                         </span>
                         <span className="flex items-center gap-1">
                           <Star className="w-3 h-3 text-yellow-400" />
@@ -1274,11 +1132,7 @@ const WorkerSearchSection: React.FC = () => {
                           <span className="ml-1 text-[11px] text-gray-600">{perHourLabel}</span>
                         </div>
 
-                        <Button
-                          size="sm"
-                          className="bg-pro-blue hover:bg-blue-700 text-[11px]"
-                          onClick={() => goToWorkerProfile(w.id)}
-                        >
+                        <Button size="sm" className="bg-pro-blue hover:bg-blue-700 text-[11px]" onClick={() => goToWorkerProfile(w.id)}>
                           {contactLabel}
                         </Button>
                       </div>
