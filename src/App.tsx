@@ -45,7 +45,7 @@ import AdminOuvrierInscriptions from "./pages/AdminOuvrierInscriptions";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminAds from "./pages/AdminAds";
 
-// ✅ NEW: Admin Journal de connexions (page à créer/coller)
+// ✅ Admin Journal de connexions
 import AdminLoginJournalPage from "./pages/admin/AdminLoginJournalPage";
 
 // Espace ouvrier connecté
@@ -100,66 +100,55 @@ function ScrollManager() {
 }
 
 /**
- * ✅ Journal de connexion (Edge Function) — non bloquant
- * - LOG sur SIGNED_IN / SIGNED_OUT
- * - ne casse jamais l'app si la function n'existe pas encore
+ * ✅ Journal de connexion (RPC) — non bloquant
+ * - écrit dans public.op_login_journal via RPC public.op_log_login_event(...)
+ * - ne casse jamais l'app si la RPC n'existe pas encore (try/catch silencieux)
+ *
+ * IMPORTANT:
+ * - Pour que ça marche, tu dois avoir créé:
+ *   - table: public.op_login_journal
+ *   - function: public.op_log_login_event(...)
  */
 function AuthAuditLogger() {
   useEffect(() => {
-    const safeCall = async (payload: any) => {
+    const log = async (event: "login" | "logout" | "refresh", session: any) => {
       try {
-        // 1) Tente via supabase.functions.invoke si disponible/configuré
-        const fn = (supabase as any)?.functions?.invoke;
-        if (typeof fn === "function") {
-          await fn("log-login", { body: payload });
-          return;
-        }
+        const ua = typeof navigator !== "undefined" ? navigator.userAgent : null;
 
-        // 2) Fallback HTTP (Netlify/Supabase) — garde si tu as /functions/v1/*
-        await fetch("/functions/v1/log-login", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(payload),
+        await supabase.rpc("op_log_login_event", {
+          p_event: event,
+          p_success: true,
+          p_email: session?.user?.email ?? null,
+          p_ip: null, // IP réelle => server-side (Edge Function) si tu veux
+          p_user_agent: ua,
+          p_country: null,
+          p_region: null,
+          p_city: null,
+          p_lat: null,
+          p_lng: null,
+          p_source: "web",
+          p_meta: { note: "client-side" },
         });
       } catch {
         // silencieux
       }
     };
 
-    // Log "refresh" au chargement si déjà connecté (utile si session persistée)
+    // Log "refresh" au chargement si déjà connecté
     supabase.auth
       .getSession()
       .then(({ data }) => {
         const s = data.session;
         if (!s?.user) return;
-        safeCall({
-          event: "refresh",
-          success: true,
-          user_id: s.user.id,
-          email: s.user.email ?? null,
-          source: "web",
-        });
+        log("refresh", s);
       })
       .catch(() => {});
 
     const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
       if (evt === "SIGNED_IN") {
-        safeCall({
-          event: "login",
-          success: true,
-          user_id: session?.user?.id ?? null,
-          email: session?.user?.email ?? null,
-          source: "web",
-        });
+        log("login", session);
       } else if (evt === "SIGNED_OUT") {
-        // email souvent null au logout (normal)
-        safeCall({
-          event: "logout",
-          success: true,
-          user_id: session?.user?.id ?? null,
-          email: session?.user?.email ?? null,
-          source: "web",
-        });
+        log("logout", session);
       }
     });
 
@@ -315,7 +304,6 @@ const AppRoutes = () => (
           </PrivateRoute>
         }
       >
-        {/* ✅ IMPORTANT : /admin => /admin/dashboard */}
         <Route index element={<Navigate to="dashboard" replace />} />
 
         <Route path="dashboard" element={<AdminDashboard />} />
@@ -326,7 +314,7 @@ const AppRoutes = () => (
         <Route path="contenu" element={<AdminContent />} />
         <Route path="faq-questions" element={<AdminFaqQuestions />} />
 
-        {/* ✅ NEW: Journal de connexion (admin only) */}
+        {/* ✅ Journal de connexion (admin only) */}
         <Route path="journal-connexions" element={<AdminLoginJournalPage />} />
       </Route>
 
@@ -344,7 +332,6 @@ const App = () => (
           <Toaster />
           <Sonner />
 
-          {/* ✅ Wrapper global safe (évite débordements) */}
           <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
             <AppRoutes />
           </div>
