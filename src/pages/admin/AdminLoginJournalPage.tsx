@@ -11,30 +11,19 @@ import { Loader2, RefreshCw, Search, Filter, Eye, X } from "lucide-react";
 
 /**
  * Journal de connexions (admin only)
- *
- * ⚠️ IMPORTANT :
- * - On ne connaît pas encore le nom exact de ta table.
- * - Cette page essaie plusieurs noms "probables" et choisit automatiquement celui qui existe.
- * - Dès que tu confirmes le nom, on pourra verrouiller TABLE_CANDIDATES à 1 valeur.
+ * - Table attendue: public.op_login_journal
+ * - RLS: SELECT uniquement pour admin (via op_is_admin())
  */
-const TABLE_CANDIDATES = [
-  "op_login_journal",
-  "op_login_logs",
-  "op_auth_logins",
-  "auth_login_logs",
-  "login_journal",
-  "login_logs",
-  "op_audit_logins",
-] as const;
+const TABLE_NAME = "op_login_journal";
 
 type AnyRow = Record<string, any>;
 
 type FiltersState = {
-  q: string; // recherche globale (email, user_id, ip)
-  event: "all" | "login" | "logout" | "refresh";
+  q: string;
+  event: "all" | "login" | "logout" | "refresh" | "failed_login";
   success: "all" | "success" | "fail";
-  from: string; // date YYYY-MM-DD
-  to: string; // date YYYY-MM-DD
+  from: string; // YYYY-MM-DD
+  to: string; // YYYY-MM-DD
   perPage: number;
 };
 
@@ -48,7 +37,6 @@ const DEFAULT_FILTERS: FiltersState = {
 };
 
 function toIsoStartOfDay(dateYYYYMMDD: string) {
-  // ex: 2026-01-17 -> 2026-01-17T00:00:00.000Z
   if (!dateYYYYMMDD) return null;
   const d = new Date(`${dateYYYYMMDD}T00:00:00.000Z`);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
@@ -104,12 +92,15 @@ function truncate(s: string, n = 48) {
   return s.slice(0, n - 1) + "…";
 }
 
+function escapeLike(raw: string) {
+  // supabase ilike escape % et _
+  return raw.replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
 export default function AdminLoginJournalPage() {
   const { toast } = useToast();
 
-  const [tableName, setTableName] = useState<string | null>(null);
-  const [tableDetecting, setTableDetecting] = useState(true);
-
+  const [tableOk, setTableOk] = useState<boolean | null>(null); // null = pending
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
 
@@ -132,52 +123,49 @@ export default function AdminLoginJournalPage() {
     return Math.max(1, Math.ceil(total / perPage));
   }, [total, perPage]);
 
-  // ---------
-  // Detect table
-  // ---------
+  // Vérifie l'existence/lisibilité de la table
   useEffect(() => {
     let alive = true;
 
-    const detect = async () => {
-      setTableDetecting(true);
-      setTableName(null);
+    const check = async () => {
+      try {
+        const { error } = await supabase.from(TABLE_NAME).select("id").limit(1);
+        if (!alive) return;
 
-      for (const t of TABLE_CANDIDATES) {
-        try {
-          const { error } = await supabase.from(t).select("*").limit(1);
-          if (!error) {
-            if (!alive) return;
-            setTableName(t);
-            setTableDetecting(false);
-            return;
-          }
-
-          // relation does not exist => on continue
-          // RLS denied => la table existe mais pas lisible. On affiche quand même le nom.
-          if ((error as any)?.code === "42P01") {
-            continue;
-          }
-
-          // Si c'est RLS denied, on considère que la table existe
-          // (ça veut dire qu'il faut corriger la policy admin)
-          const msg = (error as any)?.message ?? "";
-          if (msg.toLowerCase().includes("permission") || msg.toLowerCase().includes("rls")) {
-            if (!alive) return;
-            setTableName(t);
-            setTableDetecting(false);
-            return;
-          }
-        } catch {
-          // ignore
+        if (!error) {
+          setTableOk(true);
+          return;
         }
-      }
 
-      if (!alive) return;
-      setTableDetecting(false);
-      setTableName(null);
+        const code = (error as any)?.code;
+        const msg = String((error as any)?.message ?? "");
+
+        // 42P01 = table inexistante
+        if (code === "42P01") {
+          setTableOk(false);
+          setError("Table op_login_journal introuvable. Crée-la dans Supabase (SQL) puis réessaye.");
+          return;
+        }
+
+        // RLS / permission => table existe mais pas lisible
+        if (msg.toLowerCase().includes("permission") || msg.toLowerCase().includes("rls")) {
+          setTableOk(false);
+          setError(
+            "Accès refusé (RLS). Vérifie la policy SELECT admin sur op_login_journal (op_is_admin())."
+          );
+          return;
+        }
+
+        setTableOk(false);
+        setError(msg || "Impossible d'accéder à la table op_login_journal.");
+      } catch (e: any) {
+        if (!alive) return;
+        setTableOk(false);
+        setError(e?.message ?? "Erreur lors de la vérification de la table.");
+      }
     };
 
-    detect();
+    check();
 
     return () => {
       alive = false;
@@ -190,61 +178,45 @@ export default function AdminLoginJournalPage() {
   }, [filters.q, filters.event, filters.success, filters.from, filters.to, filters.perPage]);
 
   const buildQuery = () => {
-    if (!tableName) return null;
+    if (!tableOk) return null;
 
-    // ⚠️ On utilise select("*") car les colonnes exactes peuvent varier.
-    let q = supabase.from(tableName).select("*", { count: "exact" });
+    let q = supabase.from(TABLE_NAME).select("*", { count: "exact" });
 
-    // event
-    if (filters.event !== "all") {
-      // selon schéma: event / action / type
-      // on teste "event" (le plus probable). Si ton schéma utilise "action", dis-le et on adapte.
-      q = q.eq("event", filters.event);
-    }
+    if (filters.event !== "all") q = q.eq("event", filters.event);
 
-    // success
     if (filters.success !== "all") {
-      const val = filters.success === "success";
-      // "success" est le plus probable
-      q = q.eq("success", val);
+      q = q.eq("success", filters.success === "success");
     }
 
-    // date range (created_at)
     const isoFrom = toIsoStartOfDay(filters.from);
     const isoTo = toIsoEndOfDay(filters.to);
-
     if (isoFrom) q = q.gte("created_at", isoFrom);
     if (isoTo) q = q.lte("created_at", isoTo);
 
-    // search (email / user_id / ip) : OR
     const raw = filters.q.trim();
     if (raw) {
-      const like = `%${raw.replace(/%/g, "\\%").replace(/_/g, "\\_")}%`;
-
-      // colonnes probables: email, user_email, ip, ip_address, user_id
-      // Supabase OR syntax: "col.ilike.%x%,col2.ilike.%x%"
+      const like = `%${escapeLike(raw)}%`;
+      // Colonnes connues de op_login_journal : email, user_id, ip, user_agent, source, event
       q = q.or(
         [
           `email.ilike.${like}`,
-          `user_email.ilike.${like}`,
           `user_id::text.ilike.${like}`,
           `ip.ilike.${like}`,
-          `ip_address.ilike.${like}`,
+          `user_agent.ilike.${like}`,
+          `source.ilike.${like}`,
+          `event.ilike.${like}`,
         ].join(",")
       );
     }
 
-    // order & pagination
     q = q.order("created_at", { ascending: false }).range(fromIdx, toIdx);
-
     return q;
   };
 
   const fetchData = async () => {
-    if (!tableName) {
+    if (!tableOk) {
       setRows([]);
       setTotal(0);
-      setError("Aucune table de journal trouvée. (Donne-moi le nom exact et je verrouille la page.)");
       return;
     }
 
@@ -278,28 +250,26 @@ export default function AdminLoginJournalPage() {
     }
   };
 
-  // initial + whenever tableName/page changes
+  // initial + whenever page changes
   useEffect(() => {
-    if (!tableName) return;
+    if (!tableOk) return;
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableName, page]);
+  }, [tableOk, page]);
 
   // debounced fetch on filters changes
   useEffect(() => {
-    if (!tableName) return;
+    if (!tableOk) return;
 
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
-    debounceRef.current = window.setTimeout(() => {
-      fetchData();
-    }, 350);
+    debounceRef.current = window.setTimeout(() => fetchData(), 350);
 
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
       debounceRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableName, filters.q, filters.event, filters.success, filters.from, filters.to, filters.perPage]);
+  }, [tableOk, filters.q, filters.event, filters.success, filters.from, filters.to, filters.perPage]);
 
   const openDetails = (r: AnyRow) => {
     setSelected(r);
@@ -314,20 +284,20 @@ export default function AdminLoginJournalPage() {
   const prettyRow = useMemo(() => {
     if (!selected) return null;
 
-    const createdAt = pickTs(selected, ["created_at", "createdAt", "ts", "timestamp"]);
-    const event = pickStr(selected, ["event", "action", "type"]);
-    const success = pickBool(selected, ["success", "ok", "is_success"]);
-    const userId = pickStr(selected, ["user_id", "uid", "userId", "account_id"]);
-    const email = pickStr(selected, ["email", "user_email", "userEmail"]);
-    const ip = pickStr(selected, ["ip", "ip_address", "ipAddress"]);
-    const source = pickStr(selected, ["source", "channel", "app"]);
-    const ua = pickStr(selected, ["user_agent", "userAgent", "ua"]);
+    const createdAt = pickTs(selected, ["created_at"]);
+    const event = pickStr(selected, ["event"]);
+    const success = pickBool(selected, ["success"]);
+    const userId = pickStr(selected, ["user_id"]);
+    const email = pickStr(selected, ["email"]);
+    const ip = pickStr(selected, ["ip"]);
+    const source = pickStr(selected, ["source"]);
+    const ua = pickStr(selected, ["user_agent"]);
 
-    const country = pickStr(selected, ["country", "ip_country", "geo_country", "location_country"]);
-    const region = pickStr(selected, ["region", "ip_region", "geo_region", "location_region", "state"]);
-    const city = pickStr(selected, ["city", "ip_city", "geo_city", "location_city"]);
-    const lat = selected?.lat ?? selected?.latitude ?? selected?.geo_lat ?? null;
-    const lng = selected?.lng ?? selected?.longitude ?? selected?.geo_lng ?? null;
+    const country = pickStr(selected, ["country"]);
+    const region = pickStr(selected, ["region"]);
+    const city = pickStr(selected, ["city"]);
+    const lat = selected?.lat ?? null;
+    const lng = selected?.lng ?? null;
 
     return {
       createdAt,
@@ -348,25 +318,25 @@ export default function AdminLoginJournalPage() {
   }, [selected]);
 
   const headerRight = useMemo(() => {
-    if (tableDetecting) {
+    if (tableOk === null) {
       return (
         <div className="inline-flex items-center gap-2 text-xs text-slate-500">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Détection de la table…
+          Vérification…
         </div>
       );
     }
 
-    if (!tableName) {
-      return <div className="text-xs text-red-600">Table introuvable</div>;
+    if (tableOk === false) {
+      return <div className="text-xs text-red-600">Table/RLS non OK</div>;
     }
 
     return (
       <div className="text-xs text-slate-500">
-        Table: <span className="font-medium text-slate-700">{tableName}</span>
+        Table: <span className="font-medium text-slate-700">{TABLE_NAME}</span>
       </div>
     );
-  }, [tableDetecting, tableName]);
+  }, [tableOk]);
 
   return (
     <div className="space-y-5">
@@ -387,7 +357,7 @@ export default function AdminLoginJournalPage() {
               variant="outline"
               className="gap-2"
               onClick={() => fetchData()}
-              disabled={loading || tableDetecting || !tableName}
+              disabled={loading || tableOk !== true}
               title="Rafraîchir"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -405,9 +375,10 @@ export default function AdminLoginJournalPage() {
                 <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <Input
                   className="pl-9"
-                  placeholder="Email, user_id, IP…"
+                  placeholder="Email, user_id, IP, user-agent…"
                   value={filters.q}
                   onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))}
+                  disabled={tableOk !== true}
                 />
               </div>
             </div>
@@ -418,11 +389,13 @@ export default function AdminLoginJournalPage() {
                 className="mt-1 w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
                 value={filters.event}
                 onChange={(e) => setFilters((p) => ({ ...p, event: e.target.value as any }))}
+                disabled={tableOk !== true}
               >
                 <option value="all">Tous</option>
                 <option value="login">login</option>
                 <option value="logout">logout</option>
                 <option value="refresh">refresh</option>
+                <option value="failed_login">failed_login</option>
               </select>
             </div>
 
@@ -432,6 +405,7 @@ export default function AdminLoginJournalPage() {
                 className="mt-1 w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
                 value={filters.success}
                 onChange={(e) => setFilters((p) => ({ ...p, success: e.target.value as any }))}
+                disabled={tableOk !== true}
               >
                 <option value="all">Tous</option>
                 <option value="success">Succès</option>
@@ -446,6 +420,7 @@ export default function AdminLoginJournalPage() {
                 type="date"
                 value={filters.from}
                 onChange={(e) => setFilters((p) => ({ ...p, from: e.target.value }))}
+                disabled={tableOk !== true}
               />
             </div>
 
@@ -456,6 +431,7 @@ export default function AdminLoginJournalPage() {
                 type="date"
                 value={filters.to}
                 onChange={(e) => setFilters((p) => ({ ...p, to: e.target.value }))}
+                disabled={tableOk !== true}
               />
             </div>
 
@@ -472,6 +448,7 @@ export default function AdminLoginJournalPage() {
                   className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
                   value={filters.perPage}
                   onChange={(e) => setFilters((p) => ({ ...p, perPage: Number(e.target.value) }))}
+                  disabled={tableOk !== true}
                 >
                   <option value={10}>10 / page</option>
                   <option value={25}>25 / page</option>
@@ -483,7 +460,7 @@ export default function AdminLoginJournalPage() {
                   type="button"
                   variant="outline"
                   onClick={() => setFilters(DEFAULT_FILTERS)}
-                  disabled={loading}
+                  disabled={loading || tableOk !== true}
                   className="gap-2"
                 >
                   <X className="h-4 w-4" />
@@ -497,15 +474,13 @@ export default function AdminLoginJournalPage() {
           {error && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
               {error}
-              {!tableName ? (
-                <div className="mt-2 text-xs text-red-700/90">
-                  Donne-moi le nom exact de la table (capture Supabase) et je t’adapte la page en 30 secondes.
-                </div>
-              ) : null}
+              <div className="mt-2 text-xs text-red-700/90">
+                Si la table existe mais tu ne vois rien : il faut aussi que l’app écrive dedans (RPC op_log_login_event).
+              </div>
             </div>
           )}
 
-          {!error && !loading && rows.length === 0 && (
+          {!error && !loading && rows.length === 0 && tableOk === true && (
             <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
               Aucune entrée trouvée avec ces filtres.
             </div>
@@ -529,25 +504,20 @@ export default function AdminLoginJournalPage() {
 
               <tbody className="divide-y divide-slate-100">
                 {rows.map((r, idx) => {
-                  const createdAt = pickTs(r, ["created_at", "createdAt", "ts", "timestamp"]);
-                  const event = pickStr(r, ["event", "action", "type"]) || "—";
-                  const success = pickBool(r, ["success", "ok", "is_success"]);
-                  const userId = pickStr(r, ["user_id", "uid", "userId", "account_id"]);
-                  const email = pickStr(r, ["email", "user_email", "userEmail"]);
-                  const ip = pickStr(r, ["ip", "ip_address", "ipAddress"]);
+                  const createdAt = pickTs(r, ["created_at"]);
+                  const event = pickStr(r, ["event"]) || "—";
+                  const success = pickBool(r, ["success"]);
+                  const userId = pickStr(r, ["user_id"]);
+                  const email = pickStr(r, ["email"]);
+                  const ip = pickStr(r, ["ip"]);
 
-                  const country = pickStr(r, ["country", "ip_country", "geo_country", "location_country"]);
-                  const region = pickStr(r, ["region", "ip_region", "geo_region", "location_region", "state"]);
-                  const city = pickStr(r, ["city", "ip_city", "geo_city", "location_city"]);
+                  const country = pickStr(r, ["country"]);
+                  const region = pickStr(r, ["region"]);
+                  const city = pickStr(r, ["city"]);
 
-                  const source = pickStr(r, ["source", "channel", "app"]) || "—";
+                  const source = pickStr(r, ["source"]) || "—";
 
-                  const userLabel = email
-                    ? truncate(email, 28)
-                    : userId
-                    ? truncate(userId, 28)
-                    : "—";
-
+                  const userLabel = email ? truncate(email, 28) : userId ? truncate(userId, 28) : "—";
                   const loc = [city, region, country].filter(Boolean).join(", ") || "—";
 
                   const ok = success === null ? null : !!success;
@@ -578,13 +548,7 @@ export default function AdminLoginJournalPage() {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-600">{truncate(source, 18)}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-right">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="gap-2"
-                          onClick={() => openDetails(r)}
-                        >
+                        <Button type="button" size="sm" variant="outline" className="gap-2" onClick={() => openDetails(r)}>
                           <Eye className="h-4 w-4" />
                           Voir
                         </Button>
@@ -677,9 +641,7 @@ export default function AdminLoginJournalPage() {
 
                 <div className="rounded-xl border border-slate-200 p-3">
                   <div className="text-xs text-slate-500">Utilisateur</div>
-                  <div className="font-medium text-slate-900 break-all">
-                    {prettyRow.email || prettyRow.userId || "—"}
-                  </div>
+                  <div className="font-medium text-slate-900 break-all">{prettyRow.email || prettyRow.userId || "—"}</div>
                 </div>
 
                 <div className="rounded-xl border border-slate-200 p-3">
