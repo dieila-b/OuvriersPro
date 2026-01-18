@@ -70,11 +70,6 @@ import AdminLayout from "@/components/layout/AdminLayout";
 
 const queryClient = new QueryClient();
 
-/**
- * ✅ Scroll manager:
- * - gère /#anchor proprement avec header sticky
- * - utilise un offset robuste sur tous écrans
- */
 function ScrollManager() {
   const location = useLocation();
 
@@ -100,55 +95,90 @@ function ScrollManager() {
 }
 
 /**
- * ✅ Journal de connexion (RPC) — non bloquant
- * - écrit dans public.op_login_journal via RPC public.op_log_login_event(...)
- * - ne casse jamais l'app si la RPC n'existe pas encore (try/catch silencieux)
- *
- * IMPORTANT:
- * - Pour que ça marche, tu dois avoir créé:
- *   - table: public.op_login_journal
- *   - function: public.op_log_login_event(...)
+ * ✅ Journal de connexion (Edge Function) — non bloquant
+ * - log sur SIGNED_IN / SIGNED_OUT + refresh
+ * - envoie un meta enrichi
+ * - ne casse jamais l'app si la function n'existe pas
  */
 function AuthAuditLogger() {
   useEffect(() => {
-    const log = async (event: "login" | "logout" | "refresh", session: any) => {
-      try {
-        const ua = typeof navigator !== "undefined" ? navigator.userAgent : null;
+    const baseMeta = () => {
+      const tz = (() => {
+        try {
+          return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
+        } catch {
+          return null;
+        }
+      })();
 
-        await supabase.rpc("op_log_login_event", {
-          p_event: event,
-          p_success: true,
-          p_email: session?.user?.email ?? null,
-          p_ip: null, // IP réelle => server-side (Edge Function) si tu veux
-          p_user_agent: ua,
-          p_country: null,
-          p_region: null,
-          p_city: null,
-          p_lat: null,
-          p_lng: null,
-          p_source: "web",
-          p_meta: { note: "client-side" },
+      return {
+        note: "client-side",
+        user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+        lang: typeof navigator !== "undefined" ? navigator.language : null,
+        tz,
+        screen: typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
+        referrer: typeof document !== "undefined" ? document.referrer || null : null,
+        href: typeof window !== "undefined" ? window.location.href : null,
+      };
+    };
+
+    const safeCall = async (payload: any) => {
+      try {
+        // 1) Supabase Edge Function (recommandé)
+        const fn = (supabase as any)?.functions?.invoke;
+        if (typeof fn === "function") {
+          await fn("log-login", { body: payload });
+          return;
+        }
+
+        // 2) Fallback HTTP
+        await fetch("/functions/v1/log-login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
         });
       } catch {
         // silencieux
       }
     };
 
-    // Log "refresh" au chargement si déjà connecté
+    // refresh au chargement si session déjà présente
     supabase.auth
       .getSession()
       .then(({ data }) => {
         const s = data.session;
         if (!s?.user) return;
-        log("refresh", s);
+
+        safeCall({
+          event: "refresh",
+          success: true,
+          user_id: s.user.id,
+          email: s.user.email ?? null,
+          source: "web",
+          meta: baseMeta(),
+        });
       })
       .catch(() => {});
 
     const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
       if (evt === "SIGNED_IN") {
-        log("login", session);
+        safeCall({
+          event: "login",
+          success: true,
+          user_id: session?.user?.id ?? null,
+          email: session?.user?.email ?? null,
+          source: "web",
+          meta: baseMeta(),
+        });
       } else if (evt === "SIGNED_OUT") {
-        log("logout", session);
+        safeCall({
+          event: "logout",
+          success: true,
+          user_id: session?.user?.id ?? null,
+          email: session?.user?.email ?? null,
+          source: "web",
+          meta: baseMeta(),
+        });
       }
     });
 
@@ -166,42 +196,30 @@ const AppRoutes = () => (
     <AuthAuditLogger />
 
     <Routes>
-      {/* 🏠 Accueil */}
       <Route path="/" element={<Index />} />
 
-      {/* 🔎 Recherche : on reste sur Index (home) */}
       <Route path="/search" element={<Index />} />
       <Route path="/rechercher" element={<Index />} />
 
-      {/* ✅ Forfaits */}
       <Route path="/forfaits" element={<Forfaits />} />
 
-      {/* ❓ FAQ */}
       <Route path="/faq" element={<Faq />} />
       <Route path="/aide" element={<Faq />} />
 
-      {/* ✅ Pages “réelles” */}
       <Route path="/a-propos" element={<About />} />
       <Route path="/partenaires" element={<Partners />} />
 
-      {/* ✅ Pages légales */}
       <Route path="/conditions" element={<Terms />} />
       <Route path="/confidentialite" element={<Privacy />} />
       <Route path="/cookies" element={<CookiesPolicy />} />
 
-      {/* 🧑‍💼 Mon compte */}
       <Route path="/mon-compte" element={<MonCompte />} />
 
-      {/* 🔐 Connexion */}
       <Route path="/login" element={<Login />} />
-
-      {/* 🆕 Inscription */}
       <Route path="/register" element={<Register />} />
 
-      {/* 📝 Inscription prestataire */}
       <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
 
-      {/* 👤 Fiche prestataire */}
       <Route
         path="/ouvrier/:id"
         element={
@@ -314,11 +332,9 @@ const AppRoutes = () => (
         <Route path="contenu" element={<AdminContent />} />
         <Route path="faq-questions" element={<AdminFaqQuestions />} />
 
-        {/* ✅ Journal de connexion (admin only) */}
         <Route path="journal-connexions" element={<AdminLoginJournalPage />} />
       </Route>
 
-      {/* ❌ 404 */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   </>
@@ -331,7 +347,6 @@ const App = () => (
         <BrowserRouter>
           <Toaster />
           <Sonner />
-
           <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
             <AppRoutes />
           </div>
