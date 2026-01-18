@@ -21,6 +21,10 @@ import {
   Laptop,
   Hash,
   ChevronDown,
+  MapPin,
+  Phone,
+  Mail,
+  IdCard,
 } from "lucide-react";
 
 const TABLE_NAME = "op_login_journal";
@@ -55,7 +59,6 @@ function toIsoEndOfDay(dateYYYYMMDD: string) {
   const d = new Date(`${dateYYYYMMDD}T23:59:59.999Z`);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
-
 function fmtDate(ts?: string | null) {
   if (!ts) return "—";
   const d = new Date(ts);
@@ -69,7 +72,6 @@ function fmtDate(ts?: string | null) {
     second: "2-digit",
   });
 }
-
 function pickStr(row: AnyRow, keys: string[]) {
   for (const k of keys) {
     const v = row?.[k];
@@ -102,6 +104,10 @@ function safeJson(val: any) {
   } catch {
     return String(val ?? "");
   }
+}
+function buildFullName(...parts: Array<string | null | undefined>) {
+  const s = parts.map((x) => (x ?? "").trim()).filter(Boolean).join(" ");
+  return s;
 }
 
 function StatusBadge({ ok }: { ok: boolean | null }) {
@@ -169,7 +175,6 @@ export default function AdminLoginJournalPage() {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<AnyRow | null>(null);
   const [enrich, setEnrich] = useState<Enrichment>({ loading: false });
-
   const [showTech, setShowTech] = useState(false);
 
   const debounceRef = useRef<number | null>(null);
@@ -178,10 +183,7 @@ export default function AdminLoginJournalPage() {
   const fromIdx = (page - 1) * perPage;
   const toIdx = fromIdx + perPage - 1;
 
-  const totalPages = useMemo(() => {
-    if (!total) return 1;
-    return Math.max(1, Math.ceil(total / perPage));
-  }, [total, perPage]);
+  const totalPages = useMemo(() => Math.max(1, Math.ceil((total || 0) / perPage)), [total, perPage]);
 
   useEffect(() => {
     setPage(1);
@@ -191,11 +193,7 @@ export default function AdminLoginJournalPage() {
     let q = supabase.from(TABLE_NAME).select("*", { count: "exact" });
 
     if (filters.event !== "all") q = q.eq("event", filters.event);
-
-    if (filters.success !== "all") {
-      const val = filters.success === "success";
-      q = q.eq("success", val);
-    }
+    if (filters.success !== "all") q = q.eq("success", filters.success === "success");
 
     const isoFrom = toIsoStartOfDay(filters.from);
     const isoTo = toIsoEndOfDay(filters.to);
@@ -219,33 +217,24 @@ export default function AdminLoginJournalPage() {
       );
     }
 
-    q = q.order("created_at", { ascending: false }).range(fromIdx, toIdx);
-    return q;
+    return q.order("created_at", { ascending: false }).range(fromIdx, toIdx);
   };
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const q = buildQuery();
-      const { data, error, count } = await q;
+      const { data, error, count } = await buildQuery();
       if (error) throw error;
-
       setRows((data ?? []) as AnyRow[]);
       setTotal(typeof count === "number" ? count : 0);
     } catch (e: any) {
       console.error(e);
       setRows([]);
       setTotal(0);
-
       const msg = e?.message ?? "Impossible de charger le journal de connexion.";
       setError(msg);
-
-      toast({
-        title: "Erreur",
-        description: msg,
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -258,9 +247,7 @@ export default function AdminLoginJournalPage() {
 
   useEffect(() => {
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
-    debounceRef.current = window.setTimeout(() => {
-      fetchData();
-    }, 350);
+    debounceRef.current = window.setTimeout(() => fetchData(), 350);
 
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
@@ -299,23 +286,11 @@ export default function AdminLoginJournalPage() {
       const opUser = opUserRes.data ?? null;
       const client = clientRes.data ?? null;
       const worker = workerRes.data ?? null;
-
       const role = (opUser as any)?.role ?? null;
 
-      const profileType: Enrichment["profileType"] = client
-        ? "client"
-        : worker
-        ? "worker"
-        : "unknown";
+      const profileType: Enrichment["profileType"] = client ? "client" : worker ? "worker" : "unknown";
 
-      setEnrich({
-        loading: false,
-        role,
-        profileType,
-        client,
-        worker,
-        opUser,
-      });
+      setEnrich({ loading: false, role, profileType, client, worker, opUser });
     } catch {
       setEnrich({ loading: false, profileType: "unknown" });
     }
@@ -323,74 +298,136 @@ export default function AdminLoginJournalPage() {
 
   const prettyRow = useMemo(() => {
     if (!selected) return null;
-
-    const createdAt = pickTs(selected, ["created_at"]);
-    const event = pickStr(selected, ["event"]);
-    const success = pickBool(selected, ["success"]);
-    const userId = pickStr(selected, ["user_id"]);
-    const email = pickStr(selected, ["email"]);
-    const ip = pickStr(selected, ["ip"]);
-    const source = pickStr(selected, ["source"]);
-    const ua = pickStr(selected, ["user_agent"]);
-
-    const country = pickStr(selected, ["country"]);
-    const region = pickStr(selected, ["region"]);
-    const city = pickStr(selected, ["city"]);
-    const lat = selected?.lat ?? null;
-    const lng = selected?.lng ?? null;
-
-    const meta = selected?.meta ?? null;
-
     return {
-      createdAt,
-      event,
-      success,
-      userId,
-      email,
-      ip,
-      source,
-      ua,
-      country,
-      region,
-      city,
-      lat,
-      lng,
-      meta,
+      createdAt: pickTs(selected, ["created_at"]),
+      event: pickStr(selected, ["event"]),
+      success: pickBool(selected, ["success"]),
+      userId: pickStr(selected, ["user_id"]),
+      email: pickStr(selected, ["email"]),
+      ip: pickStr(selected, ["ip"]),
+      source: pickStr(selected, ["source"]),
+      ua: pickStr(selected, ["user_agent"]),
+      country: pickStr(selected, ["country"]),
+      region: pickStr(selected, ["region"]),
+      city: pickStr(selected, ["city"]),
+      lat: selected?.lat ?? null,
+      lng: selected?.lng ?? null,
+      meta: selected?.meta ?? null,
       raw: selected,
     };
   }, [selected]);
 
-  const ipMissing = useMemo(() => {
-    const sample = rows.slice(0, 20);
-    if (sample.length === 0) return false;
-    const missing = sample.filter((r) => !pickStr(r, ["ip"])).length;
-    return missing / sample.length > 0.6;
-  }, [rows]);
-
+  // ✅ Unifie "toutes les infos" disponibles dans op_users / op_clients / op_ouvriers
   const identity = useMemo(() => {
-    // unifie un affichage "pro" (nom, phone, etc.)
-    const opu = enrich.opUser ?? null;
-    const cli = enrich.client ?? null;
-    const wor = enrich.worker ?? null;
+    const opu = enrich.opUser ?? {};
+    const cli = enrich.client ?? {};
+    const wor = enrich.worker ?? {};
 
-    const role = enrich.role ?? null;
+    // Nom / prénom (priorité: op_clients => op_users => op_ouvriers)
+    const firstName =
+      pickStr(cli, ["first_name", "firstname", "prenom"]) ||
+      pickStr(opu, ["first_name", "firstname", "prenom"]) ||
+      pickStr(wor, ["first_name", "firstname", "prenom"]) ||
+      "";
+
+    const lastName =
+      pickStr(cli, ["last_name", "lastname", "nom"]) ||
+      pickStr(opu, ["last_name", "lastname", "nom"]) ||
+      pickStr(wor, ["last_name", "lastname", "nom"]) ||
+      "";
 
     const fullName =
       pickStr(opu, ["full_name", "name"]) ||
-      pickStr(cli, ["first_name", "last_name"]) ||
       pickStr(wor, ["full_name", "name"]) ||
+      buildFullName(firstName, lastName) ||
+      "";
+
+    const email =
+      (prettyRow?.email || "") ||
+      pickStr(opu, ["email"]) ||
+      pickStr(cli, ["email"]) ||
+      pickStr(wor, ["email"]) ||
       "";
 
     const phone =
-      pickStr(opu, ["phone"]) || pickStr(cli, ["phone"]) || pickStr(wor, ["phone"]) || "";
+      pickStr(cli, ["phone", "phone_number", "tel", "telephone"]) ||
+      pickStr(opu, ["phone", "phone_number", "tel", "telephone"]) ||
+      pickStr(wor, ["phone", "phone_number", "tel", "telephone"]) ||
+      "";
+
+    // Adresse (on essaye beaucoup de noms)
+    const addr1 =
+      pickStr(cli, ["address", "address_line1", "street", "rue", "adresse"]) ||
+      pickStr(opu, ["address", "address_line1", "street", "rue", "adresse"]) ||
+      pickStr(wor, ["address", "address_line1", "street", "rue", "adresse"]) ||
+      "";
+
+    const addr2 =
+      pickStr(cli, ["address_line2", "street2", "complement", "adresse2"]) ||
+      pickStr(opu, ["address_line2", "street2", "complement", "adresse2"]) ||
+      pickStr(wor, ["address_line2", "street2", "complement", "adresse2"]) ||
+      "";
+
+    const postalCode =
+      pickStr(cli, ["postal_code", "zip", "zipcode", "code_postal"]) ||
+      pickStr(opu, ["postal_code", "zip", "zipcode", "code_postal"]) ||
+      pickStr(wor, ["postal_code", "zip", "zipcode", "code_postal"]) ||
+      "";
+
+    const city =
+      pickStr(cli, ["city", "ville"]) || pickStr(opu, ["city", "ville"]) || pickStr(wor, ["city", "ville"]) || "";
+
+    const region =
+      pickStr(cli, ["region", "state", "etat"]) ||
+      pickStr(opu, ["region", "state", "etat"]) ||
+      pickStr(wor, ["region", "state", "etat"]) ||
+      "";
 
     const country =
-      pickStr(opu, ["country"]) || pickStr(cli, ["country"]) || pickStr(wor, ["country"]) || "";
+      pickStr(cli, ["country", "pays"]) ||
+      pickStr(opu, ["country", "pays"]) ||
+      pickStr(wor, ["country", "pays"]) ||
+      "";
 
-    const city = pickStr(cli, ["city"]) || pickStr(wor, ["city"]) || "";
+    const role = enrich.role ?? pickStr(opu, ["role"]) ?? null;
 
-    return { role, fullName, phone, country, city, opu, cli, wor };
-  }, [enrich]);
+    // IDs utiles
+    const opUserId = pickStr(opu, ["id"]);
+    const clientId = pickStr(cli, ["id"]);
+    const workerId = pickStr(wor, ["id"]);
+
+    const addressLine = [addr1, addr2].filter(Boolean).join(" • ");
+    const addressCityLine = [postalCode, city].filter(Boolean).join(" ");
+    const addressCountryLine = [region, country].filter(Boolean).join(", ");
+
+    const addressPretty = [addressLine, addressCityLine, addressCountryLine].filter(Boolean).join("\n");
+
+    return {
+      role,
+      firstName,
+      lastName,
+      fullName,
+      email,
+      phone,
+      addressPretty,
+      opUserId,
+      clientId,
+      workerId,
+      opu,
+      cli,
+      wor,
+    };
+  }, [enrich, prettyRow]);
+
+  const ipHint =
+    !prettyRow?.ip
+      ? "L’IP publique ne remonte pas depuis le navigateur. Il faut logger via une Edge Function (serveur) pour la capturer."
+      : undefined;
+
+  const geoHint =
+    !prettyRow?.country && !prettyRow?.city
+      ? "La localisation IP fiable est calculée côté serveur (headers CDN)."
+      : undefined;
 
   return (
     <div className="space-y-5">
@@ -398,9 +435,7 @@ export default function AdminLoginJournalPage() {
         <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="text-base sm:text-lg">Journal de connexions</CardTitle>
-            <div className="mt-1 text-xs text-slate-500">
-              Historique des connexions / déconnexions (visible uniquement côté admin).
-            </div>
+            <div className="mt-1 text-xs text-slate-500">Historique des connexions / déconnexions (admin only).</div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -416,19 +451,6 @@ export default function AdminLoginJournalPage() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {ipMissing && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex gap-2">
-              <Info className="h-4 w-4 mt-0.5 shrink-0" />
-              <div>
-                <div className="font-medium">IP / Localisation non disponibles</div>
-                <div className="text-xs mt-1 text-amber-800/90">
-                  Ton log est écrit côté navigateur, donc l’IP et la géolocalisation IP ne remontent pas. Pour obtenir ces
-                  champs, il faudra logger via une Edge Function (serveur) qui lit les headers.
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Filters */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
             <div className="lg:col-span-4">
@@ -541,11 +563,9 @@ export default function AdminLoginJournalPage() {
                   const userId = pickStr(r, ["user_id"]);
                   const email = pickStr(r, ["email"]);
                   const ip = pickStr(r, ["ip"]);
-
                   const country = pickStr(r, ["country"]);
                   const region = pickStr(r, ["region"]);
                   const city = pickStr(r, ["city"]);
-
                   const source = pickStr(r, ["source"]) || "—";
 
                   const userLabel = email ? truncate(email, 30) : userId ? truncate(userId, 28) : "—";
@@ -555,9 +575,7 @@ export default function AdminLoginJournalPage() {
                     <tr key={(r?.id as string) ?? `${idx}`} className="hover:bg-slate-50/60">
                       <td className="px-4 py-3 whitespace-nowrap text-slate-700">{fmtDate(createdAt)}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <EventBadge event={event} />
-                        </div>
+                        <EventBadge event={event} />
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <StatusBadge ok={success === null ? null : !!success} />
@@ -606,11 +624,9 @@ export default function AdminLoginJournalPage() {
               <Button type="button" variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={loading || page <= 1}>
                 Précédent
               </Button>
-
               <div className="text-xs text-slate-600 px-2">
                 Page <span className="font-medium">{page}</span> / <span className="font-medium">{totalPages}</span>
               </div>
-
               <Button type="button" variant="outline" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={loading || page >= totalPages}>
                 Suivant
               </Button>
@@ -619,12 +635,11 @@ export default function AdminLoginJournalPage() {
         </CardContent>
       </Card>
 
-      {/* ✅ DIALOG “PROPRE” */}
+      {/* Dialog */}
       <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : closeDetails())}>
         <DialogContent className="max-w-5xl p-0 overflow-hidden">
           {!prettyRow ? null : (
             <>
-              {/* Header */}
               <DialogHeader className="px-6 py-4 border-b bg-white">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -633,7 +648,6 @@ export default function AdminLoginJournalPage() {
                       {fmtDate(prettyRow.createdAt)} • {prettyRow.email || truncate(prettyRow.userId || "", 28) || "—"}
                     </div>
                   </div>
-
                   <div className="flex items-center gap-2">
                     <EventBadge event={prettyRow.event || "—"} />
                     <StatusBadge ok={prettyRow.success === null ? null : !!prettyRow.success} />
@@ -642,59 +656,32 @@ export default function AdminLoginJournalPage() {
               </DialogHeader>
 
               <div className="px-6 py-5 bg-slate-50">
-                {/* 2 colonnes pro */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {/* Connexion */}
                   <div className="space-y-3">
-                    <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                      Connexion
-                    </div>
+                    <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Connexion</div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <NiceKV
-                        icon={<Globe className="h-4 w-4" />}
-                        label="IP"
-                        value={prettyRow.ip || "Non disponible"}
-                        hint={!prettyRow.ip ? "Le navigateur ne fournit pas l’IP publique. Utilise une Edge Function pour la capturer." : undefined}
-                      />
+                      <NiceKV icon={<Globe className="h-4 w-4" />} label="IP" value={prettyRow.ip || "Non disponible"} hint={ipHint} />
                       <NiceKV
                         icon={<Globe className="h-4 w-4" />}
                         label="Localisation"
                         value={[prettyRow.city, prettyRow.region, prettyRow.country].filter(Boolean).join(", ") || "Non disponible"}
-                        hint={
-                          !prettyRow.country && !prettyRow.city
-                            ? "La géolocalisation IP est calculée côté serveur (headers CDN)."
-                            : undefined
-                        }
+                        hint={geoHint}
                       />
-
-                      <NiceKV
-                        icon={<Hash className="h-4 w-4" />}
-                        label="Source"
-                        value={prettyRow.source || "—"}
-                      />
-                      <NiceKV
-                        icon={<Laptop className="h-4 w-4" />}
-                        label="Appareil / Navigateur"
-                        value={prettyRow.ua ? truncate(prettyRow.ua, 80) : "—"}
-                        hint={prettyRow.ua ? "User-Agent" : undefined}
-                      />
+                      <NiceKV icon={<Hash className="h-4 w-4" />} label="Source" value={prettyRow.source || "—"} />
+                      <NiceKV icon={<Laptop className="h-4 w-4" />} label="Appareil / Navigateur" value={prettyRow.ua ? truncate(prettyRow.ua, 120) : "—"} hint={prettyRow.ua ? "User-Agent" : undefined} />
                     </div>
 
-                    {/* Meta clean */}
                     <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-xs font-medium text-slate-600">Informations additionnelles</div>
-                      </div>
+                      <div className="text-xs font-medium text-slate-600">Informations additionnelles</div>
                       <div className="mt-2 text-sm text-slate-700">
                         {prettyRow?.meta && typeof prettyRow.meta === "object" ? (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {Object.entries(prettyRow.meta).map(([k, v]) => (
                               <div key={k} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                                 <div className="text-[11px] text-slate-500">{k}</div>
-                                <div className="text-sm font-medium text-slate-900 break-words">
-                                  {typeof v === "string" ? v : safeJson(v)}
-                                </div>
+                                <div className="text-sm font-medium text-slate-900 break-words">{typeof v === "string" ? v : safeJson(v)}</div>
                               </div>
                             ))}
                           </div>
@@ -707,40 +694,41 @@ export default function AdminLoginJournalPage() {
 
                   {/* Identité */}
                   <div className="space-y-3">
-                    <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                      Identité & Profil
-                    </div>
+                    <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Identité & Profil</div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <NiceKV
-                        icon={<User className="h-4 w-4" />}
-                        label="Nom"
-                        value={identity.fullName || "—"}
-                      />
-                      <NiceKV
-                        icon={<ShieldCheck className="h-4 w-4" />}
-                        label="Rôle"
-                        value={identity.role || "—"}
-                      />
-                      <NiceKV label="Email" value={prettyRow.email || "—"} />
-                      <NiceKV label="Téléphone" value={identity.phone || "—"} />
-                      <NiceKV label="Pays" value={identity.country || "—"} />
-                      <NiceKV label="Ville" value={identity.city || "—"} />
+                      <NiceKV icon={<User className="h-4 w-4" />} label="Nom complet" value={identity.fullName || "—"} />
+                      <NiceKV icon={<ShieldCheck className="h-4 w-4" />} label="Rôle" value={identity.role || "—"} />
+                      <NiceKV icon={<Mail className="h-4 w-4" />} label="Email" value={identity.email || "—"} />
+                      <NiceKV icon={<Phone className="h-4 w-4" />} label="Téléphone" value={identity.phone || "—"} />
+
+                      <NiceKV icon={<MapPin className="h-4 w-4" />} label="Adresse" value={identity.addressPretty ? <pre className="whitespace-pre-wrap font-sans text-sm">{identity.addressPretty}</pre> : "—"} />
+                      <NiceKV icon={<IdCard className="h-4 w-4" />} label="Type de profil" value={enrich.loading ? "Chargement…" : enrich.profileType === "client" ? "Client" : enrich.profileType === "worker" ? "Prestataire" : "Non trouvé"} />
                     </div>
 
                     <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <div className="text-xs font-medium text-slate-600">Type de profil</div>
-                      <div className="mt-1 text-sm font-medium text-slate-900">
-                        {enrich.loading ? "Chargement…" : enrich.profileType === "client" ? "Client" : enrich.profileType === "worker" ? "Prestataire" : "Non trouvé"}
-                      </div>
-                      <div className="mt-2 text-xs text-slate-500">
-                        L’interface affiche uniquement des champs utiles. Le JSON brut est disponible dans “Détails techniques”.
+                      <div className="text-xs font-medium text-slate-600">Identifiants</div>
+                      <div className="mt-2 grid grid-cols-1 gap-2 text-sm">
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                          <div className="text-[11px] text-slate-500">user_id</div>
+                          <div className="font-medium text-slate-900 break-all">{prettyRow.userId || "—"}</div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                            <div className="text-[11px] text-slate-500">client_id</div>
+                            <div className="font-medium text-slate-900 break-all">{identity.clientId || "—"}</div>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                            <div className="text-[11px] text-slate-500">worker_id</div>
+                            <div className="font-medium text-slate-900 break-all">{identity.workerId || "—"}</div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Détails techniques repliables */}
+                {/* Tech */}
                 <div className="mt-4 rounded-xl border border-slate-200 bg-white overflow-hidden">
                   <button
                     type="button"
