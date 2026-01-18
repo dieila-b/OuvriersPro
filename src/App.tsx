@@ -95,43 +95,56 @@ function ScrollManager() {
 }
 
 /**
- * ✅ Journal de connexion (Edge Function) — non bloquant
+ * ✅ Journal de connexion (Supabase Edge Function) — non bloquant
  * - log sur SIGNED_IN / SIGNED_OUT + refresh
- * - envoie un meta enrichi
- * - ne casse jamais l'app si la function n'existe pas
+ * - envoie un meta enrichi (UA, timezone, locale, écran, referrer, URL)
+ * - ne casse jamais l'app si la function n'existe pas / si erreur réseau
+ *
+ * IMPORTANT:
+ * - L'IP et la géoloc fiables doivent être calculées côté Edge Function (headers CDN/proxy).
+ * - Le front n'a souvent pas accès à l'IP publique (normal).
  */
 function AuthAuditLogger() {
   useEffect(() => {
-    const baseMeta = () => {
-      const tz = (() => {
-        try {
-          return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
-        } catch {
-          return null;
-        }
-      })();
-
-      return {
-        note: "client-side",
-        user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
-        lang: typeof navigator !== "undefined" ? navigator.language : null,
-        tz,
-        screen: typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
-        referrer: typeof document !== "undefined" ? document.referrer || null : null,
-        href: typeof window !== "undefined" ? window.location.href : null,
-      };
+    const tryGetTimezone = () => {
+      try {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
+      } catch {
+        return null;
+      }
     };
+
+    const baseMeta = () => ({
+      note: "client-side",
+      client_time: new Date().toISOString(),
+      timezone: tryGetTimezone(),
+      locale: typeof navigator !== "undefined" ? navigator.language ?? null : null,
+      user_agent: typeof navigator !== "undefined" ? navigator.userAgent ?? null : null,
+      platform: typeof navigator !== "undefined" ? (navigator as any).platform ?? null : null,
+      referrer: typeof document !== "undefined" ? document.referrer || null : null,
+      href: typeof window !== "undefined" ? window.location.href : null,
+      screen: typeof window !== "undefined"
+        ? {
+            w: window.innerWidth ?? null,
+            h: window.innerHeight ?? null,
+            sw: window.screen?.width ?? null,
+            sh: window.screen?.height ?? null,
+            dpr: (window.devicePixelRatio ?? null) as number | null,
+          }
+        : null,
+    });
 
     const safeCall = async (payload: any) => {
       try {
-        // 1) Supabase Edge Function (recommandé)
+        // ✅ Supabase Edge Function (recommandé)
+        // IMPORTANT: invoke enverra les headers côté serveur (où l'IP est visible)
         const fn = (supabase as any)?.functions?.invoke;
         if (typeof fn === "function") {
           await fn("log-login", { body: payload });
           return;
         }
 
-        // 2) Fallback HTTP
+        // fallback (rare). On garde pour compat, mais souvent non utile sur Supabase hosting.
         await fetch("/functions/v1/log-login", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -142,44 +155,31 @@ function AuthAuditLogger() {
       }
     };
 
+    const emit = (event: "login" | "logout" | "refresh", session: any | null) => {
+      const u = session?.user;
+      safeCall({
+        event,
+        success: true,
+        user_id: u?.id ?? null,
+        email: u?.email ?? null,
+        source: "web",
+        meta: baseMeta(),
+      });
+    };
+
     // refresh au chargement si session déjà présente
     supabase.auth
       .getSession()
       .then(({ data }) => {
         const s = data.session;
         if (!s?.user) return;
-
-        safeCall({
-          event: "refresh",
-          success: true,
-          user_id: s.user.id,
-          email: s.user.email ?? null,
-          source: "web",
-          meta: baseMeta(),
-        });
+        emit("refresh", s);
       })
       .catch(() => {});
 
     const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
-      if (evt === "SIGNED_IN") {
-        safeCall({
-          event: "login",
-          success: true,
-          user_id: session?.user?.id ?? null,
-          email: session?.user?.email ?? null,
-          source: "web",
-          meta: baseMeta(),
-        });
-      } else if (evt === "SIGNED_OUT") {
-        safeCall({
-          event: "logout",
-          success: true,
-          user_id: session?.user?.id ?? null,
-          email: session?.user?.email ?? null,
-          source: "web",
-          meta: baseMeta(),
-        });
-      }
+      if (evt === "SIGNED_IN") emit("login", session);
+      if (evt === "SIGNED_OUT") emit("logout", session);
     });
 
     return () => {
