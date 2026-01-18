@@ -7,23 +7,21 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, RefreshCw, Search, Filter, Eye, X } from "lucide-react";
+import { Loader2, RefreshCw, Search, Filter, Eye, X, Info } from "lucide-react";
 
 /**
- * Journal de connexions (admin only)
- * - Table attendue: public.op_login_journal
- * - RLS: SELECT uniquement pour admin (via op_is_admin())
+ * ✅ Table confirmée
  */
 const TABLE_NAME = "op_login_journal";
 
 type AnyRow = Record<string, any>;
 
 type FiltersState = {
-  q: string;
-  event: "all" | "login" | "logout" | "refresh" | "failed_login";
+  q: string; // recherche globale (email, user_id, ip, user-agent)
+  event: "all" | "login" | "logout" | "refresh";
   success: "all" | "success" | "fail";
-  from: string; // YYYY-MM-DD
-  to: string; // YYYY-MM-DD
+  from: string; // date YYYY-MM-DD
+  to: string; // date YYYY-MM-DD
   perPage: number;
 };
 
@@ -81,7 +79,7 @@ function pickBool(row: AnyRow, keys: string[]) {
 function pickTs(row: AnyRow, keys: string[]) {
   for (const k of keys) {
     const v = row?.[k];
-    if (typeof v === "string" && v.includes("T")) return v;
+    if (typeof v === "string" && (v.includes("T") || v.includes(":"))) return v;
   }
   return null;
 }
@@ -92,15 +90,26 @@ function truncate(s: string, n = 48) {
   return s.slice(0, n - 1) + "…";
 }
 
-function escapeLike(raw: string) {
-  // supabase ilike escape % et _
-  return raw.replace(/%/g, "\\%").replace(/_/g, "\\_");
+function safeJson(val: any) {
+  try {
+    return JSON.stringify(val, null, 2);
+  } catch {
+    return String(val ?? "");
+  }
 }
+
+type Enrichment = {
+  loading: boolean;
+  role?: string | null;
+  profileType?: "client" | "worker" | "unknown";
+  client?: AnyRow | null;
+  worker?: AnyRow | null;
+  opUser?: AnyRow | null;
+};
 
 export default function AdminLoginJournalPage() {
   const { toast } = useToast();
 
-  const [tableOk, setTableOk] = useState<boolean | null>(null); // null = pending
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
 
@@ -111,6 +120,7 @@ export default function AdminLoginJournalPage() {
 
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<AnyRow | null>(null);
+  const [enrich, setEnrich] = useState<Enrichment>({ loading: false });
 
   const debounceRef = useRef<number | null>(null);
 
@@ -123,111 +133,64 @@ export default function AdminLoginJournalPage() {
     return Math.max(1, Math.ceil(total / perPage));
   }, [total, perPage]);
 
-  // Vérifie l'existence/lisibilité de la table
-  useEffect(() => {
-    let alive = true;
-
-    const check = async () => {
-      try {
-        const { error } = await supabase.from(TABLE_NAME).select("id").limit(1);
-        if (!alive) return;
-
-        if (!error) {
-          setTableOk(true);
-          return;
-        }
-
-        const code = (error as any)?.code;
-        const msg = String((error as any)?.message ?? "");
-
-        // 42P01 = table inexistante
-        if (code === "42P01") {
-          setTableOk(false);
-          setError("Table op_login_journal introuvable. Crée-la dans Supabase (SQL) puis réessaye.");
-          return;
-        }
-
-        // RLS / permission => table existe mais pas lisible
-        if (msg.toLowerCase().includes("permission") || msg.toLowerCase().includes("rls")) {
-          setTableOk(false);
-          setError(
-            "Accès refusé (RLS). Vérifie la policy SELECT admin sur op_login_journal (op_is_admin())."
-          );
-          return;
-        }
-
-        setTableOk(false);
-        setError(msg || "Impossible d'accéder à la table op_login_journal.");
-      } catch (e: any) {
-        if (!alive) return;
-        setTableOk(false);
-        setError(e?.message ?? "Erreur lors de la vérification de la table.");
-      }
-    };
-
-    check();
-
-    return () => {
-      alive = false;
-    };
-  }, []);
-
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
   }, [filters.q, filters.event, filters.success, filters.from, filters.to, filters.perPage]);
 
   const buildQuery = () => {
-    if (!tableOk) return null;
-
+    // select("*") car schéma peut évoluer
     let q = supabase.from(TABLE_NAME).select("*", { count: "exact" });
 
-    if (filters.event !== "all") q = q.eq("event", filters.event);
-
-    if (filters.success !== "all") {
-      q = q.eq("success", filters.success === "success");
+    // event
+    if (filters.event !== "all") {
+      q = q.eq("event", filters.event);
     }
 
+    // success
+    if (filters.success !== "all") {
+      const val = filters.success === "success";
+      q = q.eq("success", val);
+    }
+
+    // date range (created_at)
     const isoFrom = toIsoStartOfDay(filters.from);
     const isoTo = toIsoEndOfDay(filters.to);
     if (isoFrom) q = q.gte("created_at", isoFrom);
     if (isoTo) q = q.lte("created_at", isoTo);
 
+    // search (email / user_id / ip / user_agent) : OR
     const raw = filters.q.trim();
     if (raw) {
-      const like = `%${escapeLike(raw)}%`;
-      // Colonnes connues de op_login_journal : email, user_id, ip, user_agent, source, event
+      const like = `%${raw.replace(/%/g, "\\%").replace(/_/g, "\\_")}%`;
+
       q = q.or(
         [
           `email.ilike.${like}`,
           `user_id::text.ilike.${like}`,
           `ip.ilike.${like}`,
           `user_agent.ilike.${like}`,
+          `country.ilike.${like}`,
+          `region.ilike.${like}`,
+          `city.ilike.${like}`,
           `source.ilike.${like}`,
-          `event.ilike.${like}`,
         ].join(",")
       );
     }
 
+    // order & pagination
     q = q.order("created_at", { ascending: false }).range(fromIdx, toIdx);
     return q;
   };
 
   const fetchData = async () => {
-    if (!tableOk) {
-      setRows([]);
-      setTotal(0);
-      return;
-    }
-
     setLoading(true);
     setError(null);
 
     try {
       const q = buildQuery();
-      if (!q) return;
-
       const { data, error, count } = await q;
+
       if (error) throw error;
 
       setRows((data ?? []) as AnyRow[]);
@@ -252,52 +215,94 @@ export default function AdminLoginJournalPage() {
 
   // initial + whenever page changes
   useEffect(() => {
-    if (!tableOk) return;
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableOk, page]);
+  }, [page]);
 
   // debounced fetch on filters changes
   useEffect(() => {
-    if (!tableOk) return;
-
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
-    debounceRef.current = window.setTimeout(() => fetchData(), 350);
+    debounceRef.current = window.setTimeout(() => {
+      fetchData();
+    }, 350);
 
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
       debounceRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableOk, filters.q, filters.event, filters.success, filters.from, filters.to, filters.perPage]);
-
-  const openDetails = (r: AnyRow) => {
-    setSelected(r);
-    setOpen(true);
-  };
+  }, [filters.q, filters.event, filters.success, filters.from, filters.to, filters.perPage]);
 
   const closeDetails = () => {
     setOpen(false);
     setSelected(null);
+    setEnrich({ loading: false });
+  };
+
+  const openDetails = async (r: AnyRow) => {
+    setSelected(r);
+    setOpen(true);
+
+    const userId = pickStr(r, ["user_id", "uid", "userId", "account_id"]);
+    if (!userId) {
+      setEnrich({ loading: false, profileType: "unknown" });
+      return;
+    }
+
+    setEnrich({ loading: true });
+
+    try {
+      // Enrichissement: role (op_users), profil client (op_clients), profil prestataire (op_ouvriers)
+      const [opUserRes, clientRes, workerRes] = await Promise.all([
+        supabase.from("op_users").select("*").eq("id", userId).maybeSingle(),
+        supabase.from("op_clients").select("*").eq("user_id", userId).maybeSingle(),
+        supabase.from("op_ouvriers").select("*").eq("user_id", userId).maybeSingle(),
+      ]);
+
+      const opUser = opUserRes.data ?? null;
+      const client = clientRes.data ?? null;
+      const worker = workerRes.data ?? null;
+
+      const role = (opUser as any)?.role ?? null;
+
+      const profileType: Enrichment["profileType"] = client
+        ? "client"
+        : worker
+        ? "worker"
+        : "unknown";
+
+      setEnrich({
+        loading: false,
+        role,
+        profileType,
+        client,
+        worker,
+        opUser,
+      });
+    } catch {
+      setEnrich({ loading: false, profileType: "unknown" });
+    }
   };
 
   const prettyRow = useMemo(() => {
     if (!selected) return null;
 
-    const createdAt = pickTs(selected, ["created_at"]);
-    const event = pickStr(selected, ["event"]);
-    const success = pickBool(selected, ["success"]);
-    const userId = pickStr(selected, ["user_id"]);
-    const email = pickStr(selected, ["email"]);
-    const ip = pickStr(selected, ["ip"]);
-    const source = pickStr(selected, ["source"]);
-    const ua = pickStr(selected, ["user_agent"]);
+    const createdAt = pickTs(selected, ["created_at", "createdAt", "ts", "timestamp"]);
+    const event = pickStr(selected, ["event", "action", "type"]);
+    const success = pickBool(selected, ["success", "ok", "is_success"]);
+    const userId = pickStr(selected, ["user_id", "uid", "userId", "account_id"]);
+    const email = pickStr(selected, ["email", "user_email", "userEmail"]);
+    const ip = pickStr(selected, ["ip", "ip_address", "ipAddress"]);
+    const source = pickStr(selected, ["source", "channel", "app"]);
+    const ua = pickStr(selected, ["user_agent", "userAgent", "ua"]);
 
-    const country = pickStr(selected, ["country"]);
-    const region = pickStr(selected, ["region"]);
-    const city = pickStr(selected, ["city"]);
-    const lat = selected?.lat ?? null;
-    const lng = selected?.lng ?? null;
+    const country = pickStr(selected, ["country", "ip_country", "geo_country", "location_country"]);
+    const region = pickStr(selected, ["region", "ip_region", "geo_region", "location_region", "state"]);
+    const city = pickStr(selected, ["city", "ip_city", "geo_city", "location_city"]);
+    const lat = selected?.lat ?? selected?.latitude ?? selected?.geo_lat ?? null;
+    const lng = selected?.lng ?? selected?.longitude ?? selected?.geo_lng ?? null;
+
+    const meta = selected?.meta ?? null;
 
     return {
       createdAt,
@@ -313,30 +318,18 @@ export default function AdminLoginJournalPage() {
       city,
       lat,
       lng,
+      meta,
       raw: selected,
     };
   }, [selected]);
 
-  const headerRight = useMemo(() => {
-    if (tableOk === null) {
-      return (
-        <div className="inline-flex items-center gap-2 text-xs text-slate-500">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Vérification…
-        </div>
-      );
-    }
-
-    if (tableOk === false) {
-      return <div className="text-xs text-red-600">Table/RLS non OK</div>;
-    }
-
-    return (
-      <div className="text-xs text-slate-500">
-        Table: <span className="font-medium text-slate-700">{TABLE_NAME}</span>
-      </div>
-    );
-  }, [tableOk]);
+  const ipMissing = useMemo(() => {
+    // Si beaucoup de logs ont ip null => normal si log côté client uniquement
+    const sample = rows.slice(0, 20);
+    if (sample.length === 0) return false;
+    const missing = sample.filter((r) => !pickStr(r, ["ip"])).length;
+    return missing / sample.length > 0.6; // majorité
+  }, [rows]);
 
   return (
     <div className="space-y-5">
@@ -350,14 +343,16 @@ export default function AdminLoginJournalPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {headerRight}
+            <div className="text-xs text-slate-500">
+              Table: <span className="font-medium text-slate-700">{TABLE_NAME}</span>
+            </div>
 
             <Button
               type="button"
               variant="outline"
               className="gap-2"
               onClick={() => fetchData()}
-              disabled={loading || tableOk !== true}
+              disabled={loading}
               title="Rafraîchir"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -367,6 +362,19 @@ export default function AdminLoginJournalPage() {
         </CardHeader>
 
         <CardContent className="space-y-4">
+          {ipMissing && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex gap-2">
+              <Info className="h-4 w-4 mt-0.5 shrink-0" />
+              <div>
+                <div className="font-medium">IP / Localisation manquantes sur la majorité des logs</div>
+                <div className="text-xs mt-1 text-amber-800/90">
+                  C’est normal si l’écriture du log se fait côté navigateur. Pour capturer l’IP et la localisation,
+                  il faut logger côté serveur (Edge Function) afin de lire les headers (x-forwarded-for, cf-ipcountry, etc.).
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Filters */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
             <div className="lg:col-span-4">
@@ -378,7 +386,6 @@ export default function AdminLoginJournalPage() {
                   placeholder="Email, user_id, IP, user-agent…"
                   value={filters.q}
                   onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))}
-                  disabled={tableOk !== true}
                 />
               </div>
             </div>
@@ -389,13 +396,11 @@ export default function AdminLoginJournalPage() {
                 className="mt-1 w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
                 value={filters.event}
                 onChange={(e) => setFilters((p) => ({ ...p, event: e.target.value as any }))}
-                disabled={tableOk !== true}
               >
                 <option value="all">Tous</option>
                 <option value="login">login</option>
                 <option value="logout">logout</option>
                 <option value="refresh">refresh</option>
-                <option value="failed_login">failed_login</option>
               </select>
             </div>
 
@@ -405,7 +410,6 @@ export default function AdminLoginJournalPage() {
                 className="mt-1 w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
                 value={filters.success}
                 onChange={(e) => setFilters((p) => ({ ...p, success: e.target.value as any }))}
-                disabled={tableOk !== true}
               >
                 <option value="all">Tous</option>
                 <option value="success">Succès</option>
@@ -420,7 +424,6 @@ export default function AdminLoginJournalPage() {
                 type="date"
                 value={filters.from}
                 onChange={(e) => setFilters((p) => ({ ...p, from: e.target.value }))}
-                disabled={tableOk !== true}
               />
             </div>
 
@@ -431,7 +434,6 @@ export default function AdminLoginJournalPage() {
                 type="date"
                 value={filters.to}
                 onChange={(e) => setFilters((p) => ({ ...p, to: e.target.value }))}
-                disabled={tableOk !== true}
               />
             </div>
 
@@ -448,7 +450,6 @@ export default function AdminLoginJournalPage() {
                   className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
                   value={filters.perPage}
                   onChange={(e) => setFilters((p) => ({ ...p, perPage: Number(e.target.value) }))}
-                  disabled={tableOk !== true}
                 >
                   <option value={10}>10 / page</option>
                   <option value={25}>25 / page</option>
@@ -460,7 +461,7 @@ export default function AdminLoginJournalPage() {
                   type="button"
                   variant="outline"
                   onClick={() => setFilters(DEFAULT_FILTERS)}
-                  disabled={loading || tableOk !== true}
+                  disabled={loading}
                   className="gap-2"
                 >
                   <X className="h-4 w-4" />
@@ -470,17 +471,13 @@ export default function AdminLoginJournalPage() {
             </div>
           </div>
 
-          {/* Error / Empty */}
           {error && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
               {error}
-              <div className="mt-2 text-xs text-red-700/90">
-                Si la table existe mais tu ne vois rien : il faut aussi que l’app écrive dedans (RPC op_log_login_event).
-              </div>
             </div>
           )}
 
-          {!error && !loading && rows.length === 0 && tableOk === true && (
+          {!error && !loading && rows.length === 0 && (
             <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
               Aucune entrée trouvée avec ces filtres.
             </div>
@@ -504,22 +501,20 @@ export default function AdminLoginJournalPage() {
 
               <tbody className="divide-y divide-slate-100">
                 {rows.map((r, idx) => {
-                  const createdAt = pickTs(r, ["created_at"]);
-                  const event = pickStr(r, ["event"]) || "—";
-                  const success = pickBool(r, ["success"]);
-                  const userId = pickStr(r, ["user_id"]);
-                  const email = pickStr(r, ["email"]);
-                  const ip = pickStr(r, ["ip"]);
+                  const createdAt = pickTs(r, ["created_at", "createdAt", "ts", "timestamp"]);
+                  const event = pickStr(r, ["event", "action", "type"]) || "—";
+                  const success = pickBool(r, ["success", "ok", "is_success"]);
+                  const userId = pickStr(r, ["user_id", "uid", "userId", "account_id"]);
+                  const email = pickStr(r, ["email", "user_email", "userEmail"]);
+                  const ip = pickStr(r, ["ip", "ip_address", "ipAddress"]);
 
-                  const country = pickStr(r, ["country"]);
-                  const region = pickStr(r, ["region"]);
-                  const city = pickStr(r, ["city"]);
+                  const country = pickStr(r, ["country", "ip_country", "geo_country", "location_country"]);
+                  const region = pickStr(r, ["region", "ip_region", "geo_region", "location_region", "state"]);
+                  const city = pickStr(r, ["city", "ip_city", "geo_city", "location_city"]);
 
-                  const source = pickStr(r, ["source"]) || "—";
-
+                  const source = pickStr(r, ["source", "channel", "app"]) || "—";
                   const userLabel = email ? truncate(email, 28) : userId ? truncate(userId, 28) : "—";
                   const loc = [city, region, country].filter(Boolean).join(", ") || "—";
-
                   const ok = success === null ? null : !!success;
 
                   return (
@@ -544,7 +539,7 @@ export default function AdminLoginJournalPage() {
                         {truncate(ip || "—", 22) || "—"}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-600" title={loc}>
-                        {truncate(loc, 28)}
+                        {truncate(loc, 34)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-600">{truncate(source, 18)}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-right">
@@ -578,12 +573,7 @@ export default function AdminLoginJournalPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={loading || page <= 1}
-              >
+              <Button type="button" variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={loading || page <= 1}>
                 Précédent
               </Button>
 
@@ -591,12 +581,7 @@ export default function AdminLoginJournalPage() {
                 Page <span className="font-medium">{page}</span> / <span className="font-medium">{totalPages}</span>
               </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={loading || page >= totalPages}
-              >
+              <Button type="button" variant="outline" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={loading || page >= totalPages}>
                 Suivant
               </Button>
             </div>
@@ -606,7 +591,7 @@ export default function AdminLoginJournalPage() {
 
       {/* Details Dialog */}
       <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : closeDetails())}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle>Détails de la connexion</DialogTitle>
           </DialogHeader>
@@ -615,7 +600,8 @@ export default function AdminLoginJournalPage() {
             <div className="text-sm text-slate-500">Aucun détail.</div>
           ) : (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              {/* ✅ Infos complètes */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                 <div className="rounded-xl border border-slate-200 p-3">
                   <div className="text-xs text-slate-500">Date</div>
                   <div className="font-medium text-slate-900">{fmtDate(prettyRow.createdAt)}</div>
@@ -639,9 +625,19 @@ export default function AdminLoginJournalPage() {
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 p-3">
+                <div className="rounded-xl border border-slate-200 p-3 md:col-span-2">
                   <div className="text-xs text-slate-500">Utilisateur</div>
-                  <div className="font-medium text-slate-900 break-all">{prettyRow.email || prettyRow.userId || "—"}</div>
+                  <div className="font-medium text-slate-900 break-all">
+                    {prettyRow.email || "—"}{" "}
+                    <span className="text-xs text-slate-500">
+                      {prettyRow.userId ? `• ${prettyRow.userId}` : ""}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500">Source</div>
+                  <div className="font-medium text-slate-900">{prettyRow.source || "—"}</div>
                 </div>
 
                 <div className="rounded-xl border border-slate-200 p-3">
@@ -649,7 +645,7 @@ export default function AdminLoginJournalPage() {
                   <div className="font-medium text-slate-900 break-all">{prettyRow.ip || "—"}</div>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 p-3">
+                <div className="rounded-xl border border-slate-200 p-3 md:col-span-2">
                   <div className="text-xs text-slate-500">Localisation</div>
                   <div className="font-medium text-slate-900">
                     {[prettyRow.city, prettyRow.region, prettyRow.country].filter(Boolean).join(", ") || "—"}
@@ -661,22 +657,66 @@ export default function AdminLoginJournalPage() {
                   )}
                 </div>
 
-                <div className="rounded-xl border border-slate-200 p-3 md:col-span-2">
+                <div className="rounded-xl border border-slate-200 p-3 md:col-span-3">
                   <div className="text-xs text-slate-500">User-Agent</div>
                   <div className="font-medium text-slate-900 break-all">{prettyRow.ua || "—"}</div>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 p-3 md:col-span-2">
-                  <div className="text-xs text-slate-500">Source</div>
-                  <div className="font-medium text-slate-900">{prettyRow.source || "—"}</div>
+                {/* ✅ Profil associé (si trouvé) */}
+                <div className="rounded-xl border border-slate-200 p-3 md:col-span-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-xs text-slate-500">Profil associé</div>
+                      <div className="text-sm font-medium text-slate-900">
+                        {enrich.loading ? "Chargement…" : enrich.profileType === "client" ? "Client" : enrich.profileType === "worker" ? "Prestataire" : "Non trouvé"}
+                        {enrich.role ? <span className="text-xs text-slate-500"> • rôle: {String(enrich.role)}</span> : null}
+                      </div>
+                    </div>
+                    {enrich.loading ? <Loader2 className="h-4 w-4 animate-spin text-slate-500" /> : null}
+                  </div>
+
+                  {!enrich.loading && (enrich.client || enrich.worker || enrich.opUser) ? (
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                      {enrich.opUser ? (
+                        <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 md:col-span-1">
+                          <div className="text-xs text-slate-500 mb-1">op_users</div>
+                          <pre className="text-xs overflow-auto max-h-48">{safeJson(enrich.opUser)}</pre>
+                        </div>
+                      ) : null}
+
+                      {enrich.client ? (
+                        <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 md:col-span-1">
+                          <div className="text-xs text-slate-500 mb-1">op_clients</div>
+                          <pre className="text-xs overflow-auto max-h-48">{safeJson(enrich.client)}</pre>
+                        </div>
+                      ) : null}
+
+                      {enrich.worker ? (
+                        <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 md:col-span-1">
+                          <div className="text-xs text-slate-500 mb-1">op_ouvriers</div>
+                          <pre className="text-xs overflow-auto max-h-48">{safeJson(enrich.worker)}</pre>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
-              <div className="rounded-xl border border-slate-200 p-3">
-                <div className="text-xs text-slate-500 mb-2">Payload brut (JSON)</div>
-                <pre className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto max-h-[40vh]">
-                  {JSON.stringify(prettyRow.raw, null, 2)}
-                </pre>
+              {/* Meta + Raw */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500 mb-2">Meta (si présent)</div>
+                  <pre className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto max-h-[40vh]">
+                    {safeJson(prettyRow.meta)}
+                  </pre>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500 mb-2">Payload brut (JSON)</div>
+                  <pre className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto max-h-[40vh]">
+                    {safeJson(prettyRow.raw)}
+                  </pre>
+                </div>
               </div>
 
               <div className="flex justify-end">
