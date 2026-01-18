@@ -7,21 +7,32 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, RefreshCw, Search, Filter, Eye, X, Info } from "lucide-react";
+import {
+  Loader2,
+  RefreshCw,
+  Search,
+  Filter,
+  Eye,
+  X,
+  Info,
+  User,
+  ShieldCheck,
+  Globe,
+  Laptop,
+  Hash,
+  ChevronDown,
+} from "lucide-react";
 
-/**
- * ✅ Table confirmée
- */
 const TABLE_NAME = "op_login_journal";
 
 type AnyRow = Record<string, any>;
 
 type FiltersState = {
-  q: string; // recherche globale (email, user_id, ip, user-agent)
+  q: string;
   event: "all" | "login" | "logout" | "refresh";
   success: "all" | "success" | "fail";
-  from: string; // date YYYY-MM-DD
-  to: string; // date YYYY-MM-DD
+  from: string;
+  to: string;
   perPage: number;
 };
 
@@ -39,7 +50,6 @@ function toIsoStartOfDay(dateYYYYMMDD: string) {
   const d = new Date(`${dateYYYYMMDD}T00:00:00.000Z`);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
-
 function toIsoEndOfDay(dateYYYYMMDD: string) {
   if (!dateYYYYMMDD) return null;
   const d = new Date(`${dateYYYYMMDD}T23:59:59.999Z`);
@@ -67,7 +77,6 @@ function pickStr(row: AnyRow, keys: string[]) {
   }
   return "";
 }
-
 function pickBool(row: AnyRow, keys: string[]) {
   for (const k of keys) {
     const v = row?.[k];
@@ -75,7 +84,6 @@ function pickBool(row: AnyRow, keys: string[]) {
   }
   return null;
 }
-
 function pickTs(row: AnyRow, keys: string[]) {
   for (const k of keys) {
     const v = row?.[k];
@@ -83,19 +91,59 @@ function pickTs(row: AnyRow, keys: string[]) {
   }
   return null;
 }
-
 function truncate(s: string, n = 48) {
   if (!s) return "";
   if (s.length <= n) return s;
   return s.slice(0, n - 1) + "…";
 }
-
 function safeJson(val: any) {
   try {
     return JSON.stringify(val, null, 2);
   } catch {
     return String(val ?? "");
   }
+}
+
+function StatusBadge({ ok }: { ok: boolean | null }) {
+  if (ok === null) return <Badge variant="secondary">—</Badge>;
+  if (ok) return <Badge className="bg-emerald-600 hover:bg-emerald-600">Succès</Badge>;
+  return <Badge variant="destructive">Échec</Badge>;
+}
+
+function EventBadge({ event }: { event: string }) {
+  const e = (event || "").toLowerCase();
+  const cls =
+    e === "login"
+      ? "bg-blue-600 hover:bg-blue-600"
+      : e === "logout"
+      ? "bg-slate-700 hover:bg-slate-700"
+      : e === "refresh"
+      ? "bg-amber-600 hover:bg-amber-600"
+      : "bg-slate-500 hover:bg-slate-500";
+  return <Badge className={cls}>{event || "—"}</Badge>;
+}
+
+function NiceKV({
+  icon,
+  label,
+  value,
+  hint,
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <div className="flex items-center gap-2 text-xs text-slate-500">
+        {icon ? <span className="text-slate-400">{icon}</span> : null}
+        <span>{label}</span>
+      </div>
+      <div className="mt-1 text-sm font-medium text-slate-900 break-words">{value}</div>
+      {hint ? <div className="mt-1 text-xs text-slate-500">{hint}</div> : null}
+    </div>
+  );
 }
 
 type Enrichment = {
@@ -122,6 +170,8 @@ export default function AdminLoginJournalPage() {
   const [selected, setSelected] = useState<AnyRow | null>(null);
   const [enrich, setEnrich] = useState<Enrichment>({ loading: false });
 
+  const [showTech, setShowTech] = useState(false);
+
   const debounceRef = useRef<number | null>(null);
 
   const perPage = filters.perPage;
@@ -133,37 +183,28 @@ export default function AdminLoginJournalPage() {
     return Math.max(1, Math.ceil(total / perPage));
   }, [total, perPage]);
 
-  // Reset page when filters change
   useEffect(() => {
     setPage(1);
   }, [filters.q, filters.event, filters.success, filters.from, filters.to, filters.perPage]);
 
   const buildQuery = () => {
-    // select("*") car schéma peut évoluer
     let q = supabase.from(TABLE_NAME).select("*", { count: "exact" });
 
-    // event
-    if (filters.event !== "all") {
-      q = q.eq("event", filters.event);
-    }
+    if (filters.event !== "all") q = q.eq("event", filters.event);
 
-    // success
     if (filters.success !== "all") {
       const val = filters.success === "success";
       q = q.eq("success", val);
     }
 
-    // date range (created_at)
     const isoFrom = toIsoStartOfDay(filters.from);
     const isoTo = toIsoEndOfDay(filters.to);
     if (isoFrom) q = q.gte("created_at", isoFrom);
     if (isoTo) q = q.lte("created_at", isoTo);
 
-    // search (email / user_id / ip / user_agent) : OR
     const raw = filters.q.trim();
     if (raw) {
       const like = `%${raw.replace(/%/g, "\\%").replace(/_/g, "\\_")}%`;
-
       q = q.or(
         [
           `email.ilike.${like}`,
@@ -178,7 +219,6 @@ export default function AdminLoginJournalPage() {
       );
     }
 
-    // order & pagination
     q = q.order("created_at", { ascending: false }).range(fromIdx, toIdx);
     return q;
   };
@@ -186,11 +226,9 @@ export default function AdminLoginJournalPage() {
   const fetchData = async () => {
     setLoading(true);
     setError(null);
-
     try {
       const q = buildQuery();
       const { data, error, count } = await q;
-
       if (error) throw error;
 
       setRows((data ?? []) as AnyRow[]);
@@ -213,13 +251,11 @@ export default function AdminLoginJournalPage() {
     }
   };
 
-  // initial + whenever page changes
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
-  // debounced fetch on filters changes
   useEffect(() => {
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => {
@@ -237,13 +273,15 @@ export default function AdminLoginJournalPage() {
     setOpen(false);
     setSelected(null);
     setEnrich({ loading: false });
+    setShowTech(false);
   };
 
   const openDetails = async (r: AnyRow) => {
     setSelected(r);
     setOpen(true);
+    setShowTech(false);
 
-    const userId = pickStr(r, ["user_id", "uid", "userId", "account_id"]);
+    const userId = pickStr(r, ["user_id"]);
     if (!userId) {
       setEnrich({ loading: false, profileType: "unknown" });
       return;
@@ -252,7 +290,6 @@ export default function AdminLoginJournalPage() {
     setEnrich({ loading: true });
 
     try {
-      // Enrichissement: role (op_users), profil client (op_clients), profil prestataire (op_ouvriers)
       const [opUserRes, clientRes, workerRes] = await Promise.all([
         supabase.from("op_users").select("*").eq("id", userId).maybeSingle(),
         supabase.from("op_clients").select("*").eq("user_id", userId).maybeSingle(),
@@ -287,20 +324,20 @@ export default function AdminLoginJournalPage() {
   const prettyRow = useMemo(() => {
     if (!selected) return null;
 
-    const createdAt = pickTs(selected, ["created_at", "createdAt", "ts", "timestamp"]);
-    const event = pickStr(selected, ["event", "action", "type"]);
-    const success = pickBool(selected, ["success", "ok", "is_success"]);
-    const userId = pickStr(selected, ["user_id", "uid", "userId", "account_id"]);
-    const email = pickStr(selected, ["email", "user_email", "userEmail"]);
-    const ip = pickStr(selected, ["ip", "ip_address", "ipAddress"]);
-    const source = pickStr(selected, ["source", "channel", "app"]);
-    const ua = pickStr(selected, ["user_agent", "userAgent", "ua"]);
+    const createdAt = pickTs(selected, ["created_at"]);
+    const event = pickStr(selected, ["event"]);
+    const success = pickBool(selected, ["success"]);
+    const userId = pickStr(selected, ["user_id"]);
+    const email = pickStr(selected, ["email"]);
+    const ip = pickStr(selected, ["ip"]);
+    const source = pickStr(selected, ["source"]);
+    const ua = pickStr(selected, ["user_agent"]);
 
-    const country = pickStr(selected, ["country", "ip_country", "geo_country", "location_country"]);
-    const region = pickStr(selected, ["region", "ip_region", "geo_region", "location_region", "state"]);
-    const city = pickStr(selected, ["city", "ip_city", "geo_city", "location_city"]);
-    const lat = selected?.lat ?? selected?.latitude ?? selected?.geo_lat ?? null;
-    const lng = selected?.lng ?? selected?.longitude ?? selected?.geo_lng ?? null;
+    const country = pickStr(selected, ["country"]);
+    const region = pickStr(selected, ["region"]);
+    const city = pickStr(selected, ["city"]);
+    const lat = selected?.lat ?? null;
+    const lng = selected?.lng ?? null;
 
     const meta = selected?.meta ?? null;
 
@@ -324,12 +361,36 @@ export default function AdminLoginJournalPage() {
   }, [selected]);
 
   const ipMissing = useMemo(() => {
-    // Si beaucoup de logs ont ip null => normal si log côté client uniquement
     const sample = rows.slice(0, 20);
     if (sample.length === 0) return false;
     const missing = sample.filter((r) => !pickStr(r, ["ip"])).length;
-    return missing / sample.length > 0.6; // majorité
+    return missing / sample.length > 0.6;
   }, [rows]);
+
+  const identity = useMemo(() => {
+    // unifie un affichage "pro" (nom, phone, etc.)
+    const opu = enrich.opUser ?? null;
+    const cli = enrich.client ?? null;
+    const wor = enrich.worker ?? null;
+
+    const role = enrich.role ?? null;
+
+    const fullName =
+      pickStr(opu, ["full_name", "name"]) ||
+      pickStr(cli, ["first_name", "last_name"]) ||
+      pickStr(wor, ["full_name", "name"]) ||
+      "";
+
+    const phone =
+      pickStr(opu, ["phone"]) || pickStr(cli, ["phone"]) || pickStr(wor, ["phone"]) || "";
+
+    const country =
+      pickStr(opu, ["country"]) || pickStr(cli, ["country"]) || pickStr(wor, ["country"]) || "";
+
+    const city = pickStr(cli, ["city"]) || pickStr(wor, ["city"]) || "";
+
+    return { role, fullName, phone, country, city, opu, cli, wor };
+  }, [enrich]);
 
   return (
     <div className="space-y-5">
@@ -347,14 +408,7 @@ export default function AdminLoginJournalPage() {
               Table: <span className="font-medium text-slate-700">{TABLE_NAME}</span>
             </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              className="gap-2"
-              onClick={() => fetchData()}
-              disabled={loading}
-              title="Rafraîchir"
-            >
+            <Button type="button" variant="outline" className="gap-2" onClick={() => fetchData()} disabled={loading}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               Rafraîchir
             </Button>
@@ -366,10 +420,10 @@ export default function AdminLoginJournalPage() {
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex gap-2">
               <Info className="h-4 w-4 mt-0.5 shrink-0" />
               <div>
-                <div className="font-medium">IP / Localisation manquantes sur la majorité des logs</div>
+                <div className="font-medium">IP / Localisation non disponibles</div>
                 <div className="text-xs mt-1 text-amber-800/90">
-                  C’est normal si l’écriture du log se fait côté navigateur. Pour capturer l’IP et la localisation,
-                  il faut logger côté serveur (Edge Function) afin de lire les headers (x-forwarded-for, cf-ipcountry, etc.).
+                  Ton log est écrit côté navigateur, donc l’IP et la géolocalisation IP ne remontent pas. Pour obtenir ces
+                  champs, il faudra logger via une Edge Function (serveur) qui lit les headers.
                 </div>
               </div>
             </div>
@@ -419,22 +473,12 @@ export default function AdminLoginJournalPage() {
 
             <div className="lg:col-span-2">
               <label className="text-xs font-medium text-slate-600">Du</label>
-              <Input
-                className="mt-1"
-                type="date"
-                value={filters.from}
-                onChange={(e) => setFilters((p) => ({ ...p, from: e.target.value }))}
-              />
+              <Input className="mt-1" type="date" value={filters.from} onChange={(e) => setFilters((p) => ({ ...p, from: e.target.value }))} />
             </div>
 
             <div className="lg:col-span-2">
               <label className="text-xs font-medium text-slate-600">Au</label>
-              <Input
-                className="mt-1"
-                type="date"
-                value={filters.to}
-                onChange={(e) => setFilters((p) => ({ ...p, to: e.target.value }))}
-              />
+              <Input className="mt-1" type="date" value={filters.to} onChange={(e) => setFilters((p) => ({ ...p, to: e.target.value }))} />
             </div>
 
             <div className="lg:col-span-12 flex flex-wrap items-center justify-between gap-2 pt-1">
@@ -457,13 +501,7 @@ export default function AdminLoginJournalPage() {
                   <option value={100}>100 / page</option>
                 </select>
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setFilters(DEFAULT_FILTERS)}
-                  disabled={loading}
-                  className="gap-2"
-                >
+                <Button type="button" variant="outline" onClick={() => setFilters(DEFAULT_FILTERS)} disabled={loading} className="gap-2">
                   <X className="h-4 w-4" />
                   Reset
                 </Button>
@@ -471,11 +509,7 @@ export default function AdminLoginJournalPage() {
             </div>
           </div>
 
-          {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-              {error}
-            </div>
-          )}
+          {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
 
           {!error && !loading && rows.length === 0 && (
             <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
@@ -501,45 +535,41 @@ export default function AdminLoginJournalPage() {
 
               <tbody className="divide-y divide-slate-100">
                 {rows.map((r, idx) => {
-                  const createdAt = pickTs(r, ["created_at", "createdAt", "ts", "timestamp"]);
-                  const event = pickStr(r, ["event", "action", "type"]) || "—";
-                  const success = pickBool(r, ["success", "ok", "is_success"]);
-                  const userId = pickStr(r, ["user_id", "uid", "userId", "account_id"]);
-                  const email = pickStr(r, ["email", "user_email", "userEmail"]);
-                  const ip = pickStr(r, ["ip", "ip_address", "ipAddress"]);
+                  const createdAt = pickTs(r, ["created_at"]);
+                  const event = pickStr(r, ["event"]) || "—";
+                  const success = pickBool(r, ["success"]);
+                  const userId = pickStr(r, ["user_id"]);
+                  const email = pickStr(r, ["email"]);
+                  const ip = pickStr(r, ["ip"]);
 
-                  const country = pickStr(r, ["country", "ip_country", "geo_country", "location_country"]);
-                  const region = pickStr(r, ["region", "ip_region", "geo_region", "location_region", "state"]);
-                  const city = pickStr(r, ["city", "ip_city", "geo_city", "location_city"]);
+                  const country = pickStr(r, ["country"]);
+                  const region = pickStr(r, ["region"]);
+                  const city = pickStr(r, ["city"]);
 
-                  const source = pickStr(r, ["source", "channel", "app"]) || "—";
-                  const userLabel = email ? truncate(email, 28) : userId ? truncate(userId, 28) : "—";
+                  const source = pickStr(r, ["source"]) || "—";
+
+                  const userLabel = email ? truncate(email, 30) : userId ? truncate(userId, 28) : "—";
                   const loc = [city, region, country].filter(Boolean).join(", ") || "—";
-                  const ok = success === null ? null : !!success;
 
                   return (
                     <tr key={(r?.id as string) ?? `${idx}`} className="hover:bg-slate-50/60">
                       <td className="px-4 py-3 whitespace-nowrap text-slate-700">{fmtDate(createdAt)}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="font-medium text-slate-800">{event}</span>
+                        <div className="flex items-center gap-2">
+                          <EventBadge event={event} />
+                        </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        {ok === null ? (
-                          <span className="text-slate-500">—</span>
-                        ) : ok ? (
-                          <Badge className="bg-emerald-600 hover:bg-emerald-600">Succès</Badge>
-                        ) : (
-                          <Badge variant="destructive">Échec</Badge>
-                        )}
+                        <StatusBadge ok={success === null ? null : !!success} />
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-700" title={email || userId || ""}>
                         {userLabel}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-700" title={ip || ""}>
-                        {truncate(ip || "—", 22) || "—"}
+                        {ip ? truncate(ip, 22) : "—"}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-600" title={loc}>
-                        {truncate(loc, 34)}
+                        {truncate(loc, 40)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-600">{truncate(source, 18)}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-right">
@@ -589,142 +619,165 @@ export default function AdminLoginJournalPage() {
         </CardContent>
       </Card>
 
-      {/* Details Dialog */}
+      {/* ✅ DIALOG “PROPRE” */}
       <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : closeDetails())}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
-            <DialogTitle>Détails de la connexion</DialogTitle>
-          </DialogHeader>
-
-          {!prettyRow ? (
-            <div className="text-sm text-slate-500">Aucun détail.</div>
-          ) : (
-            <div className="space-y-4">
-              {/* ✅ Infos complètes */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                <div className="rounded-xl border border-slate-200 p-3">
-                  <div className="text-xs text-slate-500">Date</div>
-                  <div className="font-medium text-slate-900">{fmtDate(prettyRow.createdAt)}</div>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 p-3">
-                  <div className="text-xs text-slate-500">Événement</div>
-                  <div className="font-medium text-slate-900">{prettyRow.event || "—"}</div>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 p-3">
-                  <div className="text-xs text-slate-500">Statut</div>
-                  <div className="mt-1">
-                    {prettyRow.success === null ? (
-                      <span className="text-slate-500">—</span>
-                    ) : prettyRow.success ? (
-                      <Badge className="bg-emerald-600 hover:bg-emerald-600">Succès</Badge>
-                    ) : (
-                      <Badge variant="destructive">Échec</Badge>
-                    )}
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 p-3 md:col-span-2">
-                  <div className="text-xs text-slate-500">Utilisateur</div>
-                  <div className="font-medium text-slate-900 break-all">
-                    {prettyRow.email || "—"}{" "}
-                    <span className="text-xs text-slate-500">
-                      {prettyRow.userId ? `• ${prettyRow.userId}` : ""}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 p-3">
-                  <div className="text-xs text-slate-500">Source</div>
-                  <div className="font-medium text-slate-900">{prettyRow.source || "—"}</div>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 p-3">
-                  <div className="text-xs text-slate-500">IP</div>
-                  <div className="font-medium text-slate-900 break-all">{prettyRow.ip || "—"}</div>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 p-3 md:col-span-2">
-                  <div className="text-xs text-slate-500">Localisation</div>
-                  <div className="font-medium text-slate-900">
-                    {[prettyRow.city, prettyRow.region, prettyRow.country].filter(Boolean).join(", ") || "—"}
-                  </div>
-                  {(prettyRow.lat != null || prettyRow.lng != null) && (
-                    <div className="text-xs text-slate-500 mt-1">
-                      GPS: {String(prettyRow.lat ?? "—")}, {String(prettyRow.lng ?? "—")}
+        <DialogContent className="max-w-5xl p-0 overflow-hidden">
+          {!prettyRow ? null : (
+            <>
+              {/* Header */}
+              <DialogHeader className="px-6 py-4 border-b bg-white">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <DialogTitle className="text-base sm:text-lg">Détails de la connexion</DialogTitle>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {fmtDate(prettyRow.createdAt)} • {prettyRow.email || truncate(prettyRow.userId || "", 28) || "—"}
                     </div>
-                  )}
-                </div>
+                  </div>
 
-                <div className="rounded-xl border border-slate-200 p-3 md:col-span-3">
-                  <div className="text-xs text-slate-500">User-Agent</div>
-                  <div className="font-medium text-slate-900 break-all">{prettyRow.ua || "—"}</div>
+                  <div className="flex items-center gap-2">
+                    <EventBadge event={prettyRow.event || "—"} />
+                    <StatusBadge ok={prettyRow.success === null ? null : !!prettyRow.success} />
+                  </div>
                 </div>
+              </DialogHeader>
 
-                {/* ✅ Profil associé (si trouvé) */}
-                <div className="rounded-xl border border-slate-200 p-3 md:col-span-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <div className="text-xs text-slate-500">Profil associé</div>
-                      <div className="text-sm font-medium text-slate-900">
-                        {enrich.loading ? "Chargement…" : enrich.profileType === "client" ? "Client" : enrich.profileType === "worker" ? "Prestataire" : "Non trouvé"}
-                        {enrich.role ? <span className="text-xs text-slate-500"> • rôle: {String(enrich.role)}</span> : null}
+              <div className="px-6 py-5 bg-slate-50">
+                {/* 2 colonnes pro */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Connexion */}
+                  <div className="space-y-3">
+                    <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                      Connexion
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <NiceKV
+                        icon={<Globe className="h-4 w-4" />}
+                        label="IP"
+                        value={prettyRow.ip || "Non disponible"}
+                        hint={!prettyRow.ip ? "Le navigateur ne fournit pas l’IP publique. Utilise une Edge Function pour la capturer." : undefined}
+                      />
+                      <NiceKV
+                        icon={<Globe className="h-4 w-4" />}
+                        label="Localisation"
+                        value={[prettyRow.city, prettyRow.region, prettyRow.country].filter(Boolean).join(", ") || "Non disponible"}
+                        hint={
+                          !prettyRow.country && !prettyRow.city
+                            ? "La géolocalisation IP est calculée côté serveur (headers CDN)."
+                            : undefined
+                        }
+                      />
+
+                      <NiceKV
+                        icon={<Hash className="h-4 w-4" />}
+                        label="Source"
+                        value={prettyRow.source || "—"}
+                      />
+                      <NiceKV
+                        icon={<Laptop className="h-4 w-4" />}
+                        label="Appareil / Navigateur"
+                        value={prettyRow.ua ? truncate(prettyRow.ua, 80) : "—"}
+                        hint={prettyRow.ua ? "User-Agent" : undefined}
+                      />
+                    </div>
+
+                    {/* Meta clean */}
+                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs font-medium text-slate-600">Informations additionnelles</div>
+                      </div>
+                      <div className="mt-2 text-sm text-slate-700">
+                        {prettyRow?.meta && typeof prettyRow.meta === "object" ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {Object.entries(prettyRow.meta).map(([k, v]) => (
+                              <div key={k} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                                <div className="text-[11px] text-slate-500">{k}</div>
+                                <div className="text-sm font-medium text-slate-900 break-words">
+                                  {typeof v === "string" ? v : safeJson(v)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-slate-500">Aucune information.</div>
+                        )}
                       </div>
                     </div>
-                    {enrich.loading ? <Loader2 className="h-4 w-4 animate-spin text-slate-500" /> : null}
                   </div>
 
-                  {!enrich.loading && (enrich.client || enrich.worker || enrich.opUser) ? (
-                    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                      {enrich.opUser ? (
-                        <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 md:col-span-1">
-                          <div className="text-xs text-slate-500 mb-1">op_users</div>
-                          <pre className="text-xs overflow-auto max-h-48">{safeJson(enrich.opUser)}</pre>
-                        </div>
-                      ) : null}
+                  {/* Identité */}
+                  <div className="space-y-3">
+                    <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                      Identité & Profil
+                    </div>
 
-                      {enrich.client ? (
-                        <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 md:col-span-1">
-                          <div className="text-xs text-slate-500 mb-1">op_clients</div>
-                          <pre className="text-xs overflow-auto max-h-48">{safeJson(enrich.client)}</pre>
-                        </div>
-                      ) : null}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <NiceKV
+                        icon={<User className="h-4 w-4" />}
+                        label="Nom"
+                        value={identity.fullName || "—"}
+                      />
+                      <NiceKV
+                        icon={<ShieldCheck className="h-4 w-4" />}
+                        label="Rôle"
+                        value={identity.role || "—"}
+                      />
+                      <NiceKV label="Email" value={prettyRow.email || "—"} />
+                      <NiceKV label="Téléphone" value={identity.phone || "—"} />
+                      <NiceKV label="Pays" value={identity.country || "—"} />
+                      <NiceKV label="Ville" value={identity.city || "—"} />
+                    </div>
 
-                      {enrich.worker ? (
-                        <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 md:col-span-1">
-                          <div className="text-xs text-slate-500 mb-1">op_ouvriers</div>
-                          <pre className="text-xs overflow-auto max-h-48">{safeJson(enrich.worker)}</pre>
-                        </div>
-                      ) : null}
+                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="text-xs font-medium text-slate-600">Type de profil</div>
+                      <div className="mt-1 text-sm font-medium text-slate-900">
+                        {enrich.loading ? "Chargement…" : enrich.profileType === "client" ? "Client" : enrich.profileType === "worker" ? "Prestataire" : "Non trouvé"}
+                      </div>
+                      <div className="mt-2 text-xs text-slate-500">
+                        L’interface affiche uniquement des champs utiles. Le JSON brut est disponible dans “Détails techniques”.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Détails techniques repliables */}
+                <div className="mt-4 rounded-xl border border-slate-200 bg-white overflow-hidden">
+                  <button
+                    type="button"
+                    className="w-full px-4 py-3 flex items-center justify-between text-sm font-medium text-slate-800 hover:bg-slate-50"
+                    onClick={() => setShowTech((v) => !v)}
+                  >
+                    <span>Détails techniques (JSON)</span>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${showTech ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {showTech ? (
+                    <div className="border-t border-slate-200 p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <div className="text-xs text-slate-500 mb-2">op_users</div>
+                        <pre className="text-xs overflow-auto max-h-72">{safeJson(identity.opu)}</pre>
+                      </div>
+
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <div className="text-xs text-slate-500 mb-2">op_clients</div>
+                        <pre className="text-xs overflow-auto max-h-72">{safeJson(identity.cli)}</pre>
+                      </div>
+
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+                        <div className="text-xs text-slate-500 mb-2">Entrée op_login_journal (raw)</div>
+                        <pre className="text-xs overflow-auto max-h-72">{safeJson(prettyRow.raw)}</pre>
+                      </div>
                     </div>
                   ) : null}
                 </div>
-              </div>
 
-              {/* Meta + Raw */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-xl border border-slate-200 p-3">
-                  <div className="text-xs text-slate-500 mb-2">Meta (si présent)</div>
-                  <pre className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto max-h-[40vh]">
-                    {safeJson(prettyRow.meta)}
-                  </pre>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 p-3">
-                  <div className="text-xs text-slate-500 mb-2">Payload brut (JSON)</div>
-                  <pre className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto max-h-[40vh]">
-                    {safeJson(prettyRow.raw)}
-                  </pre>
+                <div className="mt-4 flex justify-end">
+                  <Button type="button" variant="outline" onClick={closeDetails}>
+                    Fermer
+                  </Button>
                 </div>
               </div>
-
-              <div className="flex justify-end">
-                <Button type="button" variant="outline" onClick={closeDetails}>
-                  Fermer
-                </Button>
-              </div>
-            </div>
+            </>
           )}
         </DialogContent>
       </Dialog>
