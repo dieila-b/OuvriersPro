@@ -23,34 +23,29 @@ function firstHeader(req: Request, names: string[]) {
 
 function parseForwardedFor(xff: string | null) {
   if (!xff) return null;
-  // x-forwarded-for: "client, proxy1, proxy2"
-  const first = xff.split(",")[0]?.trim();
-  return first || null;
+  return xff.split(",")[0]?.trim() || null;
 }
 
 function normalizeIp(ip: string | null) {
   if (!ip) return null;
-  // supprime port si présent: "1.2.3.4:1234"
-  const v = ip.includes(":") && ip.includes(".") ? ip.split(":")[0] : ip;
-  return v?.trim() || null;
+  // "1.2.3.4:1234" => "1.2.3.4"
+  if (ip.includes(".") && ip.includes(":")) return ip.split(":")[0]?.trim() || null;
+  return ip.trim() || null;
 }
 
 function getIp(req: Request) {
-  // Priorité: x-forwarded-for -> x-real-ip -> cf-connecting-ip -> fly-client-ip
   const xff = firstHeader(req, ["x-forwarded-for"]);
   const xri = firstHeader(req, ["x-real-ip"]);
   const ccip = firstHeader(req, ["cf-connecting-ip"]);
   const fly = firstHeader(req, ["fly-client-ip"]);
+  const trueClient = firstHeader(req, ["true-client-ip"]);
 
   const fromXff = parseForwardedFor(xff);
-  return normalizeIp(fromXff || xri || ccip || fly);
+  return normalizeIp(fromXff || xri || ccip || fly || trueClient);
 }
 
 function getGeo(req: Request) {
-  // Sur certains fronts/CDN, tu peux recevoir des infos géo:
-  // - Cloudflare: cf-ipcountry
-  // - Vercel: x-vercel-ip-country, x-vercel-ip-city, x-vercel-ip-country-region
-  // - autres: x-geo-country, x-geo-city, x-geo-region (custom)
+  // Pays parfois dispo selon proxy/CDN
   const country =
     firstHeader(req, ["cf-ipcountry", "x-vercel-ip-country", "x-geo-country", "x-country"]) ?? null;
 
@@ -60,18 +55,10 @@ function getGeo(req: Request) {
   const city =
     firstHeader(req, ["x-vercel-ip-city", "x-geo-city", "x-city"]) ?? null;
 
-  // coord éventuelles (rare)
-  const lat =
-    firstHeader(req, ["x-geo-lat", "x-latitude", "x-lat"]) ?? null;
-  const lng =
-    firstHeader(req, ["x-geo-lng", "x-longitude", "x-lng"]) ?? null;
-
   return {
     country: country && country !== "XX" ? country : null,
     region,
     city,
-    lat: lat ? Number(lat) : null,
-    lng: lng ? Number(lng) : null,
   };
 }
 
@@ -94,40 +81,35 @@ serve(async (req) => {
     });
   }
 
-  if (req.method !== "POST") {
-    return json({ error: "Method not allowed" }, 405);
-  }
+  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!; // ✅ TON SECRET EXACT
 
-    // Client "user" (pour valider le JWT de l'appelant)
     const authHeader = req.headers.get("authorization") ?? "";
+
+    // Client user (pour lire le JWT si présent)
     const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: authData } = await userClient.auth.getUser();
-    const authedUser = authData?.user ?? null;
-
     const body = (await req.json().catch(() => ({}))) as Payload;
 
-    // Sécurité: on force user_id/email depuis le token si dispo
+    const { data: authData } = await userClient.auth.getUser().catch(() => ({ data: null as any }));
+    const authedUser = authData?.user ?? null;
+
+    const ip = getIp(req);
+    const geo = getGeo(req);
+    const userAgent = firstHeader(req, ["user-agent"]) ?? null;
+
     const safeUserId = authedUser?.id ?? body.user_id ?? null;
     const safeEmail = authedUser?.email ?? body.email ?? null;
 
-    // IP + Geo depuis headers proxy
-    const ip = getIp(req);
-    const geo = getGeo(req);
-
-    const userAgent = firstHeader(req, ["user-agent"]) ?? null;
-
-    // Meta enrichi
     const meta = {
       ...(typeof body.meta === "object" && body.meta ? body.meta : {}),
-      // On stocke aussi les headers utiles pour debug (sans tout dump)
+      note: (body.meta?.note ?? "client-side"),
       _headers: {
         "x-forwarded-for": firstHeader(req, ["x-forwarded-for"]),
         "x-real-ip": firstHeader(req, ["x-real-ip"]),
@@ -135,10 +117,11 @@ serve(async (req) => {
       },
     };
 
-    // Écriture DB via Service Role (bypass RLS)
+    // Admin client (bypass RLS)
     const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Ta fonction SQL existe: public.op_log_login_event
+    // ✅ Appelle ta fonction SQL existante:
+    // routine: public.op_log_login_event
     const { error: rpcError } = await adminClient.rpc("op_log_login_event", {
       p_event: body.event ?? "unknown",
       p_success: typeof body.success === "boolean" ? body.success : true,
@@ -148,24 +131,20 @@ serve(async (req) => {
       p_country: geo.country,
       p_region: geo.region,
       p_city: geo.city,
-      p_lat: geo.lat,
-      p_lng: geo.lng,
+      p_lat: null,
+      p_lng: null,
       p_source: body.source ?? "web",
       p_user_agent: userAgent,
       p_meta: meta,
     });
 
     if (rpcError) {
-      // Fallback: insert direct (si tu as la table + colonnes)
-      // IMPORTANT: si ça échoue, on renvoie l'erreur RPC
       return json({ ok: false, error: rpcError.message }, 500);
     }
 
     return new Response(null, {
       status: 204,
-      headers: {
-        "access-control-allow-origin": "*",
-      },
+      headers: { "access-control-allow-origin": "*" },
     });
   } catch (e: any) {
     return json({ ok: false, error: e?.message ?? "Unexpected error" }, 500);
