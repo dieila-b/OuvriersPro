@@ -7,7 +7,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 type Payload = {
   event?: "login" | "logout" | "refresh" | string;
   success?: boolean;
-  user_id?: string | null;
   email?: string | null;
   source?: string | null;
   meta?: any;
@@ -45,15 +44,15 @@ function getIp(req: Request) {
 }
 
 function getGeo(req: Request) {
-  // Pays parfois dispo selon proxy/CDN
+  // Selon ton infra, ces headers peuvent être vides.
+  // Pays parfois dispo (Cloudflare / proxy), ville/région rarement sans service GeoIP.
   const country =
     firstHeader(req, ["cf-ipcountry", "x-vercel-ip-country", "x-geo-country", "x-country"]) ?? null;
 
   const region =
     firstHeader(req, ["x-vercel-ip-country-region", "x-geo-region", "x-region", "x-state"]) ?? null;
 
-  const city =
-    firstHeader(req, ["x-vercel-ip-city", "x-geo-city", "x-city"]) ?? null;
+  const city = firstHeader(req, ["x-vercel-ip-city", "x-geo-city", "x-city"]) ?? null;
 
   return {
     country: country && country !== "XX" ? country : null,
@@ -80,23 +79,21 @@ serve(async (req) => {
       },
     });
   }
-
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!; // ✅ TON SECRET EXACT
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const authHeader = req.headers.get("authorization") ?? "";
-
-    // Client user (pour lire le JWT si présent)
     const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
 
     const body = (await req.json().catch(() => ({}))) as Payload;
 
+    // Si le JWT est présent, on récupère l'utilisateur
     const { data: authData } = await userClient.auth.getUser().catch(() => ({ data: null as any }));
     const authedUser = authData?.user ?? null;
 
@@ -104,43 +101,41 @@ serve(async (req) => {
     const geo = getGeo(req);
     const userAgent = firstHeader(req, ["user-agent"]) ?? null;
 
-    const safeUserId = authedUser?.id ?? body.user_id ?? null;
     const safeEmail = authedUser?.email ?? body.email ?? null;
 
+    // ✅ IMPORTANT: ta fonction SQL n’a PAS p_user_id,
+    // donc on stocke user_id dans meta pour quand même l’avoir côté admin.
     const meta = {
       ...(typeof body.meta === "object" && body.meta ? body.meta : {}),
-      note: (body.meta?.note ?? "client-side"),
+      note: body.meta?.note ?? "client-side",
+      user_id: authedUser?.id ?? null,
+      // Debug utile si besoin (tu peux supprimer plus tard)
       _headers: {
         "x-forwarded-for": firstHeader(req, ["x-forwarded-for"]),
         "x-real-ip": firstHeader(req, ["x-real-ip"]),
+        "cf-connecting-ip": firstHeader(req, ["cf-connecting-ip"]),
         "cf-ipcountry": firstHeader(req, ["cf-ipcountry"]),
       },
     };
 
-    // Admin client (bypass RLS)
     const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // ✅ Appelle ta fonction SQL existante:
-    // routine: public.op_log_login_event
     const { error: rpcError } = await adminClient.rpc("op_log_login_event", {
       p_event: body.event ?? "unknown",
       p_success: typeof body.success === "boolean" ? body.success : true,
-      p_user_id: safeUserId,
       p_email: safeEmail,
       p_ip: ip,
+      p_user_agent: userAgent,
       p_country: geo.country,
       p_region: geo.region,
       p_city: geo.city,
       p_lat: null,
       p_lng: null,
       p_source: body.source ?? "web",
-      p_user_agent: userAgent,
       p_meta: meta,
     });
 
-    if (rpcError) {
-      return json({ ok: false, error: rpcError.message }, 500);
-    }
+    if (rpcError) return json({ ok: false, error: rpcError.message }, 500);
 
     return new Response(null, {
       status: 204,
