@@ -1,147 +1,128 @@
 // supabase/functions/log-login/index.ts
-/// <reference lib="deno.ns" />
-
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-type Payload = {
-  event?: "login" | "logout" | "refresh" | string;
-  success?: boolean;
-  email?: string | null;
-  source?: string | null;
-  meta?: any;
-};
-
-function firstHeader(req: Request, names: string[]) {
-  for (const n of names) {
-    const v = req.headers.get(n);
+function pickHeader(h: Headers, keys: string[]) {
+  for (const k of keys) {
+    const v = h.get(k);
     if (v && v.trim()) return v.trim();
   }
   return null;
 }
 
-function parseForwardedFor(xff: string | null) {
-  if (!xff) return null;
-  return xff.split(",")[0]?.trim() || null;
-}
+function extractIp(headers: Headers): string | null {
+  // Cloudflare / Supabase hosting
+  const cf = pickHeader(headers, ["cf-connecting-ip"]);
+  if (cf) return cf;
 
-function normalizeIp(ip: string | null) {
-  if (!ip) return null;
-  // "1.2.3.4:1234" => "1.2.3.4"
-  if (ip.includes(".") && ip.includes(":")) return ip.split(":")[0]?.trim() || null;
-  return ip.trim() || null;
-}
+  // Standard proxy chain
+  const xff = pickHeader(headers, ["x-forwarded-for"]);
+  if (xff) {
+    // "client, proxy1, proxy2"
+    const first = xff.split(",")[0]?.trim();
+    if (first) return first;
+  }
 
-function getIp(req: Request) {
-  const xff = firstHeader(req, ["x-forwarded-for"]);
-  const xri = firstHeader(req, ["x-real-ip"]);
-  const ccip = firstHeader(req, ["cf-connecting-ip"]);
-  const fly = firstHeader(req, ["fly-client-ip"]);
-  const trueClient = firstHeader(req, ["true-client-ip"]);
+  const real = pickHeader(headers, ["x-real-ip"]);
+  if (real) return real;
 
-  const fromXff = parseForwardedFor(xff);
-  return normalizeIp(fromXff || xri || ccip || fly || trueClient);
-}
-
-function getGeo(req: Request) {
-  // Selon ton infra, ces headers peuvent être vides.
-  // Pays parfois dispo (Cloudflare / proxy), ville/région rarement sans service GeoIP.
-  const country =
-    firstHeader(req, ["cf-ipcountry", "x-vercel-ip-country", "x-geo-country", "x-country"]) ?? null;
-
-  const region =
-    firstHeader(req, ["x-vercel-ip-country-region", "x-geo-region", "x-region", "x-state"]) ?? null;
-
-  const city = firstHeader(req, ["x-vercel-ip-city", "x-geo-city", "x-city"]) ?? null;
-
-  return {
-    country: country && country !== "XX" ? country : null,
-    region,
-    city,
-  };
-}
-
-function json(data: any, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "content-type": "application/json; charset=utf-8" },
-  });
+  return null;
 }
 
 serve(async (req) => {
+  // CORS simple (si ton front et la function sont sur le même projet, ça suffit)
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
+    return new Response("ok", {
       headers: {
         "access-control-allow-origin": "*",
+        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
         "access-control-allow-methods": "POST, OPTIONS",
-        "access-control-allow-headers": "authorization, content-type",
       },
     });
   }
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+
+  if (req.method !== "POST") {
+    return new Response("Method Not Allowed", { status: 405 });
+  }
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+    // IMPORTANT: on garde l'Authorization du client pour que auth.uid() fonctionne côté SQL
     const authHeader = req.headers.get("authorization") ?? "";
-    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const body = (await req.json().catch(() => ({}))) as Payload;
+    const body = await req.json().catch(() => ({}));
 
-    // Si le JWT est présent, on récupère l'utilisateur
-    const { data: authData } = await userClient.auth.getUser().catch(() => ({ data: null as any }));
-    const authedUser = authData?.user ?? null;
+    // Champs attendus de ton front
+    const event = String(body?.event ?? "login");
+    const success = Boolean(body?.success ?? true);
+    const email = typeof body?.email === "string" ? body.email : null;
+    const source = typeof body?.source === "string" ? body.source : "web";
 
-    const ip = getIp(req);
-    const geo = getGeo(req);
-    const userAgent = firstHeader(req, ["user-agent"]) ?? null;
+    // user_agent : prioritaire depuis le navigateur, sinon depuis le header
+    const userAgent =
+      (typeof body?.user_agent === "string" ? body.user_agent : null) ??
+      (typeof body?.meta?.user_agent === "string" ? body.meta.user_agent : null) ??
+      req.headers.get("user-agent");
 
-    const safeEmail = authedUser?.email ?? body.email ?? null;
+    // IP + GEO depuis CDN (Supabase Hosting = Cloudflare)
+    const ip = extractIp(req.headers);
 
-    // ✅ IMPORTANT: ta fonction SQL n’a PAS p_user_id,
-    // donc on stocke user_id dans meta pour quand même l’avoir côté admin.
-    const meta = {
-      ...(typeof body.meta === "object" && body.meta ? body.meta : {}),
-      note: body.meta?.note ?? "client-side",
-      user_id: authedUser?.id ?? null,
-      // Debug utile si besoin (tu peux supprimer plus tard)
-      _headers: {
-        "x-forwarded-for": firstHeader(req, ["x-forwarded-for"]),
-        "x-real-ip": firstHeader(req, ["x-real-ip"]),
-        "cf-connecting-ip": firstHeader(req, ["cf-connecting-ip"]),
-        "cf-ipcountry": firstHeader(req, ["cf-ipcountry"]),
-      },
-    };
+    // Cloudflare donne au minimum le pays (code ISO2) via cf-ipcountry
+    // Région / Ville ne sont pas garanties par défaut -> souvent null.
+    const country =
+      (typeof body?.country === "string" ? body.country : null) ??
+      pickHeader(req.headers, ["cf-ipcountry"]);
 
-    const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const region =
+      (typeof body?.region === "string" ? body.region : null) ??
+      null;
 
-    const { error: rpcError } = await adminClient.rpc("op_log_login_event", {
-      p_event: body.event ?? "unknown",
-      p_success: typeof body.success === "boolean" ? body.success : true,
-      p_email: safeEmail,
+    const city =
+      (typeof body?.city === "string" ? body.city : null) ??
+      null;
+
+    const lat = (typeof body?.lat === "number" ? body.lat : null);
+    const lng = (typeof body?.lng === "number" ? body.lng : null);
+
+    const meta = (body?.meta && typeof body.meta === "object") ? body.meta : null;
+
+    // Appel de ta fonction SQL existante
+    const { error } = await supabase.rpc("op_log_login_event", {
+      p_event: event,
+      p_success: success,
+      p_email: email,
       p_ip: ip,
       p_user_agent: userAgent,
-      p_country: geo.country,
-      p_region: geo.region,
-      p_city: geo.city,
-      p_lat: null,
-      p_lng: null,
-      p_source: body.source ?? "web",
+      p_country: country,
+      p_region: region,
+      p_city: city,
+      p_lat: lat,
+      p_lng: lng,
+      p_source: source,
       p_meta: meta,
     });
 
-    if (rpcError) return json({ ok: false, error: rpcError.message }, 500);
+    if (error) {
+      return new Response(JSON.stringify({ ok: false, error }), {
+        status: 500,
+        headers: { "content-type": "application/json", "access-control-allow-origin": "*" },
+      });
+    }
 
     return new Response(null, {
       status: 204,
       headers: { "access-control-allow-origin": "*" },
     });
-  } catch (e: any) {
-    return json({ ok: false, error: e?.message ?? "Unexpected error" }, 500);
+  } catch (e) {
+    return new Response(JSON.stringify({ ok: false, message: String(e) }), {
+      status: 500,
+      headers: { "content-type": "application/json", "access-control-allow-origin": "*" },
+    });
   }
 });
