@@ -70,6 +70,10 @@ import AdminLayout from "@/components/layout/AdminLayout";
 
 const queryClient = new QueryClient();
 
+/**
+ * ✅ Scroll manager:
+ * - gère /#anchor proprement avec header sticky
+ */
 function ScrollManager() {
   const location = useLocation();
 
@@ -96,115 +100,106 @@ function ScrollManager() {
 
 /**
  * ✅ Journal de connexion (Supabase Edge Function) — non bloquant
- * Objectif:
- * - Enregistrer login / logout (et refresh optionnel) côté serveur via Edge Function "log-login"
- * - Ne JAMAIS casser l'app
- * - NE PAS utiliser de fallback /functions/v1/* (pas adapté à Supabase Hosting)
- * - Exposer les erreurs en console (sinon tu ne sauras jamais pourquoi tu "rates" des logs)
  *
- * NOTE:
- * - L'IP et la géoloc ne peuvent pas être obtenues correctement côté navigateur.
- * - C'est l'Edge Function qui doit lire les headers CDN (cf-connecting-ip, cf-ipcountry, etc.)
+ * Règles (conformes à ton backend):
+ * - On utilise UNIQUEMENT supabase.functions.invoke("log-login") (pas de /functions/v1/*)
+ * - Payload envoyé = { event, success, email, source, meta }
+ * - IP/localisation: PAS côté navigateur (Edge Function lit les headers CDN)
+ *
+ * Notes:
+ * - StrictMode (dev) peut déclencher les effets 2 fois → garde anti-double-init
+ * - En prod, l’anti-double-init reste safe
  */
 function AuthAuditLogger() {
-  // anti-double log: React 18 StrictMode en dev déclenche certains effets 2 fois
   const didInitRef = useRef(false);
 
   useEffect(() => {
     if (didInitRef.current) return;
     didInitRef.current = true;
 
-    const baseMeta = () => {
-      const tz = (() => {
-        try {
-          return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
-        } catch {
-          return null;
-        }
-      })();
+    const LOG_REFRESH = false; // mets true si tu veux aussi tracer les refresh (bruyant)
 
-      return {
-        note: "client-side",
-        user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
-        lang: typeof navigator !== "undefined" ? navigator.language : null,
-        tz,
-        screen:
-          typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
-        referrer: typeof document !== "undefined" ? document.referrer || null : null,
-        href: typeof window !== "undefined" ? window.location.href : null,
-      };
+    const getTimeZone = () => {
+      try {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
+      } catch {
+        return null;
+      }
     };
 
-    const safeCall = async (payload: any) => {
+    const baseMeta = () => ({
+      note: "client-side",
+      // ✅ user_id doit aller dans meta (ta SQL func n'a pas p_user_id)
+      user_id: null as string | null,
+
+      // ✅ infos appareil / contexte
+      user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+      lang: typeof navigator !== "undefined" ? navigator.language : null,
+      tz: getTimeZone(),
+      screen: typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
+      referrer: typeof document !== "undefined" ? document.referrer || null : null,
+      href: typeof window !== "undefined" ? window.location.href : null,
+    });
+
+    const safeCall = async (payload: {
+      event: string;
+      success: boolean;
+      email: string | null;
+      source: string;
+      meta?: any;
+    }) => {
       try {
         const fn = (supabase as any)?.functions?.invoke;
         if (typeof fn !== "function") {
-          console.warn('[AuthAuditLogger] supabase.functions.invoke indisponible. Vérifie "@supabase/supabase-js" et la config.');
+          console.warn(
+            '[AuthAuditLogger] supabase.functions.invoke indisponible. Vérifie "@supabase/supabase-js" et la config.'
+          );
           return;
         }
 
-        const { data, error } = await fn("log-login", { body: payload });
+        // ✅ Hébergement Supabase → Edge Functions only
+        const { error } = await fn("log-login", { body: payload });
+
         if (error) {
           console.warn("[AuthAuditLogger] log-login error:", error);
-        } else {
-          // utile en debug: à commenter si tu veux silence total
-          // console.debug("[AuthAuditLogger] log-login ok:", data);
         }
       } catch (e) {
         console.warn("[AuthAuditLogger] log-login invoke failed:", e);
       }
     };
 
-    // ✅ Choix recommandé: log uniquement login/logout
-    // - refresh peut créer beaucoup de bruit
-    // - si tu veux le garder, tu peux le réactiver plus bas
-    const LOG_REFRESH = false;
+    const log = (event: "login" | "logout" | "refresh", session: any) => {
+      const email = session?.user?.email ?? null;
+      const userId = session?.user?.id ?? null;
 
-    // refresh au chargement si session déjà présente (optionnel)
+      return safeCall({
+        event,
+        success: true,
+        email,
+        source: "web",
+        meta: {
+          ...baseMeta(),
+          user_id: userId,
+        },
+      });
+    };
+
+    // ✅ Optionnel: refresh au chargement si session déjà présente
     if (LOG_REFRESH) {
       supabase.auth
         .getSession()
         .then(({ data }) => {
-          const s = data.session;
-          if (!s?.user) return;
-
-          safeCall({
-            event: "refresh",
-            success: true,
-            email: s.user.email ?? null,
-            source: "web",
-            meta: {
-              ...baseMeta(),
-              user_id: s.user.id,
-            },
-          });
+          if (!data?.session?.user) return;
+          log("refresh", data.session);
         })
         .catch(() => {});
     }
 
     const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
       if (evt === "SIGNED_IN") {
-        safeCall({
-          event: "login",
-          success: true,
-          email: session?.user?.email ?? null,
-          source: "web",
-          meta: {
-            ...baseMeta(),
-            user_id: session?.user?.id ?? null,
-          },
-        });
+        log("login", session);
       } else if (evt === "SIGNED_OUT") {
-        safeCall({
-          event: "logout",
-          success: true,
-          email: session?.user?.email ?? null,
-          source: "web",
-          meta: {
-            ...baseMeta(),
-            user_id: session?.user?.id ?? null,
-          },
-        });
+        log("logout", session);
       }
     });
 
