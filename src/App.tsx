@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -95,13 +95,25 @@ function ScrollManager() {
 }
 
 /**
- * ✅ Journal de connexion (Edge Function) — non bloquant
- * - log sur SIGNED_IN / SIGNED_OUT + refresh
- * - envoie un meta enrichi
- * - ne casse jamais l'app si la function n'existe pas
+ * ✅ Journal de connexion (Supabase Edge Function) — non bloquant
+ * Objectif:
+ * - Enregistrer login / logout (et refresh optionnel) côté serveur via Edge Function "log-login"
+ * - Ne JAMAIS casser l'app
+ * - NE PAS utiliser de fallback /functions/v1/* (pas adapté à Supabase Hosting)
+ * - Exposer les erreurs en console (sinon tu ne sauras jamais pourquoi tu "rates" des logs)
+ *
+ * NOTE:
+ * - L'IP et la géoloc ne peuvent pas être obtenues correctement côté navigateur.
+ * - C'est l'Edge Function qui doit lire les headers CDN (cf-connecting-ip, cf-ipcountry, etc.)
  */
 function AuthAuditLogger() {
+  // anti-double log: React 18 StrictMode en dev déclenche certains effets 2 fois
+  const didInitRef = useRef(false);
+
   useEffect(() => {
+    if (didInitRef.current) return;
+    didInitRef.current = true;
+
     const baseMeta = () => {
       const tz = (() => {
         try {
@@ -116,7 +128,8 @@ function AuthAuditLogger() {
         user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
         lang: typeof navigator !== "undefined" ? navigator.language : null,
         tz,
-        screen: typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
+        screen:
+          typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
         referrer: typeof document !== "undefined" ? document.referrer || null : null,
         href: typeof window !== "undefined" ? window.location.href : null,
       };
@@ -125,42 +138,49 @@ function AuthAuditLogger() {
     const safeCall = async (payload: any) => {
       try {
         const fn = (supabase as any)?.functions?.invoke;
-        if (typeof fn === "function") {
-          await fn("log-login", { body: payload });
+        if (typeof fn !== "function") {
+          console.warn('[AuthAuditLogger] supabase.functions.invoke indisponible. Vérifie "@supabase/supabase-js" et la config.');
           return;
         }
 
-        // Fallback au cas où (souvent inutile si tu utilises Supabase Hosting)
-        await fetch("/functions/v1/log-login", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-      } catch {
-        // silencieux
+        const { data, error } = await fn("log-login", { body: payload });
+        if (error) {
+          console.warn("[AuthAuditLogger] log-login error:", error);
+        } else {
+          // utile en debug: à commenter si tu veux silence total
+          // console.debug("[AuthAuditLogger] log-login ok:", data);
+        }
+      } catch (e) {
+        console.warn("[AuthAuditLogger] log-login invoke failed:", e);
       }
     };
 
-    // refresh au chargement si session déjà présente
-    supabase.auth
-      .getSession()
-      .then(({ data }) => {
-        const s = data.session;
-        if (!s?.user) return;
+    // ✅ Choix recommandé: log uniquement login/logout
+    // - refresh peut créer beaucoup de bruit
+    // - si tu veux le garder, tu peux le réactiver plus bas
+    const LOG_REFRESH = false;
 
-        safeCall({
-          event: "refresh",
-          success: true,
-          email: s.user.email ?? null,
-          source: "web",
-          meta: {
-            ...baseMeta(),
-            // utile car ta SQL func n’a pas p_user_id
-            user_id: s.user.id,
-          },
-        });
-      })
-      .catch(() => {});
+    // refresh au chargement si session déjà présente (optionnel)
+    if (LOG_REFRESH) {
+      supabase.auth
+        .getSession()
+        .then(({ data }) => {
+          const s = data.session;
+          if (!s?.user) return;
+
+          safeCall({
+            event: "refresh",
+            success: true,
+            email: s.user.email ?? null,
+            source: "web",
+            meta: {
+              ...baseMeta(),
+              user_id: s.user.id,
+            },
+          });
+        })
+        .catch(() => {});
+    }
 
     const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
       if (evt === "SIGNED_IN") {
@@ -202,8 +222,8 @@ const AppRoutes = () => (
     <AuthAuditLogger />
 
     <Routes>
+      {/* Public */}
       <Route path="/" element={<Index />} />
-
       <Route path="/search" element={<Index />} />
       <Route path="/rechercher" element={<Index />} />
 
@@ -235,7 +255,7 @@ const AppRoutes = () => (
         }
       />
 
-      {/* 👥 Espace Client */}
+      {/* Client */}
       <Route
         path="/espace-client"
         element={
@@ -285,7 +305,7 @@ const AppRoutes = () => (
         }
       />
 
-      {/* 👷‍♂️ Espace prestataire */}
+      {/* Worker */}
       <Route
         path="/espace-ouvrier"
         element={
@@ -319,7 +339,7 @@ const AppRoutes = () => (
         }
       />
 
-      {/* 🛠️ Admin */}
+      {/* Admin */}
       <Route
         path="/admin"
         element={
@@ -329,7 +349,6 @@ const AppRoutes = () => (
         }
       >
         <Route index element={<Navigate to="dashboard" replace />} />
-
         <Route path="dashboard" element={<AdminDashboard />} />
         <Route path="ouvrier-contacts" element={<AdminOuvrierContacts />} />
         <Route path="ouvriers" element={<AdminOuvrierInscriptions />} />
@@ -337,10 +356,10 @@ const AppRoutes = () => (
         <Route path="signalements" element={<AdminReports />} />
         <Route path="contenu" element={<AdminContent />} />
         <Route path="faq-questions" element={<AdminFaqQuestions />} />
-
         <Route path="journal-connexions" element={<AdminLoginJournalPage />} />
       </Route>
 
+      {/* 404 */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   </>
