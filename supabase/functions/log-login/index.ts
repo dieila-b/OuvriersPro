@@ -2,19 +2,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-/** CORS helpers */
-function corsHeaders(origin: string | null) {
-  // Si tu veux restreindre, remplace "*" par ton domaine, ou fais une allowlist.
-  return {
-    "access-control-allow-origin": origin ?? "*",
-    "access-control-allow-headers":
-      "authorization, x-client-info, apikey, content-type",
-    "access-control-allow-methods": "POST, OPTIONS",
-    "access-control-max-age": "86400",
-    "vary": "origin",
-  };
-}
-
 function pickHeader(h: Headers, keys: string[]) {
   for (const k of keys) {
     const v = h.get(k);
@@ -24,167 +11,105 @@ function pickHeader(h: Headers, keys: string[]) {
 }
 
 function extractIp(headers: Headers): string | null {
-  // Cloudflare / Supabase hosting
-  const cf = pickHeader(headers, ["cf-connecting-ip"]);
-  if (cf) return cf;
+  // Supabase Hosting (Cloudflare) / parfois d'autres proxies
+  const direct =
+    pickHeader(headers, [
+      "cf-connecting-ip",
+      "true-client-ip",
+      "x-real-ip",
+      "x-client-ip",
+    ]) ?? null;
 
-  // Standard proxy chain
+  if (direct) return direct;
+
   const xff = pickHeader(headers, ["x-forwarded-for"]);
   if (xff) {
     const first = xff.split(",")[0]?.trim();
     if (first) return first;
   }
 
-  const real = pickHeader(headers, ["x-real-ip"]);
-  if (real) return real;
-
   return null;
 }
 
-function safeString(v: unknown): string | null {
-  return typeof v === "string" && v.trim() ? v.trim() : null;
-}
-function safeNumber(v: unknown): number | null {
-  return typeof v === "number" && Number.isFinite(v) ? v : null;
-}
-
-async function geoLookup(ip: string): Promise<{
-  country?: string | null;
-  region?: string | null;
-  city?: string | null;
-  lat?: number | null;
-  lng?: number | null;
-} | null> {
-  // Non bloquant : si l’appel échoue, on retourne null.
-  // ipwho.is est pratique (pas besoin de clé) mais ce n’est pas “garanti” à 100%.
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 1500);
-
-  try {
-    const res = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`, {
-      signal: ctrl.signal,
-      headers: { "accept": "application/json" },
-    });
-    if (!res.ok) return null;
-
-    const j: any = await res.json().catch(() => null);
-    if (!j || j.success === false) return null;
-
-    return {
-      country: safeString(j.country_code) ?? safeString(j.country),
-      region: safeString(j.region),
-      city: safeString(j.city),
-      lat: safeNumber(j.latitude),
-      lng: safeNumber(j.longitude),
-    };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(t);
-  }
+function corsHeaders(origin: string | null) {
+  // Si tu veux être strict, remplace "*" par ton domaine.
+  // Ici on accepte large pour débloquer.
+  return {
+    "access-control-allow-origin": origin ?? "*",
+    "access-control-allow-credentials": "true",
+    "access-control-allow-headers":
+      "authorization, x-client-info, apikey, content-type",
+    "access-control-allow-methods": "POST, OPTIONS",
+    "vary": "origin",
+  };
 }
 
 serve(async (req) => {
   const origin = req.headers.get("origin");
+  const cors = corsHeaders(origin);
 
-  // CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response("ok", { status: 200, headers: corsHeaders(origin) });
+    return new Response("ok", { headers: cors });
   }
 
   if (req.method !== "POST") {
-    return new Response("Method Not Allowed", {
-      status: 405,
-      headers: corsHeaders(origin),
-    });
+    return new Response("Method Not Allowed", { status: 405, headers: cors });
   }
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+    const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!SUPABASE_URL) {
+    if (!SUPABASE_URL || !SERVICE_ROLE) {
       return new Response(
-        JSON.stringify({ ok: false, message: "Missing SUPABASE_URL" }),
-        { status: 500, headers: { "content-type": "application/json", ...corsHeaders(origin) } }
+        JSON.stringify({
+          ok: false,
+          message:
+            "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in Edge Function secrets.",
+        }),
+        { status: 500, headers: { ...cors, "content-type": "application/json" } }
       );
     }
 
-    // ✅ IMPORTANT: journalisation fiable => service role
-    const apiKey = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ ok: false, message: "Missing SUPABASE_SERVICE_ROLE_KEY (or ANON)" }),
-        { status: 500, headers: { "content-type": "application/json", ...corsHeaders(origin) } }
-      );
-    }
-
-    // On ne dépend PAS de l'Authorization client pour écrire (sinon RLS casse).
-    // (Tu peux quand même le lire si tu veux tracer, mais pas nécessaire.)
-    const supabase = createClient(SUPABASE_URL, apiKey);
+    // ✅ Client admin (écriture fiable, pas dépendante du token user)
+    const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE, {
+      auth: { persistSession: false },
+    });
 
     const body = await req.json().catch(() => ({}));
 
-    // Champs attendus de ton front
-    const event = safeString(body?.event) ?? "login";
-    const success = typeof body?.success === "boolean" ? body.success : true;
-    const email = safeString(body?.email);
-    const source = safeString(body?.source) ?? "web";
+    const event = typeof body?.event === "string" ? body.event : "login";
+    const success =
+      typeof body?.success === "boolean" ? body.success : Boolean(body?.success ?? true);
+    const email = typeof body?.email === "string" ? body.email : null;
+    const source = typeof body?.source === "string" ? body.source : "web";
 
-    // user_agent : meta.user_agent prioritaire (c’est ce que ton App.tsx envoie)
+    // UA
     const userAgent =
-      safeString(body?.user_agent) ??
-      safeString(body?.meta?.user_agent) ??
-      safeString(body?.meta?.ua) ??
-      safeString(req.headers.get("user-agent"));
+      (typeof body?.user_agent === "string" ? body.user_agent : null) ??
+      (typeof body?.meta?.user_agent === "string" ? body.meta.user_agent : null) ??
+      req.headers.get("user-agent") ??
+      null;
 
-    // IP + pays via Cloudflare headers (Supabase hosting)
+    // IP + pays depuis Cloudflare headers (Supabase Hosting)
     const ip = extractIp(req.headers);
 
-    // Pays minimal via Cloudflare (ISO2)
-    let country =
-      safeString(body?.country) ??
+    const country =
+      (typeof body?.country === "string" ? body.country : null) ??
       pickHeader(req.headers, ["cf-ipcountry"]);
 
-    let region = safeString(body?.region);
-    let city = safeString(body?.city);
-    let lat = safeNumber(body?.lat);
-    let lng = safeNumber(body?.lng);
+    // Région / ville : Cloudflare ne les fournit pas par défaut sur Supabase Hosting
+    // On garde la possibilité si un jour tu les ajoutes via une autre source.
+    const region = typeof body?.region === "string" ? body.region : null;
+    const city = typeof body?.city === "string" ? body.city : null;
 
-    // ✅ Si pas de ville/région, on tente une géoloc serveur (non bloquante)
-    // (utile si Cloudflare ne fournit pas region/city)
-    if (ip && (!region || !city || lat === null || lng === null)) {
-      const g = await geoLookup(ip);
-      if (g) {
-        country = country ?? (g.country ?? null);
-        region = region ?? (g.region ?? null);
-        city = city ?? (g.city ?? null);
-        lat = lat ?? (g.lat ?? null);
-        lng = lng ?? (g.lng ?? null);
-      }
-    }
+    const lat = typeof body?.lat === "number" ? body.lat : null;
+    const lng = typeof body?.lng === "number" ? body.lng : null;
 
-    const meta =
-      body?.meta && typeof body.meta === "object" && !Array.isArray(body.meta)
-        ? body.meta
-        : null;
+    const meta = body?.meta && typeof body.meta === "object" ? body.meta : null;
 
-    // DEBUG utile dans Supabase Logs (Edge Function logs)
-    console.log("[log-login] payload:", {
-      event,
-      success,
-      email,
-      source,
-      ip,
-      country,
-      region,
-      city,
-      hasMeta: !!meta,
-    });
-
-    // Appel de ta fonction SQL existante
-    const { error } = await supabase.rpc("op_log_login_event", {
+    // ✅ Appel RPC (ta signature confirmée)
+    const { data: id, error } = await supabaseAdmin.rpc("op_log_login_event", {
       p_event: event,
       p_success: success,
       p_email: email,
@@ -201,21 +126,26 @@ serve(async (req) => {
 
     if (error) {
       console.error("[log-login] rpc error:", error);
-      return new Response(
-        JSON.stringify({ ok: false, message: "rpc op_log_login_event failed", error }),
-        { status: 500, headers: { "content-type": "application/json", ...corsHeaders(origin) } }
-      );
+      return new Response(JSON.stringify({ ok: false, error }), {
+        status: 500,
+        headers: { ...cors, "content-type": "application/json" },
+      });
     }
 
-    return new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: { "content-type": "application/json", ...corsHeaders(origin) },
-    });
+    // ✅ Réponse JSON utile pour debug réseau
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        id,
+        stored: { event, success, email, source, ip, country, region, city },
+      }),
+      { status: 200, headers: { ...cors, "content-type": "application/json" } }
+    );
   } catch (e) {
     console.error("[log-login] fatal:", e);
-    return new Response(
-      JSON.stringify({ ok: false, message: String(e) }),
-      { status: 500, headers: { "content-type": "application/json", ...corsHeaders(origin) } }
-    );
+    return new Response(JSON.stringify({ ok: false, message: String(e) }), {
+      status: 500,
+      headers: { ...cors, "content-type": "application/json" },
+    });
   }
 });
