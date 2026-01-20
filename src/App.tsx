@@ -101,14 +101,13 @@ function ScrollManager() {
 /**
  * ✅ Journal de connexion (Supabase Edge Function) — non bloquant
  *
- * Règles (conformes à ton backend):
- * - On utilise UNIQUEMENT supabase.functions.invoke("log-login") (pas de /functions/v1/*)
- * - Payload envoyé = { event, success, email, source, meta }
- * - IP/localisation: PAS côté navigateur (Edge Function lit les headers CDN)
+ * Règles:
+ * - on envoie exactement: { event, success, email, source, meta }
+ * - IP/localisation: pas depuis navigateur -> Edge Function lit headers CDN
  *
- * Notes:
- * - StrictMode (dev) peut déclencher les effets 2 fois → garde anti-double-init
- * - En prod, l’anti-double-init reste safe
+ * Robustesse:
+ * - 1) supabase.functions.invoke("log-login")
+ * - 2) fallback ABSOLU vers `${SUPABASE_URL}/functions/v1/log-login` (toujours Edge Supabase)
  */
 function AuthAuditLogger() {
   const didInitRef = useRef(false);
@@ -117,7 +116,11 @@ function AuthAuditLogger() {
     if (didInitRef.current) return;
     didInitRef.current = true;
 
-    const LOG_REFRESH = false; // mets true si tu veux aussi tracer les refresh (bruyant)
+    const LOG_REFRESH = false; // mets true si tu veux tracer refresh (souvent bruyant)
+    const SUPABASE_URL =
+      (import.meta as any)?.env?.VITE_SUPABASE_URL ||
+      (globalThis as any)?.VITE_SUPABASE_URL ||
+      "";
 
     const getTimeZone = () => {
       try {
@@ -129,10 +132,7 @@ function AuthAuditLogger() {
 
     const baseMeta = () => ({
       note: "client-side",
-      // ✅ user_id doit aller dans meta (ta SQL func n'a pas p_user_id)
       user_id: null as string | null,
-
-      // ✅ infos appareil / contexte
       user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
       lang: typeof navigator !== "undefined" ? navigator.language : null,
       tz: getTimeZone(),
@@ -140,6 +140,49 @@ function AuthAuditLogger() {
       referrer: typeof document !== "undefined" ? document.referrer || null : null,
       href: typeof window !== "undefined" ? window.location.href : null,
     });
+
+    const invokeEdge = async (payload: any) => {
+      const fn = (supabase as any)?.functions?.invoke;
+      if (typeof fn !== "function") {
+        throw new Error("supabase.functions.invoke indisponible");
+      }
+      const { error } = await fn("log-login", { body: payload });
+      if (error) {
+        throw error;
+      }
+    };
+
+    const fetchEdgeAbsolute = async (payload: any) => {
+      if (!SUPABASE_URL) {
+        throw new Error("VITE_SUPABASE_URL manquant (fallback edge impossible)");
+      }
+
+      // IMPORTANT: on reste sur Edge Function Supabase, mais URL absolue
+      const url = `${String(SUPABASE_URL).replace(/\/+$/, "")}/functions/v1/log-login`;
+
+      const { data: s } = await supabase.auth.getSession();
+      const accessToken = s.session?.access_token ?? null;
+
+      const headers: Record<string, string> = {
+        "content-type": "application/json",
+        // apikey (anon) est automatiquement injecté par supabase-js côté invoke,
+        // ici on reste minimal: Authorization si dispo (pas obligatoire selon ta function)
+      };
+      if (accessToken) headers["authorization"] = `Bearer ${accessToken}`;
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+        // évite que la requête soit “coupée” sur navigation rapide
+        keepalive: true,
+      });
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`log-login HTTP ${res.status} ${txt || ""}`.trim());
+      }
+    };
 
     const safeCall = async (payload: {
       event: string;
@@ -149,30 +192,23 @@ function AuthAuditLogger() {
       meta?: any;
     }) => {
       try {
-        const fn = (supabase as any)?.functions?.invoke;
-        if (typeof fn !== "function") {
-          console.warn(
-            '[AuthAuditLogger] supabase.functions.invoke indisponible. Vérifie "@supabase/supabase-js" et la config.'
-          );
-          return;
-        }
-
-        // ✅ Hébergement Supabase → Edge Functions only
-        const { error } = await fn("log-login", { body: payload });
-
-        if (error) {
-          console.warn("[AuthAuditLogger] log-login error:", error);
-        }
+        await invokeEdge(payload);
       } catch (e) {
-        console.warn("[AuthAuditLogger] log-login invoke failed:", e);
+        // On loggue en console pour diagnostiquer
+        console.warn("[AuthAuditLogger] invoke log-login failed, trying absolute fetch:", e);
+        try {
+          await fetchEdgeAbsolute(payload);
+        } catch (e2) {
+          console.warn("[AuthAuditLogger] absolute fetch log-login failed:", e2);
+        }
       }
     };
 
-    const log = (event: "login" | "logout" | "refresh", session: any) => {
+    const log = async (event: "login" | "logout" | "refresh", session: any) => {
       const email = session?.user?.email ?? null;
       const userId = session?.user?.id ?? null;
 
-      return safeCall({
+      await safeCall({
         event,
         success: true,
         email,
@@ -184,22 +220,21 @@ function AuthAuditLogger() {
       });
     };
 
-    // ✅ Optionnel: refresh au chargement si session déjà présente
     if (LOG_REFRESH) {
       supabase.auth
         .getSession()
         .then(({ data }) => {
           if (!data?.session?.user) return;
-          log("refresh", data.session);
+          return log("refresh", data.session);
         })
         .catch(() => {});
     }
 
     const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
       if (evt === "SIGNED_IN") {
-        log("login", session);
+        void log("login", session);
       } else if (evt === "SIGNED_OUT") {
-        log("logout", session);
+        void log("logout", session);
       }
     });
 
