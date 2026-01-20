@@ -1,5 +1,5 @@
 // src/pages/admin/AdminLoginJournalPage.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,16 +14,12 @@ import {
   Filter,
   Eye,
   X,
-  MapPin,
-  User,
-  Phone,
-  Mail,
-  Globe,
-  Shield,
-  Info,
+  Clock,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
 
-const TABLE_NAME = "op_login_journal" as const;
+const TABLE_NAME = "op_login_journal";
 
 type AnyRow = Record<string, any>;
 
@@ -50,13 +46,11 @@ function toIsoStartOfDay(dateYYYYMMDD: string) {
   const d = new Date(`${dateYYYYMMDD}T00:00:00.000Z`);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
-
 function toIsoEndOfDay(dateYYYYMMDD: string) {
   if (!dateYYYYMMDD) return null;
   const d = new Date(`${dateYYYYMMDD}T23:59:59.999Z`);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
-
 function fmtDate(ts?: string | null) {
   if (!ts) return "—";
   const d = new Date(ts);
@@ -70,15 +64,18 @@ function fmtDate(ts?: string | null) {
     second: "2-digit",
   });
 }
-
+function truncate(s: string, n = 48) {
+  if (!s) return "";
+  if (s.length <= n) return s;
+  return s.slice(0, n - 1) + "…";
+}
 function pickStr(row: AnyRow, keys: string[]) {
   for (const k of keys) {
     const v = row?.[k];
-    if (typeof v === "string" && v.trim()) return v.trim();
+    if (typeof v === "string" && v.trim()) return v;
   }
   return "";
 }
-
 function pickBool(row: AnyRow, keys: string[]) {
   for (const k of keys) {
     const v = row?.[k];
@@ -86,40 +83,12 @@ function pickBool(row: AnyRow, keys: string[]) {
   }
   return null;
 }
-
 function pickTs(row: AnyRow, keys: string[]) {
   for (const k of keys) {
     const v = row?.[k];
     if (typeof v === "string" && v.includes("T")) return v;
   }
   return null;
-}
-
-function truncate(s: string, n = 48) {
-  if (!s) return "";
-  if (s.length <= n) return s;
-  return s.slice(0, n - 1) + "…";
-}
-
-function safeObj(v: any) {
-  return v && typeof v === "object" ? v : null;
-}
-
-function prettyAddress(parts: string[]) {
-  const v = parts.map((x) => (x || "").trim()).filter(Boolean);
-  return v.length ? v.join(", ") : "—";
-}
-
-function Field({ icon, label, value }: { icon?: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3">
-      <div className="flex items-center gap-2 text-xs text-slate-500">
-        {icon}
-        <span>{label}</span>
-      </div>
-      <div className="mt-1 text-sm font-medium text-slate-900 break-words">{value || "—"}</div>
-    </div>
-  );
 }
 
 export default function AdminLoginJournalPage() {
@@ -136,12 +105,10 @@ export default function AdminLoginJournalPage() {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<AnyRow | null>(null);
 
-  const [profileLoading, setProfileLoading] = useState(false);
-  const [userRow, setUserRow] = useState<AnyRow | null>(null);
-  const [clientRow, setClientRow] = useState<AnyRow | null>(null);
-  const [workerRow, setWorkerRow] = useState<AnyRow | null>(null);
-
-  const debounceRef = useRef<number | null>(null);
+  // Auto refresh
+  const [auto, setAuto] = useState(true);
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null);
+  const [lastTopId, setLastTopId] = useState<string | null>(null);
 
   const perPage = filters.perPage;
   const fromIdx = (page - 1) * perPage;
@@ -152,15 +119,17 @@ export default function AdminLoginJournalPage() {
     return Math.max(1, Math.ceil(total / perPage));
   }, [total, perPage]);
 
+  // Reset page when filters change
   useEffect(() => {
     setPage(1);
   }, [filters.q, filters.event, filters.success, filters.from, filters.to, filters.perPage]);
 
-  const buildQuery = () => {
+  const buildQuery = useCallback(() => {
+    // Toujours select + count exact
     let q = supabase.from(TABLE_NAME).select("*", { count: "exact" });
 
+    // Filters
     if (filters.event !== "all") q = q.eq("event", filters.event);
-
     if (filters.success !== "all") q = q.eq("success", filters.success === "success");
 
     const isoFrom = toIsoStartOfDay(filters.from);
@@ -175,201 +144,108 @@ export default function AdminLoginJournalPage() {
         [
           `email.ilike.${like}`,
           `ip.ilike.${like}`,
-          `user_agent.ilike.${like}`,
           `country.ilike.${like}`,
           `region.ilike.${like}`,
           `city.ilike.${like}`,
-          // si ta table a user_id, ça marche, sinon ignoré
-          `user_id::text.ilike.${like}`,
+          // meta (jsonb) en texte si tu cherches user_id, ua, etc.
+          `meta::text.ilike.${like}`,
+          `user_agent.ilike.${like}`,
         ].join(",")
       );
     }
 
+    // ✅ ORDER DESC + range
     q = q.order("created_at", { ascending: false }).range(fromIdx, toIdx);
+
     return q;
-  };
+  }, [filters, fromIdx, toIdx]);
 
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
+  const fetchData = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      setError(null);
+      if (!opts?.silent) setLoading(true);
 
-    try {
-      const { data, error, count } = await buildQuery();
-      if (error) throw error;
+      try {
+        // Petit “cache buster” : on force un select léger avant
+        // (évite certains comportements de cache navigateur/proxy)
+        const q = buildQuery();
+        const { data, error, count } = await q;
 
-      setRows((data ?? []) as AnyRow[]);
-      setTotal(typeof count === "number" ? count : 0);
-    } catch (e: any) {
-      console.error(e);
-      setRows([]);
-      setTotal(0);
+        if (error) throw error;
 
-      const msg = e?.message ?? "Impossible de charger le journal de connexion.";
-      setError(msg);
+        const list = (data ?? []) as AnyRow[];
+        setRows(list);
+        setTotal(typeof count === "number" ? count : 0);
+        setLastFetchedAt(Date.now());
 
-      toast({ title: "Erreur", description: msg, variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  };
+        const topId = list?.[0]?.id ? String(list[0].id) : null;
+        if (topId && topId !== lastTopId) setLastTopId(topId);
+      } catch (e: any) {
+        const msg = e?.message ?? "Impossible de charger le journal de connexion.";
+        setRows([]);
+        setTotal(0);
+        setError(msg);
 
+        toast({
+          title: "Erreur",
+          description: msg,
+          variant: "destructive",
+        });
+      } finally {
+        if (!opts?.silent) setLoading(false);
+      }
+    },
+    [buildQuery, toast, lastTopId]
+  );
+
+  // Initial load + when page changes
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
+  // When filters change: fetch (no debounce -> fiable)
   useEffect(() => {
-    if (debounceRef.current) window.clearTimeout(debounceRef.current);
-    debounceRef.current = window.setTimeout(() => {
-      fetchData();
-    }, 350);
-
-    return () => {
-      if (debounceRef.current) window.clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    };
+    fetchData({ silent: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.q, filters.event, filters.success, filters.from, filters.to, filters.perPage]);
 
-  const closeDetails = () => {
-    setOpen(false);
-    setSelected(null);
-    setUserRow(null);
-    setClientRow(null);
-    setWorkerRow(null);
-    setProfileLoading(false);
-  };
-
-  // ✅ Enrichissement "personne" : op_users + op_clients + op_ouvriers (si possible)
-  const fetchPersonDetails = async (row: AnyRow) => {
-    setProfileLoading(true);
-    setUserRow(null);
-    setClientRow(null);
-    setWorkerRow(null);
-
-    try {
-      const meta = safeObj(row?.meta);
-      const metaUserId = typeof meta?.user_id === "string" ? meta.user_id : null;
-
-      const userId = pickStr(row, ["user_id"]) || metaUserId || "";
-      const email = pickStr(row, ["email"]) || "";
-
-      // 1) op_users : par id si possible, sinon par email
-      let u: AnyRow | null = null;
-      if (userId) {
-        const { data } = await supabase.from("op_users").select("*").eq("id", userId).maybeSingle();
-        u = (data as AnyRow) ?? null;
-      } else if (email) {
-        const { data } = await supabase.from("op_users").select("*").eq("email", email).maybeSingle();
-        u = (data as AnyRow) ?? null;
-      }
-      setUserRow(u);
-
-      const resolvedUserId =
-        (u?.id as string | undefined) ||
-        (userId ? userId : "") ||
-        "";
-
-      // 2) op_clients par user_id si on l’a
-      if (resolvedUserId) {
-        const { data: c } = await supabase
-          .from("op_clients")
-          .select("*")
-          .eq("user_id", resolvedUserId)
-          .maybeSingle();
-        setClientRow((c as AnyRow) ?? null);
-
-        // 3) op_ouvriers par user_id si ton schéma l’a (sinon on ne casse pas)
-        const { data: w } = await supabase
-          .from("op_ouvriers")
-          .select("*")
-          .eq("user_id", resolvedUserId)
-          .maybeSingle();
-        setWorkerRow((w as AnyRow) ?? null);
-      }
-    } catch {
-      // silencieux
-    } finally {
-      setProfileLoading(false);
-    }
-  };
+  // Auto refresh polling
+  useEffect(() => {
+    if (!auto) return;
+    const t = window.setInterval(() => {
+      fetchData({ silent: true });
+    }, 5000);
+    return () => window.clearInterval(t);
+  }, [auto, fetchData]);
 
   const openDetails = (r: AnyRow) => {
     setSelected(r);
     setOpen(true);
-    fetchPersonDetails(r);
+  };
+  const closeDetails = () => {
+    setOpen(false);
+    setSelected(null);
   };
 
-  const pretty = useMemo(() => {
+  const prettyRow = useMemo(() => {
     if (!selected) return null;
 
-    const createdAt = pickTs(selected, ["created_at", "createdAt", "ts", "timestamp"]);
-    const event = pickStr(selected, ["event", "action", "type"]) || "—";
-    const success = pickBool(selected, ["success", "ok", "is_success"]);
-    const email = pickStr(selected, ["email", "user_email", "userEmail"]);
-    const ip = pickStr(selected, ["ip", "ip_address", "ipAddress"]);
-    const source = pickStr(selected, ["source", "channel", "app"]) || "—";
-    const ua = pickStr(selected, ["user_agent", "userAgent", "ua"]);
+    const createdAt = pickTs(selected, ["created_at"]);
+    const event = pickStr(selected, ["event"]);
+    const success = pickBool(selected, ["success"]);
+    const email = pickStr(selected, ["email"]);
+    const ip = pickStr(selected, ["ip"]);
+    const country = pickStr(selected, ["country"]);
+    const region = pickStr(selected, ["region"]);
+    const city = pickStr(selected, ["city"]);
+    const source = pickStr(selected, ["source"]);
+    const ua = pickStr(selected, ["user_agent"]);
+    const meta = selected?.meta ?? null;
 
-    const country = pickStr(selected, ["country", "ip_country", "geo_country", "location_country"]);
-    const region = pickStr(selected, ["region", "ip_region", "geo_region", "location_region", "state"]);
-    const city = pickStr(selected, ["city", "ip_city", "geo_city", "location_city"]);
-
-    const meta = safeObj(selected?.meta);
-
-    // Infos "personne" (normalisées depuis op_users/op_clients/op_ouvriers)
-    const role =
-      pickStr(userRow ?? {}, ["role"]) ||
-      pickStr(workerRow ?? {}, ["role"]) ||
-      pickStr(clientRow ?? {}, ["role"]) ||
-      "—";
-
-    const firstName =
-      pickStr(clientRow ?? {}, ["first_name", "firstname", "prenom"]) ||
-      pickStr(userRow ?? {}, ["first_name", "firstname", "prenom"]) ||
-      "";
-
-    const lastName =
-      pickStr(clientRow ?? {}, ["last_name", "lastname", "nom"]) ||
-      pickStr(userRow ?? {}, ["last_name", "lastname", "nom"]) ||
-      "";
-
-    const fullName =
-      pickStr(userRow ?? {}, ["full_name", "fullname", "name", "display_name"]) ||
-      pickStr(clientRow ?? {}, ["full_name", "fullname", "name"]) ||
-      [firstName, lastName].filter(Boolean).join(" ") ||
-      "—";
-
-    const phone =
-      pickStr(clientRow ?? {}, ["phone", "telephone", "tel", "mobile"]) ||
-      pickStr(userRow ?? {}, ["phone", "telephone", "tel", "mobile"]) ||
-      pickStr(workerRow ?? {}, ["phone", "telephone", "tel", "mobile"]) ||
-      "—";
-
-    // Adresse (si ton schéma la stocke)
-    const address =
-      pickStr(clientRow ?? {}, ["address", "adresse", "address_line1", "street"]) ||
-      pickStr(userRow ?? {}, ["address", "adresse", "address_line1", "street"]) ||
-      pickStr(workerRow ?? {}, ["address", "adresse", "address_line1", "street"]) ||
-      "—";
-
-    const addrCity =
-      pickStr(clientRow ?? {}, ["city", "ville"]) ||
-      pickStr(userRow ?? {}, ["city", "ville"]) ||
-      pickStr(workerRow ?? {}, ["city", "ville"]) ||
-      city;
-
-    const addrRegion =
-      pickStr(clientRow ?? {}, ["region", "state", "prefecture"]) ||
-      pickStr(userRow ?? {}, ["region", "state", "prefecture"]) ||
-      pickStr(workerRow ?? {}, ["region", "state", "prefecture"]) ||
-      region;
-
-    const addrCountry =
-      pickStr(clientRow ?? {}, ["country", "pays"]) ||
-      pickStr(userRow ?? {}, ["country", "pays"]) ||
-      pickStr(workerRow ?? {}, ["country", "pays"]) ||
-      country;
+    // meta enrichi (user_id, etc.)
+    const metaUserId =
+      typeof meta === "object" && meta && typeof meta.user_id === "string" ? meta.user_id : null;
 
     return {
       createdAt,
@@ -377,29 +253,16 @@ export default function AdminLoginJournalPage() {
       success,
       email,
       ip,
-      ua,
-      source,
       country,
       region,
       city,
+      source,
+      ua,
+      metaUserId,
       meta,
-      person: {
-        role,
-        fullName,
-        phone,
-        address,
-        addrCity: addrCity || "—",
-        addrRegion: addrRegion || "—",
-        addrCountry: addrCountry || "—",
-        userId:
-          pickStr(selected, ["user_id"]) ||
-          (typeof meta?.user_id === "string" ? meta.user_id : "") ||
-          "—",
-        profileType: workerRow ? "Prestataire" : clientRow ? "Client" : userRow ? "Utilisateur" : "—",
-      },
       raw: selected,
     };
-  }, [selected, userRow, clientRow, workerRow]);
+  }, [selected]);
 
   return (
     <div className="space-y-5">
@@ -410,18 +273,46 @@ export default function AdminLoginJournalPage() {
             <div className="mt-1 text-xs text-slate-500">
               Historique des connexions / déconnexions (visible uniquement côté admin).
             </div>
+
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+              <span className="inline-flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" />
+                {lastFetchedAt ? `Dernière mise à jour: ${new Date(lastFetchedAt).toLocaleTimeString("fr-FR")}` : "—"}
+              </span>
+              <span>•</span>
+              <span>
+                Table: <span className="font-medium text-slate-700">{TABLE_NAME}</span>
+              </span>
+              {auto ? (
+                <span className="inline-flex items-center gap-1">
+                  <ToggleRight className="h-3.5 w-3.5" /> Auto: ON
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1">
+                  <ToggleLeft className="h-3.5 w-3.5" /> Auto: OFF
+                </span>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="text-xs text-slate-500">
-              Table: <span className="font-medium text-slate-700">{TABLE_NAME}</span>
-            </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={() => setAuto((v) => !v)}
+              disabled={loading}
+              title="Auto refresh"
+            >
+              {auto ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
+              Auto
+            </Button>
 
             <Button
               type="button"
               variant="outline"
               className="gap-2"
-              onClick={() => fetchData()}
+              onClick={() => fetchData({ silent: false })}
               disabled={loading}
               title="Rafraîchir"
             >
@@ -440,7 +331,7 @@ export default function AdminLoginJournalPage() {
                 <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <Input
                   className="pl-9"
-                  placeholder="Email, user_id, IP, user-agent…"
+                  placeholder="Email, IP, user-agent, user_id (meta)…"
                   value={filters.q}
                   onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))}
                 />
@@ -528,6 +419,7 @@ export default function AdminLoginJournalPage() {
             </div>
           </div>
 
+          {/* Error / Empty */}
           {error && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
           )}
@@ -556,17 +448,17 @@ export default function AdminLoginJournalPage() {
 
               <tbody className="divide-y divide-slate-100">
                 {rows.map((r, idx) => {
-                  const createdAt = pickTs(r, ["created_at", "createdAt"]);
+                  const createdAt = pickTs(r, ["created_at"]);
                   const event = pickStr(r, ["event"]) || "—";
                   const success = pickBool(r, ["success"]);
                   const email = pickStr(r, ["email"]);
                   const ip = pickStr(r, ["ip"]);
-                  const source = pickStr(r, ["source"]) || "—";
                   const country = pickStr(r, ["country"]);
                   const region = pickStr(r, ["region"]);
                   const city = pickStr(r, ["city"]);
-                  const loc = [city, region, country].filter(Boolean).join(", ") || "—";
+                  const source = pickStr(r, ["source"]) || "—";
 
+                  const loc = [city, region, country].filter(Boolean).join(", ") || "—";
                   const ok = success === null ? null : !!success;
 
                   return (
@@ -584,11 +476,11 @@ export default function AdminLoginJournalPage() {
                           <Badge variant="destructive">Échec</Badge>
                         )}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-slate-700" title={email || ""}>
-                        {email ? truncate(email, 28) : "—"}
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-700" title={email}>
+                        {truncate(email || "—", 28)}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-slate-700" title={ip || ""}>
-                        {ip ? truncate(ip, 22) : "—"}
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-700" title={ip}>
+                        {truncate(ip || "—", 22)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-600" title={loc}>
                         {truncate(loc, 28)}
@@ -625,7 +517,16 @@ export default function AdminLoginJournalPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={loading || page <= 1}>
+              <Button type="button" variant="outline" onClick={() => setPage(1)} disabled={loading || page === 1}>
+                Début
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={loading || page <= 1}
+              >
                 Précédent
               </Button>
 
@@ -633,8 +534,22 @@ export default function AdminLoginJournalPage() {
                 Page <span className="font-medium">{page}</span> / <span className="font-medium">{totalPages}</span>
               </div>
 
-              <Button type="button" variant="outline" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={loading || page >= totalPages}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={loading || page >= totalPages}
+              >
                 Suivant
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPage(totalPages)}
+                disabled={loading || page === totalPages}
+              >
+                Fin
               </Button>
             </div>
           </div>
@@ -643,119 +558,77 @@ export default function AdminLoginJournalPage() {
 
       {/* Details Dialog */}
       <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : closeDetails())}>
-        <DialogContent className="max-w-5xl">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Détails de la connexion</DialogTitle>
           </DialogHeader>
 
-          {!pretty ? (
+          {!prettyRow ? (
             <div className="text-sm text-slate-500">Aucun détail.</div>
           ) : (
             <div className="space-y-4">
-              {/* Header badges */}
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-sm text-slate-600">
-                  <span className="font-medium text-slate-900">{fmtDate(pretty.createdAt)}</span>
-                  {pretty.email ? <span className="text-slate-400"> • </span> : null}
-                  {pretty.email ? <span className="font-medium">{pretty.email}</span> : null}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500">Date</div>
+                  <div className="font-medium text-slate-900">{fmtDate(prettyRow.createdAt)}</div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-slate-900 hover:bg-slate-900">{pretty.event}</Badge>
-                  {pretty.success === null ? null : pretty.success ? (
-                    <Badge className="bg-emerald-600 hover:bg-emerald-600">Succès</Badge>
-                  ) : (
-                    <Badge variant="destructive">Échec</Badge>
-                  )}
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500">Événement</div>
+                  <div className="font-medium text-slate-900">{prettyRow.event || "—"}</div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500">Statut</div>
+                  <div className="mt-1">
+                    {prettyRow.success === null ? (
+                      <span className="text-slate-500">—</span>
+                    ) : prettyRow.success ? (
+                      <Badge className="bg-emerald-600 hover:bg-emerald-600">Succès</Badge>
+                    ) : (
+                      <Badge variant="destructive">Échec</Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500">Email</div>
+                  <div className="font-medium text-slate-900 break-all">{prettyRow.email || "—"}</div>
+                  {prettyRow.metaUserId ? (
+                    <div className="text-xs text-slate-500 mt-1 break-all">user_id (meta): {prettyRow.metaUserId}</div>
+                  ) : null}
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500">IP</div>
+                  <div className="font-medium text-slate-900 break-all">{prettyRow.ip || "Non disponible"}</div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500">Localisation</div>
+                  <div className="font-medium text-slate-900">
+                    {[prettyRow.city, prettyRow.region, prettyRow.country].filter(Boolean).join(", ") || "Non disponible"}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-3 md:col-span-2">
+                  <div className="text-xs text-slate-500">User-Agent</div>
+                  <div className="font-medium text-slate-900 break-all">{prettyRow.ua || "—"}</div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-3 md:col-span-2">
+                  <div className="text-xs text-slate-500">Source</div>
+                  <div className="font-medium text-slate-900">{prettyRow.source || "—"}</div>
                 </div>
               </div>
 
-              {/* Main grids */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                {/* Connexion */}
-                <div className="lg:col-span-5">
-                  <div className="mb-2 text-xs font-semibold text-slate-500 tracking-wide">CONNEXION</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Field
-                      icon={<Globe className="h-4 w-4" />}
-                      label="IP"
-                      value={pretty.ip || "Non disponible (doit être capturée côté serveur)."}
-                    />
-                    <Field
-                      icon={<MapPin className="h-4 w-4" />}
-                      label="Localisation"
-                      value={
-                        pretty.country || pretty.region || pretty.city
-                          ? prettyAddress([pretty.city, pretty.region, pretty.country])
-                          : "Non disponible (ville/région nécessitent souvent un GeoIP)."
-                      }
-                    />
-                    <Field icon={<Info className="h-4 w-4" />} label="Source" value={pretty.source || "—"} />
-                    <Field icon={<Info className="h-4 w-4" />} label="User-Agent" value={pretty.ua ? truncate(pretty.ua, 90) : "—"} />
-                  </div>
-
-                  {pretty.meta ? (
-                    <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
-                      <div className="text-xs font-semibold text-slate-500 tracking-wide">INFORMATIONS ADDITIONNELLES</div>
-                      <div className="mt-2 text-sm text-slate-700 break-words">
-                        {pretty.meta?.note ? (
-                          <div>
-                            <span className="text-slate-500">note: </span>
-                            <span className="font-medium">{String(pretty.meta.note)}</span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-500">—</span>
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-
-                {/* Identité & Profil */}
-                <div className="lg:col-span-7">
-                  <div className="mb-2 text-xs font-semibold text-slate-500 tracking-wide">IDENTITÉ & PROFIL</div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Field icon={<User className="h-4 w-4" />} label="Nom complet" value={pretty.person.fullName} />
-                    <Field icon={<Shield className="h-4 w-4" />} label="Rôle" value={pretty.person.role} />
-                    <Field icon={<Mail className="h-4 w-4" />} label="Email" value={pretty.email || "—"} />
-                    <Field icon={<Phone className="h-4 w-4" />} label="Téléphone" value={pretty.person.phone} />
-                    <Field icon={<MapPin className="h-4 w-4" />} label="Adresse" value={pretty.person.address} />
-                    <Field
-                      icon={<MapPin className="h-4 w-4" />}
-                      label="Ville / Région / Pays"
-                      value={prettyAddress([pretty.person.addrCity, pretty.person.addrRegion, pretty.person.addrCountry])}
-                    />
-                    <Field icon={<Info className="h-4 w-4" />} label="Type de profil" value={pretty.person.profileType} />
-                    <Field icon={<Info className="h-4 w-4" />} label="User ID" value={pretty.person.userId} />
-                  </div>
-
-                  {profileLoading ? (
-                    <div className="mt-3 text-sm text-slate-500 inline-flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Chargement du profil…
-                    </div>
-                  ) : null}
-
-                  {!profileLoading && !userRow && !clientRow && !workerRow ? (
-                    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                      Profil détaillé non trouvé dans <span className="font-medium">op_users/op_clients/op_ouvriers</span>.
-                      <div className="mt-1 text-xs text-amber-700">
-                        Assure-toi que <span className="font-medium">meta.user_id</span> est bien rempli (via l’Edge Function) ou que <span className="font-medium">email</span> existe dans op_users.
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-
-              {/* JSON technique (collapsible simple) */}
               <details className="rounded-xl border border-slate-200 bg-white">
                 <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-slate-800">
                   Détails techniques (JSON)
                 </summary>
                 <div className="px-4 pb-4">
                   <pre className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto max-h-[40vh]">
-                    {JSON.stringify(pretty.raw, null, 2)}
+                    {JSON.stringify(prettyRow.raw, null, 2)}
                   </pre>
                 </div>
               </details>
