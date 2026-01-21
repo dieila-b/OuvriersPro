@@ -6,7 +6,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
-import { supabase } from "@/lib/supabase";
+
+// ✅ IMPORTANT : utiliser UN SEUL client Supabase partout
+// (Lovable utilise souvent "@/integrations/supabase/client")
+import { supabase } from "@/integrations/supabase/client";
 
 // Pages publiques
 import Index from "./pages/Index";
@@ -70,10 +73,6 @@ import AdminLayout from "@/components/layout/AdminLayout";
 
 const queryClient = new QueryClient();
 
-/**
- * ✅ Scroll manager:
- * - gère /#anchor proprement avec header sticky
- */
 function ScrollManager() {
   const location = useLocation();
 
@@ -99,28 +98,20 @@ function ScrollManager() {
 }
 
 /**
- * ✅ Journal de connexion (Supabase Edge Function) — non bloquant
- *
- * Règles:
- * - on envoie exactement: { event, success, email, source, meta }
- * - IP/localisation: pas depuis navigateur -> Edge Function lit headers CDN
- *
- * Robustesse:
- * - 1) supabase.functions.invoke("log-login")
- * - 2) fallback ABSOLU vers `${SUPABASE_URL}/functions/v1/log-login` (toujours Edge Supabase)
+ * ✅ Logger Edge Function (Supabase) — fiable
+ * - écoute SIGNED_IN / SIGNED_OUT
+ * - + fallback : surveille la session toutes les 2s (au cas où événement raté)
+ * - envoie uniquement { event, success, email, source, meta }
  */
 function AuthAuditLogger() {
   const didInitRef = useRef(false);
+  const lastSessionKeyRef = useRef<string>(""); // pour détecter changement (login/logout)
 
   useEffect(() => {
     if (didInitRef.current) return;
     didInitRef.current = true;
 
-    const LOG_REFRESH = false; // mets true si tu veux tracer refresh (souvent bruyant)
-    const SUPABASE_URL =
-      (import.meta as any)?.env?.VITE_SUPABASE_URL ||
-      (globalThis as any)?.VITE_SUPABASE_URL ||
-      "";
+    const DEBUG = true; // mets false quand c’est OK
 
     const getTimeZone = () => {
       try {
@@ -130,9 +121,9 @@ function AuthAuditLogger() {
       }
     };
 
-    const baseMeta = () => ({
+    const baseMeta = (userId: string | null) => ({
       note: "client-side",
-      user_id: null as string | null,
+      user_id: userId,
       user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
       lang: typeof navigator !== "undefined" ? navigator.language : null,
       tz: getTimeZone(),
@@ -141,105 +132,118 @@ function AuthAuditLogger() {
       href: typeof window !== "undefined" ? window.location.href : null,
     });
 
-    const invokeEdge = async (payload: any) => {
-      const fn = (supabase as any)?.functions?.invoke;
-      if (typeof fn !== "function") {
-        throw new Error("supabase.functions.invoke indisponible");
-      }
-      const { error } = await fn("log-login", { body: payload });
-      if (error) {
-        throw error;
-      }
-    };
-
-    const fetchEdgeAbsolute = async (payload: any) => {
-      if (!SUPABASE_URL) {
-        throw new Error("VITE_SUPABASE_URL manquant (fallback edge impossible)");
-      }
-
-      // IMPORTANT: on reste sur Edge Function Supabase, mais URL absolue
-      const url = `${String(SUPABASE_URL).replace(/\/+$/, "")}/functions/v1/log-login`;
-
-      const { data: s } = await supabase.auth.getSession();
-      const accessToken = s.session?.access_token ?? null;
-
-      const headers: Record<string, string> = {
-        "content-type": "application/json",
-        // apikey (anon) est automatiquement injecté par supabase-js côté invoke,
-        // ici on reste minimal: Authorization si dispo (pas obligatoire selon ta function)
-      };
-      if (accessToken) headers["authorization"] = `Bearer ${accessToken}`;
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-        // évite que la requête soit “coupée” sur navigation rapide
-        keepalive: true,
-      });
-
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(`log-login HTTP ${res.status} ${txt || ""}`.trim());
-      }
-    };
-
     const safeCall = async (payload: {
-      event: string;
+      event: "login" | "logout";
       success: boolean;
       email: string | null;
-      source: string;
-      meta?: any;
+      source: "web";
+      meta: any;
     }) => {
       try {
-        await invokeEdge(payload);
-      } catch (e) {
-        // On loggue en console pour diagnostiquer
-        console.warn("[AuthAuditLogger] invoke log-login failed, trying absolute fetch:", e);
-        try {
-          await fetchEdgeAbsolute(payload);
-        } catch (e2) {
-          console.warn("[AuthAuditLogger] absolute fetch log-login failed:", e2);
+        const fn = (supabase as any)?.functions?.invoke;
+        if (typeof fn !== "function") {
+          if (DEBUG) console.warn("[AuthAuditLogger] functions.invoke indisponible sur ce client Supabase.");
+          return;
         }
+
+        if (DEBUG) console.log("[AuthAuditLogger] invoking log-login", payload);
+
+        const { data, error } = await fn("log-login", { body: payload });
+
+        if (error) {
+          console.warn("[AuthAuditLogger] log-login error:", error);
+        } else if (DEBUG) {
+          console.log("[AuthAuditLogger] log-login OK:", data);
+        }
+      } catch (e) {
+        console.warn("[AuthAuditLogger] log-login invoke failed:", e);
       }
     };
 
-    const log = async (event: "login" | "logout" | "refresh", session: any) => {
+    const logLogin = (session: any) => {
       const email = session?.user?.email ?? null;
       const userId = session?.user?.id ?? null;
-
-      await safeCall({
-        event,
+      return safeCall({
+        event: "login",
         success: true,
         email,
         source: "web",
-        meta: {
-          ...baseMeta(),
-          user_id: userId,
-        },
+        meta: baseMeta(userId),
       });
     };
 
-    if (LOG_REFRESH) {
-      supabase.auth
-        .getSession()
-        .then(({ data }) => {
-          if (!data?.session?.user) return;
-          return log("refresh", data.session);
-        })
-        .catch(() => {});
-    }
+    const logLogout = (prevEmail: string | null, prevUserId: string | null) => {
+      return safeCall({
+        event: "logout",
+        success: true,
+        email: prevEmail,
+        source: "web",
+        meta: baseMeta(prevUserId),
+      });
+    };
 
-    const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
+    // 1) écoute événements
+    const { data: sub } = supabase.auth.onAuthStateChange(async (evt, session) => {
+      if (DEBUG) console.log("[AuthAuditLogger] auth event:", evt, session?.user?.email);
+
+      const sessionKey =
+        session?.user?.id && session?.access_token ? `${session.user.id}:${session.access_token.slice(0, 16)}` : "";
+
       if (evt === "SIGNED_IN") {
-        void log("login", session);
-      } else if (evt === "SIGNED_OUT") {
-        void log("logout", session);
+        lastSessionKeyRef.current = sessionKey;
+        await logLogin(session);
+      }
+
+      if (evt === "SIGNED_OUT") {
+        // on ne connait pas toujours l’email à cet instant, mais on essaie via last session
+        lastSessionKeyRef.current = "";
+        await logLogout(null, null);
       }
     });
 
+    // 2) fallback : poll session (si on rate SIGNED_IN)
+    let prevEmail: string | null = null;
+    let prevUserId: string | null = null;
+
+    const poll = async () => {
+      const { data } = await supabase.auth.getSession();
+      const s = data?.session ?? null;
+
+      const email = s?.user?.email ?? null;
+      const userId = s?.user?.id ?? null;
+
+      const sessionKey =
+        s?.user?.id && s?.access_token ? `${s.user.id}:${s.access_token.slice(0, 16)}` : "";
+
+      // login détecté (nouvelle session)
+      if (sessionKey && sessionKey !== lastSessionKeyRef.current) {
+        lastSessionKeyRef.current = sessionKey;
+        if (DEBUG) console.log("[AuthAuditLogger] poll detected login", email);
+        await logLogin(s);
+      }
+
+      // logout détecté (session disparue)
+      if (!sessionKey && lastSessionKeyRef.current) {
+        if (DEBUG) console.log("[AuthAuditLogger] poll detected logout");
+        lastSessionKeyRef.current = "";
+        await logLogout(prevEmail, prevUserId);
+      }
+
+      prevEmail = email;
+      prevUserId = userId;
+    };
+
+    // poll toutes les 2s
+    const t = window.setInterval(() => {
+      poll().catch(() => {});
+    }, 2000);
+
+    // poll initial immédiat
+    poll().catch(() => {});
+
     return () => {
       sub.subscription.unsubscribe();
+      window.clearInterval(t);
     };
   }, []);
 
@@ -252,7 +256,6 @@ const AppRoutes = () => (
     <AuthAuditLogger />
 
     <Routes>
-      {/* Public */}
       <Route path="/" element={<Index />} />
       <Route path="/search" element={<Index />} />
       <Route path="/rechercher" element={<Index />} />
@@ -270,7 +273,6 @@ const AppRoutes = () => (
       <Route path="/cookies" element={<CookiesPolicy />} />
 
       <Route path="/mon-compte" element={<MonCompte />} />
-
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
 
@@ -389,7 +391,6 @@ const AppRoutes = () => (
         <Route path="journal-connexions" element={<AdminLoginJournalPage />} />
       </Route>
 
-      {/* 404 */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   </>
