@@ -6,10 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
-
-// ✅ IMPORTANT : utiliser UN SEUL client Supabase partout
-// (Lovable utilise souvent "@/integrations/supabase/client")
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 
 // Pages publiques
 import Index from "./pages/Index";
@@ -98,20 +95,20 @@ function ScrollManager() {
 }
 
 /**
- * ✅ Logger Edge Function (Supabase) — fiable
- * - écoute SIGNED_IN / SIGNED_OUT
- * - + fallback : surveille la session toutes les 2s (au cas où événement raté)
- * - envoie uniquement { event, success, email, source, meta }
+ * ✅ Journal de connexion (Supabase Edge Function) — non bloquant
+ * - Utilise uniquement supabase.functions.invoke("log-login")
+ * - Payload: { event, success, email, source, meta }
+ * - IP/GEO: récupérées côté Edge Function via headers CDN
  */
 function AuthAuditLogger() {
   const didInitRef = useRef(false);
-  const lastSessionKeyRef = useRef<string>(""); // pour détecter changement (login/logout)
 
   useEffect(() => {
+    // Anti double-exec (React 18 StrictMode en dev)
     if (didInitRef.current) return;
     didInitRef.current = true;
 
-    const DEBUG = true; // mets false quand c’est OK
+    const DEBUG = true; // mets false quand ça marche
 
     const getTimeZone = () => {
       try {
@@ -142,29 +139,26 @@ function AuthAuditLogger() {
       try {
         const fn = (supabase as any)?.functions?.invoke;
         if (typeof fn !== "function") {
-          if (DEBUG) console.warn("[AuthAuditLogger] functions.invoke indisponible sur ce client Supabase.");
+          if (DEBUG) console.warn("[AuthAuditLogger] supabase.functions.invoke indisponible (SDK/config).");
           return;
         }
 
-        if (DEBUG) console.log("[AuthAuditLogger] invoking log-login", payload);
+        if (DEBUG) console.log("[AuthAuditLogger] invoke log-login", payload);
 
         const { data, error } = await fn("log-login", { body: payload });
-
-        if (error) {
-          console.warn("[AuthAuditLogger] log-login error:", error);
-        } else if (DEBUG) {
-          console.log("[AuthAuditLogger] log-login OK:", data);
-        }
+        if (error) console.warn("[AuthAuditLogger] log-login error:", error);
+        else if (DEBUG) console.log("[AuthAuditLogger] log-login OK:", data ?? null);
       } catch (e) {
         console.warn("[AuthAuditLogger] log-login invoke failed:", e);
       }
     };
 
-    const logLogin = (session: any) => {
+    const log = async (event: "login" | "logout", session: any) => {
       const email = session?.user?.email ?? null;
       const userId = session?.user?.id ?? null;
-      return safeCall({
-        event: "login",
+
+      await safeCall({
+        event,
         success: true,
         email,
         source: "web",
@@ -172,78 +166,18 @@ function AuthAuditLogger() {
       });
     };
 
-    const logLogout = (prevEmail: string | null, prevUserId: string | null) => {
-      return safeCall({
-        event: "logout",
-        success: true,
-        email: prevEmail,
-        source: "web",
-        meta: baseMeta(prevUserId),
-      });
-    };
-
-    // 1) écoute événements
-    const { data: sub } = supabase.auth.onAuthStateChange(async (evt, session) => {
-      if (DEBUG) console.log("[AuthAuditLogger] auth event:", evt, session?.user?.email);
-
-      const sessionKey =
-        session?.user?.id && session?.access_token ? `${session.user.id}:${session.access_token.slice(0, 16)}` : "";
+    const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
+      if (DEBUG) console.log("[AuthAuditLogger] auth event:", evt);
 
       if (evt === "SIGNED_IN") {
-        lastSessionKeyRef.current = sessionKey;
-        await logLogin(session);
-      }
-
-      if (evt === "SIGNED_OUT") {
-        // on ne connait pas toujours l’email à cet instant, mais on essaie via last session
-        lastSessionKeyRef.current = "";
-        await logLogout(null, null);
+        log("login", session);
+      } else if (evt === "SIGNED_OUT") {
+        log("logout", session);
       }
     });
 
-    // 2) fallback : poll session (si on rate SIGNED_IN)
-    let prevEmail: string | null = null;
-    let prevUserId: string | null = null;
-
-    const poll = async () => {
-      const { data } = await supabase.auth.getSession();
-      const s = data?.session ?? null;
-
-      const email = s?.user?.email ?? null;
-      const userId = s?.user?.id ?? null;
-
-      const sessionKey =
-        s?.user?.id && s?.access_token ? `${s.user.id}:${s.access_token.slice(0, 16)}` : "";
-
-      // login détecté (nouvelle session)
-      if (sessionKey && sessionKey !== lastSessionKeyRef.current) {
-        lastSessionKeyRef.current = sessionKey;
-        if (DEBUG) console.log("[AuthAuditLogger] poll detected login", email);
-        await logLogin(s);
-      }
-
-      // logout détecté (session disparue)
-      if (!sessionKey && lastSessionKeyRef.current) {
-        if (DEBUG) console.log("[AuthAuditLogger] poll detected logout");
-        lastSessionKeyRef.current = "";
-        await logLogout(prevEmail, prevUserId);
-      }
-
-      prevEmail = email;
-      prevUserId = userId;
-    };
-
-    // poll toutes les 2s
-    const t = window.setInterval(() => {
-      poll().catch(() => {});
-    }, 2000);
-
-    // poll initial immédiat
-    poll().catch(() => {});
-
     return () => {
       sub.subscription.unsubscribe();
-      window.clearInterval(t);
     };
   }, []);
 
@@ -256,6 +190,7 @@ const AppRoutes = () => (
     <AuthAuditLogger />
 
     <Routes>
+      {/* Public */}
       <Route path="/" element={<Index />} />
       <Route path="/search" element={<Index />} />
       <Route path="/rechercher" element={<Index />} />
@@ -273,6 +208,7 @@ const AppRoutes = () => (
       <Route path="/cookies" element={<CookiesPolicy />} />
 
       <Route path="/mon-compte" element={<MonCompte />} />
+
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
 
@@ -391,6 +327,7 @@ const AppRoutes = () => (
         <Route path="journal-connexions" element={<AdminLoginJournalPage />} />
       </Route>
 
+      {/* 404 */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   </>
