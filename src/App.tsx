@@ -96,9 +96,14 @@ function ScrollManager() {
 
 /**
  * ✅ Journal de connexion (Supabase Edge Function) — non bloquant
- * - Utilise uniquement supabase.functions.invoke("log-login")
- * - Payload: { event, success, email, source, meta }
+ * - Utilise uniquement supabase.functions.invoke("log-login") (pas de /functions/v1)
+ * - Payload envoyé: { event, success, email, source, meta }
  * - IP/GEO: récupérées côté Edge Function via headers CDN
+ *
+ * IMPORTANT:
+ * - Si l’utilisateur est déjà connecté (session persistée) et recharge la page,
+ *   Supabase ne déclenche pas forcément SIGNED_IN. Donc on log une "session active"
+ *   au montage via getSession(), avec un cooldown anti-spam.
  */
 function AuthAuditLogger() {
   const didInitRef = useRef(false);
@@ -108,7 +113,11 @@ function AuthAuditLogger() {
     if (didInitRef.current) return;
     didInitRef.current = true;
 
-    const DEBUG = true; // mets false quand ça marche
+    const DEBUG = true; // mets false quand c'est validé
+
+    // Anti-spam: 1 log toutes les 15 minutes par user sur "session déjà active"
+    const COOLDOWN_MS = 15 * 60 * 1000;
+    const cooldownKey = (userId: string) => `op_login_journal:last_seen:${userId}`;
 
     const getTimeZone = () => {
       try {
@@ -118,9 +127,10 @@ function AuthAuditLogger() {
       }
     };
 
-    const baseMeta = (userId: string | null) => ({
+    const baseMeta = (userId: string | null, reason?: string) => ({
       note: "client-side",
       user_id: userId,
+      reason: reason ?? null,
       user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
       lang: typeof navigator !== "undefined" ? navigator.language : null,
       tz: getTimeZone(),
@@ -153,26 +163,64 @@ function AuthAuditLogger() {
       }
     };
 
-    const log = async (event: "login" | "logout", session: any) => {
+    const logLogin = async (session: any, reason: string) => {
+      const email = session?.user?.email ?? null;
+      const userId = session?.user?.id ?? null;
+      if (!userId) return;
+
+      // cooldown only for "session already present"
+      if (reason === "APP_MOUNT_SESSION") {
+        const k = cooldownKey(userId);
+        const last = Number(localStorage.getItem(k) || "0");
+        const now = Date.now();
+        if (last && now - last < COOLDOWN_MS) {
+          if (DEBUG) console.log("[AuthAuditLogger] skip cooldown", { userId, reason });
+          return;
+        }
+        localStorage.setItem(k, String(now));
+      }
+
+      await safeCall({
+        event: "login",
+        success: true,
+        email,
+        source: "web",
+        meta: baseMeta(userId, reason),
+      });
+    };
+
+    const logLogout = async (session: any, reason: string) => {
       const email = session?.user?.email ?? null;
       const userId = session?.user?.id ?? null;
 
       await safeCall({
-        event,
+        event: "logout",
         success: true,
         email,
         source: "web",
-        meta: baseMeta(userId),
+        meta: baseMeta(userId, reason),
       });
     };
 
+    // ✅ Log au montage si session déjà active (cas le plus fréquent quand tu "reviens" sur l'app)
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (DEBUG) console.log("[AuthAuditLogger] getSession:", !!data?.session);
+        if (data?.session?.user) {
+          logLogin(data.session, "APP_MOUNT_SESSION");
+        }
+      })
+      .catch(() => {});
+
+    // ✅ Log des événements Auth
     const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
       if (DEBUG) console.log("[AuthAuditLogger] auth event:", evt);
 
       if (evt === "SIGNED_IN") {
-        log("login", session);
+        logLogin(session, "SIGNED_IN");
       } else if (evt === "SIGNED_OUT") {
-        log("logout", session);
+        logLogout(session, "SIGNED_OUT");
       }
     });
 
