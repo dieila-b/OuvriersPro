@@ -95,29 +95,23 @@ function ScrollManager() {
 }
 
 /**
- * ✅ Journal de connexion (Supabase Edge Function) — non bloquant
- * - Utilise uniquement supabase.functions.invoke("log-login") (pas de /functions/v1)
- * - Payload envoyé: { event, success, email, source, meta }
- * - IP/GEO: récupérées côté Edge Function via headers CDN
+ * ✅ Auth audit → Supabase Edge Function "log-login"
+ * - On envoie exactement: { event, success, email, source, meta }
+ * - IP/GEO: uniquement côté Edge Function (headers CDN)
  *
- * IMPORTANT:
- * - Si l’utilisateur est déjà connecté (session persistée) et recharge la page,
- *   Supabase ne déclenche pas forcément SIGNED_IN. Donc on log une "session active"
- *   au montage via getSession(), avec un cooldown anti-spam.
+ * IMPORTANT DEBUG:
+ * - On force un "probe" une seule fois pour confirmer que la requête Edge Function part bien.
+ * - Si tu ne vois AUCUNE requête réseau vers la function, alors supabase.functions.invoke n’est pas dispo
+ *   (mauvais client Supabase / SDK / build).
  */
 function AuthAuditLogger() {
   const didInitRef = useRef(false);
 
   useEffect(() => {
-    // Anti double-exec (React 18 StrictMode en dev)
     if (didInitRef.current) return;
     didInitRef.current = true;
 
-    const DEBUG = true; // mets false quand c'est validé
-
-    // Anti-spam: 1 log toutes les 15 minutes par user sur "session déjà active"
-    const COOLDOWN_MS = 15 * 60 * 1000;
-    const cooldownKey = (userId: string) => `op_login_journal:last_seen:${userId}`;
+    const DEBUG = true; // mets false quand c'est OK
 
     const getTimeZone = () => {
       try {
@@ -127,10 +121,10 @@ function AuthAuditLogger() {
       }
     };
 
-    const baseMeta = (userId: string | null, reason?: string) => ({
+    const baseMeta = (userId: string | null, reason: string) => ({
       note: "client-side",
+      reason,
       user_id: userId,
-      reason: reason ?? null,
       user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
       lang: typeof navigator !== "undefined" ? navigator.language : null,
       tz: getTimeZone(),
@@ -139,48 +133,47 @@ function AuthAuditLogger() {
       href: typeof window !== "undefined" ? window.location.href : null,
     });
 
-    const safeCall = async (payload: {
+    const invokeLogLogin = async (payload: {
       event: "login" | "logout";
       success: boolean;
       email: string | null;
       source: "web";
       meta: any;
     }) => {
+      const fn = (supabase as any)?.functions?.invoke;
+
+      if (typeof fn !== "function") {
+        // ➜ Si tu vois ce message, c’est LA cause: ton supabase client n’a pas Functions.
+        console.warn("[AuthAuditLogger] ❌ supabase.functions.invoke indisponible.", {
+          supabaseKeys: Object.keys(supabase as any),
+        });
+        return { ok: false, reason: "NO_FUNCTIONS_INVOKE" as const };
+      }
+
       try {
-        const fn = (supabase as any)?.functions?.invoke;
-        if (typeof fn !== "function") {
-          if (DEBUG) console.warn("[AuthAuditLogger] supabase.functions.invoke indisponible (SDK/config).");
-          return;
+        if (DEBUG) console.log("[AuthAuditLogger] ➜ invoke(log-login)", payload);
+
+        // IMPORTANT: on utilise supabase.functions.invoke (Edge Function)
+        const { data, error } = await fn("log-login", { body: payload });
+
+        if (error) {
+          console.warn("[AuthAuditLogger] ❌ log-login error:", error);
+          return { ok: false, reason: "INVOKE_ERROR" as const, error };
         }
 
-        if (DEBUG) console.log("[AuthAuditLogger] invoke log-login", payload);
-
-        const { data, error } = await fn("log-login", { body: payload });
-        if (error) console.warn("[AuthAuditLogger] log-login error:", error);
-        else if (DEBUG) console.log("[AuthAuditLogger] log-login OK:", data ?? null);
+        if (DEBUG) console.log("[AuthAuditLogger] ✅ log-login OK:", data ?? null);
+        return { ok: true as const };
       } catch (e) {
-        console.warn("[AuthAuditLogger] log-login invoke failed:", e);
+        console.warn("[AuthAuditLogger] ❌ log-login invoke failed:", e);
+        return { ok: false, reason: "INVOKE_THROW" as const, error: e };
       }
     };
 
     const logLogin = async (session: any, reason: string) => {
       const email = session?.user?.email ?? null;
       const userId = session?.user?.id ?? null;
-      if (!userId) return;
 
-      // cooldown only for "session already present"
-      if (reason === "APP_MOUNT_SESSION") {
-        const k = cooldownKey(userId);
-        const last = Number(localStorage.getItem(k) || "0");
-        const now = Date.now();
-        if (last && now - last < COOLDOWN_MS) {
-          if (DEBUG) console.log("[AuthAuditLogger] skip cooldown", { userId, reason });
-          return;
-        }
-        localStorage.setItem(k, String(now));
-      }
-
-      await safeCall({
+      return invokeLogLogin({
         event: "login",
         success: true,
         email,
@@ -193,7 +186,7 @@ function AuthAuditLogger() {
       const email = session?.user?.email ?? null;
       const userId = session?.user?.id ?? null;
 
-      await safeCall({
+      return invokeLogLogin({
         event: "logout",
         success: true,
         email,
@@ -202,26 +195,48 @@ function AuthAuditLogger() {
       });
     };
 
-    // ✅ Log au montage si session déjà active (cas le plus fréquent quand tu "reviens" sur l'app)
+    /**
+     * ✅ PROBE (une seule fois) : doit créer une entrée immédiate en DB.
+     * Si tu ne la vois pas, l’Edge Function n’est pas appelée ou elle échoue.
+     */
+    (async () => {
+      const PROBE_KEY = "op_login_journal:probe_done";
+      if (localStorage.getItem(PROBE_KEY) === "1") return;
+
+      localStorage.setItem(PROBE_KEY, "1");
+
+      // probe minimal: email null OK, meta contient reason
+      await invokeLogLogin({
+        event: "login",
+        success: true,
+        email: null,
+        source: "web",
+        meta: baseMeta(null, "PROBE_APP_MOUNT"),
+      });
+    })();
+
+    /**
+     * ✅ Cas session persistée: SIGNED_IN n’est pas émis → on log quand même au montage
+     */
     supabase.auth
       .getSession()
       .then(({ data }) => {
         if (DEBUG) console.log("[AuthAuditLogger] getSession:", !!data?.session);
+
         if (data?.session?.user) {
           logLogin(data.session, "APP_MOUNT_SESSION");
         }
       })
       .catch(() => {});
 
-    // ✅ Log des événements Auth
+    /**
+     * ✅ Auth events (login/logout explicites)
+     */
     const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
       if (DEBUG) console.log("[AuthAuditLogger] auth event:", evt);
 
-      if (evt === "SIGNED_IN") {
-        logLogin(session, "SIGNED_IN");
-      } else if (evt === "SIGNED_OUT") {
-        logLogout(session, "SIGNED_OUT");
-      }
+      if (evt === "SIGNED_IN") logLogin(session, "SIGNED_IN");
+      if (evt === "SIGNED_OUT") logLogout(session, "SIGNED_OUT");
     });
 
     return () => {
