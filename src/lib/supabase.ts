@@ -3,47 +3,16 @@ import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = "https://bvezcivihjpscatsgrvu.supabase.co";
 
-// ✅ Colle ici la clé ANON PUBLIC complète (Settings → API → anon public)
-const SUPABASE_ANON_KEY = `COLLE_LA_CLE_ICI_EN_ENTIER_SANS_TROUNCATURE`;
+// ✅ clé anon public (ok côté front)
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ2ZXpjaXZpaGpwc2NhdHNncnZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMwMjU2ODcsImV4cCI6MjA3ODYwMTY4N30.qX1lSNOgcYa-7HWLs6XQBx0Zlb1yd5dyRQ3s_uBeKtk";
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY.includes("COLLE_LA_CLE_ICI")) {
-  console.error("[Supabase] Missing/placeholder config", {
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error("[Supabase] Missing config", {
     hasUrl: !!SUPABASE_URL,
     hasAnon: !!SUPABASE_ANON_KEY,
   });
-  throw new Error("Supabase URL / anon key invalid.");
+  throw new Error("supabaseKey is required.");
 }
 
-const debugFetch: typeof fetch = async (input, init) => {
-  const url = typeof input === "string" ? input : input.url;
-
-  const nextInit: RequestInit = { ...init, cache: "no-store" };
-
-  if (url.includes("/functions/v1/")) {
-    console.log("[Supabase][Functions] fetch →", {
-      url,
-      method: nextInit?.method ?? "GET",
-    });
-  }
-
-  const res = await fetch(input as any, nextInit);
-
-  if (url.includes("/functions/v1/")) {
-    console.log("[Supabase][Functions] ←", { url, status: res.status, ok: res.ok });
-  }
-
-  return res;
-};
-
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  global: {
-    fetch: debugFetch,
-    headers: { "x-app": "work-find-direct" },
-  },
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    storageKey: "op_auth",
-  },
-});
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);

@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -70,64 +70,6 @@ import AdminLayout from "@/components/layout/AdminLayout";
 
 const queryClient = new QueryClient();
 
-/** ------------------------------------------------------------------ */
-/** ✅ ErrorBoundary: évite l'écran blanc et affiche l'erreur clairement */
-/** ------------------------------------------------------------------ */
-class AppErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { hasError: boolean; error?: any; info?: any }
-> {
-  state = { hasError: false, error: null as any, info: null as any };
-
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: any, info: any) {
-    // log console (utile en preview)
-    // eslint-disable-next-line no-console
-    console.error("[AppErrorBoundary] Uncaught error:", error, info);
-    this.setState({ info });
-  }
-
-  render() {
-    if (!this.state.hasError) return this.props.children;
-
-    const msg =
-      this.state.error?.message ||
-      (typeof this.state.error === "string" ? this.state.error : "Erreur inconnue");
-
-    return (
-      <div className="min-h-dvh w-full bg-white flex items-center justify-center p-6">
-        <div className="max-w-2xl w-full rounded-2xl border border-red-200 bg-red-50 p-5">
-          <div className="text-sm font-semibold text-red-800">Erreur d’affichage</div>
-          <div className="mt-2 text-sm text-red-700">{msg}</div>
-
-          <details className="mt-4">
-            <summary className="cursor-pointer text-xs font-medium text-red-800">
-              Détails techniques
-            </summary>
-            <pre className="mt-2 max-h-[50vh] overflow-auto rounded-lg border border-red-200 bg-white p-3 text-xs text-slate-800">
-              {JSON.stringify(
-                {
-                  error: this.state.error,
-                  componentStack: this.state.info?.componentStack ?? null,
-                },
-                null,
-                2
-              )}
-            </pre>
-          </details>
-
-          <div className="mt-4 text-xs text-red-700">
-            Ouvre la console (F12) : tu verras aussi le log <code>[AppErrorBoundary]</code>.
-          </div>
-        </div>
-      </div>
-    );
-  }
-}
-
 function ScrollManager() {
   const location = useLocation();
 
@@ -154,39 +96,50 @@ function ScrollManager() {
 
 /**
  * ✅ Journal de connexion (Supabase Edge Function) — non bloquant
- * - supabase.functions.invoke("log-login") uniquement
- * - payload: { event, success, email, source, meta }
- * - aucune IP/GEO côté navigateur
+ * - Utilise uniquement supabase.functions.invoke("log-login") (pas de /functions/v1)
+ * - Payload envoyé: { event, success, email, source, meta }
+ * - IP/GEO: récupérées côté Edge Function via headers CDN
+ *
+ * IMPORTANT:
+ * - Si l’utilisateur est déjà connecté (session persistée) et recharge la page,
+ *   Supabase ne déclenche pas forcément SIGNED_IN. Donc on log une "session active"
+ *   au montage via getSession(), avec un cooldown anti-spam.
  */
 function AuthAuditLogger() {
   const didInitRef = useRef(false);
 
   useEffect(() => {
+    // Anti double-exec (React 18 StrictMode en dev)
     if (didInitRef.current) return;
     didInitRef.current = true;
 
-    const DEBUG = false; // mets true juste pour diagnostiquer
+    const DEBUG = true; // mets false quand c'est validé
 
-    const tz = (() => {
+    // Anti-spam: 1 log toutes les 15 minutes par user sur "session déjà active"
+    const COOLDOWN_MS = 15 * 60 * 1000;
+    const cooldownKey = (userId: string) => `op_login_journal:last_seen:${userId}`;
+
+    const getTimeZone = () => {
       try {
         return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
       } catch {
         return null;
       }
-    })();
+    };
 
-    const baseMeta = (userId: string | null) => ({
+    const baseMeta = (userId: string | null, reason?: string) => ({
       note: "client-side",
       user_id: userId,
+      reason: reason ?? null,
       user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
       lang: typeof navigator !== "undefined" ? navigator.language : null,
-      tz,
+      tz: getTimeZone(),
       screen: typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
       referrer: typeof document !== "undefined" ? document.referrer || null : null,
       href: typeof window !== "undefined" ? window.location.href : null,
     });
 
-    const safeInvoke = async (payload: {
+    const safeCall = async (payload: {
       event: "login" | "logout";
       success: boolean;
       email: string | null;
@@ -196,32 +149,84 @@ function AuthAuditLogger() {
       try {
         const fn = (supabase as any)?.functions?.invoke;
         if (typeof fn !== "function") {
-          if (DEBUG) console.warn("[AuthAuditLogger] supabase.functions.invoke indisponible.");
+          if (DEBUG) console.warn("[AuthAuditLogger] supabase.functions.invoke indisponible (SDK/config).");
           return;
         }
 
         if (DEBUG) console.log("[AuthAuditLogger] invoke log-login", payload);
 
-        const { error } = await fn("log-login", { body: payload });
-        if (error && DEBUG) console.warn("[AuthAuditLogger] log-login error:", error);
+        const { data, error } = await fn("log-login", { body: payload });
+        if (error) console.warn("[AuthAuditLogger] log-login error:", error);
+        else if (DEBUG) console.log("[AuthAuditLogger] log-login OK:", data ?? null);
       } catch (e) {
-        // ⚠️ ne JAMAIS casser l’app
-        if (DEBUG) console.warn("[AuthAuditLogger] log-login failed:", e);
+        console.warn("[AuthAuditLogger] log-login invoke failed:", e);
       }
     };
 
-    const log = (event: "login" | "logout", session: any) => {
+    const logLogin = async (session: any, reason: string) => {
       const email = session?.user?.email ?? null;
       const userId = session?.user?.id ?? null;
-      safeInvoke({ event, success: true, email, source: "web", meta: baseMeta(userId) });
+      if (!userId) return;
+
+      // cooldown only for "session already present"
+      if (reason === "APP_MOUNT_SESSION") {
+        const k = cooldownKey(userId);
+        const last = Number(localStorage.getItem(k) || "0");
+        const now = Date.now();
+        if (last && now - last < COOLDOWN_MS) {
+          if (DEBUG) console.log("[AuthAuditLogger] skip cooldown", { userId, reason });
+          return;
+        }
+        localStorage.setItem(k, String(now));
+      }
+
+      await safeCall({
+        event: "login",
+        success: true,
+        email,
+        source: "web",
+        meta: baseMeta(userId, reason),
+      });
     };
 
+    const logLogout = async (session: any, reason: string) => {
+      const email = session?.user?.email ?? null;
+      const userId = session?.user?.id ?? null;
+
+      await safeCall({
+        event: "logout",
+        success: true,
+        email,
+        source: "web",
+        meta: baseMeta(userId, reason),
+      });
+    };
+
+    // ✅ Log au montage si session déjà active (cas le plus fréquent quand tu "reviens" sur l'app)
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (DEBUG) console.log("[AuthAuditLogger] getSession:", !!data?.session);
+        if (data?.session?.user) {
+          logLogin(data.session, "APP_MOUNT_SESSION");
+        }
+      })
+      .catch(() => {});
+
+    // ✅ Log des événements Auth
     const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
-      if (evt === "SIGNED_IN") log("login", session);
-      else if (evt === "SIGNED_OUT") log("logout", session);
+      if (DEBUG) console.log("[AuthAuditLogger] auth event:", evt);
+
+      if (evt === "SIGNED_IN") {
+        logLogin(session, "SIGNED_IN");
+      } else if (evt === "SIGNED_OUT") {
+        logLogout(session, "SIGNED_OUT");
+      }
     });
 
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   return null;
@@ -384,9 +389,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
-            <AppErrorBoundary>
-              <AppRoutes />
-            </AppErrorBoundary>
+            <AppRoutes />
           </div>
         </BrowserRouter>
       </LanguageProvider>
