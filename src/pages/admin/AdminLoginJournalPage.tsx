@@ -19,6 +19,11 @@ import {
   ToggleRight,
   Zap,
   AlertTriangle,
+  User,
+  Phone,
+  Mail,
+  MapPin,
+  Shield,
 } from "lucide-react";
 
 const TABLE_NAME = "op_login_journal";
@@ -41,6 +46,15 @@ const DEFAULT_FILTERS: FiltersState = {
   from: "",
   to: "",
   perPage: 25,
+};
+
+type PersonDetails = {
+  full_name: string | null;
+  phone: string | null;
+  email: string | null;
+  id: string | null;
+  user_id: string | null;
+  source: "op_users(id)" | "op_users(user_id)" | "profiles(id)" | "op_users(email)" | "none";
 };
 
 function toIsoStartOfDay(dateYYYYMMDD: string) {
@@ -92,6 +106,117 @@ function pickTs(row: AnyRow, keys: string[]) {
   }
   return null;
 }
+function pickMetaUserId(meta: any): string | null {
+  if (!meta || typeof meta !== "object") return null;
+  const direct = meta.user_id ?? meta.userId ?? meta.uid ?? null;
+  return typeof direct === "string" && direct.trim() ? direct.trim() : null;
+}
+function pickGeo(meta: any): any | null {
+  if (!meta || typeof meta !== "object") return null;
+  // On a choisi meta.geo côté Edge Function
+  const g = meta.geo ?? null;
+  return g && typeof g === "object" ? g : null;
+}
+
+/**
+ * Récupère des infos utilisateur à partir de meta.user_id
+ * Ordre:
+ * 1) op_users.id == userId
+ * 2) op_users.user_id == userId
+ * 3) profiles.id == userId
+ * 4) fallback op_users.email == email
+ */
+async function fetchPersonDetails(row: AnyRow): Promise<PersonDetails> {
+  const meta = row?.meta ?? null;
+  const userId = pickMetaUserId(meta);
+  const email = (typeof row?.email === "string" ? row.email : null) ?? null;
+
+  const empty: PersonDetails = {
+    full_name: null,
+    phone: null,
+    email,
+    id: null,
+    user_id: userId,
+    source: "none",
+  };
+
+  // 1) op_users via id
+  if (userId) {
+    const a = await supabase
+      .from("op_users")
+      .select("id, user_id, full_name, phone, email")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (!a.error && a.data) {
+      return {
+        full_name: a.data.full_name ?? null,
+        phone: a.data.phone ?? null,
+        email: a.data.email ?? email ?? null,
+        id: a.data.id ?? null,
+        user_id: a.data.user_id ?? userId,
+        source: "op_users(id)",
+      };
+    }
+  }
+
+  // 2) op_users via user_id
+  if (userId) {
+    const b = await supabase
+      .from("op_users")
+      .select("id, user_id, full_name, phone, email")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (!b.error && b.data) {
+      return {
+        full_name: b.data.full_name ?? null,
+        phone: b.data.phone ?? null,
+        email: b.data.email ?? email ?? null,
+        id: b.data.id ?? null,
+        user_id: b.data.user_id ?? userId,
+        source: "op_users(user_id)",
+      };
+    }
+  }
+
+  // 3) profiles via id
+  if (userId) {
+    const c = await supabase.from("profiles").select("id, full_name, phone").eq("id", userId).maybeSingle();
+    if (!c.error && c.data) {
+      return {
+        full_name: c.data.full_name ?? null,
+        phone: (c.data as any).phone ?? null,
+        email,
+        id: c.data.id ?? null,
+        user_id: userId,
+        source: "profiles(id)",
+      };
+    }
+  }
+
+  // 4) fallback via email
+  if (email) {
+    const d = await supabase
+      .from("op_users")
+      .select("id, user_id, full_name, phone, email")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (!d.error && d.data) {
+      return {
+        full_name: d.data.full_name ?? null,
+        phone: d.data.phone ?? null,
+        email: d.data.email ?? email,
+        id: d.data.id ?? null,
+        user_id: d.data.user_id ?? userId,
+        source: "op_users(email)",
+      };
+    }
+  }
+
+  return empty;
+}
 
 /**
  * Bouton "Ping Log" pour tester la chaîne Edge Function → RPC → DB
@@ -120,16 +245,14 @@ function PingLogButton({ onSuccess }: { onSuccess?: () => void }) {
     console.log("[PingLog] Sending payload:", payload);
 
     try {
-      const { data, error } = await supabase.functions.invoke("log-login", {
-        body: payload,
-      });
+      const { data, error } = await supabase.functions.invoke("log-login", { body: payload });
 
       console.log("[PingLog] Response:", { data, error });
 
       if (error) {
         const errDetails = {
           message: error.message ?? String(error),
-          name: error.name ?? "Unknown",
+          name: (error as any).name ?? "Unknown",
           details: (error as any).details ?? null,
           hint: (error as any).hint ?? null,
           status: (error as any).status ?? null,
@@ -215,6 +338,11 @@ export default function AdminLoginJournalPage() {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<AnyRow | null>(null);
 
+  // ✅ détails utilisateur (Nom, téléphone, etc.)
+  const [personLoading, setPersonLoading] = useState(false);
+  const [person, setPerson] = useState<PersonDetails | null>(null);
+  const detailsAbortRef = useRef<AbortController | null>(null);
+
   // Auto refresh
   const [auto, setAuto] = useState(true);
   const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null);
@@ -235,10 +363,8 @@ export default function AdminLoginJournalPage() {
   }, [filters.q, filters.event, filters.success, filters.from, filters.to, filters.perPage]);
 
   const buildQuery = useCallback(() => {
-    // Toujours select + count exact
     let q = supabase.from(TABLE_NAME).select("*", { count: "exact" });
 
-    // Filters
     if (filters.event !== "all") q = q.eq("event", filters.event);
     if (filters.success !== "all") q = q.eq("success", filters.success === "success");
 
@@ -257,16 +383,13 @@ export default function AdminLoginJournalPage() {
           `country.ilike.${like}`,
           `region.ilike.${like}`,
           `city.ilike.${like}`,
-          // meta (jsonb) en texte si tu cherches user_id, ua, etc.
           `meta::text.ilike.${like}`,
           `user_agent.ilike.${like}`,
         ].join(",")
       );
     }
 
-    // ✅ ORDER DESC + range
     q = q.order("created_at", { ascending: false }).range(fromIdx, toIdx);
-
     return q;
   }, [filters, fromIdx, toIdx]);
 
@@ -276,11 +399,8 @@ export default function AdminLoginJournalPage() {
       if (!opts?.silent) setLoading(true);
 
       try {
-        // Petit “cache buster” : on force un select léger avant
-        // (évite certains comportements de cache navigateur/proxy)
         const q = buildQuery();
         const { data, error, count } = await q;
-
         if (error) throw error;
 
         const list = (data ?? []) as AnyRow[];
@@ -295,12 +415,7 @@ export default function AdminLoginJournalPage() {
         setRows([]);
         setTotal(0);
         setError(msg);
-
-        toast({
-          title: "Erreur",
-          description: msg,
-          variant: "destructive",
-        });
+        toast({ title: "Erreur", description: msg, variant: "destructive" });
       } finally {
         if (!opts?.silent) setLoading(false);
       }
@@ -314,7 +429,7 @@ export default function AdminLoginJournalPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
-  // When filters change: fetch (no debounce -> fiable)
+  // When filters change
   useEffect(() => {
     fetchData({ silent: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -329,13 +444,48 @@ export default function AdminLoginJournalPage() {
     return () => window.clearInterval(t);
   }, [auto, fetchData]);
 
-  const openDetails = (r: AnyRow) => {
+  const openDetails = async (r: AnyRow) => {
     setSelected(r);
     setOpen(true);
+
+    // reset person state + cancel previous
+    detailsAbortRef.current?.abort?.();
+    detailsAbortRef.current = new AbortController();
+
+    setPerson(null);
+    setPersonLoading(true);
+
+    try {
+      const d = await fetchPersonDetails(r);
+      setPerson(d);
+    } catch (e: any) {
+      console.warn("[AdminLoginJournalPage] fetchPersonDetails error:", e);
+      setPerson({
+        full_name: null,
+        phone: null,
+        email: (typeof r?.email === "string" ? r.email : null) ?? null,
+        id: null,
+        user_id: pickMetaUserId(r?.meta),
+        source: "none",
+      });
+      toast({
+        title: "Infos utilisateur indisponibles",
+        description: "Impossible de récupérer le profil (RLS/table).",
+        variant: "destructive",
+      });
+    } finally {
+      setPersonLoading(false);
+    }
   };
+
   const closeDetails = () => {
+    detailsAbortRef.current?.abort?.();
+    detailsAbortRef.current = null;
+
     setOpen(false);
     setSelected(null);
+    setPerson(null);
+    setPersonLoading(false);
   };
 
   const prettyRow = useMemo(() => {
@@ -353,9 +503,22 @@ export default function AdminLoginJournalPage() {
     const ua = pickStr(selected, ["user_agent"]);
     const meta = selected?.meta ?? null;
 
-    // meta enrichi (user_id, etc.)
-    const metaUserId =
-      typeof meta === "object" && meta && typeof meta.user_id === "string" ? meta.user_id : null;
+    const metaUserId = pickMetaUserId(meta);
+    const geo = pickGeo(meta);
+
+    // Location display priority: DB columns -> meta.geo
+    const locCity = city || (typeof geo?.city === "string" ? geo.city : "");
+    const locRegion = region || (typeof geo?.region === "string" ? geo.region : "");
+    const locCountry =
+      country ||
+      (typeof geo?.country === "string" ? geo.country : "") ||
+      (typeof geo?.country_code === "string" ? geo.country_code : "");
+
+    const lat = typeof selected?.lat === "number" ? selected.lat : typeof geo?.lat === "number" ? geo.lat : null;
+    const lng = typeof selected?.lng === "number" ? selected.lng : typeof geo?.lng === "number" ? geo.lng : null;
+
+    const isp = typeof geo?.isp === "string" ? geo.isp : null;
+    const timezone = typeof geo?.timezone === "string" ? geo.timezone : null;
 
     return {
       createdAt,
@@ -363,16 +526,27 @@ export default function AdminLoginJournalPage() {
       success,
       email,
       ip,
-      country,
-      region,
-      city,
+      country: locCountry || country,
+      region: locRegion || region,
+      city: locCity || city,
       source,
       ua,
       metaUserId,
       meta,
+      geo,
+      lat,
+      lng,
+      isp,
+      timezone,
       raw: selected,
     };
   }, [selected]);
+
+  const locationLabel = useMemo(() => {
+    if (!prettyRow) return "—";
+    const parts = [prettyRow.city, prettyRow.region, prettyRow.country].filter(Boolean);
+    return parts.length ? parts.join(", ") : "—";
+  }, [prettyRow]);
 
   return (
     <div className="space-y-5">
@@ -517,13 +691,7 @@ export default function AdminLoginJournalPage() {
                   <option value={100}>100 / page</option>
                 </select>
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setFilters(DEFAULT_FILTERS)}
-                  disabled={loading}
-                  className="gap-2"
-                >
+                <Button type="button" variant="outline" onClick={() => setFilters(DEFAULT_FILTERS)} disabled={loading} className="gap-2">
                   <X className="h-4 w-4" />
                   Reset
                 </Button>
@@ -532,9 +700,7 @@ export default function AdminLoginJournalPage() {
           </div>
 
           {/* Error / Empty */}
-          {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
-          )}
+          {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
 
           {!error && !loading && rows.length === 0 && (
             <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
@@ -570,7 +736,16 @@ export default function AdminLoginJournalPage() {
                   const city = pickStr(r, ["city"]);
                   const source = pickStr(r, ["source"]) || "—";
 
-                  const loc = [city, region, country].filter(Boolean).join(", ") || "—";
+                  // meilleure localisation: city/region/country sinon meta.geo
+                  const geo = pickGeo(r?.meta);
+                  const locCity = city || (typeof geo?.city === "string" ? geo.city : "");
+                  const locRegion = region || (typeof geo?.region === "string" ? geo.region : "");
+                  const locCountry =
+                    country ||
+                    (typeof geo?.country === "string" ? geo.country : "") ||
+                    (typeof geo?.country_code === "string" ? geo.country_code : "");
+
+                  const loc = [locCity, locRegion, locCountry].filter(Boolean).join(", ") || "—";
                   const ok = success === null ? null : !!success;
 
                   return (
@@ -633,12 +808,7 @@ export default function AdminLoginJournalPage() {
                 Début
               </Button>
 
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={loading || page <= 1}
-              >
+              <Button type="button" variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={loading || page <= 1}>
                 Précédent
               </Button>
 
@@ -646,21 +816,11 @@ export default function AdminLoginJournalPage() {
                 Page <span className="font-medium">{page}</span> / <span className="font-medium">{totalPages}</span>
               </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={loading || page >= totalPages}
-              >
+              <Button type="button" variant="outline" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={loading || page >= totalPages}>
                 Suivant
               </Button>
 
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setPage(totalPages)}
-                disabled={loading || page === totalPages}
-              >
+              <Button type="button" variant="outline" onClick={() => setPage(totalPages)} disabled={loading || page === totalPages}>
                 Fin
               </Button>
             </div>
@@ -670,7 +830,7 @@ export default function AdminLoginJournalPage() {
 
       {/* Details Dialog */}
       <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : closeDetails())}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>Détails de la connexion</DialogTitle>
           </DialogHeader>
@@ -679,6 +839,57 @@ export default function AdminLoginJournalPage() {
             <div className="text-sm text-slate-500">Aucun détail.</div>
           ) : (
             <div className="space-y-4">
+              {/* Bloc Identité */}
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-9 w-9 rounded-full bg-slate-100 flex items-center justify-center">
+                      <User className="h-4 w-4 text-slate-600" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500">Utilisateur</div>
+                      <div className="font-semibold text-slate-900">
+                        {personLoading ? "Chargement…" : person?.full_name || "Nom non disponible"}
+                      </div>
+                      <div className="text-xs text-slate-500 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1">
+                          <Mail className="h-3.5 w-3.5" /> {personLoading ? "…" : (person?.email || prettyRow.email || "—")}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Phone className="h-3.5 w-3.5" /> {personLoading ? "…" : (person?.phone || "Téléphone non disponible")}
+                        </span>
+                      </div>
+                      {prettyRow.metaUserId ? (
+                        <div className="mt-1 text-[11px] text-slate-500 break-all">
+                          user_id (meta): <span className="font-medium text-slate-700">{prettyRow.metaUserId}</span>
+                          {person?.source && person.source !== "none" ? (
+                            <span className="ml-2 text-slate-400">• source profil: {person.source}</span>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-[11px] text-slate-500 break-all">
+                          user_id (meta): <span className="text-slate-400">non présent</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-xs text-slate-500">Statut</div>
+                    <div className="mt-1">
+                      {prettyRow.success === null ? (
+                        <span className="text-slate-500">—</span>
+                      ) : prettyRow.success ? (
+                        <Badge className="bg-emerald-600 hover:bg-emerald-600">Succès</Badge>
+                      ) : (
+                        <Badge variant="destructive">Échec</Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Infos Connexion */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 <div className="rounded-xl border border-slate-200 p-3">
                   <div className="text-xs text-slate-500">Date</div>
@@ -691,35 +902,28 @@ export default function AdminLoginJournalPage() {
                 </div>
 
                 <div className="rounded-xl border border-slate-200 p-3">
-                  <div className="text-xs text-slate-500">Statut</div>
-                  <div className="mt-1">
-                    {prettyRow.success === null ? (
-                      <span className="text-slate-500">—</span>
-                    ) : prettyRow.success ? (
-                      <Badge className="bg-emerald-600 hover:bg-emerald-600">Succès</Badge>
-                    ) : (
-                      <Badge variant="destructive">Échec</Badge>
-                    )}
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 p-3">
-                  <div className="text-xs text-slate-500">Email</div>
-                  <div className="font-medium text-slate-900 break-all">{prettyRow.email || "—"}</div>
-                  {prettyRow.metaUserId ? (
-                    <div className="text-xs text-slate-500 mt-1 break-all">user_id (meta): {prettyRow.metaUserId}</div>
-                  ) : null}
-                </div>
-
-                <div className="rounded-xl border border-slate-200 p-3">
                   <div className="text-xs text-slate-500">IP</div>
                   <div className="font-medium text-slate-900 break-all">{prettyRow.ip || "Non disponible"}</div>
                 </div>
 
                 <div className="rounded-xl border border-slate-200 p-3">
-                  <div className="text-xs text-slate-500">Localisation</div>
-                  <div className="font-medium text-slate-900">
-                    {[prettyRow.city, prettyRow.region, prettyRow.country].filter(Boolean).join(", ") || "Non disponible"}
+                  <div className="text-xs text-slate-500 flex items-center gap-1">
+                    <MapPin className="h-3.5 w-3.5" />
+                    Localisation
+                  </div>
+                  <div className="font-medium text-slate-900">{locationLabel || "Non disponible"}</div>
+
+                  <div className="mt-1 text-xs text-slate-500">
+                    {prettyRow.lat != null && prettyRow.lng != null ? (
+                      <span>
+                        Coordonnées:{" "}
+                        <span className="font-medium text-slate-700">
+                          {prettyRow.lat.toFixed(5)}, {prettyRow.lng.toFixed(5)}
+                        </span>
+                      </span>
+                    ) : (
+                      <span>Coordonnées: —</span>
+                    )}
                   </div>
                 </div>
 
@@ -728,9 +932,20 @@ export default function AdminLoginJournalPage() {
                   <div className="font-medium text-slate-900 break-all">{prettyRow.ua || "—"}</div>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 p-3 md:col-span-2">
+                <div className="rounded-xl border border-slate-200 p-3">
                   <div className="text-xs text-slate-500">Source</div>
                   <div className="font-medium text-slate-900">{prettyRow.source || "—"}</div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500 flex items-center gap-1">
+                    <Shield className="h-3.5 w-3.5" />
+                    GeoIP (meta.geo)
+                  </div>
+                  <div className="text-xs text-slate-600">
+                    <div>FAI/ISP: <span className="font-medium text-slate-800">{prettyRow.isp || "—"}</span></div>
+                    <div>Timezone: <span className="font-medium text-slate-800">{prettyRow.timezone || "—"}</span></div>
+                  </div>
                 </div>
               </div>
 
