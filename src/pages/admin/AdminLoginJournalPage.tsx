@@ -17,6 +17,8 @@ import {
   Clock,
   ToggleLeft,
   ToggleRight,
+  Zap,
+  AlertTriangle,
 } from "lucide-react";
 
 const TABLE_NAME = "op_login_journal";
@@ -89,6 +91,114 @@ function pickTs(row: AnyRow, keys: string[]) {
     if (typeof v === "string" && v.includes("T")) return v;
   }
   return null;
+}
+
+/**
+ * Bouton "Ping Log" pour tester la chaîne Edge Function → RPC → DB
+ */
+function PingLogButton({ onSuccess }: { onSuccess?: () => void }) {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [lastResult, setLastResult] = useState<{ ok: boolean; data?: any; error?: any } | null>(null);
+
+  const handlePing = async () => {
+    setLoading(true);
+    setLastResult(null);
+
+    const payload = {
+      event: "login",
+      success: true,
+      email: `ping-${Date.now()}@admin.test`,
+      source: "web",
+      meta: {
+        note: "admin-ping-test",
+        timestamp: new Date().toISOString(),
+        user_agent: navigator.userAgent,
+      },
+    };
+
+    console.log("[PingLog] Sending payload:", payload);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("log-login", {
+        body: payload,
+      });
+
+      console.log("[PingLog] Response:", { data, error });
+
+      if (error) {
+        const errDetails = {
+          message: error.message ?? String(error),
+          name: error.name ?? "Unknown",
+          details: (error as any).details ?? null,
+          hint: (error as any).hint ?? null,
+          status: (error as any).status ?? null,
+        };
+        console.error("[PingLog] Error details:", errDetails);
+        setLastResult({ ok: false, error: errDetails });
+        toast({
+          title: "Erreur Ping Log",
+          description: `${errDetails.message}`,
+          variant: "destructive",
+        });
+      } else {
+        setLastResult({ ok: true, data });
+        toast({
+          title: "Ping Log réussi ✓",
+          description: `ID: ${data?.id ?? "—"} | Email: ${payload.email}`,
+        });
+        onSuccess?.();
+      }
+    } catch (e: any) {
+      console.error("[PingLog] Exception:", e);
+      const errDetails = {
+        message: e?.message ?? String(e),
+        name: e?.name ?? "Exception",
+        stack: e?.stack ?? null,
+      };
+      setLastResult({ ok: false, error: errDetails });
+      toast({
+        title: "Exception Ping Log",
+        description: errDetails.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button
+        type="button"
+        variant="default"
+        className="gap-2 bg-amber-600 hover:bg-amber-700"
+        onClick={handlePing}
+        disabled={loading}
+        title="Tester l'envoi vers log-login"
+      >
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+        Ping Log
+      </Button>
+
+      {lastResult && (
+        <div
+          className={`text-xs px-2 py-1 rounded ${
+            lastResult.ok ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+          }`}
+        >
+          {lastResult.ok ? (
+            <span>✓ OK: {lastResult.data?.id ?? "created"}</span>
+          ) : (
+            <span className="flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3" />
+              {lastResult.error?.message ?? "Erreur"}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function AdminLoginJournalPage() {
@@ -296,6 +406,8 @@ export default function AdminLoginJournalPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <PingLogButton onSuccess={() => fetchData({ silent: false })} />
+
             <Button
               type="button"
               variant="outline"

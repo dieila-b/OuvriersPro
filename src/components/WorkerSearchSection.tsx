@@ -352,42 +352,36 @@ const WorkerSearchSection: React.FC = () => {
   // ----------------------------
   useEffect(() => {
     const fetchFrom = async (source: "op_ouvriers_with_ratings" | "op_ouvriers") => {
-      const baseSelect = `
-        id,
-        first_name,
-        last_name,
-        profession,
-        country,
-        region,
-        city,
-        commune,
-        district,
-        hourly_rate,
-        currency,
-        years_experience,
-        status,
-        latitude,
-        longitude
-      `;
+      const baseFields = [
+        "id",
+        "first_name",
+        "last_name",
+        "profession",
+        "country",
+        "region",
+        "city",
+        "commune",
+        "district",
+        "hourly_rate",
+        "currency",
+        "years_experience",
+        "status",
+        "latitude",
+        "longitude",
+      ];
 
       // champs rating présents seulement sur la view
-      const ratingSelect =
+      const ratingFields =
         source === "op_ouvriers_with_ratings"
-          ? `,
-            average_rating,
-            rating_count,
-            computed_average_rating,
-            computed_rating_count
-          `
-          : ``;
+          ? ["average_rating", "rating_count", "computed_average_rating", "computed_rating_count"]
+          : [];
+
+      const selectStr = [...baseFields, ...ratingFields].join(",");
 
       const q = supabase
         .from(source)
-        .select(`${baseSelect}${ratingSelect}`)
+        .select(selectStr)
         .eq("status", "approved");
-
-      // Si la table a ces colonnes, ça filtre mieux (sinon PostgREST ignore pas -> ça error).
-      // On ne les met PAS pour éviter de casser si elles n'existent pas.
 
       const res = await q;
       return res;
@@ -410,7 +404,7 @@ const WorkerSearchSection: React.FC = () => {
 
         if (res.error) throw res.error;
 
-        const rows = (res.data ?? []) as DbWorker[];
+        const rows = (res.data ?? []) as unknown as DbWorker[];
 
         const mapped: WorkerCard[] = rows.map((w) => {
           const effectiveRating =
