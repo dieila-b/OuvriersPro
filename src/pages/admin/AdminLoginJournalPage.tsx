@@ -1,5 +1,5 @@
 // src/pages/admin/AdminLoginJournalPage.tsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,7 @@ import {
   Mail,
   MapPin,
   Shield,
+  Info,
 } from "lucide-react";
 
 const TABLE_NAME = "op_login_journal";
@@ -52,17 +53,26 @@ type PersonDetails = {
   full_name: string | null;
   phone: string | null;
   email: string | null;
+  // optionnels (si disponibles)
+  first_name?: string | null;
+  last_name?: string | null;
+
+  // debug
   id: string | null;
-  user_id: string | null; // meta user id (souvent auth.uid), conservé pour debug
+  user_id: string | null; // auth.users id (meta.user_id)
   source:
     | "op_users(id)"
     | "op_users(user_id)"
-    | "profiles(id)"
-    | "op_users(email)"
     | "op_users(auth_user_id)"
+    | "op_users(uid)"
+    | "profiles(id)"
     | "profiles(user_id)"
+    | "profiles(auth_user_id)"
+    | "profiles(email)"
+    | "op_users(email)"
+    | "edge(admin-user-lookup)"
     | "none";
-  debug?: { tried?: string[]; lastError?: any };
+  reason?: string | null; // pourquoi on n’a rien récupéré
 };
 
 function toIsoStartOfDay(dateYYYYMMDD: string) {
@@ -116,7 +126,7 @@ function pickTs(row: AnyRow, keys: string[]) {
 }
 function pickMetaUserId(meta: any): string | null {
   if (!meta || typeof meta !== "object") return null;
-  const direct = meta.user_id ?? meta.userId ?? meta.uid ?? meta.auth_user_id ?? meta.authUserId ?? null;
+  const direct = meta.user_id ?? meta.userId ?? meta.uid ?? meta.auth_user_id ?? null;
   return typeof direct === "string" && direct.trim() ? direct.trim() : null;
 }
 function pickGeo(meta: any): any | null {
@@ -125,40 +135,91 @@ function pickGeo(meta: any): any | null {
   return g && typeof g === "object" ? g : null;
 }
 
-function isUuid(v: any) {
-  if (typeof v !== "string") return false;
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v.trim());
+function normalizeName(d: AnyRow): { full_name: string | null; first_name: string | null; last_name: string | null } {
+  const full =
+    (typeof d?.full_name === "string" && d.full_name.trim() ? d.full_name.trim() : null) ||
+    (typeof d?.name === "string" && d.name.trim() ? d.name.trim() : null) ||
+    null;
+
+  const first =
+    (typeof d?.first_name === "string" && d.first_name.trim() ? d.first_name.trim() : null) ||
+    (typeof d?.firstname === "string" && d.firstname.trim() ? d.firstname.trim() : null) ||
+    null;
+
+  const last =
+    (typeof d?.last_name === "string" && d.last_name.trim() ? d.last_name.trim() : null) ||
+    (typeof d?.lastname === "string" && d.lastname.trim() ? d.lastname.trim() : null) ||
+    null;
+
+  const full2 =
+    full ||
+    [first, last].filter(Boolean).join(" ").trim() ||
+    null;
+
+  return { full_name: full2 || null, first_name: first, last_name: last };
 }
 
-function normalizeFullName(obj: AnyRow): string | null {
-  const direct =
-    pickStr(obj, ["full_name", "fullname", "name", "display_name", "displayName"]) ||
-    [pickStr(obj, ["first_name", "firstname", "firstName"]), pickStr(obj, ["last_name", "lastname", "lastName"])]
-      .filter(Boolean)
-      .join(" ");
-  return direct?.trim() ? direct.trim() : null;
+function normalizePhone(d: AnyRow): string | null {
+  const phone =
+    (typeof d?.phone === "string" && d.phone.trim() ? d.phone.trim() : null) ||
+    (typeof d?.phone_number === "string" && d.phone_number.trim() ? d.phone_number.trim() : null) ||
+    (typeof d?.mobile === "string" && d.mobile.trim() ? d.mobile.trim() : null) ||
+    null;
+  return phone;
 }
-function normalizePhone(obj: AnyRow): string | null {
-  const p = pickStr(obj, ["phone", "phone_number", "mobile", "tel", "telephone", "whatsapp"]);
-  return p?.trim() ? p.trim() : null;
+
+async function safeMaybeSingle(
+  table: string,
+  select: string,
+  col: string,
+  value: string
+): Promise<{ data: AnyRow | null; error: any | null }> {
+  try {
+    const res = await (supabase as any).from(table).select(select).eq(col, value).maybeSingle();
+    return { data: res?.data ?? null, error: res?.error ?? null };
+  } catch (e: any) {
+    return { data: null, error: e };
+  }
 }
-function normalizeEmail(obj: AnyRow, fallback?: string | null): string | null {
-  const e = pickStr(obj, ["email", "mail"]);
-  return e?.trim() ? e.trim() : fallback ?? null;
+
+function isNoRowsError(err: any) {
+  // maybeSingle() renvoie null data sans erreur si 0 lignes.
+  // On garde un helper pour homogénéiser.
+  return false;
+}
+
+function isBlockedByRls(err: any) {
+  const msg = String(err?.message ?? err ?? "");
+  return /row level security|permission denied|not authorized|jwt/i.test(msg);
+}
+
+function explainError(err: any) {
+  const msg = String(err?.message ?? err ?? "");
+  if (!msg) return "Erreur inconnue";
+  if (isBlockedByRls(err)) return "Accès bloqué (RLS / permissions).";
+  if (/relation .* does not exist|does not exist/i.test(msg)) return "Table/colonne manquante.";
+  if (/column .* does not exist/i.test(msg)) return "Colonne manquante.";
+  return msg;
 }
 
 /**
- * IMPORTANT (fix de ton erreur 400):
- * - Dans ta DB, op_users NE CONTIENT PAS user_id / auth_user_id / is_admin.
- * - Donc: on NE DOIT PAS filtrer .eq("user_id", ...) ni sélectionner ces colonnes.
- * - On récupère l'identité via:
- *   1) op_users.id == metaUserId (si metaUserId est un UUID)
- *   2) op_users.email == row.email (le plus fiable dans ton schéma actuel)
- *   3) profiles.id == metaUserId (optionnel, mais protégé par try/catch)
+ * ✅ Objectif: récupérer Nom + Téléphone de façon fiable
+ *
+ * Problème le plus fréquent dans ton cas:
+ * - meta.user_id = auth.users.id
+ * - mais ta table métier n’a PAS cet id en colonne "id"
+ *   (souvent: op_users.id = uuid interne; et le lien est op_users.user_id / auth_user_id / uid)
+ * - OU bien la lecture est BLOQUÉE par RLS depuis le client (anon key)
+ *
+ * Stratégie:
+ * 1) Essayer op_users via id / user_id / auth_user_id / uid
+ * 2) Essayer profiles via id / user_id / auth_user_id / email
+ * 3) Fallback via email dans op_users
+ * 4) Si toujours vide: (optionnel) appeler Edge Function "admin-user-lookup" (service role côté serveur)
  */
 async function fetchPersonDetails(row: AnyRow): Promise<PersonDetails> {
   const meta = row?.meta ?? null;
-  const metaUserId = pickMetaUserId(meta);
+  const userId = pickMetaUserId(meta);
   const email = (typeof row?.email === "string" ? row.email : null) ?? null;
 
   const empty: PersonDetails = {
@@ -166,89 +227,127 @@ async function fetchPersonDetails(row: AnyRow): Promise<PersonDetails> {
     phone: null,
     email,
     id: null,
-    user_id: metaUserId,
+    user_id: userId,
     source: "none",
-    debug: { tried: [] },
+    reason: null,
   };
 
-  const tried: string[] = [];
+  const selectCommon = "id, user_id, auth_user_id, uid, full_name, name, first_name, last_name, phone, phone_number, mobile, email";
 
-  // Colonnes CONFIRMÉES dans public.op_users
-  const OP_SELECT = "id,role,full_name,phone,email,country,city,preferred_contact,created_at,updated_at";
+  // helper: si on récupère data, remember normalized
+  const pack = (data: AnyRow, source: PersonDetails["source"], fallbackEmail?: string | null): PersonDetails => {
+    const n = normalizeName(data);
+    const p = normalizePhone(data);
+    const e = (typeof data?.email === "string" && data.email.trim() ? data.email.trim() : null) || fallbackEmail || email || null;
 
-  // 1) op_users via id (seulement si UUID)
-  if (metaUserId && isUuid(metaUserId)) {
-    tried.push(`op_users: id=eq.${metaUserId} | select=${OP_SELECT}`);
-    const a = await supabase.from("op_users").select(OP_SELECT).eq("id", metaUserId).maybeSingle();
-    if (!a.error && a.data) {
-      const d = a.data as AnyRow;
-      return {
-        full_name: normalizeFullName(d),
-        phone: normalizePhone(d),
-        email: normalizeEmail(d, email),
-        id: (d.id ?? null) as string | null,
-        user_id: metaUserId,
-        source: "op_users(id)",
-        debug: { tried },
-      };
-    }
-    if (a.error) {
-      // On conserve l'erreur en debug mais on continue sur le fallback email
-      empty.debug = { tried, lastError: a.error };
+    return {
+      full_name: n.full_name,
+      first_name: n.first_name,
+      last_name: n.last_name,
+      phone: p,
+      email: e,
+      id: (typeof data?.id === "string" ? data.id : data?.id ? String(data.id) : null),
+      user_id: userId,
+      source,
+      reason: null,
+    };
+  };
+
+  // 1) op_users via id
+  if (userId) {
+    const a = await safeMaybeSingle("op_users", selectCommon, "id", userId);
+    if (a.data) return pack(a.data, "op_users(id)");
+    // si erreur RLS, on note mais on continue les autres chemins
+    if (a.error && isBlockedByRls(a.error)) {
+      // on garde en mémoire, mais on ne stoppe pas
     }
   }
 
-  // 2) op_users via email (ton schéma a bien la colonne email)
+  // 2) op_users via user_id
+  if (userId) {
+    const b = await safeMaybeSingle("op_users", selectCommon, "user_id", userId);
+    if (b.data) return pack(b.data, "op_users(user_id)");
+  }
+
+  // 3) op_users via auth_user_id
+  if (userId) {
+    const c = await safeMaybeSingle("op_users", selectCommon, "auth_user_id", userId);
+    if (c.data) return pack(c.data, "op_users(auth_user_id)");
+  }
+
+  // 4) op_users via uid
+  if (userId) {
+    const d = await safeMaybeSingle("op_users", selectCommon, "uid", userId);
+    if (d.data) return pack(d.data, "op_users(uid)");
+  }
+
+  // 5) profiles via id
+  if (userId) {
+    const e = await safeMaybeSingle("profiles", selectCommon, "id", userId);
+    if (e.data) return pack(e.data, "profiles(id)");
+  }
+
+  // 6) profiles via user_id
+  if (userId) {
+    const f = await safeMaybeSingle("profiles", selectCommon, "user_id", userId);
+    if (f.data) return pack(f.data, "profiles(user_id)");
+  }
+
+  // 7) profiles via auth_user_id
+  if (userId) {
+    const g = await safeMaybeSingle("profiles", selectCommon, "auth_user_id", userId);
+    if (g.data) return pack(g.data, "profiles(auth_user_id)");
+  }
+
+  // 8) profiles via email
   if (email) {
-    tried.push(`op_users: email=eq.${email} | select=${OP_SELECT}`);
-    const b = await supabase.from("op_users").select(OP_SELECT).eq("email", email).maybeSingle();
-    if (!b.error && b.data) {
-      const d = b.data as AnyRow;
-      return {
-        full_name: normalizeFullName(d),
-        phone: normalizePhone(d),
-        email: normalizeEmail(d, email),
-        id: (d.id ?? null) as string | null,
-        user_id: metaUserId,
-        source: "op_users(email)",
-        debug: { tried },
-      };
-    }
-    if (b.error) {
-      empty.debug = { tried, lastError: b.error };
-    }
+    const h = await safeMaybeSingle("profiles", selectCommon, "email", email);
+    if (h.data) return pack(h.data, "profiles(email)", email);
   }
 
-  // 3) profiles via id (optionnel, protégé)
-  if (metaUserId && isUuid(metaUserId)) {
-    try {
-      // On reste minimaliste pour limiter les risques de 400 si le schéma profiles diffère
-      const PROFILES_SELECTS = ["id,full_name,phone,email", "id,full_name,phone", "id,email", "id"];
-      for (const sel of PROFILES_SELECTS) {
-        tried.push(`profiles: id=eq.${metaUserId} | select=${sel}`);
-        const c = await supabase.from("profiles").select(sel).eq("id", metaUserId).maybeSingle();
-        if (!c.error && c.data) {
-          const d = c.data as AnyRow;
+  // 9) fallback via op_users email
+  if (email) {
+    const i = await safeMaybeSingle("op_users", selectCommon, "email", email);
+    if (i.data) return pack(i.data, "op_users(email)", email);
+  }
+
+  // 10) Optionnel: Edge Function (service role) si tu la crées côté Supabase
+  // - Retour attendu: { full_name, phone, email }
+  // - Input: { user_id, email }
+  try {
+    const fn = (supabase as any)?.functions?.invoke;
+    if (typeof fn === "function") {
+      const { data, error } = await fn("admin-user-lookup", { body: { user_id: userId, email } });
+      if (!error && data && typeof data === "object") {
+        const n = normalizeName(data);
+        const p = normalizePhone(data);
+        const e = (typeof data?.email === "string" && data.email.trim() ? data.email.trim() : null) || email || null;
+
+        if (n.full_name || p || e) {
           return {
-            full_name: normalizeFullName(d),
-            phone: normalizePhone(d),
-            email: normalizeEmail(d, email),
-            id: (d.id ?? null) as string | null,
-            user_id: metaUserId,
-            source: "profiles(id)",
-            debug: { tried },
+            full_name: n.full_name,
+            first_name: n.first_name,
+            last_name: n.last_name,
+            phone: p,
+            email: e,
+            id: null,
+            user_id: userId,
+            source: "edge(admin-user-lookup)",
+            reason: null,
           };
         }
-        // Si erreur (RLS/colonne/etc.), on continue les variantes puis on sort
-        if (c.error) empty.debug = { tried, lastError: c.error };
       }
-    } catch (e: any) {
-      empty.debug = { tried, lastError: e };
     }
+  } catch {
+    // ignore
   }
 
-  empty.debug = empty.debug ?? { tried };
-  return empty;
+  // si on arrive ici: le plus probable = RLS ou aucune table ne contient ces champs
+  return {
+    ...empty,
+    reason:
+      "Aucun profil trouvé (ou accès bloqué). Vérifie: (1) op_users/profiles contiennent bien full_name/phone, (2) le lien avec auth.users utilise user_id/auth_user_id, (3) RLS autorise l’admin à lire ces tables.",
+  };
 }
 
 /**
@@ -275,12 +374,8 @@ function PingLogButton({ onSuccess }: { onSuccess?: () => void }) {
       },
     };
 
-    console.log("[PingLog] Sending payload:", payload);
-
     try {
       const { data, error } = await supabase.functions.invoke("log-login", { body: payload });
-
-      console.log("[PingLog] Response:", { data, error });
 
       if (error) {
         const errDetails = {
@@ -290,7 +385,6 @@ function PingLogButton({ onSuccess }: { onSuccess?: () => void }) {
           hint: (error as any).hint ?? null,
           status: (error as any).status ?? null,
         };
-        console.error("[PingLog] Error details:", errDetails);
         setLastResult({ ok: false, error: errDetails });
         toast({ title: "Erreur Ping Log", description: `${errDetails.message}`, variant: "destructive" });
       } else {
@@ -299,7 +393,6 @@ function PingLogButton({ onSuccess }: { onSuccess?: () => void }) {
         onSuccess?.();
       }
     } catch (e: any) {
-      console.error("[PingLog] Exception:", e);
       const errDetails = { message: e?.message ?? String(e), name: e?.name ?? "Exception", stack: e?.stack ?? null };
       setLastResult({ ok: false, error: errDetails });
       toast({ title: "Exception Ping Log", description: errDetails.message, variant: "destructive" });
@@ -324,9 +417,7 @@ function PingLogButton({ onSuccess }: { onSuccess?: () => void }) {
 
       {lastResult && (
         <div
-          className={`text-xs px-2 py-1 rounded ${
-            lastResult.ok ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-          }`}
+          className={`text-xs px-2 py-1 rounded ${lastResult.ok ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}
         >
           {lastResult.ok ? (
             <span>✓ OK: {lastResult.data?.id ?? "created"}</span>
@@ -472,20 +563,17 @@ export default function AdminLoginJournalPage() {
       const d = await fetchPersonDetails(r);
       setPerson(d);
 
-      // Toast uniquement si on a l’email mais aucun full_name/phone récupéré
-      const hasAny = !!(d?.full_name || d?.phone);
-      const email = (typeof r?.email === "string" ? r.email : null) ?? null;
-
-      if (email && !hasAny) {
-        // Pas destructive: c'est souvent juste "pas renseigné" dans op_users (full_name/phone vides)
+      // si on n'a rien, on affiche une explication utile
+      if (!d.full_name && !d.phone) {
         toast({
-          title: "Profil partiellement disponible",
+          title: "Profil non récupéré",
           description:
-            "L'utilisateur existe probablement (email trouvé), mais le nom/téléphone ne sont pas renseignés (ou lecture profiles bloquée). Renseigne full_name/phone dans op_users pour cet email.",
+            d.reason ||
+            "Aucune donnée disponible. Cause probable: RLS empêche la lecture de op_users/profiles depuis le client.",
+          variant: "destructive",
         });
       }
     } catch (e: any) {
-      console.warn("[AdminLoginJournalPage] fetchPersonDetails error:", e);
       setPerson({
         full_name: null,
         phone: null,
@@ -493,11 +581,11 @@ export default function AdminLoginJournalPage() {
         id: null,
         user_id: pickMetaUserId(r?.meta),
         source: "none",
-        debug: { lastError: e },
+        reason: e?.message ?? "Erreur inconnue",
       });
       toast({
-        title: "Profil non récupéré",
-        description: "Erreur lors de la récupération du profil.",
+        title: "Infos utilisateur indisponibles",
+        description: e?.message ?? "Impossible de récupérer le profil (RLS/table).",
         variant: "destructive",
       });
     } finally {
@@ -577,9 +665,7 @@ export default function AdminLoginJournalPage() {
         <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="text-base sm:text-lg">Journal de connexions</CardTitle>
-            <div className="mt-1 text-xs text-slate-500">
-              Historique des connexions / déconnexions (visible uniquement côté admin).
-            </div>
+            <div className="mt-1 text-xs text-slate-500">Historique des connexions / déconnexions (visible uniquement côté admin).</div>
 
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
               <span className="inline-flex items-center gap-1">
@@ -605,26 +691,12 @@ export default function AdminLoginJournalPage() {
           <div className="flex items-center gap-2">
             <PingLogButton onSuccess={() => fetchData({ silent: false })} />
 
-            <Button
-              type="button"
-              variant="outline"
-              className="gap-2"
-              onClick={() => setAuto((v) => !v)}
-              disabled={loading}
-              title="Auto refresh"
-            >
+            <Button type="button" variant="outline" className="gap-2" onClick={() => setAuto((v) => !v)} disabled={loading} title="Auto refresh">
               {auto ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
               Auto
             </Button>
 
-            <Button
-              type="button"
-              variant="outline"
-              className="gap-2"
-              onClick={() => fetchData({ silent: false })}
-              disabled={loading}
-              title="Rafraîchir"
-            >
+            <Button type="button" variant="outline" className="gap-2" onClick={() => fetchData({ silent: false })} disabled={loading} title="Rafraîchir">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               Rafraîchir
             </Button>
@@ -712,7 +784,6 @@ export default function AdminLoginJournalPage() {
             </div>
           </div>
 
-          {/* Error / Empty */}
           {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
 
           {!error && !loading && rows.length === 0 && (
@@ -819,19 +890,15 @@ export default function AdminLoginJournalPage() {
               <Button type="button" variant="outline" onClick={() => setPage(1)} disabled={loading || page === 1}>
                 Début
               </Button>
-
               <Button type="button" variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={loading || page <= 1}>
                 Précédent
               </Button>
-
               <div className="text-xs text-slate-600 px-2">
                 Page <span className="font-medium">{page}</span> / <span className="font-medium">{totalPages}</span>
               </div>
-
               <Button type="button" variant="outline" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={loading || page >= totalPages}>
                 Suivant
               </Button>
-
               <Button type="button" variant="outline" onClick={() => setPage(totalPages)} disabled={loading || page === totalPages}>
                 Fin
               </Button>
@@ -858,32 +925,40 @@ export default function AdminLoginJournalPage() {
                     <div className="h-9 w-9 rounded-full bg-slate-100 flex items-center justify-center">
                       <User className="h-4 w-4 text-slate-600" />
                     </div>
+
                     <div>
                       <div className="text-xs text-slate-500">Utilisateur</div>
                       <div className="font-semibold text-slate-900">
                         {personLoading ? "Chargement…" : person?.full_name || "Nom non disponible"}
                       </div>
+
                       <div className="text-xs text-slate-500 flex flex-wrap items-center gap-2">
                         <span className="inline-flex items-center gap-1">
-                          <Mail className="h-3.5 w-3.5" /> {personLoading ? "…" : person?.email || prettyRow.email || "—"}
+                          <Mail className="h-3.5 w-3.5" />
+                          {personLoading ? "…" : person?.email || prettyRow.email || "—"}
                         </span>
+
                         <span className="inline-flex items-center gap-1">
-                          <Phone className="h-3.5 w-3.5" /> {personLoading ? "…" : person?.phone || "Téléphone non disponible"}
+                          <Phone className="h-3.5 w-3.5" />
+                          {personLoading ? "…" : person?.phone || "Téléphone non disponible"}
                         </span>
                       </div>
 
-                      {prettyRow.metaUserId ? (
-                        <div className="mt-1 text-[11px] text-slate-500 break-all">
-                          user_id (meta): <span className="font-medium text-slate-700">{prettyRow.metaUserId}</span>
-                          {person?.source && person.source !== "none" ? (
-                            <span className="ml-2 text-slate-400">• source profil: {person.source}</span>
-                          ) : null}
+                      <div className="mt-1 text-[11px] text-slate-500 break-all">
+                        user_id (meta):{" "}
+                        <span className="font-medium text-slate-700">{prettyRow.metaUserId || "non présent"}</span>
+                        <span className="ml-2 text-slate-400">• source: {person?.source ?? "—"}</span>
+                      </div>
+
+                      {person?.reason ? (
+                        <div className="mt-2 inline-flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+                          <Info className="h-4 w-4 mt-0.5" />
+                          <div>
+                            <div className="font-medium">Pourquoi le nom/téléphone n’apparaissent pas</div>
+                            <div className="mt-0.5">{person.reason}</div>
+                          </div>
                         </div>
-                      ) : (
-                        <div className="mt-1 text-[11px] text-slate-500 break-all">
-                          user_id (meta): <span className="text-slate-400">non présent</span>
-                        </div>
-                      )}
+                      ) : null}
                     </div>
                   </div>
 
@@ -972,14 +1047,7 @@ export default function AdminLoginJournalPage() {
                 </summary>
                 <div className="px-4 pb-4">
                   <pre className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto max-h-[40vh]">
-                    {JSON.stringify(
-                      {
-                        row: prettyRow.raw,
-                        person,
-                      },
-                      null,
-                      2
-                    )}
+                    {JSON.stringify(prettyRow.raw, null, 2)}
                   </pre>
                 </div>
               </details>
