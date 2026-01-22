@@ -116,7 +116,7 @@ function AuthAuditLogger() {
     if (didInitRef.current) return;
     didInitRef.current = true;
 
-    const DEBUG = false; // mets true uniquement pour debug console
+    const DEBUG = true; // Activé pour debug
     const COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
     const LS_KEY = "op_login_journal:last_refresh";
 
@@ -148,21 +148,29 @@ function AuthAuditLogger() {
       meta: any;
     }) => {
       try {
-        const fn = (supabase as any)?.functions?.invoke;
-        if (typeof fn !== "function") {
-          if (DEBUG) console.warn("[AuthAuditLogger] supabase.functions.invoke indisponible.");
-          return;
+        console.log("[AuthAuditLogger] Invoking log-login with payload:", payload);
+
+        const { data, error } = await supabase.functions.invoke("log-login", { body: payload });
+
+        if (error) {
+          // Log détaillé de l'erreur
+          console.error("[AuthAuditLogger] log-login error:", {
+            message: error.message ?? String(error),
+            name: (error as any).name ?? "Unknown",
+            details: (error as any).details ?? null,
+            hint: (error as any).hint ?? null,
+            status: (error as any).status ?? null,
+            raw: error,
+          });
+        } else {
+          console.log("[AuthAuditLogger] log-login success:", data);
         }
-
-        if (DEBUG) console.log("[AuthAuditLogger] invoke log-login", payload);
-
-        const { error } = await fn("log-login", { body: payload });
-
-        if (error && DEBUG) {
-          console.warn("[AuthAuditLogger] log-login error:", error);
-        }
-      } catch (e) {
-        if (DEBUG) console.warn("[AuthAuditLogger] log-login invoke failed:", e);
+      } catch (e: any) {
+        console.error("[AuthAuditLogger] log-login invoke exception:", {
+          message: e?.message ?? String(e),
+          name: e?.name ?? "Exception",
+          stack: e?.stack ?? null,
+        });
       }
     };
 
@@ -183,13 +191,18 @@ function AuthAuditLogger() {
       const userId = session?.user?.id ?? null;
 
       // ne pas log si pas de user
-      if (!session?.user) return;
+      if (!session?.user) {
+        if (DEBUG) console.log("[AuthAuditLogger] skip - no user in session");
+        return;
+      }
 
       // anti-spam uniquement pour refresh
       if (event === "refresh" && !shouldLogRefresh()) {
         if (DEBUG) console.log("[AuthAuditLogger] skip refresh cooldown");
         return;
       }
+
+      if (DEBUG) console.log(`[AuthAuditLogger] logging ${event} for ${email}`);
 
       return safeInvoke({
         event,
@@ -201,7 +214,7 @@ function AuthAuditLogger() {
     };
 
     const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
-      if (DEBUG) console.log("[AuthAuditLogger] auth event:", evt);
+      console.log("[AuthAuditLogger] auth event:", evt, "session:", !!session);
 
       if (evt === "SIGNED_IN") {
         log("login", session, "SIGNED_IN");
