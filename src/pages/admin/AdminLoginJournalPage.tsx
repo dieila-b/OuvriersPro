@@ -1,5 +1,5 @@
 // src/pages/admin/AdminLoginJournalPage.tsx
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -53,7 +53,7 @@ type PersonDetails = {
   phone: string | null;
   email: string | null;
   id: string | null;
-  user_id: string | null;
+  user_id: string | null; // meta user id (souvent auth.uid), conservé pour debug
   source:
     | "op_users(id)"
     | "op_users(user_id)"
@@ -125,7 +125,10 @@ function pickGeo(meta: any): any | null {
   return g && typeof g === "object" ? g : null;
 }
 
-/** ---- Robust profile fetch (évite les 400 "Bad Request" si colonnes absentes) ---- */
+function isUuid(v: any) {
+  if (typeof v !== "string") return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v.trim());
+}
 
 function normalizeFullName(obj: AnyRow): string | null {
   const direct =
@@ -135,113 +138,27 @@ function normalizeFullName(obj: AnyRow): string | null {
       .join(" ");
   return direct?.trim() ? direct.trim() : null;
 }
-
 function normalizePhone(obj: AnyRow): string | null {
   const p = pickStr(obj, ["phone", "phone_number", "mobile", "tel", "telephone", "whatsapp"]);
   return p?.trim() ? p.trim() : null;
 }
-
 function normalizeEmail(obj: AnyRow, fallback?: string | null): string | null {
   const e = pickStr(obj, ["email", "mail"]);
   return e?.trim() ? e.trim() : fallback ?? null;
 }
 
-function isColumnError(err: any) {
-  // Supabase PostgREST renvoie souvent 400 + message "column ... does not exist"
-  const msg = String(err?.message ?? err?.details ?? err?.hint ?? "").toLowerCase();
-  return msg.includes("column") && msg.includes("does not exist");
-}
-
 /**
- * Tente une requête op_users avec plusieurs variantes de SELECT,
- * pour éviter de casser si certaines colonnes n'existent pas (=> 400).
- */
-async function tryQueryOpUsers(params: {
-  filterKey: string;
-  filterVal: string;
-  emailFallback?: string | null;
-  selectVariants: string[];
-}) {
-  const tried: string[] = [];
-  let lastError: any = null;
-
-  for (const sel of params.selectVariants) {
-    tried.push(`${params.filterKey}=${params.filterVal} | select=${sel}`);
-    const res = await supabase.from("op_users").select(sel).eq(params.filterKey as any, params.filterVal).maybeSingle();
-    if (!res.error && res.data) {
-      const d = res.data as AnyRow;
-      return {
-        ok: true as const,
-        data: {
-          id: (d.id ?? null) as string | null,
-          user_id: (d.user_id ?? d.auth_user_id ?? params.filterVal ?? null) as string | null,
-          full_name: normalizeFullName(d),
-          phone: normalizePhone(d),
-          email: normalizeEmail(d, params.emailFallback ?? null),
-        },
-        debug: { tried },
-      };
-    }
-    lastError = res.error;
-
-    // Si c’est une erreur "colonne inexistante", on tente le variant suivant.
-    // Si c’est RLS/permission ou autre, on peut aussi tenter le suivant (souvent utile),
-    // mais on garde l’erreur pour l’affichage.
-    continue;
-  }
-
-  return { ok: false as const, error: lastError, debug: { tried, lastError } };
-}
-
-/**
- * Tente profiles (si existe) avec variantes de SELECT.
- */
-async function tryQueryProfiles(params: {
-  filterKey: string;
-  filterVal: string;
-  emailFallback?: string | null;
-  selectVariants: string[];
-}) {
-  const tried: string[] = [];
-  let lastError: any = null;
-
-  for (const sel of params.selectVariants) {
-    tried.push(`${params.filterKey}=${params.filterVal} | select=${sel}`);
-    const res = await supabase.from("profiles").select(sel).eq(params.filterKey as any, params.filterVal).maybeSingle();
-    if (!res.error && res.data) {
-      const d = res.data as AnyRow;
-      return {
-        ok: true as const,
-        data: {
-          id: (d.id ?? null) as string | null,
-          user_id: (d.user_id ?? params.filterVal ?? null) as string | null,
-          full_name: normalizeFullName(d),
-          phone: normalizePhone(d),
-          email: normalizeEmail(d, params.emailFallback ?? null),
-        },
-        debug: { tried },
-      };
-    }
-    lastError = res.error;
-    continue;
-  }
-
-  return { ok: false as const, error: lastError, debug: { tried, lastError } };
-}
-
-/**
- * Récupère des infos utilisateur à partir de meta.user_id.
- * Ordre (robuste):
- * 1) op_users.id == userId
- * 2) op_users.user_id == userId
- * 3) op_users.auth_user_id == userId (si votre schéma utilise ce champ)
- * 4) profiles.id == userId
- * 5) profiles.user_id == userId (si votre schéma utilise ce champ)
- * 6) fallback op_users.email == email (UNIQUEMENT si colonne email existe; on le détecte via variantes)
+ * IMPORTANT (fix de ton erreur 400):
+ * - Dans ta DB, op_users NE CONTIENT PAS user_id / auth_user_id / is_admin.
+ * - Donc: on NE DOIT PAS filtrer .eq("user_id", ...) ni sélectionner ces colonnes.
+ * - On récupère l'identité via:
+ *   1) op_users.id == metaUserId (si metaUserId est un UUID)
+ *   2) op_users.email == row.email (le plus fiable dans ton schéma actuel)
+ *   3) profiles.id == metaUserId (optionnel, mais protégé par try/catch)
  */
 async function fetchPersonDetails(row: AnyRow): Promise<PersonDetails> {
   const meta = row?.meta ?? null;
-  const userId = pickMetaUserId(meta);
+  const metaUserId = pickMetaUserId(meta);
   const email = (typeof row?.email === "string" ? row.email : null) ?? null;
 
   const empty: PersonDetails = {
@@ -249,152 +166,88 @@ async function fetchPersonDetails(row: AnyRow): Promise<PersonDetails> {
     phone: null,
     email,
     id: null,
-    user_id: userId,
+    user_id: metaUserId,
     source: "none",
+    debug: { tried: [] },
   };
 
-  // Variantes minimalistes pour éviter 400 si colonnes absentes
-  const OP_SELECTS = [
-    // plus riche
-    "id,user_id,auth_user_id,full_name,first_name,last_name,phone,phone_number,mobile,telephone,tel,email,mail",
-    // standard
-    "id,user_id,full_name,phone,email",
-    // sans email
-    "id,user_id,full_name,phone",
-    // schémas alternatifs
-    "id,auth_user_id,full_name,phone",
-    "id,name,phone",
-    "id,display_name,phone",
-  ];
+  const tried: string[] = [];
 
-  const PROFILES_SELECTS = [
-    "id,user_id,full_name,first_name,last_name,phone,phone_number,mobile,telephone,tel,email,mail",
-    "id,full_name,phone",
-    "id,user_id,full_name,phone",
-    "id,name,phone",
-    "id,display_name,phone",
-  ];
+  // Colonnes CONFIRMÉES dans public.op_users
+  const OP_SELECT = "id,role,full_name,phone,email,country,city,preferred_contact,created_at,updated_at";
 
-  // 1) op_users via id
-  if (userId) {
-    const a = await tryQueryOpUsers({
-      filterKey: "id",
-      filterVal: userId,
-      emailFallback: email,
-      selectVariants: OP_SELECTS,
-    });
-
-    if (a.ok) {
+  // 1) op_users via id (seulement si UUID)
+  if (metaUserId && isUuid(metaUserId)) {
+    tried.push(`op_users: id=eq.${metaUserId} | select=${OP_SELECT}`);
+    const a = await supabase.from("op_users").select(OP_SELECT).eq("id", metaUserId).maybeSingle();
+    if (!a.error && a.data) {
+      const d = a.data as AnyRow;
       return {
-        ...a.data,
+        full_name: normalizeFullName(d),
+        phone: normalizePhone(d),
+        email: normalizeEmail(d, email),
+        id: (d.id ?? null) as string | null,
+        user_id: metaUserId,
         source: "op_users(id)",
-        debug: a.debug,
+        debug: { tried },
       };
+    }
+    if (a.error) {
+      // On conserve l'erreur en debug mais on continue sur le fallback email
+      empty.debug = { tried, lastError: a.error };
     }
   }
 
-  // 2) op_users via user_id
-  if (userId) {
-    const b = await tryQueryOpUsers({
-      filterKey: "user_id",
-      filterVal: userId,
-      emailFallback: email,
-      selectVariants: OP_SELECTS,
-    });
-
-    if (b.ok) {
-      return {
-        ...b.data,
-        source: "op_users(user_id)",
-        debug: b.debug,
-      };
-    }
-  }
-
-  // 3) op_users via auth_user_id (si présent)
-  if (userId) {
-    const b2 = await tryQueryOpUsers({
-      filterKey: "auth_user_id",
-      filterVal: userId,
-      emailFallback: email,
-      selectVariants: OP_SELECTS,
-    });
-
-    if (b2.ok) {
-      return {
-        ...b2.data,
-        source: "op_users(auth_user_id)",
-        debug: b2.debug,
-      };
-    }
-  }
-
-  // 4) profiles via id
-  if (userId) {
-    const c = await tryQueryProfiles({
-      filterKey: "id",
-      filterVal: userId,
-      emailFallback: email,
-      selectVariants: PROFILES_SELECTS,
-    });
-
-    if (c.ok) {
-      return {
-        ...c.data,
-        source: "profiles(id)",
-        debug: c.debug,
-      };
-    }
-  }
-
-  // 5) profiles via user_id
-  if (userId) {
-    const c2 = await tryQueryProfiles({
-      filterKey: "user_id",
-      filterVal: userId,
-      emailFallback: email,
-      selectVariants: PROFILES_SELECTS,
-    });
-
-    if (c2.ok) {
-      return {
-        ...c2.data,
-        source: "profiles(user_id)",
-        debug: c2.debug,
-      };
-    }
-  }
-
-  // 6) fallback via email (attention: si la colonne email n'existe pas => 400; nos variantes gèrent ça)
+  // 2) op_users via email (ton schéma a bien la colonne email)
   if (email) {
-    const d = await tryQueryOpUsers({
-      filterKey: "email",
-      filterVal: email,
-      emailFallback: email,
-      selectVariants: OP_SELECTS,
-    });
-
-    if (d.ok) {
+    tried.push(`op_users: email=eq.${email} | select=${OP_SELECT}`);
+    const b = await supabase.from("op_users").select(OP_SELECT).eq("email", email).maybeSingle();
+    if (!b.error && b.data) {
+      const d = b.data as AnyRow;
       return {
-        ...d.data,
+        full_name: normalizeFullName(d),
+        phone: normalizePhone(d),
+        email: normalizeEmail(d, email),
+        id: (d.id ?? null) as string | null,
+        user_id: metaUserId,
         source: "op_users(email)",
-        debug: d.debug,
+        debug: { tried },
       };
     }
-
-    // Si c'est une erreur de colonne absente, on ne "toast" pas comme un accès bloqué.
-    // (ex: vous n’avez pas de colonne email sur op_users)
-    // On laisse tomber silencieusement.
-    if (d.error && !isColumnError(d.error)) {
-      // autre erreur (RLS, permission, etc.) => on la garde en debug
-      return {
-        ...empty,
-        source: "none",
-        debug: d.debug,
-      };
+    if (b.error) {
+      empty.debug = { tried, lastError: b.error };
     }
   }
 
+  // 3) profiles via id (optionnel, protégé)
+  if (metaUserId && isUuid(metaUserId)) {
+    try {
+      // On reste minimaliste pour limiter les risques de 400 si le schéma profiles diffère
+      const PROFILES_SELECTS = ["id,full_name,phone,email", "id,full_name,phone", "id,email", "id"];
+      for (const sel of PROFILES_SELECTS) {
+        tried.push(`profiles: id=eq.${metaUserId} | select=${sel}`);
+        const c = await supabase.from("profiles").select(sel).eq("id", metaUserId).maybeSingle();
+        if (!c.error && c.data) {
+          const d = c.data as AnyRow;
+          return {
+            full_name: normalizeFullName(d),
+            phone: normalizePhone(d),
+            email: normalizeEmail(d, email),
+            id: (d.id ?? null) as string | null,
+            user_id: metaUserId,
+            source: "profiles(id)",
+            debug: { tried },
+          };
+        }
+        // Si erreur (RLS/colonne/etc.), on continue les variantes puis on sort
+        if (c.error) empty.debug = { tried, lastError: c.error };
+      }
+    } catch (e: any) {
+      empty.debug = { tried, lastError: e };
+    }
+  }
+
+  empty.debug = empty.debug ?? { tried };
   return empty;
 }
 
@@ -619,15 +472,16 @@ export default function AdminLoginJournalPage() {
       const d = await fetchPersonDetails(r);
       setPerson(d);
 
-      // Toast uniquement si on a un user_id mais aucun profil trouvé
-      const metaUserId = pickMetaUserId(r?.meta);
+      // Toast uniquement si on a l’email mais aucun full_name/phone récupéré
       const hasAny = !!(d?.full_name || d?.phone);
-      if (metaUserId && !hasAny) {
+      const email = (typeof r?.email === "string" ? r.email : null) ?? null;
+
+      if (email && !hasAny) {
+        // Pas destructive: c'est souvent juste "pas renseigné" dans op_users (full_name/phone vides)
         toast({
-          title: "Profil non récupéré",
+          title: "Profil partiellement disponible",
           description:
-            "Aucun profil trouvé (ou accès bloqué). Vérifie que op_users/profiles contiennent bien full_name/phone, que le lien avec auth.users utilise user_id/auth_user_id, et que la RLS autorise l’admin à lire ces tables.",
-          variant: "destructive",
+            "L'utilisateur existe probablement (email trouvé), mais le nom/téléphone ne sont pas renseignés (ou lecture profiles bloquée). Renseigne full_name/phone dans op_users pour cet email.",
         });
       }
     } catch (e: any) {
@@ -643,7 +497,7 @@ export default function AdminLoginJournalPage() {
       });
       toast({
         title: "Profil non récupéré",
-        description: "Erreur lors de la récupération du profil (RLS/table/colonnes).",
+        description: "Erreur lors de la récupération du profil.",
         variant: "destructive",
       });
     } finally {
@@ -676,7 +530,6 @@ export default function AdminLoginJournalPage() {
     const metaUserId = pickMetaUserId(meta);
     const geo = pickGeo(meta);
 
-    // Location display priority: DB columns -> meta.geo
     const locCity = city || (typeof geo?.city === "string" ? geo.city : "");
     const locRegion = region || (typeof geo?.region === "string" ? geo.region : "");
     const locCountry =
@@ -1012,12 +865,10 @@ export default function AdminLoginJournalPage() {
                       </div>
                       <div className="text-xs text-slate-500 flex flex-wrap items-center gap-2">
                         <span className="inline-flex items-center gap-1">
-                          <Mail className="h-3.5 w-3.5" />{" "}
-                          {personLoading ? "…" : person?.email || prettyRow.email || "—"}
+                          <Mail className="h-3.5 w-3.5" /> {personLoading ? "…" : person?.email || prettyRow.email || "—"}
                         </span>
                         <span className="inline-flex items-center gap-1">
-                          <Phone className="h-3.5 w-3.5" />{" "}
-                          {personLoading ? "…" : person?.phone || "Téléphone non disponible"}
+                          <Phone className="h-3.5 w-3.5" /> {personLoading ? "…" : person?.phone || "Téléphone non disponible"}
                         </span>
                       </div>
 
