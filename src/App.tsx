@@ -96,28 +96,29 @@ function ScrollManager() {
 
 /**
  * ✅ Journal de connexion (Supabase Edge Function) — non bloquant
- * - Utilise uniquement supabase.functions.invoke("log-login") (pas de /functions/v1)
- * - Payload envoyé: { event, success, email, source, meta }
- * - IP/GEO: récupérées côté Edge Function via headers CDN
+ *
+ * Problème courant:
+ * - Quand l'utilisateur est déjà connecté, Supabase émet souvent "INITIAL_SESSION"
+ *   (pas "SIGNED_IN") => pas de log si on ne le gère pas.
+ *
+ * Fix:
+ * - On log "refresh" sur INITIAL_SESSION (avec anti-spam).
+ * - On log "login" sur SIGNED_IN.
+ * - On log "logout" sur SIGNED_OUT.
  *
  * IMPORTANT:
- * - Si l’utilisateur est déjà connecté (session persistée) et recharge la page,
- *   Supabase ne déclenche pas forcément SIGNED_IN. Donc on log une "session active"
- *   au montage via getSession(), avec un cooldown anti-spam.
+ * - On ne jette JAMAIS d'erreur (ne doit pas casser l'UI).
  */
 function AuthAuditLogger() {
   const didInitRef = useRef(false);
 
   useEffect(() => {
-    // Anti double-exec (React 18 StrictMode en dev)
     if (didInitRef.current) return;
     didInitRef.current = true;
 
-    const DEBUG = true; // mets false quand c'est validé
-
-    // Anti-spam: 1 log toutes les 15 minutes par user sur "session déjà active"
-    const COOLDOWN_MS = 15 * 60 * 1000;
-    const cooldownKey = (userId: string) => `op_login_journal:last_seen:${userId}`;
+    const DEBUG = false; // mets true uniquement pour debug console
+    const COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+    const LS_KEY = "op_login_journal:last_refresh";
 
     const getTimeZone = () => {
       try {
@@ -139,8 +140,8 @@ function AuthAuditLogger() {
       href: typeof window !== "undefined" ? window.location.href : null,
     });
 
-    const safeCall = async (payload: {
-      event: "login" | "logout";
+    const safeInvoke = async (payload: {
+      event: "login" | "logout" | "refresh";
       success: boolean;
       email: string | null;
       source: "web";
@@ -149,52 +150,49 @@ function AuthAuditLogger() {
       try {
         const fn = (supabase as any)?.functions?.invoke;
         if (typeof fn !== "function") {
-          if (DEBUG) console.warn("[AuthAuditLogger] supabase.functions.invoke indisponible (SDK/config).");
+          if (DEBUG) console.warn("[AuthAuditLogger] supabase.functions.invoke indisponible.");
           return;
         }
 
         if (DEBUG) console.log("[AuthAuditLogger] invoke log-login", payload);
 
-        const { data, error } = await fn("log-login", { body: payload });
-        if (error) console.warn("[AuthAuditLogger] log-login error:", error);
-        else if (DEBUG) console.log("[AuthAuditLogger] log-login OK:", data ?? null);
+        const { error } = await fn("log-login", { body: payload });
+
+        if (error && DEBUG) {
+          console.warn("[AuthAuditLogger] log-login error:", error);
+        }
       } catch (e) {
-        console.warn("[AuthAuditLogger] log-login invoke failed:", e);
+        if (DEBUG) console.warn("[AuthAuditLogger] log-login invoke failed:", e);
       }
     };
 
-    const logLogin = async (session: any, reason: string) => {
-      const email = session?.user?.email ?? null;
-      const userId = session?.user?.id ?? null;
-      if (!userId) return;
-
-      // cooldown only for "session already present"
-      if (reason === "APP_MOUNT_SESSION") {
-        const k = cooldownKey(userId);
-        const last = Number(localStorage.getItem(k) || "0");
+    const shouldLogRefresh = () => {
+      try {
+        const last = Number(localStorage.getItem(LS_KEY) || "0");
         const now = Date.now();
-        if (last && now - last < COOLDOWN_MS) {
-          if (DEBUG) console.log("[AuthAuditLogger] skip cooldown", { userId, reason });
-          return;
-        }
-        localStorage.setItem(k, String(now));
+        if (now - last < COOLDOWN_MS) return false;
+        localStorage.setItem(LS_KEY, String(now));
+        return true;
+      } catch {
+        return true;
       }
-
-      await safeCall({
-        event: "login",
-        success: true,
-        email,
-        source: "web",
-        meta: baseMeta(userId, reason),
-      });
     };
 
-    const logLogout = async (session: any, reason: string) => {
+    const log = (event: "login" | "logout" | "refresh", session: any, reason: string) => {
       const email = session?.user?.email ?? null;
       const userId = session?.user?.id ?? null;
 
-      await safeCall({
-        event: "logout",
+      // ne pas log si pas de user
+      if (!session?.user) return;
+
+      // anti-spam uniquement pour refresh
+      if (event === "refresh" && !shouldLogRefresh()) {
+        if (DEBUG) console.log("[AuthAuditLogger] skip refresh cooldown");
+        return;
+      }
+
+      return safeInvoke({
+        event,
         success: true,
         email,
         source: "web",
@@ -202,25 +200,25 @@ function AuthAuditLogger() {
       });
     };
 
-    // ✅ Log au montage si session déjà active (cas le plus fréquent quand tu "reviens" sur l'app)
-    supabase.auth
-      .getSession()
-      .then(({ data }) => {
-        if (DEBUG) console.log("[AuthAuditLogger] getSession:", !!data?.session);
-        if (data?.session?.user) {
-          logLogin(data.session, "APP_MOUNT_SESSION");
-        }
-      })
-      .catch(() => {});
-
-    // ✅ Log des événements Auth
     const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
       if (DEBUG) console.log("[AuthAuditLogger] auth event:", evt);
 
       if (evt === "SIGNED_IN") {
-        logLogin(session, "SIGNED_IN");
+        log("login", session, "SIGNED_IN");
       } else if (evt === "SIGNED_OUT") {
-        logLogout(session, "SIGNED_OUT");
+        // session est souvent null sur SIGNED_OUT -> on envoie meta quand même
+        safeInvoke({
+          event: "logout",
+          success: true,
+          email: session?.user?.email ?? null,
+          source: "web",
+          meta: baseMeta(session?.user?.id ?? null, "SIGNED_OUT"),
+        });
+      } else if (evt === "INITIAL_SESSION") {
+        // ✅ cas principal: session restaurée au reload/retour
+        if (session?.user) {
+          log("refresh", session, "INITIAL_SESSION");
+        }
       }
     });
 
