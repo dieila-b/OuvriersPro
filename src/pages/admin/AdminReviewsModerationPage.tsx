@@ -41,12 +41,16 @@ type ProfileRow = {
   id: string;
   email?: string | null;
   full_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
 };
 
 type WorkerProfileRow = {
   user_id: string;
   email?: string | null;
   full_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
   company_name?: string | null;
   trade?: string | null;
 };
@@ -86,14 +90,20 @@ function isUuidLike(v: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v.trim());
 }
 
-// Affichage demandé: "Prénom Nom" -> ici on n'a pas les colonnes,
-// donc on affiche full_name, sinon email, sinon "Utilisateur".
-function buildDisplayBestEffort(p?: Partial<ProfileRow & WorkerProfileRow> | null) {
-  const full = ((p as any)?.full_name ?? "") as string;
-  const email = ((p as any)?.email ?? "") as string;
-  const company = ((p as any)?.company_name ?? "") as string;
+/**
+ * Affichage demandé: Prénom + Nom.
+ * Fallback: full_name, puis email, puis "Utilisateur".
+ * (On garde l'UUID en title dans le tableau pour debug/traçabilité.)
+ */
+function buildName(p?: Partial<ProfileRow & WorkerProfileRow> | null) {
+  const first = ((p as any)?.first_name ?? "") as string;
+  const last = ((p as any)?.last_name ?? "") as string;
+  const parts = [first, last].filter(Boolean).join(" ").trim();
 
-  return (full && full.trim()) || (company && company.trim()) || (email && email.trim()) || "Utilisateur";
+  const full = (((p as any)?.full_name ?? "") as string).trim();
+  const email = (((p as any)?.email ?? "") as string).trim();
+
+  return parts || full || email || "Utilisateur";
 }
 
 export default function AdminReviewsModerationPage() {
@@ -166,20 +176,24 @@ export default function AdminReviewsModerationPage() {
     const profileMap = new Map<string, ProfileRow>();
     const workerProfileMap = new Map<string, WorkerProfileRow>();
 
-    // profiles: on ne sélectionne QUE des colonnes qui existent chez toi
+    // profiles (clients + fallback prestataire)
     if (uniqClients.length || uniqWorkers.length) {
       const allIds = Array.from(new Set([...uniqClients, ...uniqWorkers]));
-      const { data, error } = await supabase.from("profiles").select("id,email,full_name").in("id", allIds);
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id,email,first_name,last_name,full_name")
+        .in("id", allIds);
+
       if (!error && Array.isArray(data)) {
         (data as ProfileRow[]).forEach((p) => profileMap.set(p.id, p));
       }
     }
 
-    // worker_profiles: idem (colonnes safe)
+    // worker_profiles (optionnel)
     if (uniqWorkers.length) {
       const { data, error } = await supabase
         .from("worker_profiles")
-        .select("user_id,email,full_name,company_name,trade")
+        .select("user_id,email,first_name,last_name,full_name,company_name,trade")
         .in("user_id", uniqWorkers);
 
       if (!error && Array.isArray(data)) {
@@ -229,8 +243,8 @@ export default function AdminReviewsModerationPage() {
 
         return {
           ...r,
-          client_display: buildDisplayBestEffort(clientP ?? null),
-          worker_display: buildDisplayBestEffort((workerWP ?? workerP) ?? null),
+          client_display: buildName(clientP ?? null),
+          worker_display: buildName((workerWP ?? workerP) ?? null),
         };
       });
 
