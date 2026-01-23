@@ -48,6 +48,9 @@ import AdminAds from "./pages/AdminAds";
 // ✅ Admin Journal de connexions
 import AdminLoginJournalPage from "./pages/admin/AdminLoginJournalPage";
 
+// ✅ Admin Modération avis (NOUVEAU)
+import AdminReviewsModerationPage from "./pages/admin/AdminReviewsModerationPage";
+
 // Espace ouvrier connecté
 import WorkerDashboard from "./pages/WorkerDashboard";
 import WorkerMessagesPage from "./pages/WorkerMessagesPage";
@@ -96,10 +99,6 @@ function ScrollManager() {
 
 /**
  * ✅ Journal de connexion (Supabase Edge Function) — non bloquant
- *
- * Problème courant:
- * - Quand l'utilisateur est déjà connecté, Supabase émet souvent "INITIAL_SESSION"
- *   (pas "SIGNED_IN") => pas de log si on ne le gère pas.
  *
  * Fix:
  * - On log "refresh" sur INITIAL_SESSION (avec anti-spam).
@@ -153,7 +152,6 @@ function AuthAuditLogger() {
         const { data, error } = await supabase.functions.invoke("log-login", { body: payload });
 
         if (error) {
-          // Log détaillé de l'erreur
           console.error("[AuthAuditLogger] log-login error:", {
             message: error.message ?? String(error),
             name: (error as any).name ?? "Unknown",
@@ -190,13 +188,11 @@ function AuthAuditLogger() {
       const email = session?.user?.email ?? null;
       const userId = session?.user?.id ?? null;
 
-      // ne pas log si pas de user
       if (!session?.user) {
         if (DEBUG) console.log("[AuthAuditLogger] skip - no user in session");
         return;
       }
 
-      // anti-spam uniquement pour refresh
       if (event === "refresh" && !shouldLogRefresh()) {
         if (DEBUG) console.log("[AuthAuditLogger] skip refresh cooldown");
         return;
@@ -219,7 +215,6 @@ function AuthAuditLogger() {
       if (evt === "SIGNED_IN") {
         log("login", session, "SIGNED_IN");
       } else if (evt === "SIGNED_OUT") {
-        // session est souvent null sur SIGNED_OUT -> on envoie meta quand même
         safeInvoke({
           event: "logout",
           success: true,
@@ -228,7 +223,6 @@ function AuthAuditLogger() {
           meta: baseMeta(session?.user?.id ?? null, "SIGNED_OUT"),
         });
       } else if (evt === "INITIAL_SESSION") {
-        // ✅ cas principal: session restaurée au reload/retour
         if (session?.user) {
           log("refresh", session, "INITIAL_SESSION");
         }
@@ -384,6 +378,9 @@ const AppRoutes = () => (
         <Route path="contenu" element={<AdminContent />} />
         <Route path="faq-questions" element={<AdminFaqQuestions />} />
         <Route path="journal-connexions" element={<AdminLoginJournalPage />} />
+
+        {/* ✅ NOUVEAU: Modération avis */}
+        <Route path="moderation-avis" element={<AdminReviewsModerationPage />} />
       </Route>
 
       {/* 404 */}
