@@ -2,14 +2,32 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Outlet, NavLink, Link, useLocation } from "react-router-dom";
 import AdminLogoutButton from "@/components/admin/AdminLogoutButton";
-import { Menu, X, ExternalLink, ChevronDown, Check } from "lucide-react";
+import {
+  Menu,
+  X,
+  ExternalLink,
+  ChevronDown,
+  Check,
+  Search,
+  LayoutDashboard,
+  PhoneCall,
+  UserCheck,
+  Megaphone,
+  Flag,
+  BookOpen,
+  FileText,
+  Shield,
+  LogIn,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
+type NavGroup = "core" | "content";
 type NavItem = {
   to: string;
   label: string;
   end?: boolean;
-  group?: "core" | "content";
+  group?: NavGroup;
+  icon?: React.ComponentType<{ className?: string }>;
 };
 
 function pillClass({ isActive }: { isActive: boolean }) {
@@ -33,7 +51,39 @@ function mobileNavClass({ isActive }: { isActive: boolean }) {
   );
 }
 
-/** Petit dropdown custom (sans dépendance) */
+function matchActive(activePath: string, it: NavItem) {
+  return it.end ? activePath === it.to : activePath.startsWith(it.to);
+}
+
+/** Breadcrumb (Administration / Page) */
+function Breadcrumb({
+  activePath,
+  items,
+}: {
+  activePath: string;
+  items: NavItem[];
+}) {
+  const active = useMemo(() => {
+    return (
+      items.find((it) => matchActive(activePath, it)) ||
+      items.find((it) => it.to === "/admin/dashboard")
+    );
+  }, [activePath, items]);
+
+  return (
+    <div className="border-b border-slate-200/70 bg-white/55 backdrop-blur">
+      <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10">
+        <div className="py-2.5 text-xs text-slate-500 flex items-center gap-2 min-w-0">
+          <span className="font-medium text-slate-600">Administration</span>
+          <span className="text-slate-300">/</span>
+          <span className="truncate text-slate-700">{active?.label ?? "—"}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Dropdown "Plus" premium : filtre live + icônes */
 function MoreMenu({
   items,
   activePath,
@@ -44,6 +94,7 @@ function MoreMenu({
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -54,11 +105,20 @@ function MoreMenu({
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  // reset search when closing
+  useEffect(() => {
+    if (!open) setQ("");
+  }, [open]);
+
   const isAnyActive = useMemo(() => {
-    return items.some((it) =>
-      it.end ? activePath === it.to : activePath.startsWith(it.to)
-    );
+    return items.some((it) => matchActive(activePath, it));
   }, [items, activePath]);
+
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return items;
+    return items.filter((it) => it.label.toLowerCase().includes(s));
+  }, [items, q]);
 
   return (
     <div className="relative shrink-0">
@@ -92,7 +152,7 @@ function MoreMenu({
         <div
           role="menu"
           className={cn(
-            "absolute right-0 mt-2 z-50 w-72",
+            "absolute right-0 mt-2 z-50 w-[22rem]",
             "rounded-2xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.18)]",
             "p-2"
           )}
@@ -101,33 +161,65 @@ function MoreMenu({
             Navigation
           </div>
 
-          <div className="mt-1 space-y-1">
-            {items.map((it) => {
-              const active = it.end ? activePath === it.to : activePath.startsWith(it.to);
-              return (
-                <NavLink
-                  key={it.to}
-                  to={it.to}
-                  className={cn(
-                    "w-full flex items-center justify-between gap-3",
-                    "px-3 py-2 rounded-xl text-sm transition",
-                    "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
-                    active
-                      ? "bg-slate-50 text-pro-gray border border-slate-200"
-                      : "text-slate-700 hover:bg-slate-50 border border-transparent"
-                  )}
-                  end={it.end}
-                  onClick={() => setOpen(false)}
-                >
-                  <span className="truncate">{it.label}</span>
-                  {active && (
-                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-pro-blue text-white">
-                      <Check className="h-4 w-4" />
+          {/* live search */}
+          <div className="px-2 pb-2">
+            <div className="relative">
+              <Search className="h-4 w-4 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Rechercher dans Plus…"
+                className={cn(
+                  "w-full h-9 rounded-xl border border-slate-200 bg-slate-50/60",
+                  "pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400",
+                  "focus:outline-none focus:ring-2 focus:ring-pro-blue/40 focus:border-slate-200"
+                )}
+              />
+            </div>
+          </div>
+
+          <div className="mt-1 space-y-1 max-h-[340px] overflow-auto pr-1">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-6 text-center text-sm text-slate-500">
+                Aucun résultat
+              </div>
+            ) : (
+              filtered.map((it) => {
+                const active = matchActive(activePath, it);
+                const Icon = it.icon;
+                return (
+                  <NavLink
+                    key={it.to}
+                    to={it.to}
+                    className={cn(
+                      "w-full flex items-center justify-between gap-3",
+                      "px-3 py-2 rounded-xl text-sm transition",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
+                      active
+                        ? "bg-slate-50 text-pro-gray border border-slate-200"
+                        : "text-slate-700 hover:bg-slate-50 border border-transparent"
+                    )}
+                    end={it.end}
+                    onClick={() => setOpen(false)}
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      {Icon ? (
+                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm shrink-0">
+                          <Icon className="h-4 w-4 text-slate-700" />
+                        </span>
+                      ) : null}
+                      <span className="truncate">{it.label}</span>
                     </span>
-                  )}
-                </NavLink>
-              );
-            })}
+
+                    {active && (
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-pro-blue text-white">
+                        <Check className="h-4 w-4" />
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })
+            )}
           </div>
         </div>
       )}
@@ -141,21 +233,52 @@ export default function AdminLayout() {
 
   const navItems: NavItem[] = useMemo(
     () => [
-      { to: "/admin/dashboard", label: "Tableau de bord", end: true, group: "core" },
-      { to: "/admin/ouvrier-contacts", label: "Demandes de contact", group: "core" },
-      { to: "/admin/ouvriers", label: "Inscriptions prestataires", group: "core" },
-      { to: "/admin/publicites", label: "Publicités", group: "core" },
-      { to: "/admin/signalements", label: "Signalements", group: "core" },
-      { to: "/admin/journal-connexions", label: "Journal de connexions", group: "core" },
-      { to: "/admin/faq-questions", label: "Questions FAQ", group: "content" },
-      { to: "/admin/contenu", label: "Contenu du site", group: "content" },
+      {
+        to: "/admin/dashboard",
+        label: "Tableau de bord",
+        end: true,
+        group: "core",
+        icon: LayoutDashboard,
+      },
+      {
+        to: "/admin/ouvrier-contacts",
+        label: "Demandes de contact",
+        group: "core",
+        icon: PhoneCall,
+      },
+      {
+        to: "/admin/ouvriers",
+        label: "Inscriptions prestataires",
+        group: "core",
+        icon: UserCheck,
+      },
+      {
+        to: "/admin/publicites",
+        label: "Publicités",
+        group: "core",
+        icon: Megaphone,
+      },
+      {
+        to: "/admin/signalements",
+        label: "Signalements",
+        group: "core",
+        icon: Flag,
+      },
+      {
+        to: "/admin/journal-connexions",
+        label: "Journal de connexions",
+        group: "core",
+        icon: LogIn,
+      },
+      { to: "/admin/faq-questions", label: "Questions FAQ", group: "content", icon: BookOpen },
+      { to: "/admin/contenu", label: "Contenu du site", group: "content", icon: FileText },
     ],
     []
   );
 
   // Répartition : visible (pills) vs overflow (Plus)
   const { visibleItems, overflowItems } = useMemo(() => {
-    const MAX_VISIBLE = 5; // ajustable
+    const MAX_VISIBLE = 5;
     const visible = navItems.slice(0, MAX_VISIBLE);
     const overflow = navItems.slice(MAX_VISIBLE);
     return { visibleItems: visible, overflowItems: overflow };
@@ -189,7 +312,8 @@ export default function AdminLayout() {
   const activePath = location.pathname;
 
   return (
-    <div data-admin className="min-h-dvh bg-slate-50 overflow-x-clip">
+    // ✅ IMPORTANT: retirer overflow-x-clip (cassait le scroll horizontal des pages)
+    <div data-admin className="min-h-dvh bg-slate-50">
       {/* Top header glass + subtle gradient */}
       <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/75 backdrop-blur">
         <div className="absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-white/70 to-transparent pointer-events-none" />
@@ -205,9 +329,7 @@ export default function AdminLayout() {
                 <div className="text-sm font-semibold text-pro-gray truncate">
                   Administration
                 </div>
-                <div className="text-[11px] text-slate-500 truncate">
-                  Back-office
-                </div>
+                <div className="text-[11px] text-slate-500 truncate">Back-office</div>
               </div>
             </div>
 
@@ -216,16 +338,15 @@ export default function AdminLayout() {
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 {/* Pills */}
                 <div className="flex items-center gap-1 min-w-0">
-                  {visibleItems.map((it) => (
-                    <NavLink
-                      key={it.to}
-                      to={it.to}
-                      className={pillClass}
-                      end={it.end}
-                    >
-                      {it.label}
-                    </NavLink>
-                  ))}
+                  {visibleItems.map((it) => {
+                    const Icon = it.icon;
+                    return (
+                      <NavLink key={it.to} to={it.to} className={pillClass} end={it.end}>
+                        {Icon ? <Icon className="h-4 w-4" /> : null}
+                        {it.label}
+                      </NavLink>
+                    );
+                  })}
 
                   {overflowItems.length > 0 && (
                     <MoreMenu items={overflowItems} activePath={activePath} label="Plus" />
@@ -269,6 +390,9 @@ export default function AdminLayout() {
             </div>
           </div>
         </div>
+
+        {/* ✅ Breadcrumb sous la barre */}
+        <Breadcrumb activePath={activePath} items={navItems} />
 
         {/* Mobile drawer */}
         <div className="md:hidden">
@@ -316,16 +440,17 @@ export default function AdminLayout() {
                 <div className="mt-2 space-y-1">
                   {navItems
                     .filter((x) => x.group === "core")
-                    .map((it) => (
-                      <NavLink
-                        key={it.to}
-                        to={it.to}
-                        className={mobileNavClass}
-                        end={it.end}
-                      >
-                        {it.label}
-                      </NavLink>
-                    ))}
+                    .map((it) => {
+                      const Icon = it.icon;
+                      return (
+                        <NavLink key={it.to} to={it.to} className={mobileNavClass} end={it.end}>
+                          <span className="inline-flex items-center gap-2">
+                            {Icon ? <Icon className="h-4 w-4" /> : null}
+                            {it.label}
+                          </span>
+                        </NavLink>
+                      );
+                    })}
                 </div>
               </div>
 
@@ -337,16 +462,17 @@ export default function AdminLayout() {
                 <div className="mt-2 space-y-1">
                   {navItems
                     .filter((x) => x.group === "content")
-                    .map((it) => (
-                      <NavLink
-                        key={it.to}
-                        to={it.to}
-                        className={mobileNavClass}
-                        end={it.end}
-                      >
-                        {it.label}
-                      </NavLink>
-                    ))}
+                    .map((it) => {
+                      const Icon = it.icon;
+                      return (
+                        <NavLink key={it.to} to={it.to} className={mobileNavClass} end={it.end}>
+                          <span className="inline-flex items-center gap-2">
+                            {Icon ? <Icon className="h-4 w-4" /> : null}
+                            {it.label}
+                          </span>
+                        </NavLink>
+                      );
+                    })}
                 </div>
               </div>
 
@@ -361,11 +487,22 @@ export default function AdminLayout() {
 
                 <AdminLogoutButton className="w-full justify-center" redirectTo="/" />
               </div>
+
+              <div className="pt-2">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 flex items-start gap-2">
+                  <Shield className="h-4 w-4 mt-0.5" />
+                  <div>
+                    Astuce : sur mobile, la navigation est regroupée ici. Sur desktop, “Plus” inclut une
+                    recherche.
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </header>
 
+      {/* main : garder min-w-0 pour éviter les overflows inutiles */}
       <main className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10 py-4 sm:py-6 min-w-0">
         <Outlet />
       </main>
