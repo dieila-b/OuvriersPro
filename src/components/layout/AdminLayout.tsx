@@ -1,5 +1,5 @@
 // src/components/layout/AdminLayout.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, NavLink, Link, useLocation } from "react-router-dom";
 import AdminLogoutButton from "@/components/admin/AdminLogoutButton";
 import {
@@ -244,7 +244,6 @@ export default function AdminLayout() {
     []
   );
 
-  // ✅ On garde peu d’items visibles + le reste dans "Plus"
   const { visibleItems, overflowItems } = useMemo(() => {
     const MAX_VISIBLE = 4;
     return {
@@ -253,12 +252,10 @@ export default function AdminLayout() {
     };
   }, [navItems]);
 
-  // Drawer close on navigation
   useEffect(() => {
     setDrawerOpen(false);
   }, [location.pathname]);
 
-  // Lock body scroll when drawer open
   useEffect(() => {
     if (!drawerOpen) return;
     const prev = document.body.style.overflow;
@@ -268,7 +265,6 @@ export default function AdminLayout() {
     };
   }, [drawerOpen]);
 
-  // ESC closes drawer
   useEffect(() => {
     if (!drawerOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -280,7 +276,6 @@ export default function AdminLayout() {
 
   const activePath = location.pathname;
 
-  // ✅ Scrollable pills helpers
   const pillsRef = useRef<HTMLDivElement | null>(null);
   const [canLeft, setCanLeft] = useState(false);
   const [canRight, setCanRight] = useState(false);
@@ -306,7 +301,6 @@ export default function AdminLayout() {
     if (!el) return;
     const delta = Math.max(240, Math.floor(el.clientWidth * 0.7));
     el.scrollBy({ left: dir === "left" ? -delta : delta, behavior: "smooth" });
-    // update later
     window.setTimeout(updateScrollState, 250);
   };
 
@@ -317,7 +311,6 @@ export default function AdminLayout() {
 
         <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10">
           <div className="flex items-center gap-3 py-3 min-w-0">
-            {/* Brand */}
             <div className="flex items-center gap-2 shrink-0">
               <div className="h-10 w-10 rounded-2xl bg-pro-blue text-white flex items-center justify-center text-sm font-bold shadow-sm">
                 PS
@@ -330,12 +323,9 @@ export default function AdminLayout() {
               </div>
             </div>
 
-            {/* ✅ Desktop nav dès md (pas seulement lg) */}
             <nav className="hidden md:flex min-w-0 flex-1 items-center">
               <div className="flex items-center gap-2 min-w-0 flex-1">
-                {/* ✅ Scrollable pills area */}
                 <div className="relative min-w-0 flex-1">
-                  {/* left gradient + button */}
                   <div
                     className={cn(
                       "absolute left-0 top-0 bottom-0 w-10 z-10 pointer-events-none",
@@ -358,7 +348,6 @@ export default function AdminLayout() {
                     <ChevronLeft className="h-4 w-4" />
                   </button>
 
-                  {/* right gradient + button */}
                   <div
                     className={cn(
                       "absolute right-0 top-0 bottom-0 w-10 z-10 pointer-events-none",
@@ -381,15 +370,15 @@ export default function AdminLayout() {
                     <ChevronRight className="h-4 w-4" />
                   </button>
 
-                  {/* scroll container */}
                   <div
                     ref={pillsRef}
                     onScroll={updateScrollState}
                     className={cn(
                       "flex items-center gap-1 min-w-0",
-                      "overflow-x-auto scrollbar-none",
-                      "px-10" // laisse place aux boutons de scroll
+                      "overflow-x-auto",
+                      "px-10"
                     )}
+                    style={{ scrollbarWidth: "none" as any }}
                   >
                     {visibleItems.map((it) => {
                       const Icon = it.icon;
@@ -407,7 +396,6 @@ export default function AdminLayout() {
                   </div>
                 </div>
 
-                {/* ✅ Right actions always visible */}
                 <div className="flex items-center gap-2 shrink-0 pl-2">
                   <Link
                     to="/"
@@ -428,7 +416,6 @@ export default function AdminLayout() {
               </div>
             </nav>
 
-            {/* ✅ Mobile (< md) */}
             <div className="ml-auto flex items-center gap-2 md:hidden shrink-0">
               <button
                 type="button"
@@ -445,7 +432,6 @@ export default function AdminLayout() {
 
         <Breadcrumb activePath={activePath} items={navItems} />
 
-        {/* Drawer : visible < md */}
         <div className="md:hidden">
           <div
             className={cn(
