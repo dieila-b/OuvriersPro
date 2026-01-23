@@ -18,6 +18,7 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
+  MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +52,13 @@ function itemClass({
   );
 }
 
-function Breadcrumb({ activePath, items }: { activePath: string; items: NavItem[] }) {
+function Breadcrumb({
+  activePath,
+  items,
+}: {
+  activePath: string;
+  items: NavItem[];
+}) {
   const active = useMemo(() => {
     return (
       items.find((it) => matchActive(activePath, it)) ||
@@ -87,10 +94,15 @@ function Sidebar({
   const content = navItems.filter((x) => x.group === "content");
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col min-h-0">
       {/* Brand */}
       <div className="px-3 pt-4 pb-4 border-b border-slate-200/70">
-        <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
+        <div
+          className={cn(
+            "flex items-center gap-3 min-w-0",
+            collapsed && "justify-center"
+          )}
+        >
           <div className="h-10 w-10 rounded-2xl bg-pro-blue text-white flex items-center justify-center text-sm font-bold shadow-sm shrink-0">
             PS
           </div>
@@ -100,7 +112,9 @@ function Sidebar({
               <div className="text-sm font-semibold text-slate-900 truncate">
                 Administration
               </div>
-              <div className="text-[11px] text-slate-500 truncate">Back-office</div>
+              <div className="text-[11px] text-slate-500 truncate">
+                Back-office
+              </div>
             </div>
           )}
 
@@ -111,6 +125,7 @@ function Sidebar({
               className={cn(
                 "ml-auto inline-flex items-center justify-center h-10 w-10 rounded-2xl",
                 "border border-slate-200 bg-white hover:bg-slate-50 shadow-sm",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
                 collapsed && "ml-0"
               )}
               aria-label={collapsed ? "Étendre le menu" : "Réduire le menu"}
@@ -129,7 +144,7 @@ function Sidebar({
       {/* Nav */}
       <div
         className={cn(
-          "flex-1 overflow-y-auto",
+          "flex-1 min-h-0 overflow-y-auto overscroll-contain",
           collapsed ? "px-2 py-3" : "px-3 py-4",
           "space-y-5"
         )}
@@ -211,15 +226,17 @@ function Sidebar({
         {!collapsed && (
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 flex items-start gap-2">
             <Shield className="h-4 w-4 mt-0.5" />
-            <div>Astuce : utilise le bouton en haut pour réduire/étendre la sidebar.</div>
+            <div>
+              Astuce : utilise le bouton en haut pour réduire/étendre la sidebar.
+            </div>
           </div>
         )}
       </div>
 
-      {/* Bottom actions */}
+      {/* Bottom actions (sticky bottom inside sidebar) */}
       <div
         className={cn(
-          "border-t border-slate-200/70",
+          "border-t border-slate-200/70 bg-white/80 backdrop-blur",
           collapsed ? "px-2 py-3" : "px-4 py-4",
           "space-y-2"
         )}
@@ -272,14 +289,64 @@ export default function AdminLayout() {
 
   const navItems: NavItem[] = useMemo(
     () => [
-      { to: "/admin/dashboard", label: "Tableau de bord", end: true, group: "core", icon: LayoutDashboard },
-      { to: "/admin/ouvrier-contacts", label: "Demandes de contact", group: "core", icon: PhoneCall },
-      { to: "/admin/ouvriers", label: "Inscriptions prestataires", group: "core", icon: UserCheck },
-      { to: "/admin/publicites", label: "Publicités", group: "core", icon: Megaphone },
-      { to: "/admin/signalements", label: "Signalements", group: "core", icon: Flag },
-      { to: "/admin/journal-connexions", label: "Journal de connexions", group: "core", icon: LogIn },
-      { to: "/admin/faq-questions", label: "Questions FAQ", group: "content", icon: BookOpen },
-      { to: "/admin/contenu", label: "Contenu du site", group: "content", icon: FileText },
+      {
+        to: "/admin/dashboard",
+        label: "Tableau de bord",
+        end: true,
+        group: "core",
+        icon: LayoutDashboard,
+      },
+      {
+        to: "/admin/ouvrier-contacts",
+        label: "Demandes de contact",
+        group: "core",
+        icon: PhoneCall,
+      },
+      {
+        to: "/admin/ouvriers",
+        label: "Inscriptions prestataires",
+        group: "core",
+        icon: UserCheck,
+      },
+      {
+        to: "/admin/publicites",
+        label: "Publicités",
+        group: "core",
+        icon: Megaphone,
+      },
+      {
+        to: "/admin/signalements",
+        label: "Signalements",
+        group: "core",
+        icon: Flag,
+      },
+      {
+        to: "/admin/journal-connexions",
+        label: "Journal de connexions",
+        group: "core",
+        icon: LogIn,
+      },
+
+      // ✅ Nouveau : Modération avis
+      {
+        to: "/admin/moderation-avis",
+        label: "Modération avis",
+        group: "core",
+        icon: MessageCircle,
+      },
+
+      {
+        to: "/admin/faq-questions",
+        label: "Questions FAQ",
+        group: "content",
+        icon: BookOpen,
+      },
+      {
+        to: "/admin/contenu",
+        label: "Contenu du site",
+        group: "content",
+        icon: FileText,
+      },
     ],
     []
   );
@@ -316,18 +383,20 @@ export default function AdminLayout() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [drawerOpen]);
 
+  // ✅ largeur responsive desktop sidebar
   const desktopSidebarWidth = collapsed ? "w-[88px]" : "w-[280px]";
 
   return (
     <div data-admin className="min-h-dvh bg-slate-50">
-      {/* Top header (simple, always responsive) */}
+      {/* Top header (always responsive) */}
       <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/80 backdrop-blur">
         <div className="mx-auto w-full max-w-[1600px] px-3 sm:px-6 lg:px-8 py-3">
           <div className="flex items-center gap-3">
             {/* Mobile menu button */}
             <button
               type="button"
-              className="md:hidden inline-flex items-center justify-center h-10 w-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 shadow-sm"
+              className="md:hidden inline-flex items-center justify-center h-10 w-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 shadow-sm
+                         focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40"
               aria-label={drawerOpen ? "Fermer le menu" : "Ouvrir le menu"}
               aria-expanded={drawerOpen}
               onClick={() => setDrawerOpen((v) => !v)}
@@ -365,8 +434,14 @@ export default function AdminLayout() {
       <div className="mx-auto w-full max-w-[1600px]">
         <div className="flex min-h-[calc(100dvh-64px)]">
           {/* Desktop/Tablet sidebar */}
-          <aside className={cn("hidden md:block shrink-0 border-r border-slate-200/70 bg-white/65 backdrop-blur", desktopSidebarWidth)}>
-            <div className="sticky top-[64px] h-[calc(100dvh-64px)]">
+          <aside
+            className={cn(
+              "hidden md:block shrink-0 border-r border-slate-200/70 bg-white/65 backdrop-blur",
+              desktopSidebarWidth
+            )}
+          >
+            {/* ✅ sticky + hauteur correcte + scroll interne */}
+            <div className="sticky top-[64px] h-[calc(100dvh-64px)] min-h-0">
               <Sidebar
                 navItems={navItems}
                 activePath={activePath}
@@ -389,7 +464,9 @@ export default function AdminLayout() {
         <div
           className={cn(
             "fixed inset-0 z-40 bg-black/35 transition-opacity",
-            drawerOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+            drawerOpen
+              ? "opacity-100 pointer-events-auto"
+              : "opacity-0 pointer-events-none"
           )}
           onClick={() => setDrawerOpen(false)}
           aria-hidden="true"
@@ -405,6 +482,7 @@ export default function AdminLayout() {
           aria-modal="true"
           aria-label="Menu admin"
         >
+          {/* ✅ mobile = non-collapsed + scroll interne */}
           <Sidebar
             navItems={navItems}
             activePath={activePath}
