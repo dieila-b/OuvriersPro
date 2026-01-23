@@ -305,7 +305,9 @@ const AdminOuvrierContacts: React.FC = () => {
     setError(null);
 
     const prev = contacts;
-    setContacts((p) => p.map((c) => (c.id === id ? { ...c, status: newStatus } : c)));
+    setContacts((p) =>
+      p.map((c) => (c.id === id ? { ...c, status: newStatus } : c))
+    );
 
     const { error } = await supabase
       .from("op_ouvrier_contacts")
@@ -352,7 +354,10 @@ const AdminOuvrierContacts: React.FC = () => {
   }, [filtered, originLabel]);
 
   const text = {
-    title: language === "fr" ? "Demandes de contact ouvriers" : "Worker contact requests",
+    title:
+      language === "fr"
+        ? "Demandes de contact ouvriers"
+        : "Worker contact requests",
     subtitle:
       language === "fr"
         ? "Vue d’ensemble des demandes envoyées par les particuliers."
@@ -369,14 +374,21 @@ const AdminOuvrierContacts: React.FC = () => {
     new: language === "fr" ? "Nouveau" : "New",
     inProgress: language === "fr" ? "En cours" : "In progress",
     done: language === "fr" ? "Traité" : "Done",
-    empty: language === "fr" ? "Aucune demande pour le moment." : "No requests yet.",
+    empty:
+      language === "fr"
+        ? "Aucune demande pour le moment."
+        : "No requests yet.",
     refresh: language === "fr" ? "Rafraîchir" : "Refresh",
     exportCsv: language === "fr" ? "Exporter CSV" : "Export CSV",
-    statTotal: language === "fr" ? "Total (période filtrée)" : "Total (filtered)",
+    statTotal:
+      language === "fr" ? "Total (période filtrée)" : "Total (filtered)",
     statToday: language === "fr" ? "Aujourd’hui" : "Today",
     statLast7: language === "fr" ? "7 derniers jours" : "Last 7 days",
     statByOrigin: language === "fr" ? "Par origine" : "By origin",
-    checking: language === "fr" ? "Vérification de vos droits..." : "Checking your permissions...",
+    checking:
+      language === "fr"
+        ? "Vérification de vos droits..."
+        : "Checking your permissions...",
     loading: language === "fr" ? "Chargement..." : "Loading...",
     colDate: language === "fr" ? "Date" : "Date",
     colWorker: language === "fr" ? "Ouvrier" : "Worker",
@@ -385,6 +397,10 @@ const AdminOuvrierContacts: React.FC = () => {
     colStatus: language === "fr" ? "Statut" : "Status",
     colOrigin: language === "fr" ? "Origine" : "Origin",
     colActions: language === "fr" ? "Actions" : "Actions",
+    tip:
+      language === "fr"
+        ? "Astuce : sur desktop, la table est scrollable horizontalement si l’écran est étroit."
+        : "Tip: on desktop, the table can scroll horizontally on narrow screens.",
   };
 
   const refresh = async () => {
@@ -424,7 +440,8 @@ const AdminOuvrierContacts: React.FC = () => {
       ].map(escapeCsv)
     );
 
-    const csvContent = headers.join(";") + "\n" + rows.map((r) => r.join(";")).join("\n");
+    const csvContent =
+      headers.join(";") + "\n" + rows.map((r) => r.join(";")).join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -566,7 +583,9 @@ const AdminOuvrierContacts: React.FC = () => {
               </div>
 
               <div className="min-w-0">
-                <label className="block text-xs font-medium text-slate-600 mb-1">{text.dateFrom}</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  {text.dateFrom}
+                </label>
                 <Input
                   type="date"
                   value={dateFrom}
@@ -576,7 +595,9 @@ const AdminOuvrierContacts: React.FC = () => {
               </div>
 
               <div className="min-w-0">
-                <label className="block text-xs font-medium text-slate-600 mb-1">{text.dateTo}</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  {text.dateTo}
+                </label>
                 <Input
                   type="date"
                   value={dateTo}
@@ -586,7 +607,9 @@ const AdminOuvrierContacts: React.FC = () => {
               </div>
 
               <div className="min-w-0">
-                <label className="block text-xs font-medium text-slate-600 mb-1">{text.searchLabel}</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  {text.searchLabel}
+                </label>
                 <div className="relative min-w-0">
                   <Search className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
                   <Input
@@ -609,16 +632,32 @@ const AdminOuvrierContacts: React.FC = () => {
 
         {/* ✅ LISTING */}
         <div className="mt-6">
-          {/* ✅ MOBILE: cards */}
-          <div className="md:hidden space-y-3">
+          {/* ✅ RESPONSIVE RULE:
+              - Mobile + Tablet + small laptops: cards
+              - Desktop: table
+              (=> switch md -> lg)
+          */}
+
+          {/* ✅ CARDS (<= lg) */}
+          <div className="lg:hidden space-y-3">
             {loading && (
-              <div className={cn(cardClass, "px-4 py-6 text-center text-slate-500 text-sm")}>
+              <div
+                className={cn(
+                  cardClass,
+                  "px-4 py-6 text-center text-slate-500 text-sm"
+                )}
+              >
                 {text.loading}
               </div>
             )}
 
             {!loading && filtered.length === 0 && (
-              <div className={cn(cardClass, "px-4 py-6 text-center text-slate-500 text-sm")}>
+              <div
+                className={cn(
+                  cardClass,
+                  "px-4 py-6 text-center text-slate-500 text-sm"
+                )}
+              >
                 {text.empty}
               </div>
             )}
@@ -632,7 +671,9 @@ const AdminOuvrierContacts: React.FC = () => {
                   <div key={c.id} className={cn(cardClass, "p-4")}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-xs text-slate-500">{formatDate(c.created_at)}</div>
+                        <div className="text-xs text-slate-500">
+                          {formatDate(c.created_at)}
+                        </div>
                         <div className="mt-1 font-semibold text-slate-900 truncate">
                           {c.worker_name || "—"}
                         </div>
@@ -651,7 +692,9 @@ const AdminOuvrierContacts: React.FC = () => {
                     <div className="mt-3 grid gap-2 text-sm">
                       <div className="flex items-center gap-2 text-slate-700">
                         <User className="h-4 w-4 text-slate-500" />
-                        <span className="font-medium truncate">{c.client_name || "—"}</span>
+                        <span className="font-medium truncate">
+                          {c.client_name || "—"}
+                        </span>
                       </div>
 
                       {c.client_email && (
@@ -690,7 +733,9 @@ const AdminOuvrierContacts: React.FC = () => {
                       <select
                         disabled={savingId === c.id}
                         value={st}
-                        onChange={(e) => handleStatusChange(c.id, e.target.value as ContactStatus)}
+                        onChange={(e) =>
+                          handleStatusChange(c.id, e.target.value as ContactStatus)
+                        }
                         className="h-11 w-full text-sm border border-slate-300 rounded-xl px-3 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
                       >
                         <option value="new">{text.new}</option>
@@ -703,151 +748,167 @@ const AdminOuvrierContacts: React.FC = () => {
               })}
           </div>
 
-          {/* ✅ DESKTOP: table */}
-          <div className="hidden md:block">
+          {/* ✅ TABLE (>= lg) */}
+          <div className="hidden lg:block">
             <div className={cn(cardClass, "overflow-hidden")}>
-              {/* Top “table tools” (optionnel mais pro) */}
               <div className="px-4 py-3 border-b border-slate-200/60 bg-white/60">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-xs text-slate-500">
                     {filtered.length} résultat(s)
                   </div>
-                  {/* espace réservé si tu veux ajouter des actions */}
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="min-w-[1040px] w-full text-sm">
-                  <thead className="bg-slate-50/80 text-slate-600">
-                    <tr className="border-b border-slate-200/60">
-                      <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                        {text.colDate}
-                      </th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                        {text.colWorker}
-                      </th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                        {text.colClient}
-                      </th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                        {text.colMessage}
-                      </th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                        {text.colStatus}
-                      </th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                        {text.colOrigin}
-                      </th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                        {text.colActions}
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody className="divide-y divide-slate-100">
-                    {loading && (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
-                          {text.loading}
-                        </td>
+              {/* IMPORTANT:
+                  - allow horizontal scroll
+                  - allow table to reach full viewport width on narrow layouts
+              */}
+              <div className="-mx-3 sm:-mx-6 lg:mx-0 overflow-x-auto">
+                <div className="min-w-[1040px] w-full px-3 sm:px-6 lg:px-0">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50/80 text-slate-600">
+                      <tr className="border-b border-slate-200/60">
+                        <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
+                          {text.colDate}
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
+                          {text.colWorker}
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
+                          {text.colClient}
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
+                          {text.colMessage}
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
+                          {text.colStatus}
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
+                          {text.colOrigin}
+                        </th>
+                        <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide">
+                          {text.colActions}
+                        </th>
                       </tr>
-                    )}
+                    </thead>
 
-                    {!loading && filtered.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
-                          {text.empty}
-                        </td>
-                      </tr>
-                    )}
+                    <tbody className="divide-y divide-slate-100">
+                      {loading && (
+                        <tr>
+                          <td
+                            colSpan={7}
+                            className="px-4 py-10 text-center text-slate-500"
+                          >
+                            {text.loading}
+                          </td>
+                        </tr>
+                      )}
 
-                    {!loading &&
-                      filtered.map((c) => {
-                        const OriginIcon = originIcon(c.origin);
-                        const st = normalizeStatus(c.status);
+                      {!loading && filtered.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={7}
+                            className="px-4 py-10 text-center text-slate-500"
+                          >
+                            {text.empty}
+                          </td>
+                        </tr>
+                      )}
 
-                        return (
-                          <tr key={c.id} className="hover:bg-slate-50/60 align-top">
-                            <td className="px-4 py-4 whitespace-nowrap text-slate-700">
-                              {formatDate(c.created_at)}
-                            </td>
+                      {!loading &&
+                        filtered.map((c) => {
+                          const OriginIcon = originIcon(c.origin);
+                          const st = normalizeStatus(c.status);
 
-                            <td className="px-4 py-4">
-                              <div className="font-semibold text-slate-900 whitespace-nowrap">
-                                {c.worker_name || "—"}
-                              </div>
-                            </td>
+                          return (
+                            <tr key={c.id} className="hover:bg-slate-50/60 align-top">
+                              <td className="px-4 py-4 whitespace-nowrap text-slate-700">
+                                {formatDate(c.created_at)}
+                              </td>
 
-                            <td className="px-4 py-4">
-                              <div className="font-medium text-slate-900">
-                                {c.client_name || "—"}
-                              </div>
-                              {(c.client_email || c.client_phone) && (
-                                <div className="mt-1 text-xs text-slate-500 space-y-0.5">
-                                  {c.client_email ? (
-                                    <div className="flex items-center gap-2">
-                                      <Mail className="h-3.5 w-3.5" />
-                                      <span className="truncate max-w-[260px]">{c.client_email}</span>
-                                    </div>
-                                  ) : null}
-                                  {c.client_phone ? (
-                                    <div className="flex items-center gap-2">
-                                      <Phone className="h-3.5 w-3.5" />
-                                      <span>{c.client_phone}</span>
-                                    </div>
-                                  ) : null}
+                              <td className="px-4 py-4">
+                                <div className="font-semibold text-slate-900 whitespace-nowrap">
+                                  {c.worker_name || "—"}
                                 </div>
-                              )}
-                            </td>
+                              </td>
 
-                            <td className="px-4 py-4 text-slate-700">
-                              <div className="max-w-[520px] text-xs leading-relaxed whitespace-pre-line line-clamp-3">
-                                {clampText(c.message, 340)}
-                              </div>
-                            </td>
+                              <td className="px-4 py-4">
+                                <div className="font-medium text-slate-900">
+                                  {c.client_name || "—"}
+                                </div>
 
-                            <td className="px-4 py-4">
-                              <span
-                                className={cn(
-                                  "inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full border",
-                                  statusColor(st)
+                                {(c.client_email || c.client_phone) && (
+                                  <div className="mt-1 text-xs text-slate-500 space-y-0.5">
+                                    {c.client_email ? (
+                                      <div className="flex items-center gap-2">
+                                        <Mail className="h-3.5 w-3.5" />
+                                        <span className="truncate max-w-[260px]">
+                                          {c.client_email}
+                                        </span>
+                                      </div>
+                                    ) : null}
+
+                                    {c.client_phone ? (
+                                      <div className="flex items-center gap-2">
+                                        <Phone className="h-3.5 w-3.5" />
+                                        <span>{c.client_phone}</span>
+                                      </div>
+                                    ) : null}
+                                  </div>
                                 )}
-                              >
-                                {statusLabel(st)}
-                              </span>
-                            </td>
+                              </td>
 
-                            <td className="px-4 py-4">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-white border border-slate-200">
-                                <OriginIcon className="h-3.5 w-3.5" />
-                                {originLabel(c.origin)}
-                              </span>
-                            </td>
+                              <td className="px-4 py-4 text-slate-700">
+                                <div className="max-w-[520px] text-xs leading-relaxed whitespace-pre-line line-clamp-3">
+                                  {clampText(c.message, 340)}
+                                </div>
+                              </td>
 
-                            <td className="px-4 py-4 text-right">
-                              <select
-                                disabled={savingId === c.id}
-                                value={st}
-                                onChange={(e) =>
-                                  handleStatusChange(c.id, e.target.value as ContactStatus)
-                                }
-                                className="h-9 text-sm border border-slate-300 rounded-xl px-3 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
-                              >
-                                <option value="new">{text.new}</option>
-                                <option value="in_progress">{text.inProgress}</option>
-                                <option value="done">{text.done}</option>
-                              </select>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
+                              <td className="px-4 py-4">
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full border",
+                                    statusColor(st)
+                                  )}
+                                >
+                                  {statusLabel(st)}
+                                </span>
+                              </td>
+
+                              <td className="px-4 py-4">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-white border border-slate-200">
+                                  <OriginIcon className="h-3.5 w-3.5" />
+                                  {originLabel(c.origin)}
+                                </span>
+                              </td>
+
+                              <td className="px-4 py-4 text-right">
+                                <select
+                                  disabled={savingId === c.id}
+                                  value={st}
+                                  onChange={(e) =>
+                                    handleStatusChange(
+                                      c.id,
+                                      e.target.value as ContactStatus
+                                    )
+                                  }
+                                  className="h-9 text-sm border border-slate-300 rounded-xl px-3 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                                >
+                                  <option value="new">{text.new}</option>
+                                  <option value="in_progress">{text.inProgress}</option>
+                                  <option value="done">{text.done}</option>
+                                </select>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
-              {/* footer */}
               <div className="px-4 py-3 border-t border-slate-200/60 bg-white/60 text-xs text-slate-500">
-                Astuce : sur desktop, la table est scrollable horizontalement si l’écran est étroit.
+                {text.tip}
               </div>
             </div>
           </div>
