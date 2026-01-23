@@ -32,7 +32,7 @@ type NavItem = {
 
 function pillClass({ isActive }: { isActive: boolean }) {
   return cn(
-    "shrink-0 inline-flex items-center gap-2",
+    "inline-flex items-center gap-2",
     "px-3 py-2 rounded-full text-sm font-medium transition whitespace-nowrap",
     "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
     isActive
@@ -83,7 +83,7 @@ function Breadcrumb({
   );
 }
 
-/** Dropdown "Plus" premium : filtre live + icônes */
+/** Dropdown "Plus" premium */
 function MoreMenu({
   items,
   activePath,
@@ -105,7 +105,6 @@ function MoreMenu({
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  // reset search when closing
   useEffect(() => {
     if (!open) setQ("");
   }, [open]);
@@ -139,7 +138,6 @@ function MoreMenu({
         <ChevronDown className={cn("h-4 w-4 transition", open && "rotate-180")} />
       </button>
 
-      {/* overlay click-outside */}
       {open && (
         <button
           className="fixed inset-0 z-40 cursor-default"
@@ -161,7 +159,6 @@ function MoreMenu({
             Navigation
           </div>
 
-          {/* live search */}
           <div className="px-2 pb-2">
             <div className="relative">
               <Search className="h-4 w-4 text-slate-400 absolute left-3 top-2.5" />
@@ -278,18 +275,17 @@ export default function AdminLayout() {
 
   // Répartition : visible (pills) vs overflow (Plus)
   const { visibleItems, overflowItems } = useMemo(() => {
-    const MAX_VISIBLE = 5;
+    // Réduit un peu : moins de “pills” visibles = moins de risques de débordement
+    const MAX_VISIBLE = 4;
     const visible = navItems.slice(0, MAX_VISIBLE);
     const overflow = navItems.slice(MAX_VISIBLE);
     return { visibleItems: visible, overflowItems: overflow };
   }, [navItems]);
 
-  // Ferme le drawer à chaque navigation
   useEffect(() => {
     setDrawerOpen(false);
   }, [location.pathname]);
 
-  // Bloque le scroll du body quand le drawer est ouvert
   useEffect(() => {
     if (!drawerOpen) return;
     const prev = document.body.style.overflow;
@@ -299,7 +295,6 @@ export default function AdminLayout() {
     };
   }, [drawerOpen]);
 
-  // ESC pour fermer
   useEffect(() => {
     if (!drawerOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -312,9 +307,7 @@ export default function AdminLayout() {
   const activePath = location.pathname;
 
   return (
-    // ✅ IMPORTANT: retirer overflow-x-clip (cassait le scroll horizontal des pages)
     <div data-admin className="min-h-dvh bg-slate-50">
-      {/* Top header glass + subtle gradient */}
       <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/75 backdrop-blur">
         <div className="absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-white/70 to-transparent pointer-events-none" />
 
@@ -333,11 +326,11 @@ export default function AdminLayout() {
               </div>
             </div>
 
-            {/* Desktop / Tablet nav */}
-            <nav className="hidden md:flex min-w-0 flex-1 items-center">
+            {/* ✅ Desktop nav seulement à partir de lg */}
+            <nav className="hidden lg:flex min-w-0 flex-1 items-center">
               <div className="flex items-center gap-2 min-w-0 flex-1">
-                {/* Pills */}
-                <div className="flex items-center gap-1 min-w-0">
+                {/* Pills (scrollables si nécessaire) */}
+                <div className="flex items-center gap-1 min-w-0 max-w-full overflow-x-auto">
                   {visibleItems.map((it) => {
                     const Icon = it.icon;
                     return (
@@ -353,10 +346,9 @@ export default function AdminLayout() {
                   )}
                 </div>
 
-                {/* Spacer */}
                 <div className="flex-1" />
 
-                {/* External + Logout */}
+                {/* Actions à droite */}
                 <div className="flex items-center gap-2 shrink-0">
                   <Link
                     to="/"
@@ -366,9 +358,10 @@ export default function AdminLayout() {
                       "border border-transparent hover:border-slate-200",
                       "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40"
                     )}
+                    title="Retour au site"
                   >
                     <ExternalLink className="h-4 w-4" />
-                    Retour au site
+                    <span className="hidden xl:inline">Retour au site</span>
                   </Link>
 
                   <AdminLogoutButton className="whitespace-nowrap" redirectTo="/" />
@@ -376,8 +369,8 @@ export default function AdminLayout() {
               </div>
             </nav>
 
-            {/* Mobile actions */}
-            <div className="ml-auto flex items-center gap-2 md:hidden shrink-0">
+            {/* ✅ Mobile/Tablet (jusqu’à lg) */}
+            <div className="ml-auto flex items-center gap-2 lg:hidden shrink-0">
               <button
                 type="button"
                 className="inline-flex items-center justify-center h-10 w-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 shadow-sm"
@@ -391,11 +384,10 @@ export default function AdminLayout() {
           </div>
         </div>
 
-        {/* ✅ Breadcrumb sous la barre */}
         <Breadcrumb activePath={activePath} items={navItems} />
 
-        {/* Mobile drawer */}
-        <div className="md:hidden">
+        {/* Drawer : visible < lg */}
+        <div className="lg:hidden">
           <div
             className={cn(
               "fixed inset-0 z-40 bg-black/30 transition-opacity",
@@ -432,7 +424,6 @@ export default function AdminLayout() {
             </div>
 
             <div className="p-4 space-y-3 overflow-y-auto h-[calc(100dvh-76px)]">
-              {/* Section Core */}
               <div>
                 <div className="px-2 py-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                   Administration
@@ -454,7 +445,6 @@ export default function AdminLayout() {
                 </div>
               </div>
 
-              {/* Section Content */}
               <div>
                 <div className="px-2 py-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                   Contenu
@@ -492,8 +482,8 @@ export default function AdminLayout() {
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 flex items-start gap-2">
                   <Shield className="h-4 w-4 mt-0.5" />
                   <div>
-                    Astuce : sur mobile, la navigation est regroupée ici. Sur desktop, “Plus” inclut une
-                    recherche.
+                    Astuce : sur mobile/tablette, la navigation est regroupée ici. Sur desktop, “Plus”
+                    inclut une recherche.
                   </div>
                 </div>
               </div>
@@ -502,7 +492,6 @@ export default function AdminLayout() {
         </div>
       </header>
 
-      {/* main : garder min-w-0 pour éviter les overflows inutiles */}
       <main className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 xl:px-10 py-4 sm:py-6 min-w-0">
         <Outlet />
       </main>
