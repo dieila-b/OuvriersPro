@@ -5,23 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
-import {
-  Loader2,
-  Search,
-  Eye,
-  CheckCircle2,
-  XCircle,
-  EyeOff,
-  RefreshCw,
-} from "lucide-react";
+import { Loader2, Search, Eye, CheckCircle2, XCircle, EyeOff, RefreshCw } from "lucide-react";
 
 type ReviewStatus = "pending" | "published" | "hidden" | "rejected";
 
@@ -46,7 +33,6 @@ type ReviewRow = {
 
   related_order_id?: string | null;
 
-  // On enrichit côté UI via lookup
   client_display?: string | null;
   worker_display?: string | null;
 };
@@ -94,35 +80,40 @@ function statusBadge(status?: ReviewStatus | null, isPublic?: boolean | null) {
   const s = status ?? "pending";
   const pub = !!isPublic;
 
-  if (s === "published" && pub)
-    return (
-      <Badge className="bg-emerald-600 hover:bg-emerald-600">Publié</Badge>
-    );
-  if (s === "hidden")
-    return <Badge className="bg-slate-600 hover:bg-slate-600">Masqué</Badge>;
+  if (s === "published" && pub) return <Badge className="bg-emerald-600 hover:bg-emerald-600">Publié</Badge>;
+  if (s === "hidden") return <Badge className="bg-slate-600 hover:bg-slate-600">Masqué</Badge>;
   if (s === "rejected") return <Badge variant="destructive">Rejeté</Badge>;
   return <Badge className="bg-amber-600 hover:bg-amber-600">En attente</Badge>;
 }
 
 function isUuidLike(v: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    v.trim()
-  );
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v.trim());
 }
 
-function buildDisplay(p?: Partial<ProfileRow & WorkerProfileRow> | null, fallbackId?: string | null) {
-  const full =
-    (p as any)?.full_name ??
-    [ (p as any)?.first_name, (p as any)?.last_name ].filter(Boolean).join(" ").trim() ??
-    null;
+/**
+ * Affichage STRICT demandé :
+ * - Priorité: "Prénom Nom"
+ * - Sinon: full_name
+ * - Sinon (fallback): "Utilisateur" (et on garde l'UUID en title pour debug)
+ *
+ * NOTE: si profiles/worker_profiles ne contiennent pas first_name/last_name/full_name,
+ * tu verras "Utilisateur". Dans ce cas, il faut remplir profiles côté DB.
+ */
+function buildFullNameOnly(
+  p?: Partial<ProfileRow & WorkerProfileRow> | null,
+  fallbackId?: string | null
+) {
+  const first = ((p as any)?.first_name ?? "") as string;
+  const last = ((p as any)?.last_name ?? "") as string;
+  const fullNameFromParts = [first, last].filter(Boolean).join(" ").trim();
 
-  const company = (p as any)?.company_name ?? null;
-  const trade = (p as any)?.trade ?? null;
-  const email = (p as any)?.email ?? null;
+  const full = (((p as any)?.full_name ?? "") as string).trim();
 
-  const primary = full || company || email || fallbackId || "—";
-  const extra = trade ? ` • ${trade}` : "";
-  return `${primary}${extra}`;
+  // Demande: "Prénom et Nom" -> on prend parts si dispo, sinon full_name
+  const name = fullNameFromParts || full;
+
+  // Fallback volontairement NON-ID dans l'affichage (on met l'id dans title)
+  return name || "Utilisateur";
 }
 
 export default function AdminReviewsModerationPage() {
@@ -132,14 +123,11 @@ export default function AdminReviewsModerationPage() {
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // filtres
   const [q, setQ] = useState("");
-  // IMPORTANT: par défaut, on affiche TOUS les avis
   const [status, setStatus] = useState<ReviewStatus | "all">("all");
   const [perPage, setPerPage] = useState(25);
   const [page, setPage] = useState(1);
 
-  // compteurs (toujours basés sur la recherche, pas sur la pagination)
   const [counts, setCounts] = useState({
     total: 0,
     pending: 0,
@@ -148,7 +136,6 @@ export default function AdminReviewsModerationPage() {
     rejected: 0,
   });
 
-  // modal
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<ReviewRow | null>(null);
   const [note, setNote] = useState("");
@@ -161,26 +148,11 @@ export default function AdminReviewsModerationPage() {
     const raw = q.trim();
     if (!raw) return base;
 
-    // Recherche texte sur colonnes lisibles
     const like = `%${raw.replace(/%/g, "\\%").replace(/_/g, "\\_")}%`;
-    base = base.or(
-      [
-        `title.ilike.${like}`,
-        `content.ilike.${like}`,
-        `moderation_note.ilike.${like}`,
-      ].join(",")
-    );
+    base = base.or([`title.ilike.${like}`, `content.ilike.${like}`, `moderation_note.ilike.${like}`].join(","));
 
-    // Si ça ressemble à un UUID, on ajoute une recherche par IDs (exact match)
     if (isUuidLike(raw)) {
-      base = base.or(
-        [
-          `id.eq.${raw}`,
-          `client_user_id.eq.${raw}`,
-          `worker_user_id.eq.${raw}`,
-          `related_order_id.eq.${raw}`,
-        ].join(",")
-      );
+      base = base.or([`id.eq.${raw}`, `client_user_id.eq.${raw}`, `worker_user_id.eq.${raw}`, `related_order_id.eq.${raw}`].join(","));
     }
 
     return base;
@@ -195,22 +167,15 @@ export default function AdminReviewsModerationPage() {
       );
 
     query = applySearchFilters(query);
-
     if (status !== "all") query = query.eq("status", status);
 
     return query.order("created_at", { ascending: false }).range(fromIdx, toIdx);
   };
 
   const buildCountQuery = (s: ReviewStatus | "all") => {
-    let query = supabase
-      .from(TABLE)
-      // head:true => pas de data, uniquement count
-      .select("id", { count: "exact", head: true });
-
+    let query = supabase.from(TABLE).select("id", { count: "exact", head: true });
     query = applySearchFilters(query);
-
     if (s !== "all") query = query.eq("status", s);
-
     return query;
   };
 
@@ -221,26 +186,21 @@ export default function AdminReviewsModerationPage() {
     const profileMap = new Map<string, ProfileRow>();
     const workerProfileMap = new Map<string, WorkerProfileRow>();
 
-    // 1) profiles (souvent id = auth.uid)
+    // profiles: clients + workers (fallback)
     if (uniqClients.length || uniqWorkers.length) {
       const allIds = Array.from(new Set([...uniqClients, ...uniqWorkers]));
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id,email,full_name,first_name,last_name")
-        .in("id", allIds);
+      const { data, error } = await supabase.from("profiles").select("id,full_name,first_name,last_name").in("id", allIds);
 
       if (!error && Array.isArray(data)) {
         (data as ProfileRow[]).forEach((p) => profileMap.set(p.id, p));
       }
-      // si RLS bloque profiles, on ignore (l'admin doit idéalement avoir une policy)
     }
 
-    // 2) worker_profiles (si existe) => enrichissement spécifique prestataire
-    // Si table absente, Supabase renvoie une erreur; on ignore proprement.
+    // worker_profiles: enrich prestataire si dispo
     if (uniqWorkers.length) {
       const { data, error } = await supabase
         .from("worker_profiles")
-        .select("user_id,email,full_name,first_name,last_name,company_name,trade")
+        .select("user_id,full_name,first_name,last_name,company_name,trade")
         .in("user_id", uniqWorkers);
 
       if (!error && Array.isArray(data)) {
@@ -256,20 +216,12 @@ export default function AdminReviewsModerationPage() {
     setError(null);
 
     try {
-      // 1) Liste paginée (selon filtres)
       const { data, error: e1 } = await buildListQuery();
       if (e1) throw e1;
 
       const baseRows = (data ?? []) as ReviewRow[];
 
-      // 2) Compteurs (toujours “tous statuts” + par statut, basés sur la recherche)
-      const [
-        cAll,
-        cPending,
-        cPublished,
-        cHidden,
-        cRejected,
-      ] = await Promise.all([
+      const [cAll, cPending, cPublished, cHidden, cRejected] = await Promise.all([
         buildCountQuery("all"),
         buildCountQuery("pending"),
         buildCountQuery("published"),
@@ -285,7 +237,6 @@ export default function AdminReviewsModerationPage() {
         rejected: cRejected.count ?? 0,
       });
 
-      // 3) Enrichissement affichage client / prestataire via lookup (profiles + worker_profiles)
       const clientIds = baseRows.map((r) => r.client_user_id ?? "").filter(Boolean);
       const workerIds = baseRows.map((r) => r.worker_user_id ?? "").filter(Boolean);
 
@@ -294,14 +245,14 @@ export default function AdminReviewsModerationPage() {
       const enriched = baseRows.map((r) => {
         const clientP = r.client_user_id ? profileMap.get(r.client_user_id) : null;
 
-        // Pour prestataire: priorité worker_profiles (plus riche), sinon profiles
         const workerWP = r.worker_user_id ? workerProfileMap.get(r.worker_user_id) : null;
         const workerP = r.worker_user_id ? profileMap.get(r.worker_user_id) : null;
 
         return {
           ...r,
-          client_display: buildDisplay(clientP ?? null, r.client_user_id),
-          worker_display: buildDisplay((workerWP ?? workerP) ?? null, r.worker_user_id),
+          // ICI: on force l'affichage prénom/nom (et pas l'ID)
+          client_display: buildFullNameOnly(clientP ?? null, r.client_user_id),
+          worker_display: buildFullNameOnly((workerWP ?? workerP) ?? null, r.worker_user_id),
         };
       });
 
@@ -318,7 +269,6 @@ export default function AdminReviewsModerationPage() {
   };
 
   useEffect(() => {
-    // si on change les filtres, revenir page 1 (sinon page vide)
     setPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, q, perPage]);
@@ -370,12 +320,7 @@ export default function AdminReviewsModerationPage() {
 
       toast({
         title: "Modération enregistrée",
-        description:
-          action === "publish"
-            ? "Avis publié."
-            : action === "hide"
-            ? "Avis masqué."
-            : "Avis rejeté.",
+        description: action === "publish" ? "Avis publié." : action === "hide" ? "Avis masqué." : "Avis rejeté.",
       });
 
       closeDetails();
@@ -432,7 +377,6 @@ export default function AdminReviewsModerationPage() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {/* Filters */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
             <div className="lg:col-span-5">
               <label className="text-xs font-medium text-slate-600">Recherche</label>
@@ -493,12 +437,9 @@ export default function AdminReviewsModerationPage() {
           {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
 
           {!error && !loading && rows.length === 0 && (
-            <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
-              Aucun avis trouvé avec ces filtres.
-            </div>
+            <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">Aucun avis trouvé avec ces filtres.</div>
           )}
 
-          {/* Table */}
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-slate-600">
@@ -517,12 +458,17 @@ export default function AdminReviewsModerationPage() {
                 {rows.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50/60">
                     <td className="px-4 py-3 whitespace-nowrap text-slate-700">{fmtDate(r.created_at)}</td>
+
+                    {/* IMPORTANT: on affiche Prénom Nom (pas l'UUID).
+                        L'UUID reste en title pour debug/traçabilité. */}
                     <td className="px-4 py-3 whitespace-nowrap text-slate-700" title={r.client_user_id ?? ""}>
-                      {truncate(r.client_display ?? r.client_user_id, 26)}
+                      {truncate(r.client_display ?? "Utilisateur", 26)}
                     </td>
+
                     <td className="px-4 py-3 whitespace-nowrap text-slate-700" title={r.worker_user_id ?? ""}>
-                      {truncate(r.worker_display ?? r.worker_user_id, 26)}
+                      {truncate(r.worker_display ?? "Utilisateur", 26)}
                     </td>
+
                     <td className="px-4 py-3 whitespace-nowrap text-slate-700">{r.rating ?? "—"}</td>
                     <td className="px-4 py-3 text-slate-700" title={r.content ?? ""}>
                       {truncate(r.title ? `${r.title} — ${r.content ?? ""}` : r.content, 64)}
@@ -549,7 +495,6 @@ export default function AdminReviewsModerationPage() {
         </CardContent>
       </Card>
 
-      {/* Modal Détails */}
       <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : closeDetails())}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
@@ -564,13 +509,13 @@ export default function AdminReviewsModerationPage() {
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="text-xs text-slate-500">Client</div>
-                    <div className="font-medium text-slate-900 break-words">
-                      {selected.client_display ?? selected.client_user_id ?? "—"}
+                    <div className="font-medium text-slate-900 break-words" title={selected.client_user_id ?? ""}>
+                      {selected.client_display ?? "Utilisateur"}
                     </div>
 
                     <div className="mt-2 text-xs text-slate-500">Prestataire</div>
-                    <div className="font-medium text-slate-900 break-words">
-                      {selected.worker_display ?? selected.worker_user_id ?? "—"}
+                    <div className="font-medium text-slate-900 break-words" title={selected.worker_user_id ?? ""}>
+                      {selected.worker_display ?? "Utilisateur"}
                     </div>
 
                     <div className="mt-2 text-xs text-slate-500">Date</div>
@@ -598,8 +543,7 @@ export default function AdminReviewsModerationPage() {
                 <label className="text-xs font-medium text-slate-600">Note de modération (visible admin)</label>
                 <Textarea className="mt-2" placeholder="Ex: spam, insulte, hors sujet..." value={note} onChange={(e) => setNote(e.target.value)} />
                 <div className="mt-2 text-[11px] text-slate-500">
-                  Dernière modération : {selected.moderated_at ? fmtDate(selected.moderated_at) : "—"} • par{" "}
-                  {selected.moderated_by ?? "—"}
+                  Dernière modération : {selected.moderated_at ? fmtDate(selected.moderated_at) : "—"} • par {selected.moderated_by ?? "—"}
                 </div>
               </div>
 
@@ -608,12 +552,7 @@ export default function AdminReviewsModerationPage() {
                   Fermer
                 </Button>
 
-                <Button
-                  type="button"
-                  className="gap-2 bg-emerald-600 hover:bg-emerald-700"
-                  onClick={() => applyModeration("publish")}
-                  disabled={saving}
-                >
+                <Button type="button" className="gap-2 bg-emerald-600 hover:bg-emerald-700" onClick={() => applyModeration("publish")} disabled={saving}>
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                   Publier
                 </Button>
