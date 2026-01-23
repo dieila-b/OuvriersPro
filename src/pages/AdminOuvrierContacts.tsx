@@ -397,10 +397,6 @@ const AdminOuvrierContacts: React.FC = () => {
     colStatus: language === "fr" ? "Statut" : "Status",
     colOrigin: language === "fr" ? "Origine" : "Origin",
     colActions: language === "fr" ? "Actions" : "Actions",
-    tip:
-      language === "fr"
-        ? "Astuce : sur desktop, la table est scrollable horizontalement si l’écran est étroit."
-        : "Tip: on desktop, the table can scroll horizontally on narrow screens.",
   };
 
   const refresh = async () => {
@@ -565,7 +561,8 @@ const AdminOuvrierContacts: React.FC = () => {
 
           {/* Filtres */}
           <div className={cn(cardClass, "p-4 sm:p-5")}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* ✅ vrai responsive : 1 col -> 2 col -> 4 col */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
               <div className="min-w-0">
                 <label className="block text-xs font-medium text-slate-600 mb-1">
                   {text.statusFilter}
@@ -632,14 +629,8 @@ const AdminOuvrierContacts: React.FC = () => {
 
         {/* ✅ LISTING */}
         <div className="mt-6">
-          {/* ✅ RESPONSIVE RULE:
-              - Mobile + Tablet + small laptops: cards
-              - Desktop: table
-              (=> switch md -> lg)
-          */}
-
-          {/* ✅ CARDS (<= lg) */}
-          <div className="lg:hidden space-y-3">
+          {/* ✅ MOBILE: cards (< md) */}
+          <div className="md:hidden space-y-3">
             {loading && (
               <div
                 className={cn(
@@ -748,8 +739,8 @@ const AdminOuvrierContacts: React.FC = () => {
               })}
           </div>
 
-          {/* ✅ TABLE (>= lg) */}
-          <div className="hidden lg:block">
+          {/* ✅ TABLE: responsive (>= md) */}
+          <div className="hidden md:block">
             <div className={cn(cardClass, "overflow-hidden")}>
               <div className="px-4 py-3 border-b border-slate-200/60 bg-white/60">
                 <div className="flex items-center justify-between gap-3">
@@ -759,156 +750,181 @@ const AdminOuvrierContacts: React.FC = () => {
                 </div>
               </div>
 
-              {/* IMPORTANT:
-                  - allow horizontal scroll
-                  - allow table to reach full viewport width on narrow layouts
-              */}
-              <div className="-mx-3 sm:-mx-6 lg:mx-0 overflow-x-auto">
-                <div className="min-w-[1040px] w-full px-3 sm:px-6 lg:px-0">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50/80 text-slate-600">
-                      <tr className="border-b border-slate-200/60">
-                        <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                          {text.colDate}
-                        </th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                          {text.colWorker}
-                        </th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                          {text.colClient}
-                        </th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                          {text.colMessage}
-                        </th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                          {text.colStatus}
-                        </th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                          {text.colOrigin}
-                        </th>
-                        <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                          {text.colActions}
-                        </th>
+              {/* ✅ IMPORTANT: plus de min-width “forcé”.
+                  On utilise table-fixed + colonnes cachées => pas de débordement sur petits écrans.
+               */}
+              <div className="w-full overflow-x-auto">
+                <table className="w-full table-fixed text-sm">
+                  <thead className="bg-slate-50/80 text-slate-600">
+                    <tr className="border-b border-slate-200/60">
+                      {/* Date : visible */}
+                      <th className="w-[140px] text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
+                        {text.colDate}
+                      </th>
+
+                      {/* Ouvrier : visible */}
+                      <th className="w-[140px] text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
+                        {text.colWorker}
+                      </th>
+
+                      {/* Client : visible */}
+                      <th className="w-[220px] text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
+                        {text.colClient}
+                      </th>
+
+                      {/* Message : caché sur md, visible dès lg */}
+                      <th className="hidden lg:table-cell text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
+                        {text.colMessage}
+                      </th>
+
+                      {/* Statut : visible */}
+                      <th className="w-[110px] text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
+                        {text.colStatus}
+                      </th>
+
+                      {/* Origine : caché sur md, visible dès xl */}
+                      <th className="hidden xl:table-cell w-[110px] text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">
+                        {text.colOrigin}
+                      </th>
+
+                      {/* Actions : visible */}
+                      <th className="w-[140px] text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide">
+                        {text.colActions}
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-100">
+                    {loading && (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="px-4 py-10 text-center text-slate-500"
+                        >
+                          {text.loading}
+                        </td>
                       </tr>
-                    </thead>
+                    )}
 
-                    <tbody className="divide-y divide-slate-100">
-                      {loading && (
-                        <tr>
-                          <td
-                            colSpan={7}
-                            className="px-4 py-10 text-center text-slate-500"
-                          >
-                            {text.loading}
-                          </td>
-                        </tr>
-                      )}
+                    {!loading && filtered.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="px-4 py-10 text-center text-slate-500"
+                        >
+                          {text.empty}
+                        </td>
+                      </tr>
+                    )}
 
-                      {!loading && filtered.length === 0 && (
-                        <tr>
-                          <td
-                            colSpan={7}
-                            className="px-4 py-10 text-center text-slate-500"
-                          >
-                            {text.empty}
-                          </td>
-                        </tr>
-                      )}
+                    {!loading &&
+                      filtered.map((c) => {
+                        const OriginIcon = originIcon(c.origin);
+                        const st = normalizeStatus(c.status);
 
-                      {!loading &&
-                        filtered.map((c) => {
-                          const OriginIcon = originIcon(c.origin);
-                          const st = normalizeStatus(c.status);
+                        return (
+                          <tr key={c.id} className="hover:bg-slate-50/60 align-top">
+                            {/* Date */}
+                            <td className="px-4 py-4 text-slate-700">
+                              <div className="truncate">{formatDate(c.created_at)}</div>
+                            </td>
 
-                          return (
-                            <tr key={c.id} className="hover:bg-slate-50/60 align-top">
-                              <td className="px-4 py-4 whitespace-nowrap text-slate-700">
-                                {formatDate(c.created_at)}
-                              </td>
+                            {/* Ouvrier */}
+                            <td className="px-4 py-4">
+                              <div className="font-semibold text-slate-900 truncate">
+                                {c.worker_name || "—"}
+                              </div>
+                            </td>
 
-                              <td className="px-4 py-4">
-                                <div className="font-semibold text-slate-900 whitespace-nowrap">
-                                  {c.worker_name || "—"}
+                            {/* Client */}
+                            <td className="px-4 py-4">
+                              <div className="font-medium text-slate-900 truncate">
+                                {c.client_name || "—"}
+                              </div>
+
+                              {(c.client_email || c.client_phone) && (
+                                <div className="mt-1 text-xs text-slate-500 space-y-0.5">
+                                  {c.client_email ? (
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <Mail className="h-3.5 w-3.5 shrink-0" />
+                                      <span className="truncate">{c.client_email}</span>
+                                    </div>
+                                  ) : null}
+                                  {c.client_phone ? (
+                                    <div className="flex items-center gap-2">
+                                      <Phone className="h-3.5 w-3.5 shrink-0" />
+                                      <span className="truncate">{c.client_phone}</span>
+                                    </div>
+                                  ) : null}
                                 </div>
-                              </td>
+                              )}
 
-                              <td className="px-4 py-4">
-                                <div className="font-medium text-slate-900">
-                                  {c.client_name || "—"}
+                              {/* ✅ Sur md (où Message est caché), on affiche un mini message ici */}
+                              <div className="mt-2 lg:hidden">
+                                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-2">
+                                  <MessageSquareText className="h-3.5 w-3.5" />
+                                  {text.colMessage}
                                 </div>
+                                <div className="mt-1 text-xs text-slate-700 whitespace-pre-line line-clamp-2">
+                                  {clampText(c.message, 220)}
+                                </div>
+                              </div>
+                            </td>
 
-                                {(c.client_email || c.client_phone) && (
-                                  <div className="mt-1 text-xs text-slate-500 space-y-0.5">
-                                    {c.client_email ? (
-                                      <div className="flex items-center gap-2">
-                                        <Mail className="h-3.5 w-3.5" />
-                                        <span className="truncate max-w-[260px]">
-                                          {c.client_email}
-                                        </span>
-                                      </div>
-                                    ) : null}
+                            {/* Message (lg+) */}
+                            <td className="hidden lg:table-cell px-4 py-4 text-slate-700">
+                              <div className="text-xs leading-relaxed whitespace-pre-line line-clamp-3">
+                                {clampText(c.message, 340)}
+                              </div>
+                            </td>
 
-                                    {c.client_phone ? (
-                                      <div className="flex items-center gap-2">
-                                        <Phone className="h-3.5 w-3.5" />
-                                        <span>{c.client_phone}</span>
-                                      </div>
-                                    ) : null}
-                                  </div>
+                            {/* Statut */}
+                            <td className="px-4 py-4">
+                              <span
+                                className={cn(
+                                  "inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full border",
+                                  statusColor(st)
                                 )}
-                              </td>
+                              >
+                                {statusLabel(st)}
+                              </span>
+                            </td>
 
-                              <td className="px-4 py-4 text-slate-700">
-                                <div className="max-w-[520px] text-xs leading-relaxed whitespace-pre-line line-clamp-3">
-                                  {clampText(c.message, 340)}
-                                </div>
-                              </td>
+                            {/* Origine (xl+) */}
+                            <td className="hidden xl:table-cell px-4 py-4">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-white border border-slate-200">
+                                <OriginIcon className="h-3.5 w-3.5" />
+                                {originLabel(c.origin)}
+                              </span>
+                            </td>
 
-                              <td className="px-4 py-4">
-                                <span
-                                  className={cn(
-                                    "inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full border",
-                                    statusColor(st)
-                                  )}
-                                >
-                                  {statusLabel(st)}
-                                </span>
-                              </td>
-
-                              <td className="px-4 py-4">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-white border border-slate-200">
-                                  <OriginIcon className="h-3.5 w-3.5" />
-                                  {originLabel(c.origin)}
-                                </span>
-                              </td>
-
-                              <td className="px-4 py-4 text-right">
-                                <select
-                                  disabled={savingId === c.id}
-                                  value={st}
-                                  onChange={(e) =>
-                                    handleStatusChange(
-                                      c.id,
-                                      e.target.value as ContactStatus
-                                    )
-                                  }
-                                  className="h-9 text-sm border border-slate-300 rounded-xl px-3 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
-                                >
-                                  <option value="new">{text.new}</option>
-                                  <option value="in_progress">{text.inProgress}</option>
-                                  <option value="done">{text.done}</option>
-                                </select>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                    </tbody>
-                  </table>
-                </div>
+                            {/* Actions */}
+                            <td className="px-4 py-4 text-right">
+                              <select
+                                disabled={savingId === c.id}
+                                value={st}
+                                onChange={(e) =>
+                                  handleStatusChange(
+                                    c.id,
+                                    e.target.value as ContactStatus
+                                  )
+                                }
+                                className="h-9 w-full sm:w-auto text-sm border border-slate-300 rounded-xl px-3 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                              >
+                                <option value="new">{text.new}</option>
+                                <option value="in_progress">{text.inProgress}</option>
+                                <option value="done">{text.done}</option>
+                              </select>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
               </div>
 
               <div className="px-4 py-3 border-t border-slate-200/60 bg-white/60 text-xs text-slate-500">
-                {text.tip}
+                Responsive : colonnes “Message” et “Origine” se masquent sur petits écrans.
               </div>
             </div>
           </div>
