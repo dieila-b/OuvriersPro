@@ -40,19 +40,10 @@ type ReviewRow = {
 type ProfileRow = {
   id: string;
   email?: string | null;
-  full_name?: string | null;
   first_name?: string | null;
   last_name?: string | null;
-};
-
-type WorkerProfileRow = {
-  user_id: string;
-  email?: string | null;
   full_name?: string | null;
-  first_name?: string | null;
-  last_name?: string | null;
-  company_name?: string | null;
-  trade?: string | null;
+  is_admin?: boolean | null;
 };
 
 const TABLE = "op_reviews";
@@ -90,20 +81,21 @@ function isUuidLike(v: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v.trim());
 }
 
-/**
- * Affichage demandé: Prénom + Nom.
- * Fallback: full_name, puis email, puis "Utilisateur".
- * (On garde l'UUID en title dans le tableau pour debug/traçabilité.)
- */
-function buildName(p?: Partial<ProfileRow & WorkerProfileRow> | null) {
-  const first = ((p as any)?.first_name ?? "") as string;
-  const last = ((p as any)?.last_name ?? "") as string;
+function buildName(p?: Partial<ProfileRow> | null, fallbackId?: string | null) {
+  const first = (p?.first_name ?? "").trim();
+  const last = (p?.last_name ?? "").trim();
   const parts = [first, last].filter(Boolean).join(" ").trim();
 
-  const full = (((p as any)?.full_name ?? "") as string).trim();
-  const email = (((p as any)?.email ?? "") as string).trim();
+  const full = (p?.full_name ?? "").trim();
+  const email = (p?.email ?? "").trim();
 
-  return parts || full || email || "Utilisateur";
+  // IMPORTANT: si pas de profil trouvé, on montre l'UUID tronqué (au lieu de "Utilisateur")
+  if (!parts && !full && !email) {
+    if (fallbackId) return `${fallbackId.slice(0, 8)}…${fallbackId.slice(-4)}`;
+    return "Utilisateur";
+  }
+
+  return parts || full || email;
 }
 
 export default function AdminReviewsModerationPage() {
@@ -169,39 +161,29 @@ export default function AdminReviewsModerationPage() {
     return query;
   };
 
-  const fetchIdentityMaps = async (clientIds: string[], workerIds: string[]) => {
-    const uniqClients = Array.from(new Set(clientIds.filter(Boolean)));
-    const uniqWorkers = Array.from(new Set(workerIds.filter(Boolean)));
+  const fetchProfilesByIdsAsAdmin = async (ids: string[]) => {
+    const uniq = Array.from(new Set(ids.filter(Boolean)));
+    if (!uniq.length) return new Map<string, ProfileRow>();
 
-    const profileMap = new Map<string, ProfileRow>();
-    const workerProfileMap = new Map<string, WorkerProfileRow>();
+    const { data, error } = await supabase.rpc("admin_profiles_by_ids", {
+      ids: uniq,
+    });
 
-    // profiles (clients + fallback prestataire)
-    if (uniqClients.length || uniqWorkers.length) {
-      const allIds = Array.from(new Set([...uniqClients, ...uniqWorkers]));
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id,email,first_name,last_name,full_name")
-        .in("id", allIds);
-
-      if (!error && Array.isArray(data)) {
-        (data as ProfileRow[]).forEach((p) => profileMap.set(p.id, p));
-      }
+    if (error) {
+      // Si ça échoue, on garde un fallback ID dans l'UI + on affiche un toast clair
+      toast({
+        title: "Lookup profils impossible",
+        description: error.message ?? "La récupération des profils via RPC a échoué.",
+        variant: "destructive",
+      });
+      return new Map<string, ProfileRow>();
     }
 
-    // worker_profiles (optionnel)
-    if (uniqWorkers.length) {
-      const { data, error } = await supabase
-        .from("worker_profiles")
-        .select("user_id,email,first_name,last_name,full_name,company_name,trade")
-        .in("user_id", uniqWorkers);
-
-      if (!error && Array.isArray(data)) {
-        (data as WorkerProfileRow[]).forEach((p) => workerProfileMap.set(p.user_id, p));
-      }
-    }
-
-    return { profileMap, workerProfileMap };
+    const map = new Map<string, ProfileRow>();
+    (data as ProfileRow[] | null)?.forEach((p) => {
+      if (p?.id) map.set(p.id, p);
+    });
+    return map;
   };
 
   const fetchData = async () => {
@@ -230,21 +212,25 @@ export default function AdminReviewsModerationPage() {
         rejected: cRejected.count ?? 0,
       });
 
-      const clientIds = baseRows.map((r) => r.client_user_id ?? "").filter(Boolean);
-      const workerIds = baseRows.map((r) => r.worker_user_id ?? "").filter(Boolean);
+      const allIds = Array.from(
+        new Set(
+          baseRows
+            .flatMap((r) => [r.client_user_id, r.worker_user_id])
+            .filter(Boolean) as string[]
+        )
+      );
 
-      const { profileMap, workerProfileMap } = await fetchIdentityMaps(clientIds, workerIds);
+      // ✅ Ici: RPC admin (bypass RLS)
+      const profileMap = await fetchProfilesByIdsAsAdmin(allIds);
 
       const enriched = baseRows.map((r) => {
         const clientP = r.client_user_id ? profileMap.get(r.client_user_id) : null;
-
-        const workerWP = r.worker_user_id ? workerProfileMap.get(r.worker_user_id) : null;
         const workerP = r.worker_user_id ? profileMap.get(r.worker_user_id) : null;
 
         return {
           ...r,
-          client_display: buildName(clientP ?? null),
-          worker_display: buildName((workerWP ?? workerP) ?? null),
+          client_display: buildName(clientP ?? null, r.client_user_id),
+          worker_display: buildName(workerP ?? null, r.worker_user_id),
         };
       });
 
@@ -419,7 +405,9 @@ export default function AdminReviewsModerationPage() {
           {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
 
           {!error && !loading && rows.length === 0 && (
-            <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">Aucun avis trouvé avec ces filtres.</div>
+            <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
+              Aucun avis trouvé avec ces filtres.
+            </div>
           )}
 
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
@@ -441,10 +429,10 @@ export default function AdminReviewsModerationPage() {
                   <tr key={r.id} className="hover:bg-slate-50/60">
                     <td className="px-4 py-3 whitespace-nowrap text-slate-700">{fmtDate(r.created_at)}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-slate-700" title={r.client_user_id ?? ""}>
-                      {truncate(r.client_display ?? "Utilisateur", 26)}
+                      {truncate(r.client_display ?? "—", 28)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-slate-700" title={r.worker_user_id ?? ""}>
-                      {truncate(r.worker_display ?? "Utilisateur", 26)}
+                      {truncate(r.worker_display ?? "—", 28)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-slate-700">{r.rating ?? "—"}</td>
                     <td className="px-4 py-3 text-slate-700" title={r.content ?? ""}>
@@ -487,12 +475,12 @@ export default function AdminReviewsModerationPage() {
                   <div>
                     <div className="text-xs text-slate-500">Client</div>
                     <div className="font-medium text-slate-900 break-words" title={selected.client_user_id ?? ""}>
-                      {selected.client_display ?? "Utilisateur"}
+                      {selected.client_display ?? "—"}
                     </div>
 
                     <div className="mt-2 text-xs text-slate-500">Prestataire</div>
                     <div className="font-medium text-slate-900 break-words" title={selected.worker_user_id ?? ""}>
-                      {selected.worker_display ?? "Utilisateur"}
+                      {selected.worker_display ?? "—"}
                     </div>
 
                     <div className="mt-2 text-xs text-slate-500">Date</div>
