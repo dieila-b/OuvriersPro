@@ -34,7 +34,7 @@ function matchActive(activePath: string, it: NavItem) {
   return it.end ? activePath === it.to : activePath.startsWith(it.to);
 }
 
-function sidebarItemClass({
+function itemClass({
   isActive,
   collapsed,
 }: {
@@ -51,13 +51,7 @@ function sidebarItemClass({
   );
 }
 
-function Breadcrumb({
-  activePath,
-  items,
-}: {
-  activePath: string;
-  items: NavItem[];
-}) {
+function Breadcrumb({ activePath, items }: { activePath: string; items: NavItem[] }) {
   const active = useMemo(() => {
     return (
       items.find((it) => matchActive(activePath, it)) ||
@@ -74,25 +68,27 @@ function Breadcrumb({
   );
 }
 
-function SidebarContent({
+function Sidebar({
   navItems,
   activePath,
   collapsed,
-  onToggleCollapsed,
+  setCollapsed,
   onNavigate,
+  showCollapseToggle,
 }: {
   navItems: NavItem[];
   activePath: string;
   collapsed: boolean;
-  onToggleCollapsed?: () => void;
+  setCollapsed?: (v: boolean) => void;
   onNavigate?: () => void;
+  showCollapseToggle?: boolean;
 }) {
   const core = navItems.filter((x) => x.group === "core");
   const content = navItems.filter((x) => x.group === "content");
 
   return (
     <div className="h-full flex flex-col">
-      {/* Brand + collapse toggle */}
+      {/* Brand */}
       <div className="px-3 pt-4 pb-4 border-b border-slate-200/70">
         <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
           <div className="h-10 w-10 rounded-2xl bg-pro-blue text-white flex items-center justify-center text-sm font-bold shadow-sm shrink-0">
@@ -108,11 +104,10 @@ function SidebarContent({
             </div>
           )}
 
-          {/* Desktop collapse button */}
-          {onToggleCollapsed && (
+          {showCollapseToggle && setCollapsed && (
             <button
               type="button"
-              onClick={onToggleCollapsed}
+              onClick={() => setCollapsed(!collapsed)}
               className={cn(
                 "ml-auto inline-flex items-center justify-center h-10 w-10 rounded-2xl",
                 "border border-slate-200 bg-white hover:bg-slate-50 shadow-sm",
@@ -132,8 +127,13 @@ function SidebarContent({
       </div>
 
       {/* Nav */}
-      <div className={cn("flex-1 overflow-y-auto", collapsed ? "px-2 py-3" : "px-3 py-4", "space-y-5")}>
-        {/* Core */}
+      <div
+        className={cn(
+          "flex-1 overflow-y-auto",
+          collapsed ? "px-2 py-3" : "px-3 py-4",
+          "space-y-5"
+        )}
+      >
         <div>
           {!collapsed && (
             <div className="px-2 py-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
@@ -150,7 +150,7 @@ function SidebarContent({
                   key={it.to}
                   to={it.to}
                   end={it.end}
-                  className={sidebarItemClass({ isActive, collapsed })}
+                  className={itemClass({ isActive, collapsed })}
                   onClick={onNavigate}
                   title={collapsed ? it.label : undefined}
                 >
@@ -171,7 +171,6 @@ function SidebarContent({
           </div>
         </div>
 
-        {/* Content */}
         <div>
           {!collapsed && (
             <div className="px-2 py-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
@@ -188,7 +187,7 @@ function SidebarContent({
                   key={it.to}
                   to={it.to}
                   end={it.end}
-                  className={sidebarItemClass({ isActive, collapsed })}
+                  className={itemClass({ isActive, collapsed })}
                   onClick={onNavigate}
                   title={collapsed ? it.label : undefined}
                 >
@@ -212,15 +211,19 @@ function SidebarContent({
         {!collapsed && (
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 flex items-start gap-2">
             <Shield className="h-4 w-4 mt-0.5" />
-            <div>
-              Astuce : clique sur l’icône en haut du menu pour réduire/étendre.
-            </div>
+            <div>Astuce : utilise le bouton en haut pour réduire/étendre la sidebar.</div>
           </div>
         )}
       </div>
 
       {/* Bottom actions */}
-      <div className={cn("border-t border-slate-200/70", collapsed ? "px-2 py-3" : "px-4 py-4", "space-y-2")}>
+      <div
+        className={cn(
+          "border-t border-slate-200/70",
+          collapsed ? "px-2 py-3" : "px-4 py-4",
+          "space-y-2"
+        )}
+      >
         {collapsed ? (
           <>
             <Link
@@ -254,6 +257,7 @@ function SidebarContent({
 
 export default function AdminLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
+
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
       const v = localStorage.getItem("admin_sidebar_collapsed");
@@ -280,31 +284,6 @@ export default function AdminLayout() {
     []
   );
 
-  // Ferme le drawer à chaque navigation
-  useEffect(() => {
-    setDrawerOpen(false);
-  }, [location.pathname]);
-
-  // Bloque le scroll du body quand drawer open
-  useEffect(() => {
-    if (!drawerOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [drawerOpen]);
-
-  // ESC pour fermer drawer
-  useEffect(() => {
-    if (!drawerOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setDrawerOpen(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [drawerOpen]);
-
   // Persist collapsed state
   useEffect(() => {
     try {
@@ -314,18 +293,41 @@ export default function AdminLayout() {
     }
   }, [collapsed]);
 
-  const sidebarWidth = collapsed ? "lg:grid-cols-[88px_1fr]" : "lg:grid-cols-[280px_1fr]";
+  // Close drawer on navigation
+  useEffect(() => setDrawerOpen(false), [location.pathname]);
+
+  // Lock body scroll when drawer open
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [drawerOpen]);
+
+  // ESC closes drawer
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDrawerOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [drawerOpen]);
+
+  const desktopSidebarWidth = collapsed ? "w-[88px]" : "w-[280px]";
 
   return (
     <div data-admin className="min-h-dvh bg-slate-50">
-      {/* Top header */}
+      {/* Top header (simple, always responsive) */}
       <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/80 backdrop-blur">
         <div className="mx-auto w-full max-w-[1600px] px-3 sm:px-6 lg:px-8 py-3">
           <div className="flex items-center gap-3">
             {/* Mobile menu button */}
             <button
               type="button"
-              className="lg:hidden inline-flex items-center justify-center h-10 w-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 shadow-sm"
+              className="md:hidden inline-flex items-center justify-center h-10 w-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 shadow-sm"
               aria-label={drawerOpen ? "Fermer le menu" : "Ouvrir le menu"}
               aria-expanded={drawerOpen}
               onClick={() => setDrawerOpen((v) => !v)}
@@ -339,7 +341,7 @@ export default function AdminLayout() {
             </div>
 
             {/* Desktop quick actions */}
-            <div className="hidden lg:flex items-center gap-2 shrink-0">
+            <div className="hidden md:flex items-center gap-2 shrink-0">
               <Link
                 to="/"
                 className={cn(
@@ -359,28 +361,31 @@ export default function AdminLayout() {
         </div>
       </header>
 
-      {/* Layout */}
+      {/* Main layout: sidebar left + content */}
       <div className="mx-auto w-full max-w-[1600px]">
-        <div className={cn("grid grid-cols-1", sidebarWidth)}>
-          {/* Desktop sidebar */}
-          <aside className="hidden lg:block sticky top-[64px] h-[calc(100dvh-64px)] border-r border-slate-200/70 bg-white/65 backdrop-blur">
-            <SidebarContent
-              navItems={navItems}
-              activePath={activePath}
-              collapsed={collapsed}
-              onToggleCollapsed={() => setCollapsed((v) => !v)}
-            />
+        <div className="flex min-h-[calc(100dvh-64px)]">
+          {/* Desktop/Tablet sidebar */}
+          <aside className={cn("hidden md:block shrink-0 border-r border-slate-200/70 bg-white/65 backdrop-blur", desktopSidebarWidth)}>
+            <div className="sticky top-[64px] h-[calc(100dvh-64px)]">
+              <Sidebar
+                navItems={navItems}
+                activePath={activePath}
+                collapsed={collapsed}
+                setCollapsed={setCollapsed}
+                showCollapseToggle
+              />
+            </div>
           </aside>
 
           {/* Content */}
-          <main className="min-w-0 px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <main className="min-w-0 flex-1 px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
             <Outlet />
           </main>
         </div>
       </div>
 
       {/* Mobile drawer */}
-      <div className="lg:hidden">
+      <div className="md:hidden">
         <div
           className={cn(
             "fixed inset-0 z-40 bg-black/35 transition-opacity",
@@ -400,8 +405,7 @@ export default function AdminLayout() {
           aria-modal="true"
           aria-label="Menu admin"
         >
-          {/* Sur mobile, on affiche toujours en mode “non-collapsed” pour l’ergonomie */}
-          <SidebarContent
+          <Sidebar
             navItems={navItems}
             activePath={activePath}
             collapsed={false}
