@@ -41,16 +41,12 @@ type ProfileRow = {
   id: string;
   email?: string | null;
   full_name?: string | null;
-  first_name?: string | null;
-  last_name?: string | null;
 };
 
 type WorkerProfileRow = {
   user_id: string;
   email?: string | null;
   full_name?: string | null;
-  first_name?: string | null;
-  last_name?: string | null;
   company_name?: string | null;
   trade?: string | null;
 };
@@ -90,30 +86,14 @@ function isUuidLike(v: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v.trim());
 }
 
-/**
- * Affichage STRICT demandé :
- * - Priorité: "Prénom Nom"
- * - Sinon: full_name
- * - Sinon (fallback): "Utilisateur" (et on garde l'UUID en title pour debug)
- *
- * NOTE: si profiles/worker_profiles ne contiennent pas first_name/last_name/full_name,
- * tu verras "Utilisateur". Dans ce cas, il faut remplir profiles côté DB.
- */
-function buildFullNameOnly(
-  p?: Partial<ProfileRow & WorkerProfileRow> | null,
-  fallbackId?: string | null
-) {
-  const first = ((p as any)?.first_name ?? "") as string;
-  const last = ((p as any)?.last_name ?? "") as string;
-  const fullNameFromParts = [first, last].filter(Boolean).join(" ").trim();
+// Affichage demandé: "Prénom Nom" -> ici on n'a pas les colonnes,
+// donc on affiche full_name, sinon email, sinon "Utilisateur".
+function buildDisplayBestEffort(p?: Partial<ProfileRow & WorkerProfileRow> | null) {
+  const full = ((p as any)?.full_name ?? "") as string;
+  const email = ((p as any)?.email ?? "") as string;
+  const company = ((p as any)?.company_name ?? "") as string;
 
-  const full = (((p as any)?.full_name ?? "") as string).trim();
-
-  // Demande: "Prénom et Nom" -> on prend parts si dispo, sinon full_name
-  const name = fullNameFromParts || full;
-
-  // Fallback volontairement NON-ID dans l'affichage (on met l'id dans title)
-  return name || "Utilisateur";
+  return (full && full.trim()) || (company && company.trim()) || (email && email.trim()) || "Utilisateur";
 }
 
 export default function AdminReviewsModerationPage() {
@@ -186,21 +166,20 @@ export default function AdminReviewsModerationPage() {
     const profileMap = new Map<string, ProfileRow>();
     const workerProfileMap = new Map<string, WorkerProfileRow>();
 
-    // profiles: clients + workers (fallback)
+    // profiles: on ne sélectionne QUE des colonnes qui existent chez toi
     if (uniqClients.length || uniqWorkers.length) {
       const allIds = Array.from(new Set([...uniqClients, ...uniqWorkers]));
-      const { data, error } = await supabase.from("profiles").select("id,full_name,first_name,last_name").in("id", allIds);
-
+      const { data, error } = await supabase.from("profiles").select("id,email,full_name").in("id", allIds);
       if (!error && Array.isArray(data)) {
         (data as ProfileRow[]).forEach((p) => profileMap.set(p.id, p));
       }
     }
 
-    // worker_profiles: enrich prestataire si dispo
+    // worker_profiles: idem (colonnes safe)
     if (uniqWorkers.length) {
       const { data, error } = await supabase
         .from("worker_profiles")
-        .select("user_id,full_name,first_name,last_name,company_name,trade")
+        .select("user_id,email,full_name,company_name,trade")
         .in("user_id", uniqWorkers);
 
       if (!error && Array.isArray(data)) {
@@ -250,9 +229,8 @@ export default function AdminReviewsModerationPage() {
 
         return {
           ...r,
-          // ICI: on force l'affichage prénom/nom (et pas l'ID)
-          client_display: buildFullNameOnly(clientP ?? null, r.client_user_id),
-          worker_display: buildFullNameOnly((workerWP ?? workerP) ?? null, r.worker_user_id),
+          client_display: buildDisplayBestEffort(clientP ?? null),
+          worker_display: buildDisplayBestEffort((workerWP ?? workerP) ?? null),
         };
       });
 
@@ -346,25 +324,15 @@ export default function AdminReviewsModerationPage() {
             </div>
 
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-              <span>
-                Total: <span className="font-medium text-slate-700">{uiCounts.total}</span>
-              </span>
+              <span>Total: <span className="font-medium text-slate-700">{uiCounts.total}</span></span>
               <span>•</span>
-              <span>
-                En attente: <span className="font-medium text-slate-700">{uiCounts.pending}</span>
-              </span>
+              <span>En attente: <span className="font-medium text-slate-700">{uiCounts.pending}</span></span>
               <span>•</span>
-              <span>
-                Publié: <span className="font-medium text-slate-700">{uiCounts.published}</span>
-              </span>
+              <span>Publié: <span className="font-medium text-slate-700">{uiCounts.published}</span></span>
               <span>•</span>
-              <span>
-                Masqué: <span className="font-medium text-slate-700">{uiCounts.hidden}</span>
-              </span>
+              <span>Masqué: <span className="font-medium text-slate-700">{uiCounts.hidden}</span></span>
               <span>•</span>
-              <span>
-                Rejeté: <span className="font-medium text-slate-700">{uiCounts.rejected}</span>
-              </span>
+              <span>Rejeté: <span className="font-medium text-slate-700">{uiCounts.rejected}</span></span>
             </div>
           </div>
 
@@ -458,17 +426,12 @@ export default function AdminReviewsModerationPage() {
                 {rows.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50/60">
                     <td className="px-4 py-3 whitespace-nowrap text-slate-700">{fmtDate(r.created_at)}</td>
-
-                    {/* IMPORTANT: on affiche Prénom Nom (pas l'UUID).
-                        L'UUID reste en title pour debug/traçabilité. */}
                     <td className="px-4 py-3 whitespace-nowrap text-slate-700" title={r.client_user_id ?? ""}>
                       {truncate(r.client_display ?? "Utilisateur", 26)}
                     </td>
-
                     <td className="px-4 py-3 whitespace-nowrap text-slate-700" title={r.worker_user_id ?? ""}>
                       {truncate(r.worker_display ?? "Utilisateur", 26)}
                     </td>
-
                     <td className="px-4 py-3 whitespace-nowrap text-slate-700">{r.rating ?? "—"}</td>
                     <td className="px-4 py-3 text-slate-700" title={r.content ?? ""}>
                       {truncate(r.title ? `${r.title} — ${r.content ?? ""}` : r.content, 64)}
