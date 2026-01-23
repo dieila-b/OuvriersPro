@@ -1,5 +1,5 @@
 // src/components/layout/AdminLayout.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, NavLink, Link, useLocation } from "react-router-dom";
 import AdminLogoutButton from "@/components/admin/AdminLogoutButton";
 import {
@@ -18,6 +18,8 @@ import {
   FileText,
   Shield,
   LogIn,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,7 +34,7 @@ type NavItem = {
 
 function pillClass({ isActive }: { isActive: boolean }) {
   return cn(
-    "inline-flex items-center gap-2",
+    "shrink-0 inline-flex items-center gap-2",
     "px-3 py-2 rounded-full text-sm font-medium transition whitespace-nowrap",
     "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
     isActive
@@ -230,62 +232,33 @@ export default function AdminLayout() {
 
   const navItems: NavItem[] = useMemo(
     () => [
-      {
-        to: "/admin/dashboard",
-        label: "Tableau de bord",
-        end: true,
-        group: "core",
-        icon: LayoutDashboard,
-      },
-      {
-        to: "/admin/ouvrier-contacts",
-        label: "Demandes de contact",
-        group: "core",
-        icon: PhoneCall,
-      },
-      {
-        to: "/admin/ouvriers",
-        label: "Inscriptions prestataires",
-        group: "core",
-        icon: UserCheck,
-      },
-      {
-        to: "/admin/publicites",
-        label: "Publicités",
-        group: "core",
-        icon: Megaphone,
-      },
-      {
-        to: "/admin/signalements",
-        label: "Signalements",
-        group: "core",
-        icon: Flag,
-      },
-      {
-        to: "/admin/journal-connexions",
-        label: "Journal de connexions",
-        group: "core",
-        icon: LogIn,
-      },
+      { to: "/admin/dashboard", label: "Tableau de bord", end: true, group: "core", icon: LayoutDashboard },
+      { to: "/admin/ouvrier-contacts", label: "Demandes de contact", group: "core", icon: PhoneCall },
+      { to: "/admin/ouvriers", label: "Inscriptions prestataires", group: "core", icon: UserCheck },
+      { to: "/admin/publicites", label: "Publicités", group: "core", icon: Megaphone },
+      { to: "/admin/signalements", label: "Signalements", group: "core", icon: Flag },
+      { to: "/admin/journal-connexions", label: "Journal de connexions", group: "core", icon: LogIn },
       { to: "/admin/faq-questions", label: "Questions FAQ", group: "content", icon: BookOpen },
       { to: "/admin/contenu", label: "Contenu du site", group: "content", icon: FileText },
     ],
     []
   );
 
-  // Répartition : visible (pills) vs overflow (Plus)
+  // ✅ On garde peu d’items visibles + le reste dans "Plus"
   const { visibleItems, overflowItems } = useMemo(() => {
-    // Réduit un peu : moins de “pills” visibles = moins de risques de débordement
     const MAX_VISIBLE = 4;
-    const visible = navItems.slice(0, MAX_VISIBLE);
-    const overflow = navItems.slice(MAX_VISIBLE);
-    return { visibleItems: visible, overflowItems: overflow };
+    return {
+      visibleItems: navItems.slice(0, MAX_VISIBLE),
+      overflowItems: navItems.slice(MAX_VISIBLE),
+    };
   }, [navItems]);
 
+  // Drawer close on navigation
   useEffect(() => {
     setDrawerOpen(false);
   }, [location.pathname]);
 
+  // Lock body scroll when drawer open
   useEffect(() => {
     if (!drawerOpen) return;
     const prev = document.body.style.overflow;
@@ -295,6 +268,7 @@ export default function AdminLayout() {
     };
   }, [drawerOpen]);
 
+  // ESC closes drawer
   useEffect(() => {
     if (!drawerOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -305,6 +279,36 @@ export default function AdminLayout() {
   }, [drawerOpen]);
 
   const activePath = location.pathname;
+
+  // ✅ Scrollable pills helpers
+  const pillsRef = useRef<HTMLDivElement | null>(null);
+  const [canLeft, setCanLeft] = useState(false);
+  const [canRight, setCanRight] = useState(false);
+
+  const updateScrollState = useCallback(() => {
+    const el = pillsRef.current;
+    if (!el) return;
+    const left = el.scrollLeft;
+    const max = el.scrollWidth - el.clientWidth;
+    setCanLeft(left > 2);
+    setCanRight(left < max - 2);
+  }, []);
+
+  useEffect(() => {
+    updateScrollState();
+    const onResize = () => updateScrollState();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [updateScrollState, visibleItems.length, overflowItems.length]);
+
+  const scrollPills = (dir: "left" | "right") => {
+    const el = pillsRef.current;
+    if (!el) return;
+    const delta = Math.max(240, Math.floor(el.clientWidth * 0.7));
+    el.scrollBy({ left: dir === "left" ? -delta : delta, behavior: "smooth" });
+    // update later
+    window.setTimeout(updateScrollState, 250);
+  };
 
   return (
     <div data-admin className="min-h-dvh bg-slate-50">
@@ -326,30 +330,85 @@ export default function AdminLayout() {
               </div>
             </div>
 
-            {/* ✅ Desktop nav seulement à partir de lg */}
-            <nav className="hidden lg:flex min-w-0 flex-1 items-center">
+            {/* ✅ Desktop nav dès md (pas seulement lg) */}
+            <nav className="hidden md:flex min-w-0 flex-1 items-center">
               <div className="flex items-center gap-2 min-w-0 flex-1">
-                {/* Pills (scrollables si nécessaire) */}
-                <div className="flex items-center gap-1 min-w-0 max-w-full overflow-x-auto">
-                  {visibleItems.map((it) => {
-                    const Icon = it.icon;
-                    return (
-                      <NavLink key={it.to} to={it.to} className={pillClass} end={it.end}>
-                        {Icon ? <Icon className="h-4 w-4" /> : null}
-                        {it.label}
-                      </NavLink>
-                    );
-                  })}
+                {/* ✅ Scrollable pills area */}
+                <div className="relative min-w-0 flex-1">
+                  {/* left gradient + button */}
+                  <div
+                    className={cn(
+                      "absolute left-0 top-0 bottom-0 w-10 z-10 pointer-events-none",
+                      "bg-gradient-to-r from-white/85 to-transparent",
+                      !canLeft && "opacity-0"
+                    )}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => scrollPills("left")}
+                    className={cn(
+                      "absolute left-0 top-1/2 -translate-y-1/2 z-20",
+                      "h-8 w-8 rounded-full border border-slate-200 bg-white shadow-sm",
+                      "inline-flex items-center justify-center",
+                      "hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
+                      !canLeft && "opacity-0 pointer-events-none"
+                    )}
+                    aria-label="Faire défiler vers la gauche"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
 
-                  {overflowItems.length > 0 && (
-                    <MoreMenu items={overflowItems} activePath={activePath} label="Plus" />
-                  )}
+                  {/* right gradient + button */}
+                  <div
+                    className={cn(
+                      "absolute right-0 top-0 bottom-0 w-10 z-10 pointer-events-none",
+                      "bg-gradient-to-l from-white/85 to-transparent",
+                      !canRight && "opacity-0"
+                    )}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => scrollPills("right")}
+                    className={cn(
+                      "absolute right-0 top-1/2 -translate-y-1/2 z-20",
+                      "h-8 w-8 rounded-full border border-slate-200 bg-white shadow-sm",
+                      "inline-flex items-center justify-center",
+                      "hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
+                      !canRight && "opacity-0 pointer-events-none"
+                    )}
+                    aria-label="Faire défiler vers la droite"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+
+                  {/* scroll container */}
+                  <div
+                    ref={pillsRef}
+                    onScroll={updateScrollState}
+                    className={cn(
+                      "flex items-center gap-1 min-w-0",
+                      "overflow-x-auto scrollbar-none",
+                      "px-10" // laisse place aux boutons de scroll
+                    )}
+                  >
+                    {visibleItems.map((it) => {
+                      const Icon = it.icon;
+                      return (
+                        <NavLink key={it.to} to={it.to} className={pillClass} end={it.end}>
+                          {Icon ? <Icon className="h-4 w-4" /> : null}
+                          {it.label}
+                        </NavLink>
+                      );
+                    })}
+
+                    {overflowItems.length > 0 && (
+                      <MoreMenu items={overflowItems} activePath={activePath} label="Plus" />
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex-1" />
-
-                {/* Actions à droite */}
-                <div className="flex items-center gap-2 shrink-0">
+                {/* ✅ Right actions always visible */}
+                <div className="flex items-center gap-2 shrink-0 pl-2">
                   <Link
                     to="/"
                     className={cn(
@@ -369,8 +428,8 @@ export default function AdminLayout() {
               </div>
             </nav>
 
-            {/* ✅ Mobile/Tablet (jusqu’à lg) */}
-            <div className="ml-auto flex items-center gap-2 lg:hidden shrink-0">
+            {/* ✅ Mobile (< md) */}
+            <div className="ml-auto flex items-center gap-2 md:hidden shrink-0">
               <button
                 type="button"
                 className="inline-flex items-center justify-center h-10 w-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 shadow-sm"
@@ -386,8 +445,8 @@ export default function AdminLayout() {
 
         <Breadcrumb activePath={activePath} items={navItems} />
 
-        {/* Drawer : visible < lg */}
-        <div className="lg:hidden">
+        {/* Drawer : visible < md */}
+        <div className="md:hidden">
           <div
             className={cn(
               "fixed inset-0 z-40 bg-black/30 transition-opacity",
@@ -482,8 +541,8 @@ export default function AdminLayout() {
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 flex items-start gap-2">
                   <Shield className="h-4 w-4 mt-0.5" />
                   <div>
-                    Astuce : sur mobile/tablette, la navigation est regroupée ici. Sur desktop, “Plus”
-                    inclut une recherche.
+                    Astuce : sur mobile, la navigation est regroupée ici. Sur desktop, vous pouvez
+                    faire défiler les onglets horizontalement.
                   </div>
                 </div>
               </div>
