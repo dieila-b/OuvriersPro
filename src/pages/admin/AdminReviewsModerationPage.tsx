@@ -1,5 +1,5 @@
 // src/pages/admin/AdminReviewsModerationPage.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -39,10 +39,10 @@ type ReviewRow = {
 
 type ProfileRow = {
   id: string;
-  email?: string | null;
-  first_name?: string | null;
-  last_name?: string | null;
-  full_name?: string | null;
+  email: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  full_name: string | null;
   is_admin?: boolean | null;
 };
 
@@ -89,17 +89,19 @@ function buildName(p?: Partial<ProfileRow> | null, fallbackId?: string | null) {
   const full = (p?.full_name ?? "").trim();
   const email = (p?.email ?? "").trim();
 
-  // Si aucun champ => fallback UUID tronqué (diagnostic clair)
-  if (!parts && !full && !email) {
-    if (fallbackId) return `${fallbackId.slice(0, 8)}…${fallbackId.slice(-4)}`;
-    return "Utilisateur";
-  }
+  if (parts) return parts;
+  if (full) return full;
+  if (email) return email;
 
-  return parts || full || email;
+  if (fallbackId) return `${fallbackId.slice(0, 8)}…${fallbackId.slice(-4)}`;
+  return "Utilisateur";
 }
 
 export default function AdminReviewsModerationPage() {
   const { toast } = useToast();
+
+  const [checkingAdmin, setCheckingAdmin] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<ReviewRow[]>([]);
@@ -125,6 +127,9 @@ export default function AdminReviewsModerationPage() {
 
   const fromIdx = (page - 1) * perPage;
   const toIdx = fromIdx + perPage - 1;
+
+  const realtimeRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const fetchingRef = useRef(false);
 
   const applySearchFilters = (base: any) => {
     const raw = q.trim();
@@ -161,29 +166,63 @@ export default function AdminReviewsModerationPage() {
     return query;
   };
 
-  const fetchProfilesByIdsAsAdmin = async (ids: string[]) => {
+  const checkAdmin = async () => {
+    setCheckingAdmin(true);
+    try {
+      const { data: au, error: eAu } = await supabase.auth.getUser();
+      if (eAu) throw eAu;
+      const uid = au?.user?.id;
+      if (!uid) {
+        setIsAdmin(false);
+        return;
+      }
+
+      const { data, error: e } = await supabase
+        .from("profiles")
+        .select("id,is_admin")
+        .eq("id", uid)
+        .maybeSingle();
+
+      if (e) throw e;
+      setIsAdmin(!!data?.is_admin);
+    } catch (e: any) {
+      toast({ title: "Erreur", description: e?.message ?? "Impossible de vérifier le rôle admin.", variant: "destructive" });
+      setIsAdmin(false);
+    } finally {
+      setCheckingAdmin(false);
+    }
+  };
+
+  const fetchProfilesMap = async (ids: string[]) => {
     const uniq = Array.from(new Set(ids.filter(Boolean)));
-    if (!uniq.length) return new Map<string, ProfileRow>();
+    const map = new Map<string, ProfileRow>();
+    if (!uniq.length) return map;
 
-    const { data, error } = await supabase.rpc("admin_profiles_by_ids", { ids: uniq });
+    // IMPORTANT: ceci suppose la policy profiles_admin_select_all (SQL ci-dessus)
+    const { data, error: e } = await supabase
+      .from("profiles")
+      .select("id,email,first_name,last_name,full_name")
+      .in("id", uniq);
 
-    if (error) {
+    if (e) {
+      // On affiche l’erreur car sinon vous ne saurez pas que la policy manque
       toast({
-        title: "Profils non accessibles",
-        description: `RPC admin_profiles_by_ids: ${error.message}`,
+        title: "Lecture profils refusée",
+        description: `profiles: ${e.message}`,
         variant: "destructive",
       });
-      return new Map<string, ProfileRow>();
+      return map;
     }
 
-    const map = new Map<string, ProfileRow>();
-    (data as ProfileRow[] | null)?.forEach((p) => {
-      if (p?.id) map.set(p.id, p);
-    });
+    (data ?? []).forEach((p: any) => map.set(p.id, p as ProfileRow));
     return map;
   };
 
   const fetchData = async () => {
+    if (!isAdmin) return;
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+
     setLoading(true);
     setError(null);
 
@@ -210,13 +249,10 @@ export default function AdminReviewsModerationPage() {
       });
 
       const ids = Array.from(
-        new Set(
-          baseRows.flatMap((r) => [r.client_user_id, r.worker_user_id]).filter(Boolean) as string[]
-        )
+        new Set(baseRows.flatMap((r) => [r.client_user_id, r.worker_user_id]).filter(Boolean) as string[])
       );
 
-      // ✅ Bypass RLS via RPC (admin-guarded)
-      const profileMap = await fetchProfilesByIdsAsAdmin(ids);
+      const profileMap = await fetchProfilesMap(ids);
 
       const enriched = baseRows.map((r) => {
         const clientP = r.client_user_id ? profileMap.get(r.client_user_id) : null;
@@ -238,8 +274,19 @@ export default function AdminReviewsModerationPage() {
       toast({ title: "Erreur", description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
+
+  useEffect(() => {
+    checkAdmin();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!checkingAdmin && isAdmin) fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkingAdmin, isAdmin]);
 
   useEffect(() => {
     setPage(1);
@@ -247,9 +294,43 @@ export default function AdminReviewsModerationPage() {
   }, [status, q, perPage]);
 
   useEffect(() => {
+    if (!isAdmin) return;
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, q, perPage, page]);
+  }, [status, q, perPage, page, isAdmin]);
+
+  // Realtime: auto refresh quand un avis est créé/modifié/supprimé
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    // cleanup ancien channel si existant
+    if (realtimeRef.current) {
+      supabase.removeChannel(realtimeRef.current);
+      realtimeRef.current = null;
+    }
+
+    const ch = supabase
+      .channel("admin-op-reviews")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: TABLE },
+        () => {
+          // Recharge sans casser les filtres/pagination
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    realtimeRef.current = ch;
+
+    return () => {
+      if (realtimeRef.current) {
+        supabase.removeChannel(realtimeRef.current);
+        realtimeRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
 
   const openDetails = (r: ReviewRow) => {
     setSelected(r);
@@ -266,6 +347,7 @@ export default function AdminReviewsModerationPage() {
 
   const applyModeration = async (action: "publish" | "hide" | "reject") => {
     if (!selected) return;
+    if (!isAdmin) return;
 
     setSaving(true);
     try {
@@ -308,6 +390,30 @@ export default function AdminReviewsModerationPage() {
 
   const uiCounts = useMemo(() => counts, [counts]);
 
+  if (checkingAdmin) {
+    return (
+      <div className="p-6 text-sm text-slate-600 flex items-center gap-2">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Vérification des droits…
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="p-6">
+        <Card className="border-red-200 bg-red-50">
+          <CardHeader>
+            <CardTitle className="text-base text-red-700">Accès refusé</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-red-700">
+            Vous n’avez pas les droits administrateur pour accéder à la modération des avis.
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <Card className="border-slate-200">
@@ -315,7 +421,7 @@ export default function AdminReviewsModerationPage() {
           <div>
             <CardTitle className="text-base sm:text-lg">Modération des avis</CardTitle>
             <div className="mt-1 text-xs text-slate-500">
-              Affiche tous les commentaires laissés entre clients/particuliers et ouvriers/prestataires. Vous pouvez publier, masquer ou rejeter.
+              Tous les avis laissés par clients et prestataires apparaissent ici. Seul un admin peut publier, masquer ou rejeter.
             </div>
 
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
@@ -347,7 +453,7 @@ export default function AdminReviewsModerationPage() {
                 <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <Input
                   className="pl-9"
-                  placeholder="Titre, contenu, note de modération… (ou coller un UUID pour filtrer)"
+                  placeholder="Titre, contenu, note de modération… (ou UUID)"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
