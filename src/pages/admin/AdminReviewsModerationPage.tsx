@@ -6,57 +6,39 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, Search, Eye, CheckCircle2, XCircle, EyeOff, RefreshCw } from "lucide-react";
+import { Loader2, Search, Eye, CheckCircle2, XCircle, EyeOff, RefreshCw, Flag } from "lucide-react";
 
-// CORRECT TABLE: op_reviews
-// Relations:
-// - client_user_id -> profiles.id (for client name)
-// - worker_user_id -> op_users.id (for worker name via op_users.full_name)
+type AdminStatus = "all" | "pending" | "published" | "hidden" | "rejected" | "flagged";
 
-type ReviewRow = {
-  id: string;
+type AdminReviewRow = {
+  source_table: "op_reviews" | "op_worker_client_reviews" | string;
+  review_id: string;
+
   created_at: string | null;
-  updated_at?: string | null;
-
-  client_user_id: string | null;
-  worker_user_id: string | null;
+  updated_at: string | null;
 
   rating: number | null;
   title: string | null;
   content: string | null;
 
-  status: string | null; // "pending" | "published" | "hidden" | "rejected"
+  status: string | null; // texte canonique
   is_public: boolean | null;
+  is_flagged: boolean | null;
 
-  // Display names (enriched)
-  client_display?: string | null;
-  worker_display?: string | null;
+  client_profile_id: string | null;
+  worker_profile_id: string | null;
+
+  client_display: string | null;
+  worker_display: string | null;
+
+  moderation_note: string | null;
+  moderated_by: string | null;
+  moderated_at: string | null;
+
+  total_count?: number | null;
 };
-
-type ProfileRow = {
-  id: string;
-  first_name?: string | null;
-  last_name?: string | null;
-  full_name?: string | null;
-  email?: string | null;
-};
-
-type OpUserRow = {
-  id: string;
-  full_name?: string | null;
-  email?: string | null;
-};
-
-type WorkerRow = {
-  id: string;
-  user_id?: string | null;
-  first_name?: string | null;
-  last_name?: string | null;
-  profession?: string | null;
-};
-
-const TABLE = "op_reviews";
 
 function fmtDate(ts?: string | null) {
   if (!ts) return "—";
@@ -77,254 +59,67 @@ function truncate(s?: string | null, n = 70) {
   return s.slice(0, n - 1) + "…";
 }
 
-function statusBadge(status?: string | null, isPublic?: boolean | null) {
-  if (status === "hidden" || status === "rejected") {
-    return <Badge variant="destructive">Masqué</Badge>;
-  }
-  if (status === "published" || isPublic === true) {
-    return <Badge className="bg-emerald-600 hover:bg-emerald-600">Publié</Badge>;
-  }
+function statusBadge(status?: string | null, isPublic?: boolean | null, isFlagged?: boolean | null) {
+  const s = (status ?? "pending").toLowerCase();
+  if (isFlagged || s === "flagged") return <Badge variant="destructive">Signalé</Badge>;
+  if (s === "published" && !!isPublic) return <Badge className="bg-emerald-600 hover:bg-emerald-600">Publié</Badge>;
+  if (s === "hidden") return <Badge className="bg-slate-600 hover:bg-slate-600">Masqué</Badge>;
+  if (s === "rejected") return <Badge variant="destructive">Rejeté</Badge>;
   return <Badge className="bg-amber-600 hover:bg-amber-600">En attente</Badge>;
 }
 
-function isUuidLike(v: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v.trim());
-}
-
-function buildClientName(profile?: ProfileRow | null, fallbackId?: string | null) {
-  if (profile) {
-    const first = (profile.first_name ?? "").trim();
-    const last = (profile.last_name ?? "").trim();
-    const full = (profile.full_name ?? "").trim();
-    const name = [first, last].filter(Boolean).join(" ").trim() || full;
-    if (name) return name;
-    
-    const email = (profile.email ?? "").trim();
-    if (email) return email;
-  }
-  
-  if (fallbackId) return `${fallbackId.slice(0, 8)}…`;
-  return "Client";
-}
-
-function buildWorkerName(
-  opUser?: OpUserRow | null, 
-  worker?: WorkerRow | null, 
-  fallbackId?: string | null
-) {
-  // Priority 1: op_users.full_name
-  if (opUser?.full_name?.trim()) {
-    const prof = worker?.profession?.trim();
-    return prof ? `${opUser.full_name.trim()} • ${prof}` : opUser.full_name.trim();
-  }
-  
-  // Priority 2: op_ouvriers first/last name
-  if (worker) {
-    const first = (worker.first_name ?? "").trim();
-    const last = (worker.last_name ?? "").trim();
-    const name = [first, last].filter(Boolean).join(" ").trim();
-    if (name) {
-      const prof = (worker.profession ?? "").trim();
-      return prof ? `${name} • ${prof}` : name;
-    }
-  }
-  
-  // Priority 3: email
-  if (opUser?.email?.trim()) return opUser.email.trim();
-  
-  // Fallback
-  if (fallbackId) return `${fallbackId.slice(0, 8)}…`;
-  return "Prestataire";
+function sourceBadge(src?: string | null) {
+  const s = src ?? "unknown";
+  if (s === "op_reviews") return <Badge variant="outline">Avis (op_reviews)</Badge>;
+  if (s === "op_worker_client_reviews") return <Badge variant="outline">Avis (worker↔client)</Badge>;
+  return <Badge variant="outline">{s}</Badge>;
 }
 
 export default function AdminReviewsModerationPage() {
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(false);
-  const [rows, setRows] = useState<ReviewRow[]>([]);
+  const [rows, setRows] = useState<AdminReviewRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const [q, setQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "published" | "pending" | "hidden">("all");
+  const [status, setStatus] = useState<AdminStatus>("all");
   const [perPage, setPerPage] = useState(25);
   const [page, setPage] = useState(1);
 
-  const [counts, setCounts] = useState({
-    total: 0,
-    pending: 0,
-    published: 0,
-    hidden: 0,
-  });
+  const [totalCount, setTotalCount] = useState(0);
 
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<ReviewRow | null>(null);
+  const [selected, setSelected] = useState<AdminReviewRow | null>(null);
+  const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
-
-  const fromIdx = (page - 1) * perPage;
-  const toIdx = fromIdx + perPage - 1;
-
-  const applySearchFilters = (base: any) => {
-    const raw = q.trim();
-    if (!raw) return base;
-
-    const like = `%${raw.replace(/%/g, "\\%").replace(/_/g, "\\_")}%`;
-    base = base.or([`title.ilike.${like}`, `content.ilike.${like}`].join(","));
-
-    if (isUuidLike(raw)) {
-      base = base.or([`id.eq.${raw}`, `client_user_id.eq.${raw}`, `worker_user_id.eq.${raw}`].join(","));
-    }
-
-    return base;
-  };
-
-  const buildListQuery = () => {
-    let query = supabase
-      .from(TABLE)
-      .select(
-        "id,created_at,updated_at,client_user_id,worker_user_id,rating,title,content,status,is_public",
-        { count: "exact" }
-      );
-
-    query = applySearchFilters(query);
-    
-    // NO hidden filter - show ALL reviews
-    if (statusFilter === "published") query = query.or("status.eq.published,is_public.eq.true");
-    if (statusFilter === "pending") query = query.eq("status", "pending");
-    if (statusFilter === "hidden") query = query.or("status.eq.hidden,status.eq.rejected");
-
-    return query.order("created_at", { ascending: false }).range(fromIdx, toIdx);
-  };
-
-  const buildCountQuery = (filter: "all" | "published" | "pending" | "hidden") => {
-    let query = supabase.from(TABLE).select("id", { count: "exact", head: true });
-    query = applySearchFilters(query);
-    
-    if (filter === "published") query = query.or("status.eq.published,is_public.eq.true");
-    if (filter === "pending") query = query.eq("status", "pending");
-    if (filter === "hidden") query = query.or("status.eq.hidden,status.eq.rejected");
-    
-    return query;
-  };
-
-  // Fetch client profiles from profiles table
-  const fetchProfiles = async (userIds: string[]) => {
-    const uniq = Array.from(new Set(userIds.filter(Boolean)));
-    const map = new Map<string, ProfileRow>();
-    if (!uniq.length) return map;
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id,first_name,last_name,full_name,email")
-      .in("id", uniq);
-
-    if (error) {
-      console.error("[fetchProfiles] error:", error);
-      return map;
-    }
-
-    (data as ProfileRow[] | null)?.forEach((p) => p?.id && map.set(p.id, p));
-    return map;
-  };
-
-  // Fetch op_users for worker identity
-  const fetchOpUsers = async (userIds: string[]) => {
-    const uniq = Array.from(new Set(userIds.filter(Boolean)));
-    const map = new Map<string, OpUserRow>();
-    if (!uniq.length) return map;
-
-    const { data, error } = await supabase
-      .from("op_users")
-      .select("id,full_name,email")
-      .in("id", uniq);
-
-    if (error) {
-      console.error("[fetchOpUsers] error:", error);
-      return map;
-    }
-
-    (data as OpUserRow[] | null)?.forEach((u) => u?.id && map.set(u.id, u));
-    return map;
-  };
-
-  // Fetch workers from op_ouvriers (for profession)
-  const fetchWorkers = async (userIds: string[]) => {
-    const uniq = Array.from(new Set(userIds.filter(Boolean)));
-    const map = new Map<string, WorkerRow>();
-    if (!uniq.length) return map;
-
-    // op_ouvriers.user_id = op_users.id
-    const { data, error } = await supabase
-      .from("op_ouvriers")
-      .select("id,user_id,first_name,last_name,profession")
-      .in("user_id", uniq);
-
-    if (error) {
-      console.error("[fetchWorkers] error:", error);
-      return map;
-    }
-
-    // Map by user_id (not by id)
-    (data as WorkerRow[] | null)?.forEach((w) => w?.user_id && map.set(w.user_id, w));
-    return map;
-  };
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const { data, error: e1 } = await buildListQuery();
+      const p_status = status === "all" ? null : status;
+
+      const { data, error: e1 } = await supabase.rpc("admin_list_all_reviews", {
+        p_q: q?.trim() ? q.trim() : null,
+        p_status,
+        p_page: page,
+        p_per_page: perPage,
+      });
+
       if (e1) throw e1;
 
-      const baseRows = (data ?? []) as ReviewRow[];
+      const list = (data ?? []) as AdminReviewRow[];
+      setRows(list);
 
-      console.log("[AdminReviews] Fetched", baseRows.length, "reviews from", TABLE);
-
-      const [cAll, cPending, cPublished, cHidden] = await Promise.all([
-        buildCountQuery("all"),
-        buildCountQuery("pending"),
-        buildCountQuery("published"),
-        buildCountQuery("hidden"),
-      ]);
-
-      setCounts({
-        total: cAll.count ?? 0,
-        pending: cPending.count ?? 0,
-        published: cPublished.count ?? 0,
-        hidden: cHidden.count ?? 0,
-      });
-
-      // Get unique client and worker IDs
-      const clientIds = baseRows.map((r) => r.client_user_id ?? "").filter(Boolean);
-      const workerIds = baseRows.map((r) => r.worker_user_id ?? "").filter(Boolean);
-
-      // Fetch related data in parallel
-      const [profileMap, opUserMap, workerMap] = await Promise.all([
-        fetchProfiles(clientIds),
-        fetchOpUsers(workerIds),
-        fetchWorkers(workerIds),
-      ]);
-
-      // Enrich rows with display names
-      const enriched = baseRows.map((r) => {
-        const clientProfile = r.client_user_id ? profileMap.get(r.client_user_id) : null;
-        const workerOpUser = r.worker_user_id ? opUserMap.get(r.worker_user_id) : null;
-        const workerData = r.worker_user_id ? workerMap.get(r.worker_user_id) : null;
-
-        return {
-          ...r,
-          client_display: buildClientName(clientProfile, r.client_user_id),
-          worker_display: buildWorkerName(workerOpUser, workerData, r.worker_user_id),
-        };
-      });
-
-      setRows(enriched);
+      const tc = list?.[0]?.total_count ?? 0;
+      setTotalCount(Number(tc) || 0);
     } catch (e: any) {
       const msg = e?.message ?? "Impossible de charger les avis.";
-      console.error("[AdminReviews] error:", e);
       setError(msg);
       setRows([]);
-      setCounts({ total: 0, pending: 0, published: 0, hidden: 0 });
+      setTotalCount(0);
       toast({ title: "Erreur", description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
@@ -333,55 +128,51 @@ export default function AdminReviewsModerationPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, q, perPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, q, perPage]);
 
   useEffect(() => {
     fetchData();
-  }, [statusFilter, q, perPage, page]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, q, perPage, page]);
 
-  const openDetails = (r: ReviewRow) => {
+  const openDetails = (r: AdminReviewRow) => {
     setSelected(r);
+    setNote(r.moderation_note ?? "");
     setOpen(true);
   };
 
   const closeDetails = () => {
     setOpen(false);
     setSelected(null);
+    setNote("");
     setSaving(false);
   };
 
-  const applyModeration = async (action: "publish" | "unpublish" | "hide") => {
+  const applyModeration = async (action: "publish" | "hide" | "reject" | "flag") => {
     if (!selected) return;
 
     setSaving(true);
     try {
-      const payload: Record<string, any> = {
-        updated_at: new Date().toISOString(),
-      };
+      const { error: e1 } = await supabase.rpc("admin_moderate_any_review", {
+        p_source_table: selected.source_table,
+        p_review_id: selected.review_id,
+        p_action: action,
+        p_note: note?.trim() ? note.trim() : null,
+      });
 
-      if (action === "publish") {
-        payload.status = "published";
-        payload.is_public = true;
-      } else if (action === "unpublish") {
-        payload.status = "pending";
-        payload.is_public = false;
-      } else if (action === "hide") {
-        payload.status = "hidden";
-        payload.is_public = false;
-      }
-
-      const { error } = await supabase.from(TABLE).update(payload).eq("id", selected.id);
-      if (error) throw error;
-
-      const messages: Record<string, string> = {
-        publish: "Avis publié.",
-        unpublish: "Avis dépublié.",
-        hide: "Avis masqué.",
-      };
+      if (e1) throw e1;
 
       toast({
         title: "Modération enregistrée",
-        description: messages[action],
+        description:
+          action === "publish"
+            ? "Avis publié."
+            : action === "hide"
+            ? "Avis masqué."
+            : action === "flag"
+            ? "Avis signalé."
+            : "Avis rejeté.",
       });
 
       closeDetails();
@@ -394,7 +185,7 @@ export default function AdminReviewsModerationPage() {
     }
   };
 
-  const uiCounts = useMemo(() => counts, [counts]);
+  const uiTotal = useMemo(() => totalCount, [totalCount]);
 
   return (
     <div className="space-y-5">
@@ -403,17 +194,17 @@ export default function AdminReviewsModerationPage() {
           <div>
             <CardTitle className="text-base sm:text-lg">Modération des avis</CardTitle>
             <div className="mt-1 text-xs text-slate-500">
-              Avis des clients sur les prestataires. L'admin peut publier, dépublier ou masquer.
+              Affiche les avis réels de l’application (op_reviews + op_worker_client_reviews) avec résolution correcte des noms.
             </div>
 
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-              <span>Total: <span className="font-medium text-slate-700">{uiCounts.total}</span></span>
+              <span>
+                Total: <span className="font-medium text-slate-700">{uiTotal}</span>
+              </span>
               <span>•</span>
-              <span>En attente: <span className="font-medium text-slate-700">{uiCounts.pending}</span></span>
+              <span>Page: <span className="font-medium text-slate-700">{page}</span></span>
               <span>•</span>
-              <span>Publié: <span className="font-medium text-slate-700">{uiCounts.published}</span></span>
-              <span>•</span>
-              <span>Masqué: <span className="font-medium text-slate-700">{uiCounts.hidden}</span></span>
+              <span>Par page: <span className="font-medium text-slate-700">{perPage}</span></span>
             </div>
           </div>
 
@@ -426,14 +217,15 @@ export default function AdminReviewsModerationPage() {
         </CardHeader>
 
         <CardContent className="space-y-4">
+          {/* Filters */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-            <div className="lg:col-span-5">
+            <div className="lg:col-span-6">
               <label className="text-xs font-medium text-slate-600">Recherche</label>
               <div className="mt-1 relative">
                 <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <Input
                   className="pl-9"
-                  placeholder="Titre, contenu… (ou UUID)"
+                  placeholder="Titre, contenu, nom client/prestataire… (ou UUID)"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
@@ -444,13 +236,15 @@ export default function AdminReviewsModerationPage() {
               <label className="text-xs font-medium text-slate-600">Statut</label>
               <select
                 className="mt-1 w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as any)}
+                value={status}
+                onChange={(e) => setStatus(e.target.value as AdminStatus)}
               >
                 <option value="all">Tous</option>
                 <option value="pending">En attente</option>
                 <option value="published">Publié</option>
                 <option value="hidden">Masqué</option>
+                <option value="rejected">Rejeté</option>
+                <option value="flagged">Signalé</option>
               </select>
             </div>
 
@@ -468,13 +262,13 @@ export default function AdminReviewsModerationPage() {
               </select>
             </div>
 
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-1">
               <label className="text-xs font-medium text-slate-600">Page</label>
               <div className="mt-1 flex items-center gap-2">
                 <Button type="button" variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1 || loading}>
                   -
                 </Button>
-                <div className="text-sm text-slate-700 min-w-[42px] text-center">{page}</div>
+                <div className="text-sm text-slate-700 min-w-[38px] text-center">{page}</div>
                 <Button type="button" variant="outline" onClick={() => setPage((p) => p + 1)} disabled={loading}>
                   +
                 </Button>
@@ -490,126 +284,137 @@ export default function AdminReviewsModerationPage() {
             </div>
           )}
 
+          {/* Table */}
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-slate-600">
                 <tr className="text-left">
                   <th className="px-4 py-3 whitespace-nowrap">Date</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Source</th>
                   <th className="px-4 py-3 whitespace-nowrap">Client</th>
                   <th className="px-4 py-3 whitespace-nowrap">Prestataire</th>
                   <th className="px-4 py-3 whitespace-nowrap">Note</th>
                   <th className="px-4 py-3 whitespace-nowrap">Extrait</th>
                   <th className="px-4 py-3 whitespace-nowrap">Statut</th>
-                  <th className="px-4 py-3 whitespace-nowrap text-center">Actions</th>
+                  <th className="px-4 py-3 whitespace-nowrap text-right">Action</th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-slate-100">
                 {rows.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="px-4 py-3 whitespace-nowrap text-slate-500">{fmtDate(r.created_at)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap font-medium text-slate-700">{r.client_display}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-slate-600">{r.worker_display}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-amber-600 font-semibold">{r.rating ?? "—"}/5</td>
-                    <td className="px-4 py-3 max-w-xs truncate text-slate-600">{truncate(r.content)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">{statusBadge(r.status, r.is_public)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-center">
-                      <Button type="button" variant="ghost" size="icon" onClick={() => openDetails(r)} title="Voir détails">
+                  <tr key={`${r.source_table}:${r.review_id}`} className="hover:bg-slate-50/60">
+                    <td className="px-4 py-3 whitespace-nowrap text-slate-700">{fmtDate(r.created_at)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{sourceBadge(r.source_table)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-slate-700">{truncate(r.client_display ?? "Utilisateur", 28)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-slate-700">{truncate(r.worker_display ?? "Prestataire", 28)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-slate-700">{r.rating ?? "—"}</td>
+                    <td className="px-4 py-3 text-slate-700" title={r.content ?? ""}>
+                      {truncate(r.title ? `${r.title} — ${r.content ?? ""}` : r.content, 64)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">{statusBadge(r.status, r.is_public, r.is_flagged)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-right">
+                      <Button type="button" size="sm" variant="outline" className="gap-2" onClick={() => openDetails(r)}>
                         <Eye className="h-4 w-4" />
+                        Voir
                       </Button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+
+            {loading ? (
+              <div className="p-4 text-sm text-slate-500 flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Chargement…
+              </div>
+            ) : null}
           </div>
         </CardContent>
       </Card>
 
-      {/* Detail / moderation dialog */}
-      <Dialog open={open} onOpenChange={(v) => !v && closeDetails()}>
-        <DialogContent className="max-w-xl">
+      {/* Modal */}
+      <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : closeDetails())}>
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Détail de l'avis</DialogTitle>
+            <DialogTitle>Détail de l’avis</DialogTitle>
           </DialogHeader>
 
-          {selected && (
-            <div className="space-y-4 text-sm">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-xs text-slate-500">Client</div>
-                  <div className="font-medium">{selected.client_display}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-500">Prestataire</div>
-                  <div className="font-medium">{selected.worker_display}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-500">Date</div>
-                  <div>{fmtDate(selected.created_at)}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-500">Note</div>
-                  <div className="font-semibold text-amber-600">{selected.rating ?? "—"}/5</div>
-                </div>
-              </div>
+          {!selected ? (
+            <div className="text-sm text-slate-500">Aucun avis sélectionné.</div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="text-xs text-slate-500">Source</div>
+                    <div className="mt-1">{sourceBadge(selected.source_table)}</div>
 
-              {selected.title && (
-                <div>
-                  <div className="text-xs text-slate-500">Titre</div>
-                  <div className="font-medium">{selected.title}</div>
-                </div>
-              )}
+                    <div className="mt-3 text-xs text-slate-500">Client</div>
+                    <div className="font-medium text-slate-900 break-words">{selected.client_display ?? "Utilisateur"}</div>
 
-              <div>
-                <div className="text-xs text-slate-500">Contenu</div>
-                <div className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 border border-slate-200">
-                  {selected.content || "—"}
+                    <div className="mt-2 text-xs text-slate-500">Prestataire</div>
+                    <div className="font-medium text-slate-900 break-words">{selected.worker_display ?? "Prestataire"}</div>
+
+                    <div className="mt-2 text-xs text-slate-500">Date</div>
+                    <div className="font-medium text-slate-900">{fmtDate(selected.created_at)}</div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-xs text-slate-500">Statut</div>
+                    <div className="mt-1">{statusBadge(selected.status, selected.is_public, selected.is_flagged)}</div>
+                    <div className="mt-2 text-xs text-slate-500">Note</div>
+                    <div className="font-medium text-slate-900">{selected.rating ?? "—"} / 5</div>
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <div className="text-xs text-slate-500 mb-2">Statut actuel</div>
-                {statusBadge(selected.status, selected.is_public)}
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="text-xs text-slate-500">Titre</div>
+                <div className="font-medium text-slate-900">{selected.title ?? "—"}</div>
+
+                <div className="mt-3 text-xs text-slate-500">Commentaire</div>
+                <div className="text-sm text-slate-800 whitespace-pre-wrap">{selected.content ?? "—"}</div>
               </div>
 
-              <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-200">
-                {(selected.status !== "published" && selected.is_public !== true) && (
-                  <Button
-                    type="button"
-                    className="gap-2 bg-emerald-600 hover:bg-emerald-700"
-                    onClick={() => applyModeration("publish")}
-                    disabled={saving}
-                  >
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                    Publier
-                  </Button>
-                )}
+              {/* Note uniquement utile pour op_reviews, mais on la garde côté admin */}
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <label className="text-xs font-medium text-slate-600">Note de modération (admin)</label>
+                <Textarea className="mt-2" placeholder="Ex: spam, insulte, hors sujet..." value={note} onChange={(e) => setNote(e.target.value)} />
+                <div className="mt-2 text-[11px] text-slate-500">
+                  Dernière modération : {selected.moderated_at ? fmtDate(selected.moderated_at) : "—"} • par {selected.moderated_by ?? "—"}
+                </div>
+              </div>
 
-                {(selected.status === "published" || selected.is_public === true) && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="gap-2"
-                    onClick={() => applyModeration("unpublish")}
-                    disabled={saving}
-                  >
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <EyeOff className="h-4 w-4" />}
-                    Dépublier
-                  </Button>
-                )}
+              <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+                <Button type="button" variant="outline" onClick={closeDetails} disabled={saving}>
+                  Fermer
+                </Button>
 
-                {selected.status !== "hidden" && (
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    className="gap-2"
-                    onClick={() => applyModeration("hide")}
-                    disabled={saving}
-                  >
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-                    Masquer
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+                  onClick={() => applyModeration("publish")}
+                  disabled={saving}
+                >
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  Publier
+                </Button>
+
+                <Button type="button" variant="outline" className="gap-2" onClick={() => applyModeration("hide")} disabled={saving}>
+                  <EyeOff className="h-4 w-4" />
+                  Masquer
+                </Button>
+
+                <Button type="button" variant="outline" className="gap-2" onClick={() => applyModeration("flag")} disabled={saving}>
+                  <Flag className="h-4 w-4" />
+                  Signaler
+                </Button>
+
+                <Button type="button" variant="destructive" className="gap-2" onClick={() => applyModeration("reject")} disabled={saving}>
+                  <XCircle className="h-4 w-4" />
+                  Rejeter
+                </Button>
               </div>
             </div>
           )}
