@@ -89,7 +89,7 @@ function buildName(p?: Partial<ProfileRow> | null, fallbackId?: string | null) {
   const full = (p?.full_name ?? "").trim();
   const email = (p?.email ?? "").trim();
 
-  // IMPORTANT: si pas de profil trouvé, on montre l'UUID tronqué (au lieu de "Utilisateur")
+  // Si aucun champ => fallback UUID tronqué (diagnostic clair)
   if (!parts && !full && !email) {
     if (fallbackId) return `${fallbackId.slice(0, 8)}…${fallbackId.slice(-4)}`;
     return "Utilisateur";
@@ -165,15 +165,12 @@ export default function AdminReviewsModerationPage() {
     const uniq = Array.from(new Set(ids.filter(Boolean)));
     if (!uniq.length) return new Map<string, ProfileRow>();
 
-    const { data, error } = await supabase.rpc("admin_profiles_by_ids", {
-      ids: uniq,
-    });
+    const { data, error } = await supabase.rpc("admin_profiles_by_ids", { ids: uniq });
 
     if (error) {
-      // Si ça échoue, on garde un fallback ID dans l'UI + on affiche un toast clair
       toast({
-        title: "Lookup profils impossible",
-        description: error.message ?? "La récupération des profils via RPC a échoué.",
+        title: "Profils non accessibles",
+        description: `RPC admin_profiles_by_ids: ${error.message}`,
         variant: "destructive",
       });
       return new Map<string, ProfileRow>();
@@ -212,16 +209,14 @@ export default function AdminReviewsModerationPage() {
         rejected: cRejected.count ?? 0,
       });
 
-      const allIds = Array.from(
+      const ids = Array.from(
         new Set(
-          baseRows
-            .flatMap((r) => [r.client_user_id, r.worker_user_id])
-            .filter(Boolean) as string[]
+          baseRows.flatMap((r) => [r.client_user_id, r.worker_user_id]).filter(Boolean) as string[]
         )
       );
 
-      // ✅ Ici: RPC admin (bypass RLS)
-      const profileMap = await fetchProfilesByIdsAsAdmin(allIds);
+      // ✅ Bypass RLS via RPC (admin-guarded)
+      const profileMap = await fetchProfilesByIdsAsAdmin(ids);
 
       const enriched = baseRows.map((r) => {
         const clientP = r.client_user_id ? profileMap.get(r.client_user_id) : null;
