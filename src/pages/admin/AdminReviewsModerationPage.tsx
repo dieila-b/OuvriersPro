@@ -10,58 +10,50 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, Search, Eye, CheckCircle2, XCircle, EyeOff, RefreshCw } from "lucide-react";
 
-type ReviewStatus = "pending" | "published" | "hidden" | "rejected";
+// Using the correct table: op_worker_client_reviews
+// This table has proper relations:
+// - client_id -> op_clients.id
+// - worker_id -> op_ouvriers.id
 
 type ReviewRow = {
   id: string;
   created_at: string | null;
   updated_at?: string | null;
 
-  client_user_id: string | null; // profiles.id (auth uid)
-  worker_user_id: string | null; // op_users.id (après migration)
+  client_id: string | null;
+  worker_id: string | null;
+  contact_id?: string | null;
 
   rating: number | null;
   title: string | null;
   content: string | null;
 
-  status: ReviewStatus | null;
-  is_public: boolean | null;
+  is_published: boolean | null;
+  is_flagged: boolean | null;
 
-  moderation_note: string | null;
-  moderated_by: string | null;
-  moderated_at: string | null;
-
-  related_order_id?: string | null;
-
+  // Display names (enriched)
   client_display?: string | null;
   worker_display?: string | null;
 };
 
-type ProfileRow = {
+type ClientRow = {
   id: string;
-  email?: string | null;
+  user_id?: string | null;
   first_name?: string | null;
   last_name?: string | null;
-  full_name?: string | null;
-};
-
-type OpUserRow = {
-  id: string;
-  full_name?: string | null;
   email?: string | null;
-  role?: string | null;
 };
 
-type OuvrierRow = {
+type WorkerRow = {
   id: string;
-  user_id: string | null;
+  user_id?: string | null;
   first_name?: string | null;
   last_name?: string | null;
   email?: string | null;
   profession?: string | null;
 };
 
-const TABLE = "op_reviews";
+const TABLE = "op_worker_client_reviews";
 
 function fmtDate(ts?: string | null) {
   if (!ts) return "—";
@@ -82,13 +74,9 @@ function truncate(s?: string | null, n = 70) {
   return s.slice(0, n - 1) + "…";
 }
 
-function statusBadge(status?: ReviewStatus | null, isPublic?: boolean | null) {
-  const s = status ?? "pending";
-  const pub = !!isPublic;
-
-  if (s === "published" && pub) return <Badge className="bg-emerald-600 hover:bg-emerald-600">Publié</Badge>;
-  if (s === "hidden") return <Badge className="bg-slate-600 hover:bg-slate-600">Masqué</Badge>;
-  if (s === "rejected") return <Badge variant="destructive">Rejeté</Badge>;
+function statusBadge(isPublished?: boolean | null, isFlagged?: boolean | null) {
+  if (isFlagged) return <Badge variant="destructive">Signalé</Badge>;
+  if (isPublished) return <Badge className="bg-emerald-600 hover:bg-emerald-600">Publié</Badge>;
   return <Badge className="bg-amber-600 hover:bg-amber-600">En attente</Badge>;
 }
 
@@ -96,42 +84,27 @@ function isUuidLike(v: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v.trim());
 }
 
-function buildClientName(p?: ProfileRow | null, fallbackId?: string | null) {
-  const full = (p?.full_name ?? "").trim();
-  const first = (p?.first_name ?? "").trim();
-  const last = (p?.last_name ?? "").trim();
+function buildClientName(c?: ClientRow | null, fallbackId?: string | null) {
+  const first = (c?.first_name ?? "").trim();
+  const last = (c?.last_name ?? "").trim();
   const parts = [first, last].filter(Boolean).join(" ").trim();
-  const email = (p?.email ?? "").trim();
-  return parts || full || email || (fallbackId ? `${fallbackId.slice(0, 8)}…${fallbackId.slice(-4)}` : "Utilisateur");
+  const email = (c?.email ?? "").trim();
+  return parts || email || (fallbackId ? `${fallbackId.slice(0, 8)}…` : "Client");
 }
 
-function buildWorkerName(
-  opUser?: OpUserRow | null,
-  ouvrier?: OuvrierRow | null,
-  fallbackId?: string | null
-) {
-  // Priority 1: op_users.full_name (most reliable for worker_user_id)
-  const opUserName = (opUser?.full_name ?? "").trim();
-  if (opUserName) {
-    const prof = (ouvrier?.profession ?? "").trim();
-    return prof ? `${opUserName} • ${prof}` : opUserName;
-  }
-
-  // Priority 2: op_ouvriers first_name + last_name
-  const first = (ouvrier?.first_name ?? "").trim();
-  const last = (ouvrier?.last_name ?? "").trim();
-  const ouvrierName = [first, last].filter(Boolean).join(" ").trim();
-  if (ouvrierName) {
-    const prof = (ouvrier?.profession ?? "").trim();
-    return prof ? `${ouvrierName} • ${prof}` : ouvrierName;
-  }
-
-  // Priority 3: Email
-  const email = (opUser?.email ?? ouvrier?.email ?? "").trim();
+function buildWorkerName(w?: WorkerRow | null, fallbackId?: string | null) {
+  const first = (w?.first_name ?? "").trim();
+  const last = (w?.last_name ?? "").trim();
+  const name = [first, last].filter(Boolean).join(" ").trim();
+  const prof = (w?.profession ?? "").trim();
+  
+  if (name && prof) return `${name} • ${prof}`;
+  if (name) return name;
+  
+  const email = (w?.email ?? "").trim();
   if (email) return email;
-
-  // Fallback: Truncated ID (only if truly no data)
-  if (fallbackId) return `${fallbackId.slice(0, 8)}…${fallbackId.slice(-4)}`;
+  
+  if (fallbackId) return `${fallbackId.slice(0, 8)}…`;
   return "Prestataire";
 }
 
@@ -143,7 +116,7 @@ export default function AdminReviewsModerationPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState<ReviewStatus | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "published" | "pending" | "flagged">("all");
   const [perPage, setPerPage] = useState(25);
   const [page, setPage] = useState(1);
 
@@ -151,13 +124,11 @@ export default function AdminReviewsModerationPage() {
     total: 0,
     pending: 0,
     published: 0,
-    hidden: 0,
-    rejected: 0,
+    flagged: 0,
   });
 
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<ReviewRow | null>(null);
-  const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
   const fromIdx = (page - 1) * perPage;
@@ -168,10 +139,10 @@ export default function AdminReviewsModerationPage() {
     if (!raw) return base;
 
     const like = `%${raw.replace(/%/g, "\\%").replace(/_/g, "\\_")}%`;
-    base = base.or([`title.ilike.${like}`, `content.ilike.${like}`, `moderation_note.ilike.${like}`].join(","));
+    base = base.or([`title.ilike.${like}`, `content.ilike.${like}`].join(","));
 
     if (isUuidLike(raw)) {
-      base = base.or([`id.eq.${raw}`, `client_user_id.eq.${raw}`, `worker_user_id.eq.${raw}`, `related_order_id.eq.${raw}`].join(","));
+      base = base.or([`id.eq.${raw}`, `client_id.eq.${raw}`, `worker_id.eq.${raw}`].join(","));
     }
 
     return base;
@@ -181,79 +152,67 @@ export default function AdminReviewsModerationPage() {
     let query = supabase
       .from(TABLE)
       .select(
-        "id,created_at,updated_at,client_user_id,worker_user_id,rating,title,content,status,is_public,moderation_note,moderated_by,moderated_at,related_order_id",
+        "id,created_at,updated_at,client_id,worker_id,contact_id,rating,title,content,is_published,is_flagged",
         { count: "exact" }
       );
 
     query = applySearchFilters(query);
-    if (status !== "all") query = query.eq("status", status);
+    
+    if (statusFilter === "published") query = query.eq("is_published", true).eq("is_flagged", false);
+    if (statusFilter === "pending") query = query.eq("is_published", false).eq("is_flagged", false);
+    if (statusFilter === "flagged") query = query.eq("is_flagged", true);
 
     return query.order("created_at", { ascending: false }).range(fromIdx, toIdx);
   };
 
-  const buildCountQuery = (s: ReviewStatus | "all") => {
+  const buildCountQuery = (filter: "all" | "published" | "pending" | "flagged") => {
     let query = supabase.from(TABLE).select("id", { count: "exact", head: true });
     query = applySearchFilters(query);
-    if (s !== "all") query = query.eq("status", s);
+    
+    if (filter === "published") query = query.eq("is_published", true).eq("is_flagged", false);
+    if (filter === "pending") query = query.eq("is_published", false).eq("is_flagged", false);
+    if (filter === "flagged") query = query.eq("is_flagged", true);
+    
     return query;
   };
 
-  const fetchClientsProfiles = async (clientIds: string[]) => {
+  // Fetch clients from op_clients table
+  const fetchClients = async (clientIds: string[]) => {
     const uniq = Array.from(new Set(clientIds.filter(Boolean)));
-    const map = new Map<string, ProfileRow>();
+    const map = new Map<string, ClientRow>();
     if (!uniq.length) return map;
 
     const { data, error } = await supabase
-      .from("profiles")
-      .select("id,email,first_name,last_name,full_name")
+      .from("op_clients")
+      .select("id,user_id,first_name,last_name,email")
       .in("id", uniq);
 
     if (error) {
-      // Si RLS bloque, vous verrez les IDs; à corriger côté policies admin si besoin.
+      console.error("[fetchClients] error:", error);
       return map;
     }
 
-    (data as ProfileRow[] | null)?.forEach((p) => p?.id && map.set(p.id, p));
+    (data as ClientRow[] | null)?.forEach((c) => c?.id && map.set(c.id, c));
     return map;
   };
 
-  // Fetch op_users data (worker_user_id -> op_users.id -> full_name)
-  const fetchWorkersOpUsers = async (opUserIds: string[]) => {
-    const uniq = Array.from(new Set(opUserIds.filter(Boolean)));
-    const map = new Map<string, OpUserRow>();
-    if (!uniq.length) return map;
-
-    const { data, error } = await supabase
-      .from("op_users")
-      .select("id,full_name,email,role")
-      .in("id", uniq);
-
-    if (error) {
-      console.error("[fetchWorkersOpUsers] error:", error);
-      return map;
-    }
-
-    (data as OpUserRow[] | null)?.forEach((u) => u?.id && map.set(u.id, u));
-    return map;
-  };
-
-  // Fetch op_ouvriers data (for profession info, keyed by user_id)
-  const fetchWorkersOuvriers = async (opUserIds: string[]) => {
-    const uniq = Array.from(new Set(opUserIds.filter(Boolean)));
-    const map = new Map<string, OuvrierRow>();
+  // Fetch workers from op_ouvriers table
+  const fetchWorkers = async (workerIds: string[]) => {
+    const uniq = Array.from(new Set(workerIds.filter(Boolean)));
+    const map = new Map<string, WorkerRow>();
     if (!uniq.length) return map;
 
     const { data, error } = await supabase
       .from("op_ouvriers")
       .select("id,user_id,first_name,last_name,email,profession")
-      .in("user_id", uniq);
+      .in("id", uniq);
 
     if (error) {
-      console.error("[fetchWorkersOuvriers] error:", error);
+      console.error("[fetchWorkers] error:", error);
       return map;
     }
 
-    (data as OuvrierRow[] | null)?.forEach((o) => o?.user_id && map.set(o.user_id, o));
+    (data as WorkerRow[] | null)?.forEach((w) => w?.id && map.set(w.id, w));
     return map;
   };
 
@@ -267,43 +226,39 @@ export default function AdminReviewsModerationPage() {
 
       const baseRows = (data ?? []) as ReviewRow[];
 
-      const [cAll, cPending, cPublished, cHidden, cRejected] = await Promise.all([
+      const [cAll, cPending, cPublished, cFlagged] = await Promise.all([
         buildCountQuery("all"),
         buildCountQuery("pending"),
         buildCountQuery("published"),
-        buildCountQuery("hidden"),
-        buildCountQuery("rejected"),
+        buildCountQuery("flagged"),
       ]);
 
       setCounts({
         total: cAll.count ?? 0,
         pending: cPending.count ?? 0,
         published: cPublished.count ?? 0,
-        hidden: cHidden.count ?? 0,
-        rejected: cRejected.count ?? 0,
+        flagged: cFlagged.count ?? 0,
       });
 
-      // Client -> profiles (auth uid)
-      const clientIds = baseRows.map((r) => r.client_user_id ?? "").filter(Boolean);
+      // Get unique client and worker IDs
+      const clientIds = baseRows.map((r) => r.client_id ?? "").filter(Boolean);
+      const workerIds = baseRows.map((r) => r.worker_id ?? "").filter(Boolean);
 
-      // Prestataire -> worker_user_id = op_users.id
-      const workerOpUserIds = baseRows.map((r) => r.worker_user_id ?? "").filter(Boolean);
-
-      const [clientMap, opUsersMap, ouvriersMap] = await Promise.all([
-        fetchClientsProfiles(clientIds),
-        fetchWorkersOpUsers(workerOpUserIds),
-        fetchWorkersOuvriers(workerOpUserIds),
+      // Fetch related data in parallel
+      const [clientMap, workerMap] = await Promise.all([
+        fetchClients(clientIds),
+        fetchWorkers(workerIds),
       ]);
 
+      // Enrich rows with display names
       const enriched = baseRows.map((r) => {
-        const c = r.client_user_id ? clientMap.get(r.client_user_id) : null;
-        const opUser = r.worker_user_id ? opUsersMap.get(r.worker_user_id) : null;
-        const ouvrier = r.worker_user_id ? ouvriersMap.get(r.worker_user_id) : null;
+        const client = r.client_id ? clientMap.get(r.client_id) : null;
+        const worker = r.worker_id ? workerMap.get(r.worker_id) : null;
 
         return {
           ...r,
-          client_display: buildClientName(c ?? null, r.client_user_id),
-          worker_display: buildWorkerName(opUser ?? null, ouvrier ?? null, r.worker_user_id),
+          client_display: buildClientName(client, r.client_id),
+          worker_display: buildWorkerName(worker, r.worker_id),
         };
       });
 
@@ -312,7 +267,7 @@ export default function AdminReviewsModerationPage() {
       const msg = e?.message ?? "Impossible de charger les avis.";
       setError(msg);
       setRows([]);
-      setCounts({ total: 0, pending: 0, published: 0, hidden: 0, rejected: 0 });
+      setCounts({ total: 0, pending: 0, published: 0, flagged: 0 });
       toast({ title: "Erreur", description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
@@ -321,57 +276,57 @@ export default function AdminReviewsModerationPage() {
 
   useEffect(() => {
     setPage(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, q, perPage]);
+  }, [statusFilter, q, perPage]);
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, q, perPage, page]);
+  }, [statusFilter, q, perPage, page]);
 
   const openDetails = (r: ReviewRow) => {
     setSelected(r);
-    setNote(r.moderation_note ?? "");
     setOpen(true);
   };
 
   const closeDetails = () => {
     setOpen(false);
     setSelected(null);
-    setNote("");
     setSaving(false);
   };
 
-  const applyModeration = async (action: "publish" | "hide" | "reject") => {
+  const applyModeration = async (action: "publish" | "unpublish" | "flag" | "unflag") => {
     if (!selected) return;
 
     setSaving(true);
     try {
       const payload: Partial<ReviewRow> = {
-        moderation_note: note?.trim() ? note.trim() : null,
-        moderated_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
       if (action === "publish") {
-        payload.status = "published";
-        payload.is_public = true;
-      } else if (action === "hide") {
-        payload.status = "hidden";
-        payload.is_public = false;
-      } else {
-        payload.status = "rejected";
-        payload.is_public = false;
+        payload.is_published = true;
+        payload.is_flagged = false;
+      } else if (action === "unpublish") {
+        payload.is_published = false;
+      } else if (action === "flag") {
+        payload.is_flagged = true;
+        payload.is_published = false;
+      } else if (action === "unflag") {
+        payload.is_flagged = false;
       }
-
-      const user = (await supabase.auth.getUser())?.data?.user ?? null;
-      if (user?.id) (payload as any).moderated_by = user.id;
 
       const { error } = await supabase.from(TABLE).update(payload).eq("id", selected.id);
       if (error) throw error;
 
+      const messages: Record<string, string> = {
+        publish: "Avis publié.",
+        unpublish: "Avis dépublié.",
+        flag: "Avis signalé.",
+        unflag: "Signalement retiré.",
+      };
+
       toast({
         title: "Modération enregistrée",
-        description: action === "publish" ? "Avis publié." : action === "hide" ? "Avis masqué." : "Avis rejeté.",
+        description: messages[action],
       });
 
       closeDetails();
@@ -393,7 +348,7 @@ export default function AdminReviewsModerationPage() {
           <div>
             <CardTitle className="text-base sm:text-lg">Modération des avis</CardTitle>
             <div className="mt-1 text-xs text-slate-500">
-              Tous les commentaires entre clients et prestataires. L’admin peut publier, masquer ou rejeter.
+              Avis des clients sur les prestataires. L'admin peut publier, dépublier ou signaler.
             </div>
 
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
@@ -403,9 +358,7 @@ export default function AdminReviewsModerationPage() {
               <span>•</span>
               <span>Publié: <span className="font-medium text-slate-700">{uiCounts.published}</span></span>
               <span>•</span>
-              <span>Masqué: <span className="font-medium text-slate-700">{uiCounts.hidden}</span></span>
-              <span>•</span>
-              <span>Rejeté: <span className="font-medium text-slate-700">{uiCounts.rejected}</span></span>
+              <span>Signalé: <span className="font-medium text-slate-700">{uiCounts.flagged}</span></span>
             </div>
           </div>
 
@@ -425,7 +378,7 @@ export default function AdminReviewsModerationPage() {
                 <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <Input
                   className="pl-9"
-                  placeholder="Titre, contenu, note de modération… (ou UUID)"
+                  placeholder="Titre, contenu… (ou UUID)"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
@@ -436,14 +389,13 @@ export default function AdminReviewsModerationPage() {
               <label className="text-xs font-medium text-slate-600">Statut</label>
               <select
                 className="mt-1 w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as any)}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
               >
                 <option value="all">Tous</option>
                 <option value="pending">En attente</option>
                 <option value="published">Publié</option>
-                <option value="hidden">Masqué</option>
-                <option value="rejected">Rejeté</option>
+                <option value="flagged">Signalé</option>
               </select>
             </div>
 
@@ -493,117 +445,130 @@ export default function AdminReviewsModerationPage() {
                   <th className="px-4 py-3 whitespace-nowrap">Note</th>
                   <th className="px-4 py-3 whitespace-nowrap">Extrait</th>
                   <th className="px-4 py-3 whitespace-nowrap">Statut</th>
-                  <th className="px-4 py-3 whitespace-nowrap text-right">Action</th>
+                  <th className="px-4 py-3 whitespace-nowrap text-center">Actions</th>
                 </tr>
               </thead>
-
               <tbody className="divide-y divide-slate-100">
                 {rows.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-3 whitespace-nowrap text-slate-700">{fmtDate(r.created_at)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-slate-700" title={r.client_user_id ?? ""}>
-                      {truncate(r.client_display ?? "—", 28)}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-slate-700" title={r.worker_user_id ?? ""}>
-                      {truncate(r.worker_display ?? "—", 28)}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-slate-700">{r.rating ?? "—"}</td>
-                    <td className="px-4 py-3 text-slate-700" title={r.content ?? ""}>
-                      {truncate(r.title ? `${r.title} — ${r.content ?? ""}` : r.content, 64)}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">{statusBadge(r.status, r.is_public)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-right">
-                      <Button type="button" size="sm" variant="outline" className="gap-2" onClick={() => openDetails(r)}>
+                  <tr key={r.id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="px-4 py-3 whitespace-nowrap text-slate-500">{fmtDate(r.created_at)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap font-medium text-slate-700">{r.client_display}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-slate-600">{r.worker_display}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-amber-600 font-semibold">{r.rating ?? "—"}/5</td>
+                    <td className="px-4 py-3 max-w-xs truncate text-slate-600">{truncate(r.content)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{statusBadge(r.is_published, r.is_flagged)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-center">
+                      <Button type="button" variant="ghost" size="icon" onClick={() => openDetails(r)} title="Voir détails">
                         <Eye className="h-4 w-4" />
-                        Voir
                       </Button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-
-            {loading ? (
-              <div className="p-4 text-sm text-slate-500 flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Chargement…
-              </div>
-            ) : null}
           </div>
         </CardContent>
       </Card>
 
-      <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : closeDetails())}>
-        <DialogContent className="max-w-3xl">
+      {/* Detail / moderation dialog */}
+      <Dialog open={open} onOpenChange={(v) => !v && closeDetails()}>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>Détail de l’avis</DialogTitle>
+            <DialogTitle>Détail de l'avis</DialogTitle>
           </DialogHeader>
 
-          {!selected ? (
-            <div className="text-sm text-slate-500">Aucun avis sélectionné.</div>
-          ) : (
-            <div className="space-y-4">
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <div className="text-xs text-slate-500">Client</div>
-                    <div className="font-medium text-slate-900 break-words" title={selected.client_user_id ?? ""}>
-                      {selected.client_display ?? "—"}
-                    </div>
-
-                    <div className="mt-2 text-xs text-slate-500">Prestataire</div>
-                    <div className="font-medium text-slate-900 break-words" title={selected.worker_user_id ?? ""}>
-                      {selected.worker_display ?? "—"}
-                    </div>
-
-                    <div className="mt-2 text-xs text-slate-500">Date</div>
-                    <div className="font-medium text-slate-900">{fmtDate(selected.created_at)}</div>
-                  </div>
-
-                  <div className="text-right">
-                    <div className="text-xs text-slate-500">Statut</div>
-                    <div className="mt-1">{statusBadge(selected.status, selected.is_public)}</div>
-                    <div className="mt-2 text-xs text-slate-500">Note</div>
-                    <div className="font-medium text-slate-900">{selected.rating ?? "—"} / 5</div>
-                  </div>
+          {selected && (
+            <div className="space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-xs text-slate-500">Client</div>
+                  <div className="font-medium">{selected.client_display}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500">Prestataire</div>
+                  <div className="font-medium">{selected.worker_display}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500">Note</div>
+                  <div className="font-medium text-amber-600">{selected.rating ?? "—"}/5</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500">Statut</div>
+                  <div>{statusBadge(selected.is_published, selected.is_flagged)}</div>
                 </div>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <div className="text-xs text-slate-500">Titre</div>
-                <div className="font-medium text-slate-900">{selected.title ?? "—"}</div>
+              {selected.title && (
+                <div>
+                  <div className="text-xs text-slate-500">Titre</div>
+                  <div className="font-medium">{selected.title}</div>
+                </div>
+              )}
 
-                <div className="mt-3 text-xs text-slate-500">Commentaire</div>
-                <div className="text-sm text-slate-800 whitespace-pre-wrap">{selected.content ?? "—"}</div>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <label className="text-xs font-medium text-slate-600">Note de modération (visible admin)</label>
-                <Textarea className="mt-2" placeholder="Ex: spam, insulte, hors sujet..." value={note} onChange={(e) => setNote(e.target.value)} />
-                <div className="mt-2 text-[11px] text-slate-500">
-                  Dernière modération : {selected.moderated_at ? fmtDate(selected.moderated_at) : "—"} • par {selected.moderated_by ?? "—"}
+              <div>
+                <div className="text-xs text-slate-500">Contenu</div>
+                <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50 p-3 text-slate-700 whitespace-pre-wrap">
+                  {selected.content || "—"}
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
-                <Button type="button" variant="outline" onClick={closeDetails} disabled={saving}>
-                  Fermer
-                </Button>
+              <div>
+                <div className="text-xs text-slate-500">Créé le</div>
+                <div>{fmtDate(selected.created_at)}</div>
+              </div>
 
-                <Button type="button" className="gap-2 bg-emerald-600 hover:bg-emerald-700" onClick={() => applyModeration("publish")} disabled={saving}>
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                  Publier
-                </Button>
+              <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-200">
+                {!selected.is_published && (
+                  <Button
+                    type="button"
+                    variant="default"
+                    className="gap-2"
+                    onClick={() => applyModeration("publish")}
+                    disabled={saving}
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Publier
+                  </Button>
+                )}
 
-                <Button type="button" variant="outline" className="gap-2" onClick={() => applyModeration("hide")} disabled={saving}>
-                  <EyeOff className="h-4 w-4" />
-                  Masquer
-                </Button>
+                {selected.is_published && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => applyModeration("unpublish")}
+                    disabled={saving}
+                  >
+                    <EyeOff className="h-4 w-4" />
+                    Dépublier
+                  </Button>
+                )}
 
-                <Button type="button" variant="destructive" className="gap-2" onClick={() => applyModeration("reject")} disabled={saving}>
-                  <XCircle className="h-4 w-4" />
-                  Rejeter
-                </Button>
+                {!selected.is_flagged && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="gap-2"
+                    onClick={() => applyModeration("flag")}
+                    disabled={saving}
+                  >
+                    <XCircle className="h-4 w-4" />
+                    Signaler
+                  </Button>
+                )}
+
+                {selected.is_flagged && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => applyModeration("unflag")}
+                    disabled={saving}
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Retirer le signalement
+                  </Button>
+                )}
               </div>
             </div>
           )}
