@@ -45,9 +45,16 @@ type ProfileRow = {
   full_name?: string | null;
 };
 
+type OpUserRow = {
+  id: string;
+  full_name?: string | null;
+  email?: string | null;
+  role?: string | null;
+};
+
 type OuvrierRow = {
   id: string;
-  user_id: string | null; // op_users.id
+  user_id: string | null;
   first_name?: string | null;
   last_name?: string | null;
   email?: string | null;
@@ -98,14 +105,34 @@ function buildClientName(p?: ProfileRow | null, fallbackId?: string | null) {
   return parts || full || email || (fallbackId ? `${fallbackId.slice(0, 8)}…${fallbackId.slice(-4)}` : "Utilisateur");
 }
 
-function buildWorkerName(o?: OuvrierRow | null, fallbackId?: string | null) {
-  const first = (o?.first_name ?? "").trim();
-  const last = (o?.last_name ?? "").trim();
-  const full = [first, last].filter(Boolean).join(" ").trim();
-  const email = (o?.email ?? "").trim();
-  const prof = (o?.profession ?? "").trim();
-  const base = full || email || (fallbackId ? `${fallbackId.slice(0, 8)}…${fallbackId.slice(-4)}` : "Prestataire");
-  return prof ? `${base} • ${prof}` : base;
+function buildWorkerName(
+  opUser?: OpUserRow | null,
+  ouvrier?: OuvrierRow | null,
+  fallbackId?: string | null
+) {
+  // Priority 1: op_users.full_name (most reliable for worker_user_id)
+  const opUserName = (opUser?.full_name ?? "").trim();
+  if (opUserName) {
+    const prof = (ouvrier?.profession ?? "").trim();
+    return prof ? `${opUserName} • ${prof}` : opUserName;
+  }
+
+  // Priority 2: op_ouvriers first_name + last_name
+  const first = (ouvrier?.first_name ?? "").trim();
+  const last = (ouvrier?.last_name ?? "").trim();
+  const ouvrierName = [first, last].filter(Boolean).join(" ").trim();
+  if (ouvrierName) {
+    const prof = (ouvrier?.profession ?? "").trim();
+    return prof ? `${ouvrierName} • ${prof}` : ouvrierName;
+  }
+
+  // Priority 3: Email
+  const email = (opUser?.email ?? ouvrier?.email ?? "").trim();
+  if (email) return email;
+
+  // Fallback: Truncated ID (only if truly no data)
+  if (fallbackId) return `${fallbackId.slice(0, 8)}…${fallbackId.slice(-4)}`;
+  return "Prestataire";
 }
 
 export default function AdminReviewsModerationPage() {
@@ -190,6 +217,27 @@ export default function AdminReviewsModerationPage() {
     return map;
   };
 
+  // Fetch op_users data (worker_user_id -> op_users.id -> full_name)
+  const fetchWorkersOpUsers = async (opUserIds: string[]) => {
+    const uniq = Array.from(new Set(opUserIds.filter(Boolean)));
+    const map = new Map<string, OpUserRow>();
+    if (!uniq.length) return map;
+
+    const { data, error } = await supabase
+      .from("op_users")
+      .select("id,full_name,email,role")
+      .in("id", uniq);
+
+    if (error) {
+      console.error("[fetchWorkersOpUsers] error:", error);
+      return map;
+    }
+
+    (data as OpUserRow[] | null)?.forEach((u) => u?.id && map.set(u.id, u));
+    return map;
+  };
+
+  // Fetch op_ouvriers data (for profession info, keyed by user_id)
   const fetchWorkersOuvriers = async (opUserIds: string[]) => {
     const uniq = Array.from(new Set(opUserIds.filter(Boolean)));
     const map = new Map<string, OuvrierRow>();
@@ -201,6 +249,7 @@ export default function AdminReviewsModerationPage() {
       .in("user_id", uniq);
 
     if (error) {
+      console.error("[fetchWorkersOuvriers] error:", error);
       return map;
     }
 
@@ -237,22 +286,24 @@ export default function AdminReviewsModerationPage() {
       // Client -> profiles (auth uid)
       const clientIds = baseRows.map((r) => r.client_user_id ?? "").filter(Boolean);
 
-      // Prestataire -> op_ouvriers via user_id = op_users.id (après migration)
+      // Prestataire -> worker_user_id = op_users.id
       const workerOpUserIds = baseRows.map((r) => r.worker_user_id ?? "").filter(Boolean);
 
-      const [clientMap, workerMap] = await Promise.all([
+      const [clientMap, opUsersMap, ouvriersMap] = await Promise.all([
         fetchClientsProfiles(clientIds),
+        fetchWorkersOpUsers(workerOpUserIds),
         fetchWorkersOuvriers(workerOpUserIds),
       ]);
 
       const enriched = baseRows.map((r) => {
         const c = r.client_user_id ? clientMap.get(r.client_user_id) : null;
-        const w = r.worker_user_id ? workerMap.get(r.worker_user_id) : null;
+        const opUser = r.worker_user_id ? opUsersMap.get(r.worker_user_id) : null;
+        const ouvrier = r.worker_user_id ? ouvriersMap.get(r.worker_user_id) : null;
 
         return {
           ...r,
           client_display: buildClientName(c ?? null, r.client_user_id),
-          worker_display: buildWorkerName(w ?? null, r.worker_user_id),
+          worker_display: buildWorkerName(opUser ?? null, ouvrier ?? null, r.worker_user_id),
         };
       });
 

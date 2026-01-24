@@ -1324,6 +1324,57 @@ export type Database = {
           },
         ]
       }
+      op_reviews: {
+        Row: {
+          client_user_id: string | null
+          content: string
+          created_at: string
+          id: string
+          is_public: boolean
+          moderated_at: string | null
+          moderated_by: string | null
+          moderation_note: string | null
+          rating: number | null
+          related_order_id: string | null
+          status: Database["public"]["Enums"]["review_status"]
+          title: string | null
+          updated_at: string
+          worker_user_id: string | null
+        }
+        Insert: {
+          client_user_id?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          is_public?: boolean
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_note?: string | null
+          rating?: number | null
+          related_order_id?: string | null
+          status?: Database["public"]["Enums"]["review_status"]
+          title?: string | null
+          updated_at?: string
+          worker_user_id?: string | null
+        }
+        Update: {
+          client_user_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          is_public?: boolean
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_note?: string | null
+          rating?: number | null
+          related_order_id?: string | null
+          status?: Database["public"]["Enums"]["review_status"]
+          title?: string | null
+          updated_at?: string
+          worker_user_id?: string | null
+        }
+        Relationships: []
+      }
       op_services: {
         Row: {
           category: string | null
@@ -1714,22 +1765,31 @@ export type Database = {
         Row: {
           created_at: string
           email: string | null
+          first_name: string | null
+          full_name: string | null
           id: string
           is_admin: boolean
+          last_name: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
           email?: string | null
+          first_name?: string | null
+          full_name?: string | null
           id: string
           is_admin?: boolean
+          last_name?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
           email?: string | null
+          first_name?: string | null
+          full_name?: string | null
           id?: string
           is_admin?: boolean
+          last_name?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -2085,6 +2145,17 @@ export type Database = {
             }
             Returns: string
           }
+      admin_profiles_by_ids: {
+        Args: { ids: string[] }
+        Returns: {
+          email: string
+          first_name: string
+          full_name: string
+          id: string
+          is_admin: boolean
+          last_name: string
+        }[]
+      }
       disablelongtransactions: { Args: never; Returns: string }
       dropgeometrycolumn:
         | {
@@ -2217,7 +2288,9 @@ export type Database = {
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
       gettransactionid: { Args: never; Returns: unknown }
-      is_admin: { Args: never; Returns: boolean }
+      is_admin:
+        | { Args: never; Returns: boolean }
+        | { Args: { uid: string }; Returns: boolean }
       longtransactionsenabled: { Args: never; Returns: boolean }
       op_is_admin: { Args: never; Returns: boolean }
       op_log_login_event: {
@@ -2930,6 +3003,7 @@ export type Database = {
         | "harassment"
         | "pricing_scam"
         | "other"
+      review_status: "pending" | "published" | "hidden" | "rejected"
       user_role: "user" | "admin" | "worker"
     }
     CompositeTypes: {
@@ -3091,6 +3165,7 @@ export const Constants = {
         "pricing_scam",
         "other",
       ],
+      review_status: ["pending", "published", "hidden", "rejected"],
       user_role: ["user", "admin", "worker"],
     },
   },
