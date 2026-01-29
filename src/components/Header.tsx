@@ -65,26 +65,26 @@ const Header = () => {
           <div className="w-full px-4 sm:px-6 lg:px-10 overflow-visible">
             {/* ✅ hauteur raisonnable */}
             <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3 overflow-visible">
-              {/* ✅ Logo premium : plus grand + dépasse vers le bas */}
+              {/* ✅ Logo premium (équilibré) : plus visible mais plus discret */}
               <Link to="/" className="min-w-0 flex items-center shrink-0 overflow-visible">
                 <div
                   className="
                     relative
-                    -mb-4 sm:-mb-5
-                    rounded-2xl
-                    bg-white/95
+                    -mb-2 sm:-mb-3
+                    rounded-xl
+                    bg-white
                     ring-1 ring-black/5
-                    shadow-[0_10px_25px_-15px_rgba(0,0,0,0.35)]
-                    px-2 py-1
+                    shadow-sm
+                    px-1.5 py-1
                   "
                 >
                   <img
                     src={ProxiLogo}
                     alt={cms("brand.name", "ProxiServices", "ProxiServices")}
                     className="
-                      h-14 sm:h-16 md:h-[72px]
+                      h-13 sm:h-14 md:h-[64px]
                       w-auto
-                      max-w-[320px] sm:max-w-[420px] md:max-w-[520px]
+                      max-w-[300px] sm:max-w-[380px] md:max-w-[460px]
                       object-contain
                       select-none
                     "
