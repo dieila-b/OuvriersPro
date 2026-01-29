@@ -63,32 +63,21 @@ const Header = () => {
         <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3">
-              {/* ✅ Logo : visible + pas coupé dans le header */}
+              {/* ✅ Logo : taille fixe + jamais coupé */}
               <Link to="/" className="min-w-0 flex items-center">
-                <div
+                <img
+                  src={ProxiLogo}
+                  alt={cms("brand.name", "ProxiServices", "ProxiServices")}
                   className="
-                    h-12 sm:h-14
-                    w-[280px] sm:w-[360px] md:w-[440px]
-                    overflow-hidden
-                    flex items-center
+                    h-9 sm:h-10 md:h-11
+                    w-auto
+                    max-w-[180px] sm:max-w-[220px] md:max-w-[260px]
+                    object-contain
+                    select-none
                   "
-                >
-                  <img
-                    src={ProxiLogo}
-                    alt={cms("brand.name", "ProxiServices", "ProxiServices")}
-                    className="
-                      h-full w-full
-                      object-cover object-left
-                      select-none
-                      origin-left
-                      scale-[1.08]
-                      translate-x-[4px]
-                      translate-y-[10px]
-                    "
-                    loading="eager"
-                    decoding="async"
-                  />
-                </div>
+                  loading="eager"
+                  decoding="async"
+                />
               </Link>
 
               {/* Navigation Desktop (vide volontairement) */}
