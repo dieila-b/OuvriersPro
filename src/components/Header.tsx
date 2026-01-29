@@ -63,15 +63,15 @@ const Header = () => {
         <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3">
-              {/* ✅ Logo : un peu plus grand + jamais coupé */}
+              {/* ✅ Logo : encore un peu plus grand + jamais coupé */}
               <Link to="/" className="min-w-0 flex items-center shrink-0">
                 <img
                   src={ProxiLogo}
                   alt={cms("brand.name", "ProxiServices", "ProxiServices")}
                   className="
-                    h-10 sm:h-11 md:h-12
+                    h-11 sm:h-12 md:h-13
                     w-auto
-                    max-w-[210px] sm:max-w-[260px] md:max-w-[320px]
+                    max-w-[240px] sm:max-w-[300px] md:max-w-[360px]
                     object-contain
                     select-none
                   "
