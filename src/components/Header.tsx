@@ -60,25 +60,38 @@ const Header = () => {
   return (
     <>
       <header className="sticky top-0 z-40 w-full max-w-full">
-        <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200">
-          <div className="w-full px-4 sm:px-6 lg:px-10">
-            {/* ✅ Header plus haut pour rendre le logo vraiment visible */}
-            <div className="h-16 sm:h-[76px] min-w-0 flex items-center justify-between gap-3">
-              {/* ✅ Logo : BEAUCOUP plus grand + jamais coupé */}
-              <Link to="/" className="min-w-0 flex items-center shrink-0">
-                <img
-                  src={ProxiLogo}
-                  alt={cms("brand.name", "ProxiServices", "ProxiServices")}
+        {/* ✅ overflow-visible pour laisser le logo "dépasser" */}
+        <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200 overflow-visible">
+          <div className="w-full px-4 sm:px-6 lg:px-10 overflow-visible">
+            {/* ✅ hauteur raisonnable */}
+            <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3 overflow-visible">
+              {/* ✅ Logo premium : plus grand + dépasse vers le bas */}
+              <Link to="/" className="min-w-0 flex items-center shrink-0 overflow-visible">
+                <div
                   className="
-                    h-12 sm:h-14 md:h-16
-                    w-auto
-                    max-w-[280px] sm:max-w-[360px] md:max-w-[460px]
-                    object-contain
-                    select-none
+                    relative
+                    -mb-4 sm:-mb-5
+                    rounded-2xl
+                    bg-white/95
+                    ring-1 ring-black/5
+                    shadow-[0_10px_25px_-15px_rgba(0,0,0,0.35)]
+                    px-2 py-1
                   "
-                  loading="eager"
-                  decoding="async"
-                />
+                >
+                  <img
+                    src={ProxiLogo}
+                    alt={cms("brand.name", "ProxiServices", "ProxiServices")}
+                    className="
+                      h-14 sm:h-16 md:h-[72px]
+                      w-auto
+                      max-w-[320px] sm:max-w-[420px] md:max-w-[520px]
+                      object-contain
+                      select-none
+                    "
+                    loading="eager"
+                    decoding="async"
+                  />
+                </div>
               </Link>
 
               {/* Navigation Desktop (vide volontairement) */}
