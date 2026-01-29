@@ -63,11 +63,11 @@ const Header = () => {
         <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3">
-              {/* ✅ Logo : zoom plus doux + descendu => plus de coupe */}
+              {/* ✅ Logo : visible + pas coupé dans le header */}
               <Link to="/" className="min-w-0 flex items-center">
                 <div
                   className="
-                    h-14 sm:h-16
+                    h-12 sm:h-14
                     w-[280px] sm:w-[360px] md:w-[440px]
                     overflow-hidden
                     flex items-center
@@ -81,9 +81,9 @@ const Header = () => {
                       object-cover object-left
                       select-none
                       origin-left
-                      scale-[1.10]
-                      translate-x-[6px]
-                      translate-y-[14px]
+                      scale-[1.08]
+                      translate-x-[4px]
+                      translate-y-[10px]
                     "
                     loading="eager"
                     decoding="async"
