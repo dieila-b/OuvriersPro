@@ -4,13 +4,13 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Check, Star, BarChart3, Headphones, User } from "lucide-react";
+import { CheckCircle2, Sparkles, ShieldCheck, Clock, ArrowRight, BarChart3, Headphones, User } from "lucide-react";
 
 const SubscriptionSection = () => {
   const { t, language } = useLanguage();
 
   /**
-   * ✅ Plans payants masqués provisoirement (cohérent avec Forfaits.tsx et InscriptionOuvrier.tsx)
+   * ✅ Plans payants masqués provisoirement
    * Pour réactiver plus tard: passer ces flags à true.
    */
   const SHOW_MONTHLY = false;
@@ -42,22 +42,60 @@ const SubscriptionSection = () => {
         code: "FREE" as const,
         name: cms("pricing.plan.free.name", "Gratuit", "Free"),
         price: parseAmount(cms("pricing.plan.free.price", "0", "0"), 0),
-        period: cms("pricing.plan.free.period", "FG/mois", "GNF/month"),
+        // ✅ period = "mois" / "month" (sans monnaie doublée)
+        period: cms("pricing.plan.free.period", "mois", "month"),
         popular: false,
         isFree: true,
-        features: [
+        // ✅ Une description utile (valeur)
+        description: cms(
+          "pricing.plan.free.desc",
+          "Pour créer votre profil et apparaître dans les recherches.",
+          "Create your profile and appear in search results."
+        ),
+        // ✅ Features orientées valeur (le texte “limitations” sera dans un bloc à part)
+        valuePoints: [
+          {
+            icon: CheckCircle2,
+            title: cms("pricing.plan.free.v1t", "Votre profil en ligne", "Your online profile"),
+            desc: cms(
+              "pricing.plan.free.v1d",
+              "Présentez votre métier, votre zone et vos infos de contact.",
+              "Show your trade, service area and contact info."
+            ),
+          },
+          {
+            icon: ShieldCheck,
+            title: cms("pricing.plan.free.v2t", "Apparition dans les recherches", "Shown in search results"),
+            desc: cms(
+              "pricing.plan.free.v2d",
+              "Les clients vous trouvent par métier et quartier.",
+              "Clients can find you by trade and area."
+            ),
+          },
+          {
+            icon: Clock,
+            title: cms("pricing.plan.free.v3t", "Mise en route rapide", "Fast setup"),
+            desc: cms(
+              "pricing.plan.free.v3d",
+              "Profil simplifié pour démarrer en quelques minutes.",
+              "Simple setup to get started in minutes."
+            ),
+          },
+        ],
+        // ✅ Limites (présentées de façon plus soft)
+        limits: [
           cms("pricing.plan.free.f1", "1 métier affiché", "1 listed trade"),
           cms("pricing.plan.free.f2", "Profil simplifié", "Simplified profile"),
-          cms("pricing.plan.free.f3", "Nombre de contacts limité", "Limited number of contacts"),
-          cms("pricing.plan.free.f4", "Pas de mise en avant", "No highlight in results"),
+          cms("pricing.plan.free.f3", "Contacts limités (pour tester)", "Limited contacts (to try)"),
+          cms("pricing.plan.free.f4", "Pas de mise en avant (bientôt)", "No boost (coming soon)"),
         ],
-        btn: cms("pricing.plan.free.btn", "Choisir ce plan", "Choose this plan"),
+        btn: cms("pricing.plan.free.btn", "Créer mon profil gratuitement", "Create my profile for free"),
       },
       {
         code: "MONTHLY" as const,
         name: cms("pricing.plan.monthly.name", "Mensuel", "Monthly"),
         price: parseAmount(cms("pricing.plan.monthly.price", "5000", "5000"), 5000),
-        period: cms("pricing.plan.monthly.period", "FG/mois", "GNF/month"),
+        period: cms("pricing.plan.monthly.period", "mois", "month"),
         popular: true,
         isFree: false,
         features: [
@@ -74,7 +112,7 @@ const SubscriptionSection = () => {
         code: "YEARLY" as const,
         name: cms("pricing.plan.yearly.name", "Annuel", "Yearly"),
         price: parseAmount(cms("pricing.plan.yearly.price", "50000", "50000"), 50000),
-        period: cms("pricing.plan.yearly.period", "FG/an", "GNF/year"),
+        period: cms("pricing.plan.yearly.period", "an", "year"),
         popular: false,
         isFree: false,
         features: [
@@ -114,11 +152,10 @@ const SubscriptionSection = () => {
     },
   ];
 
-  // ✅ Centrer la carte si on n’affiche que "Gratuit"
   const onlyFree = plans.length === 1 && plans[0].code === "FREE";
-  const gridClass = onlyFree
-    ? "flex justify-center"
-    : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 min-w-0";
+  const gridClass = onlyFree ? "flex justify-center" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 min-w-0";
+
+  const currency = cms("pricing.currency", "FG", "GNF");
 
   return (
     <section
@@ -126,85 +163,193 @@ const SubscriptionSection = () => {
       className="w-full py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-gray-50 to-gray-100"
     >
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
+        {/* Header section */}
         <div className="text-center mb-10 sm:mb-12 lg:mb-16">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray mb-3 sm:mb-4">
-            {cms("pricing.section.title", "Rejoignez ProxiServices", "Join ProxiServices")}
+          <div className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-sm shadow-sm">
+            <Sparkles className="h-4 w-4 text-pro-blue" />
+            <span className="font-medium text-pro-gray">
+              {cms("pricing.section.kicker", "Rejoignez ProxiServices", "Join ProxiServices")}
+            </span>
+          </div>
+
+          <h2 className="mt-4 text-2xl sm:text-3xl md:text-4xl font-extrabold text-pro-gray mb-3 sm:mb-4">
+            {cms("pricing.section.title", "Développez votre activité avec plus de visibilité", "Grow your business with more visibility")}
           </h2>
-          <p className="text-sm sm:text-base md:text-xl text-gray-600 max-w-3xl mx-auto">
+          <p className="text-sm sm:text-base md:text-lg text-gray-600 max-w-3xl mx-auto">
             {cms(
               "pricing.section.subtitle",
-              "Développez votre activité avec plus de visibilité",
-              "Grow your business with more visibility"
+              "Commencez gratuitement, publiez votre métier et recevez vos premiers contacts.",
+              "Start for free, publish your trade and get your first leads."
             )}
           </p>
         </div>
 
+        {/* Plans */}
         <div className={gridClass}>
-          {plans.map((plan, index) => (
-            <Card
-              key={index}
-              className={[
-                "relative overflow-hidden transition-transform md:hover:scale-[1.02]",
-                plan.popular ? "ring-2 ring-pro-blue shadow-xl" : "shadow-lg",
-                onlyFree ? "w-full max-w-xl" : "",
-              ].join(" ")}
-            >
-              {plan.popular && (
-                <div className="absolute top-0 left-0 right-0 bg-pro-blue text-white text-center py-2">
-                  <Badge className="bg-white text-pro-blue">
-                    <Star className="w-3 h-3 mr-1" />
-                    {plan.badge ?? (language === "fr" ? "Populaire" : "Popular")}
-                  </Badge>
-                </div>
-              )}
+          {plans.map((plan, index) => {
+            const isFreePlan = (plan as any).isFree;
+            const isOnlyFreeCard = onlyFree && plan.code === "FREE";
 
-              <CardHeader className={`text-center ${plan.popular ? "pt-12" : "pt-6"}`}>
-                <CardTitle className="text-xl sm:text-2xl font-bold text-pro-gray">{plan.name}</CardTitle>
-
-                <div className="mt-4">
-                  <span className="text-3xl sm:text-4xl font-bold text-pro-blue">
-                    {formatPrice(plan.price)} <span className="text-xl sm:text-2xl">FG</span>
-                  </span>
-                  <span className="text-gray-600 text-sm sm:text-base">/{plan.period}</span>
-                </div>
-
-                {"savings" in plan && (plan as any).savings && (
-                  <Badge variant="secondary" className="mt-2 bg-green-100 text-green-700">
-                    {(plan as any).savings}
-                  </Badge>
+            return (
+              <Card
+                key={index}
+                className={[
+                  "relative overflow-hidden transition-transform md:hover:scale-[1.01] rounded-2xl border-gray-200",
+                  isOnlyFreeCard ? "w-full max-w-2xl shadow-xl" : plan.popular ? "ring-2 ring-pro-blue shadow-xl" : "shadow-lg",
+                ].join(" ")}
+              >
+                {/* FREE badge */}
+                {isOnlyFreeCard && (
+                  <div className="absolute top-4 right-4">
+                    <Badge className="rounded-full bg-pro-blue/10 text-pro-blue hover:bg-pro-blue/10">
+                      {cms("pricing.plan.free.badge", "Idéal pour démarrer", "Best to start")}
+                    </Badge>
+                  </div>
                 )}
-              </CardHeader>
 
-              <CardContent className="pt-0">
-                <ul className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
-                  {plan.features.map((feature, featureIndex) => (
-                    <li key={featureIndex} className="flex items-center">
-                      <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
-                      <span className="text-gray-700 text-sm sm:text-base">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
+                {/* Paid popular ribbon (when enabled later) */}
+                {plan.popular && (
+                  <div className="absolute top-0 left-0 right-0 bg-pro-blue text-white text-center py-2">
+                    <Badge className="bg-white text-pro-blue">
+                      <Sparkles className="w-3 h-3 mr-1" />
+                      {(plan as any).badge ?? (language === "fr" ? "Populaire" : "Popular")}
+                    </Badge>
+                  </div>
+                )}
 
-                <Button
-                  className={`w-full py-3 text-sm sm:text-base ${
-                    plan.popular
-                      ? "bg-pro-blue hover:bg-blue-700"
-                      : plan.isFree
-                      ? "bg-gray-800 hover:bg-gray-900"
-                      : "bg-gray-700 hover:bg-gray-800"
-                  }`}
-                  onClick={() => {
-                    // ✅ Si quelqu’un essaie d’ouvrir un plan payant (quand réactivé), l’inscription fera aussi le garde-fou.
-                    window.location.href = `/inscription-ouvrier?plan=${plan.code}`;
-                  }}
-                >
-                  {plan.btn}
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+                <CardHeader className={plan.popular ? "pt-12 pb-4" : "pt-6 pb-4"}>
+                  <CardTitle className="text-xl sm:text-2xl font-bold text-pro-gray">
+                    {plan.name}
+                  </CardTitle>
+
+                  {(plan as any).description && (
+                    <p className="mt-1 text-sm text-gray-600">{(plan as any).description}</p>
+                  )}
+
+                  <div className="mt-4 flex items-end justify-between gap-4">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-4xl sm:text-5xl font-extrabold text-pro-blue leading-none">
+                        {formatPrice(plan.price)}
+                      </span>
+                      <span className="text-lg sm:text-xl font-semibold text-pro-blue">{currency}</span>
+                    </div>
+
+                    <div className="text-sm text-gray-600">
+                      /{plan.period}
+                    </div>
+                  </div>
+
+                  {"savings" in plan && (plan as any).savings && (
+                    <Badge variant="secondary" className="mt-3 bg-green-100 text-green-700">
+                      {(plan as any).savings}
+                    </Badge>
+                  )}
+                </CardHeader>
+
+                <CardContent className="pt-0">
+                  {/* ✅ Free plan: value points + limits block */}
+                  {isFreePlan && (plan as any).valuePoints ? (
+                    <div className="space-y-5">
+                      <div className="grid gap-3">
+                        {(plan as any).valuePoints.map(
+                          (
+                            vp: { icon: any; title: string; desc: string },
+                            i: number
+                          ) => (
+                            <div key={i} className="flex items-start gap-3">
+                              <vp.icon className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
+                              <div className="min-w-0">
+                                <div className="font-semibold text-pro-gray">{vp.title}</div>
+                                <div className="text-sm text-gray-600">{vp.desc}</div>
+                              </div>
+                            </div>
+                          )
+                        )}
+                      </div>
+
+                      <div className="rounded-xl border bg-gray-50 p-4">
+                        <div className="text-sm font-semibold text-pro-gray">
+                          {cms("pricing.plan.free.included", "Inclus dans Gratuit", "Included in Free")}
+                        </div>
+                        <ul className="mt-2 grid gap-2 text-sm text-gray-700">
+                          {(plan as any).limits.map((item: string, i: number) => (
+                            <li key={i} className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-pro-blue" />
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  ) : (
+                    // ✅ Paid plans (when enabled later): keep existing features list
+                    <ul className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
+                      {(plan as any).features?.map((feature: string, featureIndex: number) => (
+                        <li key={featureIndex} className="flex items-center">
+                          <CheckCircle2 className="w-5 h-5 text-green-600 mr-3 flex-shrink-0" />
+                          <span className="text-gray-700 text-sm sm:text-base">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <Button
+                    className={[
+                      "w-full h-11 rounded-xl text-sm sm:text-base",
+                      plan.popular
+                        ? "bg-pro-blue hover:bg-pro-blue/90 text-white"
+                        : plan.isFree
+                        ? "bg-gray-900 hover:bg-gray-950 text-white"
+                        : "bg-gray-700 hover:bg-gray-800 text-white",
+                    ].join(" ")}
+                    onClick={() => {
+                      window.location.href = `/inscription-ouvrier?plan=${plan.code}`;
+                    }}
+                  >
+                    {plan.isFree ? (
+                      <span className="inline-flex items-center gap-2">
+                        {plan.btn} <ArrowRight className="h-4 w-4" />
+                      </span>
+                    ) : (
+                      plan.btn
+                    )}
+                  </Button>
+
+                  {/* ✅ reassurance line */}
+                  {plan.isFree && (
+                    <p className="mt-3 text-center text-xs text-gray-500">
+                      {cms(
+                        "pricing.plan.free.note",
+                        "Aucun paiement requis. Vous pourrez passer à une formule supérieure dès qu’elle sera disponible.",
+                        "No payment required. You can upgrade later when Pro plans are available."
+                      )}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
+        {/* ✅ Coming soon (only when only free is displayed) */}
+        {onlyFree && (
+          <div className="mt-8 mx-auto max-w-2xl">
+            <div className="rounded-2xl border bg-white p-4 shadow-sm text-center">
+              <div className="font-semibold text-pro-gray">
+                {cms("pricing.comingsoon.title", "Bientôt : formules Pro", "Coming soon: Pro plans")}
+              </div>
+              <p className="mt-1 text-sm text-gray-600">
+                {cms(
+                  "pricing.comingsoon.desc",
+                  "Mise en avant, plusieurs métiers, contacts illimités, badge vérifié… (en préparation).",
+                  "Boost, multiple trades, unlimited leads, verified badge… (in progress)."
+                )}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Benefits */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mt-10 sm:mt-14 lg:mt-16 min-w-0">
           {benefits.map((benefit, index) => (
             <div key={index} className="text-center min-w-0">
