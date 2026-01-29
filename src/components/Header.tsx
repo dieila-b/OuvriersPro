@@ -63,7 +63,7 @@ const Header = () => {
         <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3">
-              {/* ✅ Logo (remplit le cadre et "mange" les marges blanches du PNG) */}
+              {/* ✅ Logo : affiche TOUT le logo (pas de coupe) + zoom raisonnable */}
               <Link to="/" className="min-w-0 flex items-center">
                 <div
                   className="
@@ -78,10 +78,11 @@ const Header = () => {
                     alt={cms("brand.name", "ProxiServices", "ProxiServices")}
                     className="
                       h-full w-full
-                      object-cover object-left
+                      object-contain object-left
                       select-none
-                      scale-[1.05]
                       origin-left
+                      scale-[1.28]
+                      translate-y-[2px]
                     "
                     loading="eager"
                     decoding="async"
@@ -138,7 +139,11 @@ const Header = () => {
               <div className="md:hidden min-w-0 flex items-center gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="rounded-full flex items-center gap-1 whitespace-nowrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full flex items-center gap-1 whitespace-nowrap"
+                    >
                       <Languages className="w-4 h-4" />
                       <span className="uppercase">{language}</span>
                     </Button>
