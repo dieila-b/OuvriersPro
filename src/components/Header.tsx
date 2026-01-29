@@ -42,10 +42,6 @@ const Header = () => {
     };
   }, [mobileOpen]);
 
-  // ✅ CTA Devenir prestataire => ouvre la même section (carte gratuit) via hash
-  // Si ta section est sur /forfaits, remplace par "/forfaits#subscription"
-  const becomeProviderHref = "/#subscription";
-
   const accountLabel = useMemo(() => {
     if (user) return cms("header.btn_account", "Mon compte", "My account");
     return cms("header.btn_login", "Se connecter", "Sign in");
@@ -93,8 +89,7 @@ const Header = () => {
 
               {/* Actions Desktop */}
               <div className="hidden md:flex min-w-0 items-center gap-2">
-                {/* ✅ Devenir prestataire => même fenêtre/section que la capture */}
-                <Link to={becomeProviderHref} className="min-w-0">
+                <Link to="/forfaits" className="min-w-0">
                   <Button variant="outline" size="sm" className="rounded-full whitespace-nowrap">
                     {becomeProviderLabel}
                   </Button>
@@ -191,9 +186,8 @@ const Header = () => {
                 </div>
 
                 <div className="mt-3 flex flex-col gap-1 min-w-0">
-                  {/* ✅ Devenir prestataire => même fenêtre/section que la capture */}
                   <Link
-                    to={becomeProviderHref}
+                    to="/forfaits"
                     onClick={() => setMobileOpen(false)}
                     className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue min-w-0"
                   >
