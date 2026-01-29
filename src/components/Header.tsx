@@ -13,12 +13,11 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import ContactModal from "@/components/contact/ContactModal";
 
-// ✅ Logo
 import ProxiLogo from "@/assets/logo-proxiservices.png";
 
 const Header = () => {
   const { t, language, setLanguage } = useLanguage();
-  const { user, isWorker } = useAuthProfile(); // ✅ on ne link plus l'admin depuis le header
+  const { user, isWorker } = useAuthProfile();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
 
@@ -48,11 +47,6 @@ const Header = () => {
     return cms("header.btn_login", "Se connecter", "Sign in");
   }, [user, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /**
-   * ✅ IMPORTANT:
-   * - On NE redirige PLUS vers /admin/dashboard depuis le header.
-   * - L’admin reste accessible UNIQUEMENT via /admin (URL directe).
-   */
   const accountPath = useMemo(() => {
     if (!user) return "/mon-compte";
     if (isWorker) return "/espace-ouvrier";
@@ -69,12 +63,12 @@ const Header = () => {
         <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3">
-              {/* ✅ Logo (zoom + crop pour compenser les marges blanches du PNG) */}
+              {/* ✅ Logo (remplit le cadre et "mange" les marges blanches du PNG) */}
               <Link to="/" className="min-w-0 flex items-center">
                 <div
                   className="
-                    h-10 sm:h-12 md:h-12
-                    w-[180px] sm:w-[240px] md:w-[280px]
+                    h-12 sm:h-14
+                    w-[240px] sm:w-[320px] md:w-[420px]
                     overflow-hidden
                     flex items-center
                   "
@@ -84,9 +78,9 @@ const Header = () => {
                     alt={cms("brand.name", "ProxiServices", "ProxiServices")}
                     className="
                       h-full w-full
-                      object-contain object-left
+                      object-cover object-left
                       select-none
-                      scale-[1.55]
+                      scale-[1.05]
                       origin-left
                     "
                     loading="eager"
@@ -100,7 +94,6 @@ const Header = () => {
 
               {/* Actions Desktop */}
               <div className="hidden md:flex min-w-0 items-center gap-2">
-                {/* ✅ Nouveau bouton : Devenir Prestataire */}
                 <Link to="/forfaits" className="min-w-0">
                   <Button variant="outline" size="sm" className="rounded-full whitespace-nowrap">
                     {becomeProviderLabel}
@@ -114,9 +107,7 @@ const Header = () => {
                   >
                     <User className="w-4 h-4" />
                     <span className="hidden lg:inline">{accountLabel}</span>
-                    <span className="lg:hidden">
-                      {cms("header.btn_account_short", "Compte", "Account")}
-                    </span>
+                    <span className="lg:hidden">{cms("header.btn_account_short", "Compte", "Account")}</span>
                   </Button>
                 </Link>
 
@@ -147,11 +138,7 @@ const Header = () => {
               <div className="md:hidden min-w-0 flex items-center gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-full flex items-center gap-1 whitespace-nowrap"
-                    >
+                    <Button variant="outline" size="sm" className="rounded-full flex items-center gap-1 whitespace-nowrap">
                       <Languages className="w-4 h-4" />
                       <span className="uppercase">{language}</span>
                     </Button>
@@ -198,18 +185,12 @@ const Header = () => {
                   <span className="text-sm font-semibold text-pro-gray">
                     {cms("header.mobile_menu.title", "Menu", "Menu")}
                   </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setMobileOpen(false)}
-                    className="rounded-full"
-                  >
+                  <Button variant="outline" size="sm" onClick={() => setMobileOpen(false)} className="rounded-full">
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
 
                 <div className="mt-3 flex flex-col gap-1 min-w-0">
-                  {/* ✅ Nouveau bouton mobile : Devenir Prestataire */}
                   <Link
                     to="/forfaits"
                     onClick={() => setMobileOpen(false)}
