@@ -63,21 +63,32 @@ const Header = () => {
         <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3">
-              {/* ✅ Logo : taille contrôlée + affichage complet (pas de coupe) */}
+              {/* ✅ Logo : zoom modéré + recadrage du blanc (sans couper le logo) */}
               <Link to="/" className="min-w-0 flex items-center">
-                <img
-                  src={ProxiLogo}
-                  alt={cms("brand.name", "ProxiServices", "ProxiServices")}
+                <div
                   className="
-                    h-10 sm:h-11 md:h-12
-                    w-auto
-                    max-w-[200px] sm:max-w-[240px] md:max-w-[280px]
-                    object-contain
-                    select-none
+                    h-12 sm:h-14
+                    w-[260px] sm:w-[340px] md:w-[420px]
+                    overflow-hidden
+                    flex items-center
                   "
-                  loading="eager"
-                  decoding="async"
-                />
+                >
+                  <img
+                    src={ProxiLogo}
+                    alt={cms("brand.name", "ProxiServices", "ProxiServices")}
+                    className="
+                      h-full w-full
+                      object-cover object-left
+                      select-none
+                      origin-left
+                      scale-[1.18]
+                      translate-x-[6px]
+                      translate-y-[6px]
+                    "
+                    loading="eager"
+                    decoding="async"
+                  />
+                </div>
               </Link>
 
               {/* Navigation Desktop (vide volontairement) */}
@@ -98,7 +109,9 @@ const Header = () => {
                   >
                     <User className="w-4 h-4" />
                     <span className="hidden lg:inline">{accountLabel}</span>
-                    <span className="lg:hidden">{cms("header.btn_account_short", "Compte", "Account")}</span>
+                    <span className="lg:hidden">
+                      {cms("header.btn_account_short", "Compte", "Account")}
+                    </span>
                   </Button>
                 </Link>
 
@@ -129,7 +142,11 @@ const Header = () => {
               <div className="md:hidden min-w-0 flex items-center gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="rounded-full flex items-center gap-1 whitespace-nowrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full flex items-center gap-1 whitespace-nowrap"
+                    >
                       <Languages className="w-4 h-4" />
                       <span className="uppercase">{language}</span>
                     </Button>
