@@ -60,12 +60,10 @@ const Header = () => {
   return (
     <>
       <header className="sticky top-0 z-40 w-full max-w-full">
-        {/* ✅ overflow-visible pour laisser le logo "dépasser" */}
         <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200 overflow-visible">
           <div className="w-full px-4 sm:px-6 lg:px-10 overflow-visible">
-            {/* ✅ hauteur raisonnable */}
             <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3 overflow-visible">
-              {/* ✅ Logo premium (équilibré) : plus visible mais plus discret */}
+              {/* ✅ Logo : plus visible, carte NON élargie */}
               <Link to="/" className="min-w-0 flex items-center shrink-0 overflow-visible">
                 <div
                   className="
@@ -76,13 +74,14 @@ const Header = () => {
                     ring-1 ring-black/5
                     shadow-sm
                     px-1.5 py-1
+                    inline-flex
                   "
                 >
                   <img
                     src={ProxiLogo}
                     alt={cms("brand.name", "ProxiServices", "ProxiServices")}
                     className="
-                      h-13 sm:h-14 md:h-[64px]
+                      h-14 sm:h-[60px] md:h-[68px]
                       w-auto
                       max-w-[300px] sm:max-w-[380px] md:max-w-[460px]
                       object-contain
@@ -94,10 +93,8 @@ const Header = () => {
                 </div>
               </Link>
 
-              {/* Navigation Desktop (vide volontairement) */}
               <nav className="hidden md:flex" aria-hidden="true" />
 
-              {/* Actions Desktop */}
               <div className="hidden md:flex min-w-0 items-center gap-2">
                 <Link to="/forfaits" className="min-w-0">
                   <Button variant="outline" size="sm" className="rounded-full whitespace-nowrap">
@@ -139,15 +136,10 @@ const Header = () => {
                 </DropdownMenu>
               </div>
 
-              {/* Mobile actions */}
               <div className="md:hidden min-w-0 flex items-center gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-full flex items-center gap-1 whitespace-nowrap"
-                    >
+                    <Button variant="outline" size="sm" className="rounded-full flex items-center gap-1 whitespace-nowrap">
                       <Languages className="w-4 h-4" />
                       <span className="uppercase">{language}</span>
                     </Button>
@@ -178,7 +170,6 @@ const Header = () => {
           <div className="h-1 w-full bg-gradient-to-r from-pro-blue/90 via-blue-600/90 to-pro-blue/90" />
         </div>
 
-        {/* Mobile drawer */}
         {mobileOpen && (
           <div className="md:hidden fixed inset-0 z-50">
             <button
