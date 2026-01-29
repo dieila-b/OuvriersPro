@@ -33,7 +33,6 @@ type WorkerProfile = {
   description: string | null;
   hourly_rate: number | null;
   currency: string | null;
-
   latitude: number | null;
   longitude: number | null;
 };
@@ -98,9 +97,9 @@ const WorkerDetail: React.FC = () => {
   const [submitReviewLoading, setSubmitReviewLoading] = useState(false);
 
   // Votes
-  const [myVoteByReviewId, setMyVoteByReviewId] = useState<
-    Record<string, VoteType | null>
-  >({});
+  const [myVoteByReviewId, setMyVoteByReviewId] = useState<Record<string, VoteType | null>>(
+    {}
+  );
   const [countsByReviewId, setCountsByReviewId] = useState<
     Record<string, { like: number; useful: number; not_useful: number }>
   >({});
@@ -168,7 +167,7 @@ const WorkerDetail: React.FC = () => {
     };
   }, []);
 
-  // Détecter le rôle (on le garde, mais on ne bloque pas le signalement dessus)
+  // Détecter le rôle
   useEffect(() => {
     let cancelled = false;
 
@@ -277,39 +276,40 @@ const WorkerDetail: React.FC = () => {
   }, [workerId, language]);
 
   // Avis
+  const fetchReviews = async (wid: string) => {
+    setReviewsLoading(true);
+    setReviewsError(null);
+
+    const { data, error } = await supabase
+      .from("op_ouvrier_reviews")
+      .select("*")
+      .eq("worker_id", wid)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("loadReviews error", error);
+      setReviewsError(
+        language === "fr" ? "Impossible de charger les avis." : "Unable to load reviews."
+      );
+      setReviews([]);
+    } else {
+      const mapped: Review[] = (data || []).map((r: any) => ({
+        id: r.id,
+        rating: r.rating ?? null,
+        comment: r.comment ?? null,
+        created_at: r.created_at,
+        client_name: r.client_name ?? r.name ?? r.author_name ?? null,
+      }));
+      setReviews(mapped);
+    }
+
+    setReviewsLoading(false);
+  };
+
   useEffect(() => {
-    const loadReviews = async () => {
-      if (!workerId) return;
-
-      setReviewsLoading(true);
-      setReviewsError(null);
-
-      const { data, error } = await supabase
-        .from("op_ouvrier_reviews")
-        .select("*")
-        .eq("worker_id", workerId)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("loadReviews error", error);
-        setReviewsError(
-          language === "fr" ? "Impossible de charger les avis." : "Unable to load reviews."
-        );
-      } else {
-        const mapped: Review[] = (data || []).map((r: any) => ({
-          id: r.id,
-          rating: r.rating ?? null,
-          comment: r.comment ?? null,
-          created_at: r.created_at,
-          client_name: r.client_name ?? r.name ?? r.author_name ?? null,
-        }));
-        setReviews(mapped);
-      }
-
-      setReviewsLoading(false);
-    };
-
-    loadReviews();
+    if (!workerId) return;
+    fetchReviews(workerId).catch((e) => console.error("fetchReviews error", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workerId, language]);
 
   // Photos
@@ -406,23 +406,13 @@ const WorkerDetail: React.FC = () => {
         ) / 10
       : 0;
 
-  /**
-   * ✅ Correctif signalement:
-   * - On autorise l’affichage même si worker.user_id est NULL (profil non lié à auth.users).
-   * - On bloque seulement si l’utilisateur connecté essaie de se signaler lui-même (quand user_id existe).
-   */
   const canReportWorker =
     Boolean(authUserId) && (!worker?.user_id || worker.user_id !== authUserId);
 
-  /**
-   * ✅ ID envoyé au composant de signalement:
-   * - priorité: auth.users.id (worker.user_id)
-   * - fallback: op_ouvriers.id (worker.id) => permet de signaler un profil même sans user_id
-   */
   const reportTargetId = (worker?.user_id ?? worker?.id) as string;
 
   // -----------------------
-  // Votes (op_review_votes)
+  // Votes
   // -----------------------
   const loadVotesAndCounts = async () => {
     const reviewIds = reviews.map((r) => r.id);
@@ -675,53 +665,91 @@ const WorkerDetail: React.FC = () => {
     }
   };
 
+  /**
+   * ✅ FIX RLS REVIEW:
+   * - On envoie client_id = user.id (auth.users)
+   * - On log le payload pour debug
+   * - On re-fetch la liste après insert (plus fiable que .select("*") si SELECT est filtré)
+   */
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!worker) return;
-    if (newRating <= 0) return;
+
+    if (newRating <= 0) {
+      setReviewsError(
+        language === "fr" ? "Veuillez sélectionner une note." : "Please select a rating."
+      );
+      return;
+    }
 
     setSubmitReviewLoading(true);
     setReviewsError(null);
 
     try {
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      const user = authData?.user;
+      const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+      if (sessionErr) console.warn("getSession error", sessionErr);
 
-      if (authError || !user) {
+      const user = sessionData.session?.user ?? null;
+
+      if (!user) {
         throw new Error(
           language === "fr"
-            ? "Vous devez être connecté pour laisser un avis."
-            : "You must be logged in to leave a review."
+            ? "Veuillez vous connecter pour laisser un avis."
+            : "Please log in to leave a review."
         );
       }
 
-      const { data: newReview, error: insertReviewError } = await supabase
+      const payloadBase: any = {
+        client_id: user.id,          // ✅ CRITIQUE POUR RLS
+        worker_id: worker.id,
+        rating: newRating,
+        comment: newComment?.trim() ? newComment.trim() : null,
+      };
+
+      // Optionnel: si tu as une colonne status (enum review_moderation_status)
+      // on tente de l'ajouter sans casser si elle n'existe pas.
+      const payloadWithStatus = { ...payloadBase, status: "pending" };
+
+      console.log("INSERT REVIEW PAYLOAD", payloadWithStatus);
+
+      // 1) essayer avec status
+      let insertError: any = null;
+      let inserted: any = null;
+
+      const attempt1 = await supabase
         .from("op_ouvrier_reviews")
-        .insert({
-          worker_id: worker.id,
-          rating: newRating,
-          comment: newComment || null,
-        })
-        .select("*")
+        .insert(payloadWithStatus)
+        .select("id")
         .maybeSingle();
 
-      if (insertReviewError || !newReview) {
-        console.error("insert review error", insertReviewError);
+      insertError = attempt1.error;
+      inserted = attempt1.data;
+
+      // 2) fallback si colonne status n'existe pas
+      if (insertError && /column .*status/i.test(insertError.message || "")) {
+        console.warn("status column not found, retry insert without status");
+        const attempt2 = await supabase
+          .from("op_ouvrier_reviews")
+          .insert(payloadBase)
+          .select("id")
+          .maybeSingle();
+
+        insertError = attempt2.error;
+        inserted = attempt2.data;
+      }
+
+      if (insertError || !inserted?.id) {
+        console.error("insert review error", insertError);
         throw new Error(
-          language === "fr" ? "Impossible d’enregistrer votre avis." : "Unable to save your review."
+          language === "fr"
+            ? "Impossible d’enregistrer votre avis."
+            : "Unable to save your review."
         );
       }
 
-      setReviews((prev) => [
-        {
-          id: newReview.id,
-          rating: newReview.rating ?? null,
-          comment: newReview.comment ?? null,
-          created_at: newReview.created_at,
-          client_name: newReview.author_name ?? null,
-        },
-        ...prev,
-      ]);
+      // Re-fetch pour afficher ce que la policy autorise
+      await fetchReviews(worker.id);
+
       setNewRating(0);
       setNewComment("");
     } catch (err: any) {
@@ -827,8 +855,6 @@ const WorkerDetail: React.FC = () => {
                   </div>
                 </div>
               </div>
-
-              {/* NOTE: On retire le bouton signalement ici pour l'avoir à l'endroit attendu (colonne droite). */}
             </div>
 
             {/* Google Maps */}
@@ -1099,7 +1125,6 @@ const WorkerDetail: React.FC = () => {
                 {language === "fr" ? "Coordonnées directes" : "Direct contact"}
               </h2>
 
-              {/* ✅ SIGNALER (corrigé: visible même si worker.user_id est NULL) */}
               <div className="mb-3">
                 {canReportWorker ? (
                   <ReportAccountDialog
@@ -1114,7 +1139,11 @@ const WorkerDetail: React.FC = () => {
                     variant="outline"
                     className="w-full justify-start"
                     onClick={() => navigate("/login")}
-                    title={language === "fr" ? "Connectez-vous pour signaler ce profil" : "Log in to report this profile"}
+                    title={
+                      language === "fr"
+                        ? "Connectez-vous pour signaler ce profil"
+                        : "Log in to report this profile"
+                    }
                   >
                     <AlertTriangle className="w-4 h-4 mr-2" />
                     {tReport.loginToReport}
