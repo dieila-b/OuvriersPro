@@ -30,7 +30,6 @@ type WorkerProfile = {
   hourly_rate: number | null;
   currency: string | null;
 
-  // ✅ Ajout localisation
   latitude: number | null;
   longitude: number | null;
 
@@ -42,8 +41,8 @@ type WorkerContact = {
   status: string | null;
 };
 
-// On ne garde plus que 3 onglets dans ce composant
-type TabKey = "profile" | "subscription" | "stats";
+// ✅ On ne garde plus que 2 onglets : profile + stats
+type TabKey = "profile" | "stats";
 
 const WorkerDashboard: React.FC = () => {
   const { language } = useLanguage();
@@ -64,11 +63,6 @@ const WorkerDashboard: React.FC = () => {
   const [editProfile, setEditProfile] = useState<WorkerProfile | null>(null);
   const [profileUpdateError, setProfileUpdateError] = useState<string | null>(null);
   const [profileUpdateSuccess, setProfileUpdateSuccess] = useState<string | null>(null);
-
-  // Gestion abonnement
-  const [updatingPlan, setUpdatingPlan] = useState(false);
-  const [planUpdateError, setPlanUpdateError] = useState<string | null>(null);
-  const [planUpdateSuccess, setPlanUpdateSuccess] = useState<string | null>(null);
 
   // Stats
   const [statsLoading, setStatsLoading] = useState(false);
@@ -211,7 +205,6 @@ const WorkerDashboard: React.FC = () => {
         const views = count ?? 0;
         const totalRequests = contacts.length;
         const responded = contacts.filter((c) => c.status === "in_progress" || c.status === "done").length;
-
         const rate = totalRequests > 0 ? Math.round((responded / totalRequests) * 100) : 0;
 
         setProfileViews(views);
@@ -294,8 +287,6 @@ const WorkerDashboard: React.FC = () => {
     setProfileUpdateSuccess(null);
 
     try {
-      // ✅ NOTE: on ne met pas latitude/longitude ici,
-      // car la localisation est gérée par WorkerLocationEditor (plus sûr et plus clair).
       const payload = {
         first_name: editProfile.first_name,
         last_name: editProfile.last_name,
@@ -362,65 +353,6 @@ const WorkerDashboard: React.FC = () => {
     }
   };
 
-  // Gestion changement de plan
-  const updatePlan = async (newPlan: WorkerProfile["plan_code"]) => {
-    if (!profile) return;
-
-    setUpdatingPlan(true);
-    setPlanUpdateError(null);
-    setPlanUpdateSuccess(null);
-
-    try {
-      const { data: updated, error: updateError } = await supabase
-        .from("op_ouvriers")
-        .update({ plan_code: newPlan, updated_at: new Date().toISOString() })
-        .eq("id", profile.id)
-        .select(
-          `
-          id,
-          user_id,
-          first_name,
-          last_name,
-          email,
-          phone,
-          country,
-          region,
-          city,
-          commune,
-          district,
-          profession,
-          description,
-          plan_code,
-          status,
-          hourly_rate,
-          currency,
-          latitude,
-          longitude,
-          created_at
-        `
-        )
-        .maybeSingle();
-
-      if (updateError || !updated) {
-        console.error(updateError);
-        setPlanUpdateError(language === "fr" ? "Impossible de mettre à jour votre abonnement." : "Unable to update your subscription.");
-      } else {
-        const newProfile = updated as WorkerProfile;
-        setProfile(newProfile);
-        setPlanUpdateSuccess(language === "fr" ? "Abonnement mis à jour avec succès." : "Subscription updated successfully.");
-      }
-    } catch (e) {
-      console.error(e);
-      setPlanUpdateError(
-        language === "fr"
-          ? "Une erreur est survenue lors de la mise à jour de l'abonnement."
-          : "An error occurred while updating the subscription."
-      );
-    } finally {
-      setUpdatingPlan(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -458,11 +390,11 @@ const WorkerDashboard: React.FC = () => {
             </h1>
             <p className="text-sm text-slate-600 mt-1">
               {language === "fr"
-                ? "Gérez votre profil, votre abonnement et suivez vos statistiques."
-                : "Manage your profile, subscription and follow your stats."}
+                ? "Gérez votre profil et suivez vos statistiques."
+                : "Manage your profile and follow your stats."}
             </p>
 
-            {/* ✅ Actions globales (mobile + desktop) */}
+            {/* ✅ Actions globales */}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Button type="button" size="sm" variant="outline" onClick={handleGoHome} className="gap-2">
                 <Home className="w-4 h-4" />
@@ -482,12 +414,14 @@ const WorkerDashboard: React.FC = () => {
                 {fullName || (language === "fr" ? "Profil sans nom" : "No name")}
               </div>
               <div className="text-xs text-slate-500">{profile.email || ""}</div>
+
+              {/* (Optionnel) tu peux aussi supprimer ce badge Plan si tu veux */}
               <div className="mt-1 inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-50 text-slate-700 border-slate-200">
-                {language === "fr" ? "Plan" : "Plan"} : <span className="font-semibold ml-1">{planLabel(profile.plan_code)}</span>
+                {language === "fr" ? "Plan" : "Plan"} :{" "}
+                <span className="font-semibold ml-1">{planLabel(profile.plan_code)}</span>
               </div>
             </div>
 
-            {/* Bouton d'accès à la messagerie */}
             <Button type="button" size="sm" variant="outline" onClick={() => navigate("/espace-ouvrier/messages")}>
               {language === "fr" ? "Accéder à la messagerie" : "Open messaging center"}
             </Button>
@@ -499,7 +433,6 @@ const WorkerDashboard: React.FC = () => {
           <nav className="-mb-px flex flex-wrap gap-2">
             {[
               { key: "profile" as TabKey, labelFr: "Profil", labelEn: "Profile" },
-              { key: "subscription" as TabKey, labelFr: "Abonnement", labelEn: "Subscription" },
               { key: "stats" as TabKey, labelFr: "Statistiques", labelEn: "Stats" },
             ].map((tab) => {
               const isActive = activeTab === tab.key;
@@ -521,7 +454,7 @@ const WorkerDashboard: React.FC = () => {
           </nav>
         </div>
 
-        {/* Contenu selon l’onglet */}
+        {/* Contenu */}
         <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
           {/* PROFIL */}
           {activeTab === "profile" && (
@@ -544,13 +477,18 @@ const WorkerDashboard: React.FC = () => {
                       disabled={savingProfile}
                       className="bg-pro-blue hover:bg-blue-700"
                     >
-                      {savingProfile ? (language === "fr" ? "Enregistrement..." : "Saving...") : language === "fr" ? "Enregistrer" : "Save"}
+                      {savingProfile
+                        ? language === "fr"
+                          ? "Enregistrement..."
+                          : "Saving..."
+                        : language === "fr"
+                        ? "Enregistrer"
+                        : "Save"}
                     </Button>
                   </div>
                 )}
               </div>
 
-              {/* Messages de mise à jour */}
               {profileUpdateError && (
                 <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
                   {profileUpdateError}
@@ -562,7 +500,6 @@ const WorkerDashboard: React.FC = () => {
                 </div>
               )}
 
-              {/* Détails profil */}
               {!isEditingProfile && (
                 <div className="grid md:grid-cols-2 gap-4 text-sm">
                   <div>
@@ -669,7 +606,6 @@ const WorkerDashboard: React.FC = () => {
                 </div>
               )}
 
-              {/* ✅ Localisation GPS (géolocalisation + saisie manuelle) */}
               <WorkerLocationEditor
                 workerId={profile.id}
                 initialLat={profile.latitude}
@@ -680,7 +616,6 @@ const WorkerDashboard: React.FC = () => {
                 }}
               />
 
-              {/* Statut + date création */}
               <div className="mt-2 flex flex-wrap gap-2 items-center">
                 <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${statusClass(profile.status)}`}>
                   {statusLabel(profile.status)}
@@ -690,84 +625,9 @@ const WorkerDashboard: React.FC = () => {
                 </span>
               </div>
 
-              {/* Photos + portfolio */}
               <div className="pt-4 border-t border-slate-100 space-y-4">
                 <WorkerPhotosManager workerId={profile.id} />
                 <WorkerPortfolioManager workerId={profile.id} />
-              </div>
-            </div>
-          )}
-
-          {/* ABONNEMENT */}
-          {activeTab === "subscription" && (
-            <div className="space-y-4">
-              <h2 className="text-sm font-semibold text-slate-800 mb-2">
-                {language === "fr" ? "Mon abonnement" : "My subscription"}
-              </h2>
-
-              {planUpdateError && (
-                <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
-                  {planUpdateError}
-                </div>
-              )}
-              {planUpdateSuccess && (
-                <div className="text-xs text-emerald-700 bg-emerald-50 border-emerald-100 border rounded px-3 py-2">
-                  {planUpdateSuccess}
-                </div>
-              )}
-
-              <div className="text-sm">
-                <div className="mb-2">
-                  <span className="text-xs text-slate-500">{language === "fr" ? "Plan actuel" : "Current plan"}</span>
-                  <div className="mt-1 inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-200 text-sm">
-                    <span className="font-semibold mr-2">{planLabel(profile.plan_code)}</span>
-                    <span className="text-xs text-slate-500">
-                      {profile.plan_code === "FREE"
-                        ? language === "fr"
-                          ? "Visibilité limitée"
-                          : "Limited visibility"
-                        : language === "fr"
-                        ? "Visibilité avancée + contacts illimités"
-                        : "Boosted visibility + unlimited contacts"}
-                    </span>
-                  </div>
-                </div>
-
-                {profile.hourly_rate != null && (
-                  <div className="mt-3">
-                    <div className="text-xs text-slate-500">{language === "fr" ? "Tarif horaire déclaré" : "Declared hourly rate"}</div>
-                    <div className="font-medium text-slate-900">
-                      {profile.hourly_rate.toLocaleString()} {profile.currency || ""}/h
-                    </div>
-                  </div>
-                )}
-
-                {/* Actions changement de plan */}
-                <div className="pt-3 border-t border-slate-100 mt-3 flex flex-wrap gap-2">
-                  {profile.plan_code !== "FREE" && (
-                    <Button type="button" variant="outline" size="sm" disabled={updatingPlan} onClick={() => updatePlan("FREE")}>
-                      {language === "fr" ? "Revenir au plan Gratuit" : "Switch to Free"}
-                    </Button>
-                  )}
-
-                  {profile.plan_code !== "MONTHLY" && (
-                    <Button type="button" size="sm" disabled={updatingPlan} className="bg-pro-blue hover:bg-blue-700" onClick={() => updatePlan("MONTHLY")}>
-                      {language === "fr" ? "Passer au plan Mensuel" : "Switch to Monthly"}
-                    </Button>
-                  )}
-
-                  {profile.plan_code !== "YEARLY" && (
-                    <Button type="button" size="sm" disabled={updatingPlan} className="bg-amber-500 hover:bg-amber-600" onClick={() => updatePlan("YEARLY")}>
-                      {language === "fr" ? "Passer au plan Annuel" : "Switch to Yearly"}
-                    </Button>
-                  )}
-                </div>
-
-                <div className="mt-4 text-xs text-slate-500">
-                  {language === "fr"
-                    ? "Pour l’instant, le changement de plan ne déclenche pas encore de paiement automatique. Vous pourrez connecter Stripe ou un autre moyen de paiement plus tard côté back-office."
-                    : "For now, changing plan does not trigger automatic payment yet. You can connect Stripe or another payment gateway later on the back office."}
-                </div>
               </div>
             </div>
           )}
