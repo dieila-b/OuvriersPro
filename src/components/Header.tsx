@@ -13,6 +13,9 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import ContactModal from "@/components/contact/ContactModal";
 
+// ✅ Nouveau logo (assure-toi que le fichier existe bien)
+import ProxiLogo from "@/assets/logo-proxiservices.png";
+
 const Header = () => {
   const { t, language, setLanguage } = useLanguage();
   const { user, isWorker } = useAuthProfile(); // ✅ on ne link plus l'admin depuis le header
@@ -67,23 +70,21 @@ const Header = () => {
         <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3">
-              {/* Logo */}
-              <Link to="/" className="min-w-0 flex items-center gap-2 group">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-pro-blue to-blue-700 shadow-sm ring-1 ring-black/5">
-                  <span className="text-white font-bold text-lg">PS</span>
-                </div>
-                <div className="min-w-0 leading-tight">
-                  <span className="block text-base sm:text-xl font-extrabold text-pro-gray truncate">
-                    {cms("brand.name", "ProxiServices", "ProxiServices")}
-                  </span>
-                  <span className="hidden sm:block text-[11px] text-gray-500 truncate">
-                    {cms(
-                      "header.tagline",
-                      "Prestataires vérifiés, proches de vous",
-                      "Verified providers, near you"
-                    )}
-                  </span>
-                </div>
+              {/* ✅ Logo image */}
+              <Link to="/" className="min-w-0 flex items-center">
+                <img
+                  src={ProxiLogo}
+                  alt={cms("brand.name", "ProxiServices", "ProxiServices")}
+                  className="
+                    h-9 sm:h-10 md:h-11
+                    w-auto
+                    max-w-[240px] sm:max-w-[280px] md:max-w-[340px]
+                    object-contain
+                    select-none
+                  "
+                  loading="eager"
+                  decoding="async"
+                />
               </Link>
 
               {/* Navigation Desktop (vide volontairement) */}
@@ -107,7 +108,9 @@ const Header = () => {
                   >
                     <User className="w-4 h-4" />
                     <span className="hidden lg:inline">{accountLabel}</span>
-                    <span className="lg:hidden">{cms("header.btn_account_short", "Compte", "Account")}</span>
+                    <span className="lg:hidden">
+                      {cms("header.btn_account_short", "Compte", "Account")}
+                    </span>
                   </Button>
                 </Link>
 
@@ -138,7 +141,11 @@ const Header = () => {
               <div className="md:hidden min-w-0 flex items-center gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="rounded-full flex items-center gap-1 whitespace-nowrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full flex items-center gap-1 whitespace-nowrap"
+                    >
                       <Languages className="w-4 h-4" />
                       <span className="uppercase">{language}</span>
                     </Button>
@@ -185,7 +192,12 @@ const Header = () => {
                   <span className="text-sm font-semibold text-pro-gray">
                     {cms("header.mobile_menu.title", "Menu", "Menu")}
                   </span>
-                  <Button variant="outline" size="sm" onClick={() => setMobileOpen(false)} className="rounded-full">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setMobileOpen(false)}
+                    className="rounded-full"
+                  >
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
