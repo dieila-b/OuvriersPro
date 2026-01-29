@@ -13,14 +13,13 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import ContactModal from "@/components/contact/ContactModal";
 
-// ✅ Nouveau logo (assure-toi que le fichier existe bien)
+// ✅ Logo
 import ProxiLogo from "@/assets/logo-proxiservices.png";
 
 const Header = () => {
   const { t, language, setLanguage } = useLanguage();
   const { user, isWorker } = useAuthProfile(); // ✅ on ne link plus l'admin depuis le header
   const [mobileOpen, setMobileOpen] = useState(false);
-
   const [contactOpen, setContactOpen] = useState(false);
 
   const location = useLocation();
@@ -70,21 +69,30 @@ const Header = () => {
         <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3">
-              {/* ✅ Logo image */}
+              {/* ✅ Logo (zoom + crop pour compenser les marges blanches du PNG) */}
               <Link to="/" className="min-w-0 flex items-center">
-                <img
-                  src={ProxiLogo}
-                  alt={cms("brand.name", "ProxiServices", "ProxiServices")}
+                <div
                   className="
-                    h-9 sm:h-10 md:h-11
-                    w-auto
-                    max-w-[240px] sm:max-w-[280px] md:max-w-[340px]
-                    object-contain
-                    select-none
+                    h-10 sm:h-12 md:h-12
+                    w-[180px] sm:w-[240px] md:w-[280px]
+                    overflow-hidden
+                    flex items-center
                   "
-                  loading="eager"
-                  decoding="async"
-                />
+                >
+                  <img
+                    src={ProxiLogo}
+                    alt={cms("brand.name", "ProxiServices", "ProxiServices")}
+                    className="
+                      h-full w-full
+                      object-contain object-left
+                      select-none
+                      scale-[1.55]
+                      origin-left
+                    "
+                    loading="eager"
+                    decoding="async"
+                  />
+                </div>
               </Link>
 
               {/* Navigation Desktop (vide volontairement) */}
@@ -98,8 +106,6 @@ const Header = () => {
                     {becomeProviderLabel}
                   </Button>
                 </Link>
-
-                {/* ❌ Bouton Admin retiré (accès uniquement via /admin en URL directe) */}
 
                 <Link to={accountPath} className="min-w-0">
                   <Button
@@ -211,8 +217,6 @@ const Header = () => {
                   >
                     <span className="truncate font-medium">{becomeProviderLabel}</span>
                   </Link>
-
-                  {/* ❌ Bouton Admin retiré (accès uniquement via /admin en URL directe) */}
 
                   <div className="pt-2">
                     <Link to={accountPath} onClick={() => setMobileOpen(false)}>
