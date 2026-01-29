@@ -60,30 +60,21 @@ const Header = () => {
   return (
     <>
       <header className="sticky top-0 z-40 w-full max-w-full">
-        <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200 overflow-visible">
-          <div className="w-full px-4 sm:px-6 lg:px-10 overflow-visible">
-            <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3 overflow-visible">
-              {/* ✅ Logo : plus visible, carte NON élargie */}
-              <Link to="/" className="min-w-0 flex items-center shrink-0 overflow-visible">
-                <div
-                  className="
-                    relative
-                    -mb-2 sm:-mb-3
-                    rounded-xl
-                    bg-white
-                    ring-1 ring-black/5
-                    shadow-sm
-                    px-1.5 py-1
-                    inline-flex
-                  "
-                >
+        {/* ✅ PAS de overflow-visible => rien ne déborde */}
+        <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200 overflow-hidden">
+          <div className="w-full px-4 sm:px-6 lg:px-10">
+            {/* ✅ header un peu plus haut pour rendre le logo lisible, sans débordement */}
+            <div className="h-16 sm:h-[72px] min-w-0 flex items-center justify-between gap-3">
+              {/* ✅ Logo moderne : bien visible, propre, et contenu */}
+              <Link to="/" className="min-w-0 flex items-center shrink-0">
+                <div className="inline-flex items-center rounded-xl bg-white ring-1 ring-black/5 shadow-sm px-2 py-1">
                   <img
                     src={ProxiLogo}
                     alt={cms("brand.name", "ProxiServices", "ProxiServices")}
                     className="
-                      h-14 sm:h-[60px] md:h-[68px]
+                      h-12 sm:h-14
                       w-auto
-                      max-w-[300px] sm:max-w-[380px] md:max-w-[460px]
+                      max-w-[280px] sm:max-w-[340px] md:max-w-[420px]
                       object-contain
                       select-none
                     "
@@ -93,8 +84,10 @@ const Header = () => {
                 </div>
               </Link>
 
+              {/* Navigation Desktop (vide volontairement) */}
               <nav className="hidden md:flex" aria-hidden="true" />
 
+              {/* Actions Desktop */}
               <div className="hidden md:flex min-w-0 items-center gap-2">
                 <Link to="/forfaits" className="min-w-0">
                   <Button variant="outline" size="sm" className="rounded-full whitespace-nowrap">
@@ -136,6 +129,7 @@ const Header = () => {
                 </DropdownMenu>
               </div>
 
+              {/* Mobile actions */}
               <div className="md:hidden min-w-0 flex items-center gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -170,6 +164,7 @@ const Header = () => {
           <div className="h-1 w-full bg-gradient-to-r from-pro-blue/90 via-blue-600/90 to-pro-blue/90" />
         </div>
 
+        {/* Mobile drawer */}
         {mobileOpen && (
           <div className="md:hidden fixed inset-0 z-50">
             <button
