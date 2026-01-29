@@ -62,16 +62,17 @@ const Header = () => {
       <header className="sticky top-0 z-40 w-full max-w-full">
         <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200">
           <div className="w-full px-4 sm:px-6 lg:px-10">
-            <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3">
-              {/* ✅ Logo : encore un peu plus grand + jamais coupé */}
+            {/* ✅ Header plus haut pour rendre le logo vraiment visible */}
+            <div className="h-16 sm:h-[76px] min-w-0 flex items-center justify-between gap-3">
+              {/* ✅ Logo : BEAUCOUP plus grand + jamais coupé */}
               <Link to="/" className="min-w-0 flex items-center shrink-0">
                 <img
                   src={ProxiLogo}
                   alt={cms("brand.name", "ProxiServices", "ProxiServices")}
                   className="
-                    h-11 sm:h-12 md:h-13
+                    h-12 sm:h-14 md:h-16
                     w-auto
-                    max-w-[240px] sm:max-w-[300px] md:max-w-[360px]
+                    max-w-[280px] sm:max-w-[360px] md:max-w-[460px]
                     object-contain
                     select-none
                   "
