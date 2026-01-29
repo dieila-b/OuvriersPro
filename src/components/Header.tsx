@@ -63,12 +63,12 @@ const Header = () => {
         <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-14 sm:h-16 min-w-0 flex items-center justify-between gap-3">
-              {/* ✅ Logo : zoom modéré + recadrage du blanc (sans couper le logo) */}
+              {/* ✅ Logo : zoom plus doux + descendu => plus de coupe */}
               <Link to="/" className="min-w-0 flex items-center">
                 <div
                   className="
-                    h-12 sm:h-14
-                    w-[260px] sm:w-[340px] md:w-[420px]
+                    h-14 sm:h-16
+                    w-[280px] sm:w-[360px] md:w-[440px]
                     overflow-hidden
                     flex items-center
                   "
@@ -81,9 +81,9 @@ const Header = () => {
                       object-cover object-left
                       select-none
                       origin-left
-                      scale-[1.18]
+                      scale-[1.10]
                       translate-x-[6px]
-                      translate-y-[6px]
+                      translate-y-[14px]
                     "
                     loading="eager"
                     decoding="async"
@@ -109,9 +109,7 @@ const Header = () => {
                   >
                     <User className="w-4 h-4" />
                     <span className="hidden lg:inline">{accountLabel}</span>
-                    <span className="lg:hidden">
-                      {cms("header.btn_account_short", "Compte", "Account")}
-                    </span>
+                    <span className="lg:hidden">{cms("header.btn_account_short", "Compte", "Account")}</span>
                   </Button>
                 </Link>
 
