@@ -1,6 +1,8 @@
 // src/pages/Index.tsx
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
+
 import Header from "@/components/Header";
 import HeroSection from "@/components/HeroSection";
 import FeaturesSection from "@/components/FeaturesSection";
@@ -23,6 +25,60 @@ const Index = () => {
 
   const isSearchRoute = location.pathname === "/search" || location.pathname === "/rechercher";
   const isHomeRoute = location.pathname === "/";
+
+  // ✅ Pour masquer la section abonnement si ouvrier connecté
+  const [workerCheckLoading, setWorkerCheckLoading] = useState(true);
+  const [isWorker, setIsWorker] = useState(false);
+
+  // ✅ Détecter si l'utilisateur connecté est un ouvrier (table op_ouvriers)
+  useEffect(() => {
+    let mounted = true;
+
+    const checkWorker = async () => {
+      setWorkerCheckLoading(true);
+
+      try {
+        const { data } = await supabase.auth.getUser();
+        const user = data?.user;
+
+        if (!mounted) return;
+
+        if (!user) {
+          setIsWorker(false);
+          return;
+        }
+
+        const { data: workerRow, error } = await supabase
+          .from("op_ouvriers")
+          .select("id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (!mounted) return;
+
+        if (error) {
+          console.warn("[Index] checkWorker error:", error);
+          setIsWorker(false);
+        } else {
+          setIsWorker(!!workerRow);
+        }
+      } finally {
+        if (mounted) setWorkerCheckLoading(false);
+      }
+    };
+
+    checkWorker();
+
+    // ✅ Si login/logout, on re-check automatiquement
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      checkWorker();
+    });
+
+    return () => {
+      mounted = false;
+      sub?.subscription?.unsubscribe();
+    };
+  }, []);
 
   const searchPayload: SearchPayload = useMemo(() => {
     const p = new URLSearchParams(location.search);
@@ -70,7 +126,6 @@ const Index = () => {
 
         if (pos === "fixed" || pos === "sticky") {
           const r = (cur as HTMLElement).getBoundingClientRect();
-          // élément collant en haut
           if (r.top <= 0 && r.height > 0) {
             maxBottom = Math.max(maxBottom, r.bottom);
           }
@@ -84,7 +139,6 @@ const Index = () => {
       consider(document.elementFromPoint(x, yProbe));
     }
 
-    // fallback header (au cas où elementFromPoint ne capte pas bien)
     const headerEl = document.querySelector("header") as HTMLElement | null;
     if (headerEl) {
       const r = headerEl.getBoundingClientRect();
@@ -95,14 +149,12 @@ const Index = () => {
   };
 
   // ✅ 0) Si on est sur /search ou /rechercher : on redirige vers l’accueil + #search
-  // => un refresh ne te laissera plus “bloqué” sur la page recherche
   useEffect(() => {
     if (!isSearchRoute) return;
     if (redirectedRef.current) return;
 
     redirectedRef.current = true;
 
-    // on conserve les filtres dans sessionStorage (utile pour pré-remplir)
     if (hasAnySearchParam) {
       try {
         sessionStorage.setItem("op:last_search", JSON.stringify(searchPayload));
@@ -111,7 +163,6 @@ const Index = () => {
       }
     }
 
-    // on remplace l’URL /search?... par /?...#search (donc refresh = accueil)
     const target = `/${location.search || ""}#search`;
     navigate(target, { replace: true });
   }, [isSearchRoute, hasAnySearchParam, searchPayload, location.search, navigate]);
@@ -157,10 +208,8 @@ const Index = () => {
     };
 
     const timeout = window.setTimeout(() => {
-      // 1) scroll standard
       el.scrollIntoView({ block: "start", behavior: "smooth" });
 
-      // 2) correction après layout (double RAF + micro-timeout)
       requestAnimationFrame(() => {
         doScroll();
         requestAnimationFrame(doScroll);
@@ -184,21 +233,24 @@ const Index = () => {
       <Header />
 
       <main className="w-full flex-1 min-w-0">
-        {/* ✅ On n’affiche PLUS un “mode /search” séparé.
-            Tout passe par l’accueil + ancre #search */}
         <>
           <HeroSection />
 
           <FeaturesSection />
 
-          {/* ✅ Optionnel: enlever scroll-mt pour éviter tout offset additionnel */}
           <div id="search" className="w-full">
             <WorkerSearchSection />
           </div>
 
-          <div id="subscription" className="w-full">
-            <SubscriptionSection />
-          </div>
+          {/* ✅ IMPORTANT :
+              - si ouvrier connecté => on masque la section "Rejoignez ProxiServices"
+              - sinon on l'affiche normalement
+          */}
+          {!workerCheckLoading && !isWorker && (
+            <div id="subscription" className="w-full">
+              <SubscriptionSection />
+            </div>
+          )}
         </>
       </main>
 
