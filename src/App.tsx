@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
+import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 
@@ -393,13 +393,11 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <LanguageProvider>
-        <BrowserRouter>
-          <Toaster />
-          <Sonner />
-          <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
-            <AppRoutes />
-          </div>
-        </BrowserRouter>
+        <Toaster />
+        <Sonner />
+        <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
+          <AppRoutes />
+        </div>
       </LanguageProvider>
     </TooltipProvider>
   </QueryClientProvider>
