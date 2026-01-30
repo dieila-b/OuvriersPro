@@ -11,7 +11,6 @@ if (!rootEl) {
 }
 
 ReactDOM.createRoot(rootEl).render(
-  // ✅ StrictMode OK (tu peux enlever si tu veux éviter le double render en dev)
   <React.StrictMode>
     <App />
   </React.StrictMode>
