@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef, Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -8,70 +8,98 @@ import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 
-// Pages publiques
-import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
-import InscriptionOuvrier from "./pages/InscriptionOuvrier";
-import WorkerDetail from "./pages/WorkerDetail";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import MonCompte from "./pages/MonCompte";
-
-// ✅ Forfaits
-import Forfaits from "./pages/Forfaits";
-
-// ✅ FAQ + pages publiques
-import Faq from "./pages/Faq";
-import About from "./pages/About";
-import Partners from "./pages/Partners";
-
-// ✅ Pages légales
-import Terms from "./pages/Terms";
-import Privacy from "./pages/Privacy";
-import CookiesPolicy from "./pages/Cookies";
-
-// ✅ Admin FAQ Questions
-import AdminFaqQuestions from "./pages/AdminFaqQuestions";
-
-// ✅ Admin: CMS Contenu du site
-import AdminContent from "./pages/AdminContent";
-
-// ✅ Admin: Signalements
-import AdminReports from "./pages/AdminReports";
-
-// Back-office Admin
-import AdminOuvrierContacts from "./pages/AdminOuvrierContacts";
-import AdminOuvrierInscriptions from "./pages/AdminOuvrierInscriptions";
-import AdminDashboard from "./pages/AdminDashboard";
-import AdminAds from "./pages/AdminAds";
-
-// ✅ Admin Journal de connexions
-import AdminLoginJournalPage from "./pages/admin/AdminLoginJournalPage";
-
-// ✅ Admin Modération avis (NOUVEAU)
-import AdminReviewsModerationPage from "./pages/admin/AdminReviewsModerationPage";
-
-// Espace ouvrier connecté
-import WorkerDashboard from "./pages/WorkerDashboard";
-import WorkerMessagesPage from "./pages/WorkerMessagesPage";
-import WorkerReviewsPage from "./pages/WorkerReviews";
-
-// Espace Client / Particulier
-import ClientDashboard from "./pages/ClientDashboard";
-import ClientProfile from "./pages/ClientProfile";
-import ClientRequestsList from "./pages/ClientRequestsList";
-import ClientMessagesPage from "./pages/ClientMessagesPage";
-import ClientFavoritesList from "./pages/ClientFavoritesList";
-import ClientReviews from "./pages/ClientReviews";
-import ClientContactForm from "./pages/ClientContactForm";
-
 // Protection routes
 import PrivateRoute from "./components/PrivateRoute";
 
 // ✅ Layout admin
 import AdminLayout from "@/components/layout/AdminLayout";
 
-const queryClient = new QueryClient();
+/**
+ * ✅ Lazy pages (gros gain perf sur mobile)
+ * Astuce: on garde NotFound/Index en lazy aussi (ok),
+ * mais tu peux les passer en import direct si tu préfères.
+ */
+const Index = lazy(() => import("./pages/Index"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const InscriptionOuvrier = lazy(() => import("./pages/InscriptionOuvrier"));
+const WorkerDetail = lazy(() => import("./pages/WorkerDetail"));
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const MonCompte = lazy(() => import("./pages/MonCompte"));
+
+// ✅ Forfaits
+const Forfaits = lazy(() => import("./pages/Forfaits"));
+
+// ✅ FAQ + pages publiques
+const Faq = lazy(() => import("./pages/Faq"));
+const About = lazy(() => import("./pages/About"));
+const Partners = lazy(() => import("./pages/Partners"));
+
+// ✅ Pages légales
+const Terms = lazy(() => import("./pages/Terms"));
+const Privacy = lazy(() => import("./pages/Privacy"));
+const CookiesPolicy = lazy(() => import("./pages/Cookies"));
+
+// ✅ Admin FAQ Questions
+const AdminFaqQuestions = lazy(() => import("./pages/AdminFaqQuestions"));
+
+// ✅ Admin: CMS Contenu du site
+const AdminContent = lazy(() => import("./pages/AdminContent"));
+
+// ✅ Admin: Signalements
+const AdminReports = lazy(() => import("./pages/AdminReports"));
+
+// Back-office Admin
+const AdminOuvrierContacts = lazy(() => import("./pages/AdminOuvrierContacts"));
+const AdminOuvrierInscriptions = lazy(() => import("./pages/AdminOuvrierInscriptions"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const AdminAds = lazy(() => import("./pages/AdminAds"));
+
+// ✅ Admin Journal de connexions
+const AdminLoginJournalPage = lazy(() => import("./pages/admin/AdminLoginJournalPage"));
+
+// ✅ Admin Modération avis
+const AdminReviewsModerationPage = lazy(() => import("./pages/admin/AdminReviewsModerationPage"));
+
+// Espace ouvrier connecté
+const WorkerDashboard = lazy(() => import("./pages/WorkerDashboard"));
+const WorkerMessagesPage = lazy(() => import("./pages/WorkerMessagesPage"));
+const WorkerReviewsPage = lazy(() => import("./pages/WorkerReviews"));
+
+// Espace Client / Particulier
+const ClientDashboard = lazy(() => import("./pages/ClientDashboard"));
+const ClientProfile = lazy(() => import("./pages/ClientProfile"));
+const ClientRequestsList = lazy(() => import("./pages/ClientRequestsList"));
+const ClientMessagesPage = lazy(() => import("./pages/ClientMessagesPage"));
+const ClientFavoritesList = lazy(() => import("./pages/ClientFavoritesList"));
+const ClientReviews = lazy(() => import("./pages/ClientReviews"));
+const ClientContactForm = lazy(() => import("./pages/ClientContactForm"));
+
+/**
+ * ✅ QueryClient optimisé (moins de refetch inutiles, meilleur UX mobile)
+ * - staleTime: évite de recharger en boucle
+ * - refetchOnWindowFocus: false (en mobile, ça refetch trop)
+ * - retry: réduit la sensation de "freeze" si réseau instable
+ */
+const useAppQueryClient = () =>
+  useMemo(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 60_000, // 1 min
+            gcTime: 10 * 60_000, // 10 min
+            refetchOnWindowFocus: false,
+            refetchOnReconnect: true,
+            retry: 1,
+          },
+          mutations: {
+            retry: 0,
+          },
+        },
+      }),
+    []
+  );
 
 function ScrollManager() {
   const location = useLocation();
@@ -99,14 +127,6 @@ function ScrollManager() {
 
 /**
  * ✅ Journal de connexion (Supabase Edge Function) — non bloquant
- *
- * Fix:
- * - On log "refresh" sur INITIAL_SESSION (avec anti-spam).
- * - On log "login" sur SIGNED_IN.
- * - On log "logout" sur SIGNED_OUT.
- *
- * IMPORTANT:
- * - On ne jette JAMAIS d'erreur (ne doit pas casser l'UI).
  */
 function AuthAuditLogger() {
   const didInitRef = useRef(false);
@@ -115,7 +135,7 @@ function AuthAuditLogger() {
     if (didInitRef.current) return;
     didInitRef.current = true;
 
-    const DEBUG = true; // Activé pour debug
+    const DEBUG = true; // garde tel quel
     const COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
     const LS_KEY = "op_login_journal:last_refresh";
 
@@ -242,165 +262,172 @@ const AppRoutes = () => (
     <ScrollManager />
     <AuthAuditLogger />
 
-    <Routes>
-      {/* Public */}
-      <Route path="/" element={<Index />} />
-      <Route path="/search" element={<Index />} />
-      <Route path="/rechercher" element={<Index />} />
+    {/* ✅ fallback simple (rapide et safe) */}
+    <Suspense fallback={<div className="p-6 text-gray-600">Chargement…</div>}>
+      <Routes>
+        {/* Public */}
+        <Route path="/" element={<Index />} />
+        <Route path="/search" element={<Index />} />
+        <Route path="/rechercher" element={<Index />} />
 
-      <Route path="/forfaits" element={<Forfaits />} />
+        <Route path="/forfaits" element={<Forfaits />} />
 
-      <Route path="/faq" element={<Faq />} />
-      <Route path="/aide" element={<Faq />} />
+        <Route path="/faq" element={<Faq />} />
+        <Route path="/aide" element={<Faq />} />
 
-      <Route path="/a-propos" element={<About />} />
-      <Route path="/partenaires" element={<Partners />} />
+        <Route path="/a-propos" element={<About />} />
+        <Route path="/partenaires" element={<Partners />} />
 
-      <Route path="/conditions" element={<Terms />} />
-      <Route path="/confidentialite" element={<Privacy />} />
-      <Route path="/cookies" element={<CookiesPolicy />} />
+        <Route path="/conditions" element={<Terms />} />
+        <Route path="/confidentialite" element={<Privacy />} />
+        <Route path="/cookies" element={<CookiesPolicy />} />
 
-      <Route path="/mon-compte" element={<MonCompte />} />
+        <Route path="/mon-compte" element={<MonCompte />} />
 
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
-      <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
+        <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
 
-      <Route
-        path="/ouvrier/:id"
-        element={
-          <PrivateRoute allowedRoles={["user", "worker", "admin"]}>
-            <WorkerDetail />
-          </PrivateRoute>
-        }
-      />
+        <Route
+          path="/ouvrier/:id"
+          element={
+            <PrivateRoute allowedRoles={["user", "worker", "admin"]}>
+              <WorkerDetail />
+            </PrivateRoute>
+          }
+        />
 
-      {/* Client */}
-      <Route
-        path="/espace-client"
-        element={
-          <PrivateRoute allowedRoles={["user"]}>
-            <ClientDashboard />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/mon-profil"
-        element={
-          <PrivateRoute allowedRoles={["user"]}>
-            <ClientProfile />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/mes-demandes"
-        element={
-          <PrivateRoute allowedRoles={["user"]}>
-            <ClientRequestsList />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/mes-echanges"
-        element={
-          <PrivateRoute allowedRoles={["user"]}>
-            <ClientMessagesPage />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/mes-avis"
-        element={
-          <PrivateRoute allowedRoles={["user"]}>
-            <ClientReviews />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/mes-favoris"
-        element={
-          <PrivateRoute allowedRoles={["user"]}>
-            <ClientFavoritesList />
-          </PrivateRoute>
-        }
-      />
+        {/* Client */}
+        <Route
+          path="/espace-client"
+          element={
+            <PrivateRoute allowedRoles={["user"]}>
+              <ClientDashboard />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/mon-profil"
+          element={
+            <PrivateRoute allowedRoles={["user"]}>
+              <ClientProfile />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/mes-demandes"
+          element={
+            <PrivateRoute allowedRoles={["user"]}>
+              <ClientRequestsList />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/mes-echanges"
+          element={
+            <PrivateRoute allowedRoles={["user"]}>
+              <ClientMessagesPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/mes-avis"
+          element={
+            <PrivateRoute allowedRoles={["user"]}>
+              <ClientReviews />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/mes-favoris"
+          element={
+            <PrivateRoute allowedRoles={["user"]}>
+              <ClientFavoritesList />
+            </PrivateRoute>
+          }
+        />
 
-      {/* Worker */}
-      <Route
-        path="/espace-ouvrier"
-        element={
-          <PrivateRoute allowedRoles={["worker"]}>
-            <WorkerDashboard />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/espace-ouvrier/messages"
-        element={
-          <PrivateRoute allowedRoles={["worker"]}>
-            <WorkerMessagesPage />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/espace-ouvrier/avis"
-        element={
-          <PrivateRoute allowedRoles={["worker"]}>
-            <WorkerReviewsPage />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/clients/:clientId/contact"
-        element={
-          <PrivateRoute allowedRoles={["worker"]}>
-            <ClientContactForm />
-          </PrivateRoute>
-        }
-      />
+        {/* Worker */}
+        <Route
+          path="/espace-ouvrier"
+          element={
+            <PrivateRoute allowedRoles={["worker"]}>
+              <WorkerDashboard />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/espace-ouvrier/messages"
+          element={
+            <PrivateRoute allowedRoles={["worker"]}>
+              <WorkerMessagesPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/espace-ouvrier/avis"
+          element={
+            <PrivateRoute allowedRoles={["worker"]}>
+              <WorkerReviewsPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/clients/:clientId/contact"
+          element={
+            <PrivateRoute allowedRoles={["worker"]}>
+              <ClientContactForm />
+            </PrivateRoute>
+          }
+        />
 
-      {/* Admin */}
-      <Route
-        path="/admin"
-        element={
-          <PrivateRoute allowedRoles={["admin"]}>
-            <AdminLayout />
-          </PrivateRoute>
-        }
-      >
-        <Route index element={<Navigate to="dashboard" replace />} />
-        <Route path="dashboard" element={<AdminDashboard />} />
-        <Route path="ouvrier-contacts" element={<AdminOuvrierContacts />} />
-        <Route path="ouvriers" element={<AdminOuvrierInscriptions />} />
-        <Route path="publicites" element={<AdminAds />} />
-        <Route path="signalements" element={<AdminReports />} />
-        <Route path="contenu" element={<AdminContent />} />
-        <Route path="faq-questions" element={<AdminFaqQuestions />} />
-        <Route path="journal-connexions" element={<AdminLoginJournalPage />} />
+        {/* Admin */}
+        <Route
+          path="/admin"
+          element={
+            <PrivateRoute allowedRoles={["admin"]}>
+              <AdminLayout />
+            </PrivateRoute>
+          }
+        >
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="ouvrier-contacts" element={<AdminOuvrierContacts />} />
+          <Route path="ouvriers" element={<AdminOuvrierInscriptions />} />
+          <Route path="publicites" element={<AdminAds />} />
+          <Route path="signalements" element={<AdminReports />} />
+          <Route path="contenu" element={<AdminContent />} />
+          <Route path="faq-questions" element={<AdminFaqQuestions />} />
+          <Route path="journal-connexions" element={<AdminLoginJournalPage />} />
 
-        {/* ✅ NOUVEAU: Modération avis */}
-        <Route path="moderation-avis" element={<AdminReviewsModerationPage />} />
-      </Route>
+          {/* ✅ Modération avis */}
+          <Route path="moderation-avis" element={<AdminReviewsModerationPage />} />
+        </Route>
 
-      {/* 404 */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        {/* 404 */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Suspense>
   </>
 );
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <LanguageProvider>
-        <Toaster />
-        <Sonner />
-        <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
-          <AppRoutes />
-        </div>
-      </LanguageProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  const queryClient = useAppQueryClient();
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <LanguageProvider>
+          <Toaster />
+          <Sonner />
+          <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
+            <AppRoutes />
+          </div>
+        </LanguageProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
