@@ -1,5 +1,5 @@
 // src/pages/WorkerMessagesPage.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,12 @@ import {
   ThumbsUp,
   BadgeCheck,
   ThumbsDown,
+  Camera,
+  Image as ImageIcon,
+  Loader2,
 } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
+import { Camera as CapCamera, CameraResultType, CameraSource } from "@capacitor/camera";
 
 type WorkerRow = {
   id: string;
@@ -49,6 +54,10 @@ type MessageRow = {
   sender_role: "worker" | "client";
   message: string | null;
   created_at: string;
+
+  // ✅ nouveaux champs (si présents dans ta table)
+  media_type?: string | null; // "image"
+  media_path?: string | null; // storage path
 };
 
 type ReviewRow = {
@@ -76,11 +85,12 @@ type ReviewReplyRow = {
 type VoteType = "like" | "useful" | "not_useful";
 type FilterKey = "all" | "unread";
 
+const BUCKET_CHAT = "chat-media"; // ✅ Storage bucket
+
 const WorkerMessagesPage: React.FC = () => {
   const { language } = useLanguage();
 
   const [authUserId, setAuthUserId] = useState<string | null>(null);
-
   const [worker, setWorker] = useState<WorkerRow | null>(null);
 
   const [contacts, setContacts] = useState<ContactRow[]>([]);
@@ -97,10 +107,14 @@ const WorkerMessagesPage: React.FC = () => {
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
 
+  // ✅ Signed URLs cache (messageId -> signedUrl)
+  const [signedUrlByMessageId, setSignedUrlByMessageId] = useState<Record<string, string>>({});
+  const [sendingImage, setSendingImage] = useState(false);
+
+  const conversationEndRef = useRef<HTMLDivElement | null>(null);
+
   // --- Mapping client_id (op_clients.id) -> client_user_id (auth.users / op_users id)
-  const [clientUserIdByClientId, setClientUserIdByClientId] = useState<Record<string, string>>(
-    {}
-  );
+  const [clientUserIdByClientId, setClientUserIdByClientId] = useState<Record<string, string>>({});
 
   // Avis (ouvrier -> client)
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -124,7 +138,7 @@ const WorkerMessagesPage: React.FC = () => {
   const [workerReplySending, setWorkerReplySending] = useState(false);
   const [workerReplyError, setWorkerReplyError] = useState<string | null>(null);
 
-  // Votes (Like / Utile / Pas utile) — même logique que côté client
+  // Votes (Like / Utile / Pas utile)
   const [myVoteByReplyId, setMyVoteByReplyId] = useState<Record<string, VoteType | null>>({});
   const [countsByReplyId, setCountsByReplyId] = useState<
     Record<string, { like: number; useful: number; not_useful: number }>
@@ -156,6 +170,16 @@ const WorkerMessagesPage: React.FC = () => {
     you: language === "fr" ? "Vous" : "You",
     client: language === "fr" ? "Client" : "Client",
     loadingErrorTitle: language === "fr" ? "Erreur de chargement" : "Loading error",
+
+    // Chat image
+    sendImage: language === "fr" ? "Image" : "Image",
+    sendingImage: language === "fr" ? "Envoi..." : "Sending...",
+    imageErrorMissingCols:
+      language === "fr"
+        ? "Les colonnes media_type/media_path ne sont pas encore dans la table des messages."
+        : "media_type/media_path columns are not in the messages table yet.",
+    imageErrorGeneric:
+      language === "fr" ? "Impossible d’envoyer l’image." : "Unable to send the image.",
 
     // Avis
     leaveReview: language === "fr" ? "Laisser un avis public" : "Leave a public review",
@@ -295,7 +319,6 @@ const WorkerMessagesPage: React.FC = () => {
         setContacts(list);
         setSelectedContactId(list.length > 0 ? list[0].id : null);
 
-        // --- Build mapping client_id -> user_id (only for clients that contacted this worker)
         const clientIds = Array.from(new Set(list.map((c) => c.client_id).filter(Boolean))) as string[];
         if (clientIds.length === 0) {
           setClientUserIdByClientId({});
@@ -341,17 +364,30 @@ const WorkerMessagesPage: React.FC = () => {
     }
   };
 
-  // 2) Load messages for selected contact
-  useEffect(() => {
-    const loadMessages = async () => {
-      if (!selectedContactId) {
-        setMessages([]);
-        return;
-      }
+  // 2) Load messages for selected contact (avec fallback si colonnes media_* absentes)
+  const loadMessages = useCallback(async () => {
+    if (!selectedContactId) {
+      setMessages([]);
+      return;
+    }
 
-      setMessagesLoading(true);
-      setMessagesError(null);
+    setMessagesLoading(true);
+    setMessagesError(null);
 
+    // ✅ tente d’abord avec media_type/media_path
+    try {
+      const { data, error } = await supabase
+        .from("op_client_worker_messages")
+        .select("id, contact_id, worker_id, client_id, sender_role, message, created_at, media_type, media_path")
+        .eq("contact_id", selectedContactId)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+
+      setMessages((data || []) as MessageRow[]);
+      return;
+    } catch (e: any) {
+      // fallback: sélection legacy sans colonnes media_*
       try {
         const { data, error } = await supabase
           .from("op_client_worker_messages")
@@ -360,21 +396,67 @@ const WorkerMessagesPage: React.FC = () => {
           .order("created_at", { ascending: true });
 
         if (error) throw error;
+
         setMessages((data || []) as MessageRow[]);
-      } catch (e: any) {
+      } catch (e2: any) {
         setMessagesError(
-          e?.message ||
+          e2?.message ||
             (language === "fr" ? "Impossible de charger les messages." : "Unable to load messages.")
         );
-      } finally {
-        setMessagesLoading(false);
+      }
+    } finally {
+      setMessagesLoading(false);
+    }
+  }, [selectedContactId, language]);
+
+  useEffect(() => {
+    loadMessages();
+  }, [loadMessages]);
+
+  // ✅ auto-scroll bas (utile mobile)
+  useEffect(() => {
+    const tmr = window.setTimeout(() => {
+      conversationEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }, 50);
+    return () => window.clearTimeout(tmr);
+  }, [messages.length, selectedContactId]);
+
+  // ✅ Signed URL on render: génère une signed url uniquement pour les messages qui ont media_path
+  useEffect(() => {
+    let cancelled = false;
+
+    const signMissing = async () => {
+      const targets = messages
+        .filter((m) => m.media_type === "image" && m.media_path && !signedUrlByMessageId[m.id])
+        .map((m) => ({ id: m.id, path: m.media_path as string }));
+
+      if (targets.length === 0) return;
+
+      // batch "soft" : on boucle (Supabase n’a pas de batch signed-url natif)
+      const updates: Record<string, string> = {};
+      for (const it of targets) {
+        try {
+          const { data, error } = await supabase.storage.from(BUCKET_CHAT).createSignedUrl(it.path, 60 * 60); // 1h
+          if (error) continue;
+          if (data?.signedUrl) updates[it.id] = data.signedUrl;
+        } catch {
+          // ignore
+        }
+      }
+
+      if (!cancelled && Object.keys(updates).length > 0) {
+        setSignedUrlByMessageId((prev) => ({ ...prev, ...updates }));
       }
     };
 
-    loadMessages();
-  }, [selectedContactId, language]);
+    signMissing();
 
-  // 3) Load existing review + replies
+    return () => {
+      cancelled = true;
+    };
+  }, [messages, signedUrlByMessageId]);
+
+  // 3) Load existing review + replies (inchangé)
   useEffect(() => {
     const loadReviewAndReplies = async () => {
       setExistingReview(null);
@@ -384,7 +466,6 @@ const WorkerMessagesPage: React.FC = () => {
       setWorkerReplyContent("");
       setWorkerReplyError(null);
 
-      // reset votes
       setMyVoteByReplyId({});
       setCountsByReplyId({});
 
@@ -473,7 +554,7 @@ const WorkerMessagesPage: React.FC = () => {
       const { data, error } = await supabase
         .from("op_client_worker_messages")
         .insert(insertPayload)
-        .select("id, contact_id, worker_id, client_id, sender_role, message, created_at")
+        .select("id, contact_id, worker_id, client_id, sender_role, message, created_at, media_type, media_path")
         .single();
 
       if (error) throw error;
@@ -492,7 +573,115 @@ const WorkerMessagesPage: React.FC = () => {
     }
   };
 
-  // 4) Votes: charger "mon vote" + compteurs (après replies)
+  // =========================
+  // ✅ CHAT IMAGE (Capacitor + Web)
+  // =========================
+  const fileFromWebPick = async (): Promise<File | null> => {
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.onchange = () => resolve(input.files?.[0] ?? null);
+      input.click();
+    });
+  };
+
+  const blobFromCapacitor = async (): Promise<{ blob: Blob; mime: string; ext: string } | null> => {
+    const perm = await CapCamera.requestPermissions();
+    const ok = perm.camera === "granted" || perm.photos === "granted";
+    if (!ok) throw new Error(language === "fr" ? "Permission caméra/photos refusée" : "Camera/photos permission denied");
+
+    const photo = await CapCamera.getPhoto({
+      quality: 85,
+      allowEditing: false,
+      resultType: CameraResultType.Uri,
+      source: CameraSource.Prompt, // Camera ou Gallery
+    });
+
+    if (!photo.webPath) return null;
+
+    const res = await fetch(photo.webPath);
+    const blob = await res.blob();
+    const mime = blob.type || "image/jpeg";
+    const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : "jpg";
+    return { blob, mime, ext };
+  };
+
+  const sendImage = async () => {
+    if (!worker || !selectedContact) return;
+
+    setSendingImage(true);
+    setMessagesError(null);
+
+    try {
+      // 1) récupérer image (mobile via Capacitor, web via input)
+      let blob: Blob | null = null;
+      let mime = "image/jpeg";
+      let ext = "jpg";
+
+      if (Capacitor.isNativePlatform()) {
+        const cap = await blobFromCapacitor();
+        if (!cap) return;
+        blob = cap.blob;
+        mime = cap.mime;
+        ext = cap.ext;
+      } else {
+        const f = await fileFromWebPick();
+        if (!f) return;
+        blob = f;
+        mime = f.type || "image/jpeg";
+        ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : "jpg";
+      }
+
+      // 2) upload Storage (privé)
+      const fileName = `${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
+      const path = `contacts/${selectedContact.id}/${worker.id}/${fileName}`;
+
+      const { error: upErr } = await supabase.storage
+        .from(BUCKET_CHAT)
+        .upload(path, blob, { contentType: mime, upsert: false });
+
+      if (upErr) throw upErr;
+
+      // 3) insert DB (message image)
+      // ⚠️ nécessite media_type/media_path sur op_client_worker_messages
+      const payload: any = {
+        contact_id: selectedContact.id,
+        worker_id: worker.id,
+        client_id: selectedContact.client_id,
+        sender_role: "worker" as const,
+        message: null,
+        media_type: "image",
+        media_path: path,
+      };
+
+      const { data, error: msgErr } = await supabase
+        .from("op_client_worker_messages")
+        .insert(payload)
+        .select("id, contact_id, worker_id, client_id, sender_role, message, created_at, media_type, media_path")
+        .single();
+
+      if (msgErr) {
+        // si la table n’a pas les colonnes, tu auras une erreur du style "column media_type does not exist"
+        const msg = msgErr.message || String(msgErr);
+        if (msg.toLowerCase().includes("media_type") || msg.toLowerCase().includes("media_path")) {
+          throw new Error(t.imageErrorMissingCols);
+        }
+        throw msgErr;
+      }
+
+      // 4) refresh UI + signed url on render (se fera via useEffect)
+      setMessages((prev) => [...prev, data as MessageRow]);
+
+      if ((selectedContact.status || "new") === "new") await markContactAsRead(selectedContact.id);
+    } catch (e: any) {
+      setMessagesError(e?.message || t.imageErrorGeneric);
+    } finally {
+      setSendingImage(false);
+    }
+  };
+
+  // 4) Votes: charger "mon vote" + compteurs (inchangé)
   const loadMyVotes = async (replyIds: string[]) => {
     if (!authUserId || replyIds.length === 0) return;
 
@@ -545,13 +734,11 @@ const WorkerMessagesPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reviewReplies.map((r) => r.id).join(","), authUserId]);
 
-  // 5) Toggle vote (même logique client)
   const toggleVote = async (replyId: string, voteType: VoteType) => {
     if (!authUserId) return;
 
     const current = myVoteByReplyId[replyId] ?? null;
 
-    // same vote => DELETE
     if (current === voteType) {
       const { error } = await supabase
         .from("op_review_reply_votes")
@@ -564,15 +751,11 @@ const WorkerMessagesPage: React.FC = () => {
       setMyVoteByReplyId((prev) => ({ ...prev, [replyId]: null }));
       setCountsByReplyId((prev) => {
         const base = prev[replyId] ?? { like: 0, useful: 0, not_useful: 0 };
-        return {
-          ...prev,
-          [replyId]: { ...base, [voteType]: Math.max(0, base[voteType] - 1) },
-        };
+        return { ...prev, [replyId]: { ...base, [voteType]: Math.max(0, base[voteType] - 1) } };
       });
       return;
     }
 
-    // different vote or none => UPSERT
     const payload = { reply_id: replyId, voter_user_id: authUserId, vote_type: voteType };
 
     const { error } = await supabase
@@ -586,15 +769,12 @@ const WorkerMessagesPage: React.FC = () => {
     setCountsByReplyId((prev) => {
       const base = prev[replyId] ?? { like: 0, useful: 0, not_useful: 0 };
       const next = { ...base };
-
       if (current) next[current] = Math.max(0, next[current] - 1);
       next[voteType] = next[voteType] + 1;
-
       return { ...prev, [replyId]: next };
     });
   };
 
-  // 6) Worker reply insert (IMPORTANT: sender_role NOT NULL)
   const handleSendWorkerReply = async () => {
     if (!worker?.id || !existingReview?.id) return;
     if (!workerReplyContent.trim()) return;
@@ -679,7 +859,6 @@ const WorkerMessagesPage: React.FC = () => {
       setWorkerReplyContent("");
       setWorkerReplyError(null);
 
-      // reset votes (pas de replies encore)
       setMyVoteByReplyId({});
       setCountsByReplyId({});
 
@@ -841,24 +1020,52 @@ const WorkerMessagesPage: React.FC = () => {
                   {!messagesLoading &&
                     !messagesError &&
                     messages.map((m) => {
-                      const isWorker = m.sender_role === "worker";
+                      const isMe = m.sender_role === "worker";
+                      const signed = signedUrlByMessageId[m.id] || null;
+
                       return (
-                        <div key={m.id} className={`mb-3 flex ${isWorker ? "justify-end" : "justify-start"}`}>
+                        <div key={m.id} className={`mb-3 flex ${isMe ? "justify-end" : "justify-start"}`}>
                           <div
                             className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
-                              isWorker
+                              isMe
                                 ? "bg-blue-600 text-white rounded-br-sm"
                                 : "bg-slate-100 text-slate-800 rounded-bl-sm"
                             }`}
                           >
-                            <div className="text-[10px] opacity-80 mb-0.5">
-                              {isWorker ? t.you : t.client} • {formatDateTime(m.created_at)}
+                            <div className="text-[10px] opacity-80 mb-1">
+                              {isMe ? t.you : t.client} • {formatDateTime(m.created_at)}
                             </div>
-                            <div className="whitespace-pre-line">{m.message}</div>
+
+                            {/* ✅ image */}
+                            {m.media_type === "image" && signed ? (
+                              <a href={signed} target="_blank" rel="noreferrer" className="block">
+                                <img
+                                  src={signed}
+                                  alt="image"
+                                  className={`max-w-[240px] sm:max-w-[320px] rounded-xl border ${
+                                    isMe ? "border-white/20" : "border-slate-200"
+                                  }`}
+                                  loading="lazy"
+                                />
+                              </a>
+                            ) : null}
+
+                            {/* ✅ texte */}
+                            {m.message ? <div className="whitespace-pre-line">{m.message}</div> : null}
+
+                            {/* ✅ fallback si image en attente de signed url */}
+                            {m.media_type === "image" && !signed ? (
+                              <div className="flex items-center gap-2 text-xs opacity-80">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                {language === "fr" ? "Chargement de l’image..." : "Loading image..."}
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       );
                     })}
+
+                  <div ref={conversationEndRef} />
                 </>
               )}
             </div>
@@ -870,14 +1077,39 @@ const WorkerMessagesPage: React.FC = () => {
                 placeholder={t.typeHere}
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
-                disabled={!selectedContact || sending}
+                disabled={!selectedContact || sending || sendingImage}
               />
-              <div className="mt-2 flex justify-end">
+
+              <div className="mt-2 flex items-center justify-between gap-2">
+                {/* ✅ bouton caméra (web + mobile) */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  onClick={sendImage}
+                  disabled={!selectedContact || sendingImage}
+                  title={language === "fr" ? "Envoyer une image" : "Send an image"}
+                >
+                  {sendingImage ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      {t.sendingImage}
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="h-4 w-4 mr-2" />
+                      <span className="hidden sm:inline">{t.sendImage}</span>
+                      <ImageIcon className="h-4 w-4 sm:hidden" />
+                    </>
+                  )}
+                </Button>
+
                 <Button
                   type="button"
                   className="flex items-center gap-1 bg-orange-500 hover:bg-orange-600"
                   onClick={handleSend}
-                  disabled={!selectedContact || !newMessage.trim() || sending}
+                  disabled={!selectedContact || !newMessage.trim() || sending || sendingImage}
                 >
                   <Send className="w-4 h-4" />
                   {t.send}
@@ -886,7 +1118,7 @@ const WorkerMessagesPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Colonne 3 : fiche + avis + replies */}
+          {/* Colonne 3 : fiche + avis + replies (inchangé) */}
           <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:col-span-3">
             <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-3">
               {selectedContact ? (
@@ -969,18 +1201,14 @@ const WorkerMessagesPage: React.FC = () => {
                   <div className="text-xs font-semibold text-slate-700 mb-1">{t.clientNameLabel}</div>
                   <div className="text-sm text-slate-800">{selectedContact.client_name || "—"}</div>
 
-                  {/* ✅ SIGNALER LE CLIENT (uniquement si l'ID user est disponible) */}
                   {selectedClientUserId && (
                     <div className="mt-3">
-                      <ReportAccountDialog
-                        reportedUserId={selectedClientUserId}
-                        reportedRole="client"
-                      />
+                      <ReportAccountDialog reportedUserId={selectedClientUserId} reportedRole="client" />
                     </div>
                   )}
                 </div>
 
-                {/* Bloc Avis + Réponses */}
+                {/* Bloc Avis + Réponses (inchangé) */}
                 <div className="px-4 py-3">
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-xs font-semibold text-slate-700">{t.leaveReview}</div>
@@ -1028,7 +1256,6 @@ const WorkerMessagesPage: React.FC = () => {
                         {existingReview.is_published ? t.publicLabel : t.privateLabel}
                       </div>
 
-                      {/* Réponses + Votes */}
                       <div className="mt-4 border-t border-slate-200 pt-3">
                         <div className="text-xs font-semibold text-slate-700 mb-2">{t.repliesTitle}</div>
 
@@ -1066,7 +1293,6 @@ const WorkerMessagesPage: React.FC = () => {
                                     {rep.content || ""}
                                   </div>
 
-                                  {/* Votes */}
                                   <div className="mt-3 flex flex-wrap gap-2">
                                     <Button
                                       type="button"
@@ -1104,7 +1330,6 @@ const WorkerMessagesPage: React.FC = () => {
                           </div>
                         )}
 
-                        {/* Zone "réagir" côté ouvrier */}
                         <div className="mt-4">
                           <div className="text-xs font-semibold text-slate-700 mb-2">{t.replyAsWorkerTitle}</div>
 
@@ -1162,7 +1387,7 @@ const WorkerMessagesPage: React.FC = () => {
         )}
       </div>
 
-      {/* Modal Avis */}
+      {/* Modal Avis (inchangé) */}
       {reviewOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={closeReviewModal} />
