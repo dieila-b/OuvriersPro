@@ -11,6 +11,9 @@ import { useNavigate } from "react-router-dom";
 import { WorkerLocationEditor } from "@/components/workers/WorkerLocationEditor";
 import { Home, LogOut } from "lucide-react";
 
+// ✅ NOUVEAU: section avatar prestataire (à créer dans src/components/workers/WorkerAvatarSection.tsx)
+import WorkerAvatarSection from "@/components/workers/WorkerAvatarSection";
+
 type WorkerProfile = {
   id: string;
   user_id: string | null;
@@ -29,6 +32,9 @@ type WorkerProfile = {
   status: string | null;
   hourly_rate: number | null;
   currency: string | null;
+
+  // ✅ (optionnel dans ton type) si tu ajoutes avatar_url dans op_ouvriers, tu peux le garder
+  avatar_url?: string | null;
 
   latitude: number | null;
   longitude: number | null;
@@ -389,9 +395,7 @@ const WorkerDashboard: React.FC = () => {
               {language === "fr" ? "Espace Ouvrier" : "Worker Dashboard"}
             </h1>
             <p className="text-sm text-slate-600 mt-1">
-              {language === "fr"
-                ? "Gérez votre profil et suivez vos statistiques."
-                : "Manage your profile and follow your stats."}
+              {language === "fr" ? "Gérez votre profil et suivez vos statistiques." : "Manage your profile and follow your stats."}
             </p>
 
             {/* ✅ Actions globales */}
@@ -417,8 +421,7 @@ const WorkerDashboard: React.FC = () => {
 
               {/* (Optionnel) tu peux aussi supprimer ce badge Plan si tu veux */}
               <div className="mt-1 inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-50 text-slate-700 border-slate-200">
-                {language === "fr" ? "Plan" : "Plan"} :{" "}
-                <span className="font-semibold ml-1">{planLabel(profile.plan_code)}</span>
+                {language === "fr" ? "Plan" : "Plan"} : <span className="font-semibold ml-1">{planLabel(profile.plan_code)}</span>
               </div>
             </div>
 
@@ -477,13 +480,7 @@ const WorkerDashboard: React.FC = () => {
                       disabled={savingProfile}
                       className="bg-pro-blue hover:bg-blue-700"
                     >
-                      {savingProfile
-                        ? language === "fr"
-                          ? "Enregistrement..."
-                          : "Saving..."
-                        : language === "fr"
-                        ? "Enregistrer"
-                        : "Save"}
+                      {savingProfile ? (language === "fr" ? "Enregistrement..." : "Saving...") : language === "fr" ? "Enregistrer" : "Save"}
                     </Button>
                   </div>
                 )}
@@ -499,6 +496,12 @@ const WorkerDashboard: React.FC = () => {
                   {profileUpdateSuccess}
                 </div>
               )}
+
+              {/* ✅ NOUVEAU: Avatar prestataire (upload + update op_ouvriers.avatar_url) */}
+              {/* NOTE: Nécessite: table op_ouvriers a une colonne avatar_url (text) + bucket "avatars" (public) */}
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <WorkerAvatarSection />
+              </div>
 
               {!isEditingProfile && (
                 <div className="grid md:grid-cols-2 gap-4 text-sm">
@@ -601,7 +604,11 @@ const WorkerDashboard: React.FC = () => {
                   </div>
                   <div className="md:col-span-2">
                     <div className="text-xs text-slate-500">{language === "fr" ? "Description de vos services" : "Services description"}</div>
-                    <Textarea rows={4} value={displayProfile.description ?? ""} onChange={(e) => handleEditField("description", e.target.value)} />
+                    <Textarea
+                      rows={4}
+                      value={displayProfile.description ?? ""}
+                      onChange={(e) => handleEditField("description", e.target.value)}
+                    />
                   </div>
                 </div>
               )}
@@ -635,14 +642,10 @@ const WorkerDashboard: React.FC = () => {
           {/* STATS */}
           {activeTab === "stats" && (
             <div className="space-y-4">
-              <h2 className="text-sm font-semibold text-slate-800 mb-2">
-                {language === "fr" ? "Statistiques personnelles" : "Personal stats"}
-              </h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-2">{language === "fr" ? "Statistiques personnelles" : "Personal stats"}</h2>
 
               {statsError && (
-                <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
-                  {statsError}
-                </div>
+                <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{statsError}</div>
               )}
 
               <p className="text-xs text-slate-500 mb-2">
@@ -664,9 +667,7 @@ const WorkerDashboard: React.FC = () => {
 
                 <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                   <div className="text-xs text-slate-500">{language === "fr" ? "Taux de réponse" : "Response rate"}</div>
-                  <div className="text-2xl font-bold text-slate-900 mt-1">
-                    {statsLoading ? "…" : requestsCount > 0 ? `${responseRate}%` : "—"}
-                  </div>
+                  <div className="text-2xl font-bold text-slate-900 mt-1">{statsLoading ? "…" : requestsCount > 0 ? `${responseRate}%` : "—"}</div>
                   {requestsCount > 0 && !statsLoading && (
                     <div className="text-[11px] text-slate-500 mt-1">
                       {language === "fr"
