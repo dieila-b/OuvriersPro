@@ -1,5 +1,5 @@
 // src/lib/media.ts
-import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
+import { Camera, CameraResultType, CameraSource, PermissionStatus } from "@capacitor/camera";
 import { supabase } from "@/lib/supabase";
 
 export type PickMediaMode = "camera" | "gallery";
@@ -9,6 +9,35 @@ async function blobFromWebPath(webPath: string): Promise<Blob> {
   const res = await fetch(webPath);
   if (!res.ok) throw new Error("Impossible de lire le fichier");
   return await res.blob();
+}
+
+function isGranted(v: any): boolean {
+  return v === "granted" || v === true;
+}
+
+async function ensurePermissionsForMode(mode: PickMediaMode): Promise<PermissionStatus> {
+  // ✅ Demande explicite (camera + photos) = plus robuste iOS/Android
+  // Note: selon OS, "photos" peut être absent → on gère en fallback.
+  const perm = await Camera.requestPermissions({ permissions: ["camera", "photos"] });
+
+  // Camera obligatoire si mode camera
+  if (mode === "camera") {
+    if (!isGranted((perm as any).camera)) {
+      throw new Error("Permission caméra refusée");
+    }
+  }
+
+  // Galerie : sur iOS/Android récents, "photos" est souvent explicite.
+  // Sur certains Android, l’accès galerie passe sans champ perm.photos => on ne bloque pas.
+  if (mode === "gallery") {
+    const photos = (perm as any).photos;
+    // Si l'OS renvoie explicitement "denied" / "prompt-with-rationale", on bloque.
+    if (photos && !isGranted(photos)) {
+      throw new Error("Permission galerie refusée");
+    }
+  }
+
+  return perm;
 }
 
 export async function pickImageAndUpload(params: {
@@ -25,17 +54,7 @@ export async function pickImageAndUpload(params: {
   signedUrl: string | null; // dispo si bucket private (aperçu)
   contentType: string;
 }> {
-  const perm = await Camera.requestPermissions();
-
-  // Sur certains devices, "photos" est séparé — on ne bloque pas si camera ok.
-  if (params.mode === "camera" && perm.camera !== "granted") {
-    throw new Error("Permission caméra refusée");
-  }
-  if (params.mode === "gallery" && perm.photos && perm.photos !== "granted") {
-    // On ne bloque pas systématiquement (Android varie), mais si l'OS renvoie un refus explicite, on le respecte
-    // Tu peux commenter si tu préfères être permissive.
-    // throw new Error("Permission galerie refusée");
-  }
+  await ensurePermissionsForMode(params.mode);
 
   const photo = await Camera.getPhoto({
     quality: params.quality ?? 85,
@@ -49,12 +68,10 @@ export async function pickImageAndUpload(params: {
   const blob = await blobFromWebPath(photo.webPath);
   const contentType = blob.type || "image/jpeg";
 
-  const { error } = await supabase.storage
-    .from(params.bucket)
-    .upload(params.path, blob, {
-      upsert: params.upsert ?? true,
-      contentType,
-    });
+  const { error } = await supabase.storage.from(params.bucket).upload(params.path, blob, {
+    upsert: params.upsert ?? true,
+    contentType,
+  });
 
   if (error) throw error;
 
@@ -69,9 +86,7 @@ export async function pickImageAndUpload(params: {
 
   // ✅ Bucket private => URL signée (aperçu)
   const expiresIn = params.signedUrlSeconds ?? 600;
-  const { data, error: signErr } = await supabase.storage
-    .from(params.bucket)
-    .createSignedUrl(params.path, expiresIn);
+  const { data, error: signErr } = await supabase.storage.from(params.bucket).createSignedUrl(params.path, expiresIn);
 
   if (signErr) throw signErr;
 
