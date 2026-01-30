@@ -13,7 +13,6 @@ if (!rootEl) {
 
 ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
-    {/* ✅ HashRouter = zéro écran blanc / zéro 404 en mobile */}
     <HashRouter>
       <App />
     </HashRouter>
