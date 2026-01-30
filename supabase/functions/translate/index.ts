@@ -1,5 +1,5 @@
 // supabase/functions/translate/index.ts
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+// Edge runtime types are automatically available in Supabase Edge Functions
 
 type Payload = {
   source: "fr" | "en";

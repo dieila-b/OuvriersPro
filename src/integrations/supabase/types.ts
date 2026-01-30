@@ -53,6 +53,42 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_review_moderation: {
+        Row: {
+          created_at: string
+          is_public: boolean
+          moderated_at: string | null
+          moderated_by: string | null
+          moderation_note: string | null
+          source_id: string
+          source_table: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          is_public?: boolean
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_note?: string | null
+          source_id: string
+          source_table: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          is_public?: boolean
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_note?: string | null
+          source_id?: string
+          source_table?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       admin_users: {
         Row: {
           created_at: string
@@ -958,7 +994,12 @@ export type Database = {
           comment: string | null
           created_at: string | null
           id: string
+          is_public: boolean
+          moderated_at: string | null
+          moderated_by: string | null
+          moderation_note: string | null
           rating: number | null
+          status: Database["public"]["Enums"]["review_moderation_status"]
           worker_id: string
         }
         Insert: {
@@ -967,7 +1008,12 @@ export type Database = {
           comment?: string | null
           created_at?: string | null
           id?: string
+          is_public?: boolean
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_note?: string | null
           rating?: number | null
+          status?: Database["public"]["Enums"]["review_moderation_status"]
           worker_id: string
         }
         Update: {
@@ -976,7 +1022,12 @@ export type Database = {
           comment?: string | null
           created_at?: string | null
           id?: string
+          is_public?: boolean
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_note?: string | null
           rating?: number | null
+          status?: Database["public"]["Enums"]["review_moderation_status"]
           worker_id?: string
         }
         Relationships: [
@@ -1895,6 +1946,73 @@ export type Database = {
       }
     }
     Views: {
+      admin_all_reviews_view: {
+        Row: {
+          client_display: string | null
+          client_profile_id: string | null
+          content: string | null
+          created_at: string | null
+          is_flagged: boolean | null
+          is_public: boolean | null
+          moderated_at: string | null
+          moderated_by: string | null
+          moderation_note: string | null
+          rating: number | null
+          review_id: string | null
+          source_table: string | null
+          status: string | null
+          title: string | null
+          updated_at: string | null
+          worker_display: string | null
+          worker_profile_id: string | null
+        }
+        Relationships: []
+      }
+      admin_reviews_timeline_view: {
+        Row: {
+          client_display: string | null
+          content: string | null
+          created_at: string | null
+          is_flagged: boolean | null
+          is_public: boolean | null
+          item_type: string | null
+          moderated_at: string | null
+          moderated_by: string | null
+          moderation_note: string | null
+          rating: number | null
+          review_id: string | null
+          source_table: string | null
+          status: string | null
+          title: string | null
+          updated_at: string | null
+          worker_display: string | null
+        }
+        Relationships: []
+      }
+      admin_reviews_view: {
+        Row: {
+          canonical_id: string | null
+          client_auth_uid: string | null
+          client_display: string | null
+          client_entity_id: string | null
+          content: string | null
+          created_at: string | null
+          is_public: boolean | null
+          moderated_at: string | null
+          moderated_by: string | null
+          moderation_note: string | null
+          rating: number | null
+          source_id: string | null
+          source_table: string | null
+          status: string | null
+          title: string | null
+          updated_at: string | null
+          worker_auth_uid: string | null
+          worker_display: string | null
+          worker_entity_id: string | null
+        }
+        Relationships: []
+      }
       geography_columns: {
         Row: {
           coord_dimension: number | null
@@ -2145,6 +2263,107 @@ export type Database = {
             }
             Returns: string
           }
+      admin_client_display: { Args: { p_client_id: string }; Returns: string }
+      admin_client_id_from_profile: {
+        Args: { p_profile_id: string }
+        Returns: string
+      }
+      admin_get_review_thread:
+        | {
+            Args: { p_review_id: string; p_source: string }
+            Returns: {
+              actor_display: string
+              actor_role: string
+              content: string
+              created_at: string
+              item_type: string
+              rating: number
+              source_id: string
+              source_table: string
+              title: string
+            }[]
+          }
+        | {
+            Args: { p_review_id?: string; p_source: string }
+            Returns: {
+              actor_display: string
+              actor_role: string
+              content: string
+              created_at: string
+              item_type: string
+              rating: number
+              source_id: string
+              source_table: string
+              title: string
+            }[]
+          }
+      admin_list_all_reviews: {
+        Args: {
+          p_page?: number
+          p_per_page?: number
+          p_q?: string
+          p_status?: string
+        }
+        Returns: {
+          canonical_id: string
+          client_display: string
+          content: string
+          created_at: string
+          is_public: boolean
+          moderated_at: string
+          moderated_by: string
+          moderation_note: string
+          rating: number
+          source_id: string
+          source_table: string
+          status: string
+          title: string
+          total_count: number
+          updated_at: string
+          worker_display: string
+        }[]
+      }
+      admin_list_reviews: {
+        Args: {
+          p_page?: number
+          p_per_page?: number
+          p_q?: string
+          p_status?: string
+        }
+        Returns: {
+          client_display: string
+          client_user_id: string
+          content: string
+          created_at: string
+          id: string
+          is_public: boolean
+          moderated_at: string
+          moderated_by: string
+          moderation_note: string
+          rating: number
+          related_order_id: string
+          status: string
+          title: string
+          total_count: number
+          updated_at: string
+          worker_display: string
+          worker_user_id: string
+        }[]
+      }
+      admin_moderate_any_review: {
+        Args: {
+          p_action: string
+          p_note?: string
+          p_source_id: string
+          p_source_table: string
+        }
+        Returns: undefined
+      }
+      admin_moderate_review: {
+        Args: { action: string; note?: string; review_id: string }
+        Returns: undefined
+      }
+      admin_profile_display: { Args: { p_uid: string }; Returns: string }
       admin_profiles_by_ids: {
         Args: { ids: string[] }
         Returns: {
@@ -2155,6 +2374,11 @@ export type Database = {
           is_admin: boolean
           last_name: string
         }[]
+      }
+      admin_worker_display: { Args: { p_worker_id: string }; Returns: string }
+      admin_worker_id_from_profile: {
+        Args: { p_profile_id: string }
+        Returns: string
       }
       disablelongtransactions: { Args: never; Returns: string }
       dropgeometrycolumn:
@@ -2288,10 +2512,9 @@ export type Database = {
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
       gettransactionid: { Args: never; Returns: unknown }
-      is_admin:
-        | { Args: never; Returns: boolean }
-        | { Args: { uid: string }; Returns: boolean }
+      is_admin: { Args: { uid: string }; Returns: boolean }
       longtransactionsenabled: { Args: never; Returns: boolean }
+      op_current_user_id: { Args: never; Returns: string }
       op_is_admin: { Args: never; Returns: boolean }
       op_log_login_event: {
         Args: {
@@ -3003,6 +3226,7 @@ export type Database = {
         | "harassment"
         | "pricing_scam"
         | "other"
+      review_moderation_status: "pending" | "published" | "hidden" | "rejected"
       review_status: "pending" | "published" | "hidden" | "rejected"
       user_role: "user" | "admin" | "worker"
     }
@@ -3165,6 +3389,7 @@ export const Constants = {
         "pricing_scam",
         "other",
       ],
+      review_moderation_status: ["pending", "published", "hidden", "rejected"],
       review_status: ["pending", "published", "hidden", "rejected"],
       user_role: ["user", "admin", "worker"],
     },

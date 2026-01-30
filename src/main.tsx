@@ -5,7 +5,16 @@ import { HashRouter } from "react-router-dom";
 import App from "./App";
 import "./index.css";
 
-// ✅ Sécurité si root absent
+// Global error handler to prevent blank screens from unhandled promise rejections
+window.addEventListener("unhandledrejection", (event) => {
+  console.error("[Global] Unhandled promise rejection:", event.reason);
+  event.preventDefault();
+});
+
+window.addEventListener("error", (event) => {
+  console.error("[Global] Uncaught error:", event.error);
+});
+
 const rootEl = document.getElementById("root");
 if (!rootEl) {
   throw new Error("Root element #root not found");
