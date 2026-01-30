@@ -12,6 +12,8 @@
     "netlify:dev": "netlify dev"
   },
   "dependencies": {
+    "@capacitor/camera": "^8.0.0",
+    "@capacitor/core": "^8.0.2",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",

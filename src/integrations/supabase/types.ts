@@ -789,6 +789,33 @@ export type Database = {
           },
         ]
       }
+      op_ouvrier_kyc_files: {
+        Row: {
+          created_at: string
+          id: string
+          storage_path: string
+          type: string
+          updated_at: string
+          worker_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          storage_path: string
+          type: string
+          updated_at?: string
+          worker_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          storage_path?: string
+          type?: string
+          updated_at?: string
+          worker_id?: string
+        }
+        Relationships: []
+      }
       op_ouvrier_photos: {
         Row: {
           created_at: string
@@ -799,6 +826,7 @@ export type Database = {
           public_url: string | null
           storage_path: string
           title: string | null
+          type: string | null
           worker_id: string
         }
         Insert: {
@@ -810,6 +838,7 @@ export type Database = {
           public_url?: string | null
           storage_path: string
           title?: string | null
+          type?: string | null
           worker_id: string
         }
         Update: {
@@ -821,6 +850,7 @@ export type Database = {
           public_url?: string | null
           storage_path?: string
           title?: string | null
+          type?: string | null
           worker_id?: string
         }
         Relationships: [
