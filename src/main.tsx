@@ -1,6 +1,7 @@
 // src/main.tsx
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { HashRouter } from "react-router-dom";
 import App from "./App";
 import "./index.css";
 
@@ -12,6 +13,9 @@ if (!rootEl) {
 
 ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
-    <App />
+    {/* ✅ HashRouter = zéro écran blanc / zéro 404 en mobile */}
+    <HashRouter>
+      <App />
+    </HashRouter>
   </React.StrictMode>
 );
