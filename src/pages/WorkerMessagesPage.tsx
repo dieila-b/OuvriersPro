@@ -55,7 +55,6 @@ type MessageRow = {
   message: string | null;
   created_at: string;
 
-  // ✅ nouveaux champs (si présents dans ta table)
   media_type?: string | null; // "image"
   media_path?: string | null; // storage path
 };
@@ -85,7 +84,13 @@ type ReviewReplyRow = {
 type VoteType = "like" | "useful" | "not_useful";
 type FilterKey = "all" | "unread";
 
-const BUCKET_CHAT = "chat-media"; // ✅ Storage bucket
+const BUCKET_CHAT = "chat-media";
+
+// ✅ petites aides
+const uniqByIdAppend = <T extends { id: string }>(arr: T[], item: T) => {
+  if (arr.some((x) => x.id === item.id)) return arr;
+  return [...arr, item];
+};
 
 const WorkerMessagesPage: React.FC = () => {
   const { language } = useLanguage();
@@ -113,10 +118,10 @@ const WorkerMessagesPage: React.FC = () => {
 
   const conversationEndRef = useRef<HTMLDivElement | null>(null);
 
-  // --- Mapping client_id (op_clients.id) -> client_user_id (auth.users / op_users id)
+  // --- Mapping client_id -> client_user_id
   const [clientUserIdByClientId, setClientUserIdByClientId] = useState<Record<string, string>>({});
 
-  // Avis (ouvrier -> client)
+  // Avis
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
@@ -128,17 +133,16 @@ const WorkerMessagesPage: React.FC = () => {
   const [reviewPublish, setReviewPublish] = useState<boolean>(true);
   const [reviewSaving, setReviewSaving] = useState(false);
 
-  // Replies (client + ouvrier) sur l'avis
+  // Replies
   const [reviewReplies, setReviewReplies] = useState<ReviewReplyRow[]>([]);
   const [repliesLoading, setRepliesLoading] = useState(false);
   const [repliesError, setRepliesError] = useState<string | null>(null);
 
-  // Ouvrier répond à l'avis
   const [workerReplyContent, setWorkerReplyContent] = useState("");
   const [workerReplySending, setWorkerReplySending] = useState(false);
   const [workerReplyError, setWorkerReplyError] = useState<string | null>(null);
 
-  // Votes (Like / Utile / Pas utile)
+  // Votes
   const [myVoteByReplyId, setMyVoteByReplyId] = useState<Record<string, VoteType | null>>({});
   const [countsByReplyId, setCountsByReplyId] = useState<
     Record<string, { like: number; useful: number; not_useful: number }>
@@ -178,8 +182,7 @@ const WorkerMessagesPage: React.FC = () => {
       language === "fr"
         ? "Les colonnes media_type/media_path ne sont pas encore dans la table des messages."
         : "media_type/media_path columns are not in the messages table yet.",
-    imageErrorGeneric:
-      language === "fr" ? "Impossible d’envoyer l’image." : "Unable to send the image.",
+    imageErrorGeneric: language === "fr" ? "Impossible d’envoyer l’image." : "Unable to send the image.",
 
     // Avis
     leaveReview: language === "fr" ? "Laisser un avis public" : "Leave a public review",
@@ -272,6 +275,17 @@ const WorkerMessagesPage: React.FC = () => {
     return clientUserIdByClientId[cid] || null;
   }, [selectedContact?.client_id, clientUserIdByClientId]);
 
+  // ✅ helper signed url (utilisé aussi en realtime)
+  const createSignedUrl = useCallback(async (path: string) => {
+    try {
+      const { data, error } = await supabase.storage.from(BUCKET_CHAT).createSignedUrl(path, 60 * 60); // 1h
+      if (error) return null;
+      return data?.signedUrl ?? null;
+    } catch {
+      return null;
+    }
+  }, []);
+
   // 0) Auth user id
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setAuthUserId(data.user?.id ?? null));
@@ -317,7 +331,7 @@ const WorkerMessagesPage: React.FC = () => {
 
         const list = (contactsData || []) as ContactRow[];
         setContacts(list);
-        setSelectedContactId(list.length > 0 ? list[0].id : null);
+        setSelectedContactId((prev) => prev ?? (list.length > 0 ? list[0].id : null));
 
         const clientIds = Array.from(new Set(list.map((c) => c.client_id).filter(Boolean))) as string[];
         if (clientIds.length === 0) {
@@ -364,7 +378,7 @@ const WorkerMessagesPage: React.FC = () => {
     }
   };
 
-  // 2) Load messages for selected contact (avec fallback si colonnes media_* absentes)
+  // 2) Load messages for selected contact
   const loadMessages = useCallback(async () => {
     if (!selectedContactId) {
       setMessages([]);
@@ -374,7 +388,6 @@ const WorkerMessagesPage: React.FC = () => {
     setMessagesLoading(true);
     setMessagesError(null);
 
-    // ✅ tente d’abord avec media_type/media_path
     try {
       const { data, error } = await supabase
         .from("op_client_worker_messages")
@@ -383,11 +396,9 @@ const WorkerMessagesPage: React.FC = () => {
         .order("created_at", { ascending: true });
 
       if (error) throw error;
-
       setMessages((data || []) as MessageRow[]);
-      return;
     } catch (e: any) {
-      // fallback: sélection legacy sans colonnes media_*
+      // fallback legacy
       try {
         const { data, error } = await supabase
           .from("op_client_worker_messages")
@@ -396,7 +407,6 @@ const WorkerMessagesPage: React.FC = () => {
           .order("created_at", { ascending: true });
 
         if (error) throw error;
-
         setMessages((data || []) as MessageRow[]);
       } catch (e2: any) {
         setMessagesError(
@@ -413,7 +423,78 @@ const WorkerMessagesPage: React.FC = () => {
     loadMessages();
   }, [loadMessages]);
 
-  // ✅ auto-scroll bas (utile mobile)
+  // ✅ REALTIME: nouveaux messages (INSERT) sur le thread sélectionné
+  useEffect(() => {
+    if (!selectedContactId) return;
+
+    const channel = supabase
+      .channel(`rt:worker:messages:${selectedContactId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "op_client_worker_messages",
+          filter: `contact_id=eq.${selectedContactId}`,
+        },
+        async (payload) => {
+          const row = payload.new as MessageRow;
+
+          setMessages((prev) => uniqByIdAppend(prev, row));
+
+          // si image -> signed url immédiate (meilleure UX)
+          if (row?.media_type === "image" && row?.media_path) {
+            const signed = await createSignedUrl(row.media_path);
+            if (signed) {
+              setSignedUrlByMessageId((prev) => ({ ...prev, [row.id]: signed }));
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedContactId, createSignedUrl]);
+
+  // ✅ REALTIME: nouveaux contacts / update status (optionnel mais utile)
+  useEffect(() => {
+    if (!worker?.id) return;
+
+    const channel = supabase
+      .channel(`rt:worker:contacts:${worker.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "op_ouvrier_contacts", filter: `worker_id=eq.${worker.id}` },
+        (payload) => {
+          const row = payload.new as any;
+
+          // INSERT: nouveau contact
+          if (payload.eventType === "INSERT") {
+            setContacts((prev) => {
+              if (prev.some((c) => c.id === row.id)) return prev;
+              return [row as ContactRow, ...prev];
+            });
+            // si aucun thread sélectionné, sélection automatique
+            setSelectedContactId((prev) => prev ?? (row?.id ?? null));
+            return;
+          }
+
+          // UPDATE: maj contact (status/message/etc.)
+          if (payload.eventType === "UPDATE") {
+            setContacts((prev) => prev.map((c) => (c.id === row.id ? ({ ...c, ...row } as ContactRow) : c)));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [worker?.id]);
+
+  // ✅ auto-scroll bas
   useEffect(() => {
     const tmr = window.setTimeout(() => {
       conversationEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -421,7 +502,7 @@ const WorkerMessagesPage: React.FC = () => {
     return () => window.clearTimeout(tmr);
   }, [messages.length, selectedContactId]);
 
-  // ✅ Signed URL on render: génère une signed url uniquement pour les messages qui ont media_path
+  // ✅ Signed URL on render (cache)
   useEffect(() => {
     let cancelled = false;
 
@@ -432,16 +513,10 @@ const WorkerMessagesPage: React.FC = () => {
 
       if (targets.length === 0) return;
 
-      // batch "soft" : on boucle (Supabase n’a pas de batch signed-url natif)
       const updates: Record<string, string> = {};
       for (const it of targets) {
-        try {
-          const { data, error } = await supabase.storage.from(BUCKET_CHAT).createSignedUrl(it.path, 60 * 60); // 1h
-          if (error) continue;
-          if (data?.signedUrl) updates[it.id] = data.signedUrl;
-        } catch {
-          // ignore
-        }
+        const signed = await createSignedUrl(it.path);
+        if (signed) updates[it.id] = signed;
       }
 
       if (!cancelled && Object.keys(updates).length > 0) {
@@ -454,7 +529,7 @@ const WorkerMessagesPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [messages, signedUrlByMessageId]);
+  }, [messages, signedUrlByMessageId, createSignedUrl]);
 
   // 3) Load existing review + replies (inchangé)
   useEffect(() => {
@@ -559,7 +634,7 @@ const WorkerMessagesPage: React.FC = () => {
 
       if (error) throw error;
 
-      setMessages((prev) => [...prev, data as MessageRow]);
+      setMessages((prev) => uniqByIdAppend(prev, data as MessageRow));
       setNewMessage("");
 
       if ((selectedContact.status || "new") === "new") await markContactAsRead(selectedContact.id);
@@ -595,7 +670,7 @@ const WorkerMessagesPage: React.FC = () => {
       quality: 85,
       allowEditing: false,
       resultType: CameraResultType.Uri,
-      source: CameraSource.Prompt, // Camera ou Gallery
+      source: CameraSource.Prompt,
     });
 
     if (!photo.webPath) return null;
@@ -614,7 +689,6 @@ const WorkerMessagesPage: React.FC = () => {
     setMessagesError(null);
 
     try {
-      // 1) récupérer image (mobile via Capacitor, web via input)
       let blob: Blob | null = null;
       let mime = "image/jpeg";
       let ext = "jpg";
@@ -633,18 +707,16 @@ const WorkerMessagesPage: React.FC = () => {
         ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : "jpg";
       }
 
-      // 2) upload Storage (privé)
       const fileName = `${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
       const path = `contacts/${selectedContact.id}/${worker.id}/${fileName}`;
 
-      const { error: upErr } = await supabase.storage
-        .from(BUCKET_CHAT)
-        .upload(path, blob, { contentType: mime, upsert: false });
+      const { error: upErr } = await supabase.storage.from(BUCKET_CHAT).upload(path, blob, {
+        contentType: mime,
+        upsert: false,
+      });
 
       if (upErr) throw upErr;
 
-      // 3) insert DB (message image)
-      // ⚠️ nécessite media_type/media_path sur op_client_worker_messages
       const payload: any = {
         contact_id: selectedContact.id,
         worker_id: worker.id,
@@ -662,7 +734,6 @@ const WorkerMessagesPage: React.FC = () => {
         .single();
 
       if (msgErr) {
-        // si la table n’a pas les colonnes, tu auras une erreur du style "column media_type does not exist"
         const msg = msgErr.message || String(msgErr);
         if (msg.toLowerCase().includes("media_type") || msg.toLowerCase().includes("media_path")) {
           throw new Error(t.imageErrorMissingCols);
@@ -670,8 +741,14 @@ const WorkerMessagesPage: React.FC = () => {
         throw msgErr;
       }
 
-      // 4) refresh UI + signed url on render (se fera via useEffect)
-      setMessages((prev) => [...prev, data as MessageRow]);
+      // ajoute local + prépare signed url
+      const inserted = data as MessageRow;
+      setMessages((prev) => uniqByIdAppend(prev, inserted));
+
+      if (inserted.media_path) {
+        const signed = await createSignedUrl(inserted.media_path);
+        if (signed) setSignedUrlByMessageId((prev) => ({ ...prev, [inserted.id]: signed }));
+      }
 
       if ((selectedContact.status || "new") === "new") await markContactAsRead(selectedContact.id);
     } catch (e: any) {
@@ -758,9 +835,9 @@ const WorkerMessagesPage: React.FC = () => {
 
     const payload = { reply_id: replyId, voter_user_id: authUserId, vote_type: voteType };
 
-    const { error } = await supabase
-      .from("op_review_reply_votes")
-      .upsert(payload, { onConflict: "reply_id,voter_user_id" });
+    const { error } = await supabase.from("op_review_reply_votes").upsert(payload, {
+      onConflict: "reply_id,voter_user_id",
+    });
 
     if (error) throw error;
 
@@ -1027,16 +1104,13 @@ const WorkerMessagesPage: React.FC = () => {
                         <div key={m.id} className={`mb-3 flex ${isMe ? "justify-end" : "justify-start"}`}>
                           <div
                             className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
-                              isMe
-                                ? "bg-blue-600 text-white rounded-br-sm"
-                                : "bg-slate-100 text-slate-800 rounded-bl-sm"
+                              isMe ? "bg-blue-600 text-white rounded-br-sm" : "bg-slate-100 text-slate-800 rounded-bl-sm"
                             }`}
                           >
                             <div className="text-[10px] opacity-80 mb-1">
                               {isMe ? t.you : t.client} • {formatDateTime(m.created_at)}
                             </div>
 
-                            {/* ✅ image */}
                             {m.media_type === "image" && signed ? (
                               <a href={signed} target="_blank" rel="noreferrer" className="block">
                                 <img
@@ -1050,10 +1124,8 @@ const WorkerMessagesPage: React.FC = () => {
                               </a>
                             ) : null}
 
-                            {/* ✅ texte */}
                             {m.message ? <div className="whitespace-pre-line">{m.message}</div> : null}
 
-                            {/* ✅ fallback si image en attente de signed url */}
                             {m.media_type === "image" && !signed ? (
                               <div className="flex items-center gap-2 text-xs opacity-80">
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -1081,7 +1153,6 @@ const WorkerMessagesPage: React.FC = () => {
               />
 
               <div className="mt-2 flex items-center justify-between gap-2">
-                {/* ✅ bouton caméra (web + mobile) */}
                 <Button
                   type="button"
                   variant="outline"
@@ -1237,9 +1308,7 @@ const WorkerMessagesPage: React.FC = () => {
                             <Star
                               key={i}
                               className={`w-4 h-4 ${
-                                i < (existingReview.rating || 0)
-                                  ? "text-orange-500 fill-orange-500"
-                                  : "text-slate-300"
+                                i < (existingReview.rating || 0) ? "text-orange-500 fill-orange-500" : "text-slate-300"
                               }`}
                             />
                           ))}
@@ -1289,9 +1358,7 @@ const WorkerMessagesPage: React.FC = () => {
                                   <div className="text-[11px] text-slate-400">
                                     {isClient ? t.client : t.you} • {formatDateTime(rep.created_at)}
                                   </div>
-                                  <div className="text-sm text-slate-700 whitespace-pre-line mt-1">
-                                    {rep.content || ""}
-                                  </div>
+                                  <div className="text-sm text-slate-700 whitespace-pre-line mt-1">{rep.content || ""}</div>
 
                                   <div className="mt-3 flex flex-wrap gap-2">
                                     <Button
