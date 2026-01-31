@@ -110,6 +110,9 @@ const WorkerDetail: React.FC = () => {
   const [photosLoading, setPhotosLoading] = useState(false);
   const [photosError, setPhotosError] = useState<string | null>(null);
 
+  // ✅ NOUVEAU: Galerie masquée par défaut
+  const [showRealizations, setShowRealizations] = useState(false);
+
   const tVotes = useMemo(() => {
     return {
       like: language === "fr" ? "J’aime" : "Like",
@@ -141,6 +144,22 @@ const WorkerDetail: React.FC = () => {
       report: language === "fr" ? "Signaler ce profil" : "Report this profile",
       loginToReport:
         language === "fr" ? "Se connecter pour signaler" : "Log in to report",
+    };
+  }, [language]);
+
+  const tGallery = useMemo(() => {
+    return {
+      title: language === "fr" ? "Galerie photos" : "Photo gallery",
+      subtitle:
+        language === "fr"
+          ? "Découvrez quelques réalisations de cet ouvrier."
+          : "Discover some works from this worker.",
+      open: language === "fr" ? "Mes réalisations" : "My work",
+      close: language === "fr" ? "Masquer" : "Hide",
+      empty:
+        language === "fr"
+          ? "Aucune réalisation publiée pour le moment."
+          : "No work published yet.",
     };
   }, [language]);
 
@@ -700,7 +719,7 @@ const WorkerDetail: React.FC = () => {
       }
 
       const payloadBase: any = {
-        client_id: user.id,          // ✅ CRITIQUE POUR RLS
+        client_id: user.id, // ✅ CRITIQUE POUR RLS
         worker_id: worker.id,
         rating: newRating,
         comment: newComment?.trim() ? newComment.trim() : null,
@@ -813,7 +832,9 @@ const WorkerDetail: React.FC = () => {
                     <h1 className="text-xl font-bold text-slate-900">
                       {fullName || (language === "fr" ? "Ouvrier" : "Worker")}
                     </h1>
-                    {worker.profession && <p className="text-sm text-slate-600">{worker.profession}</p>}
+                    {worker.profession && (
+                      <p className="text-sm text-slate-600">{worker.profession}</p>
+                    )}
                     {location && (
                       <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500">
                         <MapPin className="w-3 h-3" />
@@ -831,7 +852,9 @@ const WorkerDetail: React.FC = () => {
                         {averageRating > 0 ? averageRating.toFixed(1) : "—"}
                       </span>
                     </div>
-                    <div className="text-[11px] text-slate-500">{language === "fr" ? "avis" : "reviews"}</div>
+                    <div className="text-[11px] text-slate-500">
+                      {language === "fr" ? "avis" : "reviews"}
+                    </div>
                     <div className="text-[11px] text-slate-400">
                       {reviews.length}{" "}
                       {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
@@ -851,7 +874,9 @@ const WorkerDetail: React.FC = () => {
                         ? `${worker.hourly_rate.toLocaleString()} ${worker.currency || "GNF"}`
                         : "—"}
                     </div>
-                    <div className="text-[11px] text-slate-500">{language === "fr" ? "par heure" : "per hour"}</div>
+                    <div className="text-[11px] text-slate-500">
+                      {language === "fr" ? "par heure" : "per hour"}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -913,54 +938,71 @@ const WorkerDetail: React.FC = () => {
 
             {/* Galerie photos */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-1">
-                {language === "fr" ? "Galerie photos" : "Photo gallery"}
-              </h2>
-              <p className="text-xs text-slate-500 mb-2">
-                {language === "fr"
-                  ? "Découvrez quelques réalisations de cet ouvrier."
-                  : "Discover some works from this worker."}
-              </p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-slate-800 mb-1">{tGallery.title}</h2>
+                  <p className="text-xs text-slate-500">{tGallery.subtitle}</p>
+                </div>
+
+                <Button
+                  type="button"
+                  variant={showRealizations ? "outline" : "default"}
+                  size="sm"
+                  className={
+                    showRealizations
+                      ? "text-xs"
+                      : "text-xs bg-pro-blue hover:bg-blue-700"
+                  }
+                  onClick={() => setShowRealizations((v) => !v)}
+                >
+                  {showRealizations ? tGallery.close : tGallery.open}
+                </Button>
+              </div>
 
               {photosError && (
-                <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                <div className="mt-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
                   {photosError}
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {photosLoading && (
-                  <>
-                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
-                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
-                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
-                  </>
-                )}
+              {/* ✅ Les photos sont masquées tant que showRealizations=false */}
+              {showRealizations && (
+                <div className="mt-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {photosLoading && (
+                      <>
+                        <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                        <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                        <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
+                      </>
+                    )}
 
-                {!photosLoading && photos.length === 0 && (
-                  <>
-                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
-                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
-                    <div className="aspect-[4/3] rounded-lg bg-slate-100 border border-slate-200" />
-                  </>
-                )}
+                    {!photosLoading && photos.length === 0 && (
+                      <>
+                        <div className="sm:col-span-3 text-xs text-slate-500 border border-slate-100 bg-slate-50 rounded-lg px-3 py-2">
+                          {tGallery.empty}
+                        </div>
+                      </>
+                    )}
 
-                {!photosLoading &&
-                  photos.map((p) => (
-                    <div
-                      key={p.id}
-                      className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-100"
-                    >
-                      {p.public_url && (
-                        <img
-                          src={p.public_url}
-                          alt={p.title || ""}
-                          className="w-full h-full object-cover"
-                        />
-                      )}
-                    </div>
-                  ))}
-              </div>
+                    {!photosLoading &&
+                      photos.map((p) => (
+                        <div
+                          key={p.id}
+                          className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-100"
+                        >
+                          {p.public_url && (
+                            <img
+                              src={p.public_url}
+                              alt={p.title || ""}
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Avis clients */}
@@ -978,10 +1020,13 @@ const WorkerDetail: React.FC = () => {
               <div className="flex items-center gap-2 mb-3 text-sm">
                 <div className="inline-flex items-center gap-1 text-amber-500">
                   <Star className="w-4 h-4 fill-amber-400" />
-                  <span className="font-semibold">{averageRating > 0 ? averageRating.toFixed(1) : "—"}</span>
+                  <span className="font-semibold">
+                    {averageRating > 0 ? averageRating.toFixed(1) : "—"}
+                  </span>
                 </div>
                 <span className="text-xs text-slate-500">
-                  {reviews.length} {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
+                  {reviews.length}{" "}
+                  {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
                 </span>
               </div>
 
@@ -1007,14 +1052,19 @@ const WorkerDetail: React.FC = () => {
                 {!reviewsLoading &&
                   reviews.map((r) => {
                     const myVote = myVoteByReviewId[r.id] ?? null;
-                    const counts = countsByReviewId[r.id] ?? { like: 0, useful: 0, not_useful: 0 };
+                    const counts =
+                      countsByReviewId[r.id] ?? { like: 0, useful: 0, not_useful: 0 };
 
                     return (
                       <div key={r.id} className="border border-slate-100 rounded-lg px-3 py-2 text-xs">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold text-slate-800">{r.client_name || "Client"}</span>
+                          <span className="font-semibold text-slate-800">
+                            {r.client_name || "Client"}
+                          </span>
                           <span className="text-[11px] text-slate-400">
-                            {new Date(r.created_at).toLocaleDateString(language === "fr" ? "fr-FR" : "en-GB")}
+                            {new Date(r.created_at).toLocaleDateString(
+                              language === "fr" ? "fr-FR" : "en-GB"
+                            )}
                           </span>
                         </div>
 
@@ -1023,7 +1073,9 @@ const WorkerDetail: React.FC = () => {
                             <Star
                               key={i}
                               className={`w-3 h-3 ${
-                                (r.rating || 0) > i ? "text-amber-500 fill-amber-400" : "text-slate-200"
+                                (r.rating || 0) > i
+                                  ? "text-amber-500 fill-amber-400"
+                                  : "text-slate-200"
                               }`}
                             />
                           ))}
@@ -1231,7 +1283,9 @@ const WorkerDetail: React.FC = () => {
                     value={requestType}
                     onChange={(e) => setRequestType(e.target.value)}
                   >
-                    <option value="Demande de devis">{language === "fr" ? "Demande de devis" : "Quote request"}</option>
+                    <option value="Demande de devis">
+                      {language === "fr" ? "Demande de devis" : "Quote request"}
+                    </option>
                     <option value="Demande de rappel">
                       {language === "fr" ? "Demande de rappel" : "Call back request"}
                     </option>
@@ -1241,7 +1295,9 @@ const WorkerDetail: React.FC = () => {
 
                 <div>
                   <label className="text-xs text-slate-500 block mb-1">
-                    {language === "fr" ? "Budget approximatif (facultatif)" : "Approx. budget (optional)"}
+                    {language === "fr"
+                      ? "Budget approximatif (facultatif)"
+                      : "Approx. budget (optional)"}
                   </label>
                   <Input
                     type="number"
