@@ -93,9 +93,7 @@ const useAppQueryClient = () =>
             refetchOnReconnect: true,
             retry: 1,
           },
-          mutations: {
-            retry: 0,
-          },
+          mutations: { retry: 0 },
         },
       }),
     []
@@ -170,30 +168,17 @@ function AuthAuditLogger() {
       meta: any;
     }) => {
       try {
-        console.log("[AuthAuditLogger] Invoking log-login with payload:", payload);
-
         const { data, error } = await supabase.functions.invoke("log-login", {
           body: payload,
         });
 
         if (error) {
-          console.error("[AuthAuditLogger] log-login error:", {
-            message: error.message ?? String(error),
-            name: (error as any).name ?? "Unknown",
-            details: (error as any).details ?? null,
-            hint: (error as any).hint ?? null,
-            status: (error as any).status ?? null,
-            raw: error,
-          });
+          console.error("[AuthAuditLogger] log-login error:", error);
         } else {
           console.log("[AuthAuditLogger] log-login success:", data);
         }
       } catch (e: any) {
-        console.error("[AuthAuditLogger] log-login invoke exception:", {
-          message: e?.message ?? String(e),
-          name: e?.name ?? "Exception",
-          stack: e?.stack ?? null,
-        });
+        console.error("[AuthAuditLogger] log-login invoke exception:", e);
       }
     };
 
@@ -213,17 +198,9 @@ function AuthAuditLogger() {
       const email = session?.user?.email ?? null;
       const userId = session?.user?.id ?? null;
 
-      if (!session?.user) {
-        if (DEBUG) console.log("[AuthAuditLogger] skip - no user in session");
-        return;
-      }
+      if (!session?.user) return;
 
-      if (event === "refresh" && !shouldLogRefresh()) {
-        if (DEBUG) console.log("[AuthAuditLogger] skip refresh cooldown");
-        return;
-      }
-
-      if (DEBUG) console.log(`[AuthAuditLogger] logging ${event} for ${email}`);
+      if (event === "refresh" && !shouldLogRefresh()) return;
 
       return safeInvoke({
         event,
@@ -235,8 +212,6 @@ function AuthAuditLogger() {
     };
 
     const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
-      console.log("[AuthAuditLogger] auth event:", evt, "session:", !!session);
-
       if (evt === "SIGNED_IN") {
         log("login", session, "SIGNED_IN");
       } else if (evt === "SIGNED_OUT") {
@@ -248,9 +223,7 @@ function AuthAuditLogger() {
           meta: baseMeta(session?.user?.id ?? null, "SIGNED_OUT"),
         });
       } else if (evt === "INITIAL_SESSION") {
-        if (session?.user) {
-          log("refresh", session, "INITIAL_SESSION");
-        }
+        if (session?.user) log("refresh", session, "INITIAL_SESSION");
       }
     });
 
@@ -263,7 +236,7 @@ function AuthAuditLogger() {
 }
 
 /**
- * ✅ Badge debug global (optionnel)
+ * ✅ Badge debug global (DEV ONLY)
  */
 function UiDebugBadge() {
   const { isMobileUI, debug } = useUiModeCtx();
@@ -295,7 +268,9 @@ const AppRoutes = () => (
   <>
     <ScrollManager />
     <AuthAuditLogger />
-    <UiDebugBadge />
+
+    {/* ✅ Afficher le badge UNIQUEMENT en dev */}
+    {import.meta.env.DEV ? <UiDebugBadge /> : null}
 
     <Suspense fallback={<div className="p-6 text-gray-600">Chargement…</div>}>
       <Routes>
@@ -454,17 +429,14 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
 
   const DESKTOP_WIDTH = 1200;
 
-  // ✅ Activer le canvas desktop uniquement en native Capacitor
   const enableDesktopCanvas = Boolean(debug?.native) && isDesktopUI;
 
   useEffect(() => {
     const html = document.documentElement;
 
-    // Flags CSS
     html.setAttribute("data-ui-native", String(Boolean(debug?.native)));
     html.setAttribute("data-ui-desktop-canvas", String(enableDesktopCanvas));
 
-    // Variables CSS
     html.style.setProperty("--ui-desktop-width", `${DESKTOP_WIDTH}px`);
 
     const computeScale = () => {
@@ -495,10 +467,8 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
     };
   }, [debug?.native, enableDesktopCanvas]);
 
-  // ✅ Web: ne pas wrapper (sinon ça change le desktop)
   if (!enableDesktopCanvas) return <>{children}</>;
 
-  // ✅ Native: wrapper "canvas desktop"
   return (
     <div id="ui-desktop-viewport" data-ui-viewport="desktop">
       {children}
@@ -513,11 +483,9 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <LanguageProvider>
-          {/* ✅ UI mode global pour TOUTE l'app */}
           <UiModeProvider>
             <Toaster />
             <Sonner />
-
             <DesktopViewport>
               <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
                 <AppRoutes />
