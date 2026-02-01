@@ -44,6 +44,10 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* ✅ variables utilisées par le viewport desktop */
+    --ui-desktop-width: 1200px;
+    --ui-scale: 1;
   }
 
   .dark {
@@ -95,8 +99,6 @@
     box-sizing: border-box;
   }
 
-  /* ✅ IMPORTANT: on garde un layout stable, mais on ne “force” plus une logique mobile via CSS.
-     Le mode Desktop vs Mobile doit être piloté par ton hook global useUiMode(). */
   html {
     width: 100%;
     max-width: 100%;
@@ -121,8 +123,6 @@
     overflow-x: hidden;
   }
 
-  /* ✅ Root: on laisse la hauteur moderne, mais sans "hacks" qui peuvent perturber l'émulateur.
-     (Desktop forcé en app -> géré par useUiMode, pas par CSS) */
   #root {
     width: 100%;
     max-width: 100%;
@@ -131,7 +131,6 @@
     overflow-x: clip;
   }
 
-  /* ✅ Médias ne doivent jamais déborder */
   img,
   video,
   canvas,
@@ -141,7 +140,6 @@
     display: block;
   }
 
-  /* ✅ Tables / préformatés peuvent créer du débordement */
   table {
     width: 100%;
     max-width: 100%;
@@ -153,7 +151,6 @@
     overflow-x: auto;
   }
 
-  /* ✅ Form controls peuvent déborder en flex */
   input,
   select,
   textarea,
@@ -164,31 +161,49 @@
 
 /* ---------------------------
    ✅ MODE DESKTOP FORCÉ EN APP/ÉMULATEUR (CAPACITOR)
-   Le hook useUiMode() ajoute [data-ui-mode="desktop"] sur <html> ou <body>.
-   Ici on supprime la plupart des comportements "mobile-first" visibles (sticky CTA, etc.)
 ---------------------------- */
 
 html[data-ui-mode="desktop"] body,
 body[data-ui-mode="desktop"] {
-  /* Empêche certains navigateurs/webviews de grossir le texte comme sur mobile */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
-/* Optionnel: si ton UI mobile utilise des safe-area paddings, on neutralise en desktop forcé */
 html[data-ui-mode="desktop"] .safe-area-bottom,
 body[data-ui-mode="desktop"] .safe-area-bottom {
   padding-bottom: 0 !important;
 }
 
 /* ---------------------------
+   ✅ VRAI "VIEWPORT DESKTOP" DANS ÉMULATEUR
+   - rendu en 1200px
+   - scale pour rentrer dans l'écran
+   => active les breakpoints Tailwind (lg:, xl:)
+---------------------------- */
+
+html[data-ui-mode="desktop"] #ui-desktop-viewport {
+  width: var(--ui-desktop-width, 1200px);
+  max-width: none;
+
+  transform: scale(var(--ui-scale, 1));
+  transform-origin: top left;
+
+  /* garde le scroll vertical cohérent malgré le scale */
+  min-height: calc(100dvh / var(--ui-scale, 1));
+}
+
+html[data-ui-mode="desktop"],
+html[data-ui-mode="desktop"] body {
+  overflow-x: hidden;
+}
+
+/* ---------------------------
    ADMIN responsive hardening
 ---------------------------- */
 
-/* Scrollbar discrète pour nav horizontal */
 .admin-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.65) transparent; /* slate-400 */
+  scrollbar-color: rgba(148, 163, 184, 0.65) transparent;
 }
 .admin-scrollbar::-webkit-scrollbar {
   height: 8px;
@@ -201,12 +216,10 @@ body[data-ui-mode="desktop"] .safe-area-bottom {
   border-radius: 999px;
 }
 
-/* Protection anti-débordement uniquement dans l'admin */
 [data-admin] * {
   min-width: 0;
 }
 
-/* Empêche que le header admin crée du scroll horizontal */
 [data-admin] header,
 [data-admin] main {
   max-width: 100%;
