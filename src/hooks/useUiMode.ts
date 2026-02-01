@@ -30,9 +30,13 @@ export function useUiMode(options?: {
   forceDesktopInApp?: boolean;
   /** breakpoint desktop threshold */
   desktopMinWidth?: number;
+
+  /** width used for "desktop render" when forcing desktop on small screens */
+  desktopRenderWidth?: number; // 👈 NEW
 }) {
   const forceDesktopInApp = options?.forceDesktopInApp ?? true;
   const desktopMinWidth = options?.desktopMinWidth ?? 1024;
+  const desktopRenderWidth = options?.desktopRenderWidth ?? 1200; // 👈 NEW
 
   const [mode, setMode] = useState<UiMode>(() => {
     const native = (() => {
@@ -97,6 +101,23 @@ export function useUiMode(options?: {
 
   const isMobileUI = mode === "mobile";
   const isDesktopUI = mode === "desktop";
+
+  // ✅ NEW: expose desktop variables to CSS (html dataset + CSS vars)
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const html = document.documentElement;
+    html.setAttribute("data-ui-mode", mode);
+
+    const eff = getEffectiveCssWidth();
+
+    // scale only when in desktop mode AND screen is smaller than our render width
+    const scale =
+      mode === "desktop" ? Math.min(1, Math.max(0.35, eff / desktopRenderWidth)) : 1;
+
+    html.style.setProperty("--ui-desktop-width", `${desktopRenderWidth}px`);
+    html.style.setProperty("--ui-scale", String(scale));
+  }, [mode, desktopRenderWidth]);
 
   return useMemo(
     () => ({
