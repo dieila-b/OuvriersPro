@@ -1,5 +1,5 @@
 // src/pages/WorkerDetail.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import ReportAccountDialog from "@/components/ReportAccountDialog";
+import { Capacitor } from "@capacitor/core";
 import {
   Mail,
   Phone,
@@ -98,9 +99,7 @@ const WorkerDetail: React.FC = () => {
   const [submitReviewLoading, setSubmitReviewLoading] = useState(false);
 
   // Votes
-  const [myVoteByReviewId, setMyVoteByReviewId] = useState<Record<string, VoteType | null>>(
-    {}
-  );
+  const [myVoteByReviewId, setMyVoteByReviewId] = useState<Record<string, VoteType | null>>({});
   const [countsByReviewId, setCountsByReviewId] = useState<
     Record<string, { like: number; useful: number; not_useful: number }>
   >({});
@@ -114,8 +113,60 @@ const WorkerDetail: React.FC = () => {
   // Galerie masquée par défaut
   const [showRealizations, setShowRealizations] = useState(false);
 
-  // ✅ Modale contact (mobile + desktop)
+  // Modal/Sheet contact
   const [contactOpen, setContactOpen] = useState(false);
+
+  // ✅ IMPORTANT: on ne se base PAS uniquement sur Tailwind lg (car WebView peut “mentir”)
+  const [isMobileUI, setIsMobileUI] = useState<boolean>(() => {
+    // Dans l'app (Capacitor), on force l'UI mobile
+    try {
+      return Capacitor.isNativePlatform();
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    // Si on est dans l'app → mobile UI forcée
+    let native = false;
+    try {
+      native = Capacitor.isNativePlatform();
+    } catch {
+      native = false;
+    }
+    if (native) {
+      setIsMobileUI(true);
+      return;
+    }
+
+    // Sinon (web), on suit la largeur réelle
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const apply = () => setIsMobileUI(mq.matches);
+    apply();
+
+    // compat vieux webview
+    // eslint-disable-next-line deprecation/deprecation
+    if (mq.addEventListener) mq.addEventListener("change", apply);
+    // eslint-disable-next-line deprecation/deprecation
+    else mq.addListener(apply);
+
+    return () => {
+      // eslint-disable-next-line deprecation/deprecation
+      if (mq.removeEventListener) mq.removeEventListener("change", apply);
+      // eslint-disable-next-line deprecation/deprecation
+      else mq.removeListener(apply);
+    };
+  }, []);
+
+  // Option: empêcher le scroll du body quand la modale est ouverte
+  useEffect(() => {
+    if (!contactOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [contactOpen]);
 
   const tVotes = useMemo(() => {
     return {
@@ -138,14 +189,16 @@ const WorkerDetail: React.FC = () => {
           ? "Localisation approximative / zone d’intervention."
           : "Approximate location / service area.",
       open: language === "fr" ? "Ouvrir dans Google Maps" : "Open in Google Maps",
-      missing: language === "fr" ? "Localisation non renseignée." : "Location not provided.",
+      missing:
+        language === "fr" ? "Localisation non renseignée." : "Location not provided.",
     };
   }, [language]);
 
   const tReport = useMemo(() => {
     return {
       report: language === "fr" ? "Signaler ce profil" : "Report this profile",
-      loginToReport: language === "fr" ? "Se connecter pour signaler" : "Log in to report",
+      loginToReport:
+        language === "fr" ? "Se connecter pour signaler" : "Log in to report",
     };
   }, [language]);
 
@@ -173,34 +226,13 @@ const WorkerDetail: React.FC = () => {
         language === "fr"
           ? "Remplissez le formulaire ci-dessous pour être recontacté."
           : "Fill in the form below to be contacted back.",
+      close: language === "fr" ? "Fermer" : "Close",
       sentAutoClose:
         language === "fr"
           ? "Votre demande a été envoyée. Fermeture…"
           : "Request sent. Closing…",
     };
   }, [language]);
-
-  // ✅ lock scroll + ESC close (important webview)
-  useEffect(() => {
-    if (!contactOpen) return;
-
-    const prevOverflow = document.documentElement.style.overflow;
-    const prevBodyOverflow = document.body.style.overflow;
-
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
-
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setContactOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-
-    return () => {
-      document.documentElement.style.overflow = prevOverflow;
-      document.body.style.overflow = prevBodyOverflow;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [contactOpen]);
 
   // Auth user id
   useEffect(() => {
@@ -445,9 +477,7 @@ const WorkerDetail: React.FC = () => {
   const canReportWorker = Boolean(authUserId) && (!worker?.user_id || worker.user_id !== authUserId);
   const reportTargetId = (worker?.user_id ?? worker?.id) as string;
 
-  // -----------------------
   // Votes
-  // -----------------------
   const loadVotesAndCounts = async () => {
     const reviewIds = reviews.map((r) => r.id);
     if (reviewIds.length === 0) {
@@ -522,10 +552,7 @@ const WorkerDetail: React.FC = () => {
       setMyVoteByReviewId((prev) => ({ ...prev, [reviewId]: null }));
       setCountsByReviewId((prev) => {
         const base = prev[reviewId] ?? { like: 0, useful: 0, not_useful: 0 };
-        return {
-          ...prev,
-          [reviewId]: { ...base, [voteType]: Math.max(0, base[voteType] - 1) },
-        };
+        return { ...prev, [reviewId]: { ...base, [voteType]: Math.max(0, base[voteType] - 1) } };
       });
       return;
     }
@@ -551,9 +578,7 @@ const WorkerDetail: React.FC = () => {
     });
   };
 
-  // -----------------------
   // Contact submit
-  // -----------------------
   const resetContactForm = () => {
     setRequestType("Demande de devis");
     setApproxBudget("");
@@ -561,15 +586,15 @@ const WorkerDetail: React.FC = () => {
     setClientMessage("");
   };
 
-  const openContact = () => {
+  const openContact = useCallback(() => {
     setSubmitError(null);
     setSubmitSuccess(null);
     setContactOpen(true);
-  };
+  }, []);
 
-  const closeContact = () => {
+  const closeContact = useCallback(() => {
     setContactOpen(false);
-  };
+  }, []);
 
   const handleSubmitContact = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -611,9 +636,7 @@ const WorkerDetail: React.FC = () => {
       if (selectClientError && selectClientError.code !== "PGRST116") {
         console.error("select client error", selectClientError);
         throw new Error(
-          language === "fr"
-            ? "Impossible de récupérer votre profil client."
-            : "Unable to fetch your client profile."
+          language === "fr" ? "Impossible de récupérer votre profil client." : "Unable to fetch your client profile."
         );
       }
 
@@ -635,9 +658,7 @@ const WorkerDetail: React.FC = () => {
         if (insertClientError || !newClient) {
           console.error("insert client error", insertClientError);
           throw new Error(
-            language === "fr"
-              ? "Impossible de créer votre profil client."
-              : "Unable to create your client profile."
+            language === "fr" ? "Impossible de créer votre profil client." : "Unable to create your client profile."
           );
         }
 
@@ -645,11 +666,7 @@ const WorkerDetail: React.FC = () => {
       }
 
       if (!clientProfileId) {
-        throw new Error(
-          language === "fr"
-            ? "Profil client introuvable. Veuillez réessayer."
-            : "Client profile not found. Please try again."
-        );
+        throw new Error(language === "fr" ? "Profil client introuvable. Veuillez réessayer." : "Client profile not found.");
       }
 
       const detailedMessageLines: string[] = [];
@@ -677,16 +694,13 @@ const WorkerDetail: React.FC = () => {
       if (contactError) {
         console.error("insert contact error", contactError);
         throw new Error(
-          language === "fr"
-            ? "Une erreur est survenue lors de l'envoi de votre demande."
-            : "An error occurred while sending your request."
+          language === "fr" ? "Une erreur est survenue lors de l'envoi de votre demande." : "An error occurred while sending your request."
         );
       }
 
       setSubmitSuccess(language === "fr" ? "Votre demande a été envoyée." : "Your request was sent.");
       resetContactForm();
 
-      // ✅ auto-close
       setTimeout(() => {
         closeContact();
         setSubmitSuccess(null);
@@ -699,9 +713,7 @@ const WorkerDetail: React.FC = () => {
     }
   };
 
-  // -----------------------
-  // Review submit (inchangé)
-  // -----------------------
+  // Review submit
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!worker) return;
@@ -721,11 +733,7 @@ const WorkerDetail: React.FC = () => {
       const user = sessionData.session?.user ?? null;
 
       if (!user) {
-        throw new Error(
-          language === "fr"
-            ? "Veuillez vous connecter pour laisser un avis."
-            : "Please log in to leave a review."
-        );
+        throw new Error(language === "fr" ? "Veuillez vous connecter pour laisser un avis." : "Please log in to leave a review.");
       }
 
       const payloadBase: any = {
@@ -740,22 +748,12 @@ const WorkerDetail: React.FC = () => {
       let insertError: any = null;
       let inserted: any = null;
 
-      const attempt1 = await supabase
-        .from("op_ouvrier_reviews")
-        .insert(payloadWithStatus)
-        .select("id")
-        .maybeSingle();
-
+      const attempt1 = await supabase.from("op_ouvrier_reviews").insert(payloadWithStatus).select("id").maybeSingle();
       insertError = attempt1.error;
       inserted = attempt1.data;
 
       if (insertError && /column .*status/i.test(insertError.message || "")) {
-        const attempt2 = await supabase
-          .from("op_ouvrier_reviews")
-          .insert(payloadBase)
-          .select("id")
-          .maybeSingle();
-
+        const attempt2 = await supabase.from("op_ouvrier_reviews").insert(payloadBase).select("id").maybeSingle();
         insertError = attempt2.error;
         inserted = attempt2.data;
       }
@@ -766,7 +764,6 @@ const WorkerDetail: React.FC = () => {
       }
 
       await fetchReviews(worker.id);
-
       setNewRating(0);
       setNewComment("");
     } catch (err: any) {
@@ -810,22 +807,19 @@ const WorkerDetail: React.FC = () => {
           ← {language === "fr" ? "Retour" : "Back"}
         </button>
 
-        {/* ✅ Bouton sticky (mobile uniquement) */}
-        <div className="lg:hidden fixed left-0 right-0 bottom-0 z-40 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <div className="max-w-6xl mx-auto">
-            <Button
-              type="button"
-              className="w-full bg-pro-blue hover:bg-blue-700 shadow-lg"
-              onClick={openContact}
-            >
-              {tContact.cta}
-            </Button>
+        {/* ✅ CTA sticky (MOBILE UI uniquement) */}
+        {isMobileUI && (
+          <div className="fixed left-0 right-0 bottom-0 z-40 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="max-w-6xl mx-auto">
+              <Button type="button" className="w-full bg-pro-blue hover:bg-blue-700 shadow-lg" onClick={openContact}>
+                {tContact.cta}
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className="flex flex-col lg:flex-row gap-6 pb-20 lg:pb-0">
+        <div className={`flex flex-col lg:flex-row gap-6 ${isMobileUI ? "pb-20" : "pb-0"}`}>
           <div className="flex-1 space-y-4">
-            {/* Header worker */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -858,29 +852,22 @@ const WorkerDetail: React.FC = () => {
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                     <div className="inline-flex items-center gap-1 text-amber-500">
                       <Star className="w-4 h-4 fill-amber-400" />
-                      <span className="text-sm font-semibold">
-                        {averageRating > 0 ? averageRating.toFixed(1) : "—"}
-                      </span>
+                      <span className="text-sm font-semibold">{averageRating > 0 ? averageRating.toFixed(1) : "—"}</span>
                     </div>
                     <div className="text-[11px] text-slate-500">{language === "fr" ? "avis" : "reviews"}</div>
                     <div className="text-[11px] text-slate-400">
-                      {reviews.length}{" "}
-                      {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
+                      {reviews.length} {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
                     </div>
                   </div>
 
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                     <div className="text-sm font-semibold text-slate-900">0</div>
-                    <div className="text-[11px] text-slate-500">
-                      {language === "fr" ? "ans d'expérience" : "years experience"}
-                    </div>
+                    <div className="text-[11px] text-slate-500">{language === "fr" ? "ans d'expérience" : "years experience"}</div>
                   </div>
 
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                     <div className="text-sm font-semibold text-slate-900">
-                      {worker.hourly_rate != null
-                        ? `${worker.hourly_rate.toLocaleString()} ${worker.currency || "GNF"}`
-                        : "—"}
+                      {worker.hourly_rate != null ? `${worker.hourly_rate.toLocaleString()} ${worker.currency || "GNF"}` : "—"}
                     </div>
                     <div className="text-[11px] text-slate-500">{language === "fr" ? "par heure" : "per hour"}</div>
                   </div>
@@ -931,14 +918,9 @@ const WorkerDetail: React.FC = () => {
 
             {/* À propos */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-2">
-                {language === "fr" ? "À propos" : "About"}
-              </h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-2">{language === "fr" ? "À propos" : "About"}</h2>
               <p className="text-sm text-slate-700 whitespace-pre-line">
-                {worker.description ||
-                  (language === "fr"
-                    ? "Aucune description fournie pour le moment."
-                    : "No description provided yet.")}
+                {worker.description || (language === "fr" ? "Aucune description fournie pour le moment." : "No description provided yet.")}
               </p>
             </div>
 
@@ -986,17 +968,8 @@ const WorkerDetail: React.FC = () => {
 
                     {!photosLoading &&
                       photos.map((p) => (
-                        <div
-                          key={p.id}
-                          className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-100"
-                        >
-                          {p.public_url && (
-                            <img
-                              src={p.public_url}
-                              alt={p.title || ""}
-                              className="w-full h-full object-cover"
-                            />
-                          )}
+                        <div key={p.id} className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
+                          {p.public_url && <img src={p.public_url} alt={p.title || ""} className="w-full h-full object-cover" />}
                         </div>
                       ))}
                   </div>
@@ -1006,9 +979,7 @@ const WorkerDetail: React.FC = () => {
 
             {/* Avis clients */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-1">
-                {language === "fr" ? "Avis clients" : "Customer reviews"}
-              </h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-1">{language === "fr" ? "Avis clients" : "Customer reviews"}</h2>
 
               {reviewsError && (
                 <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
@@ -1019,13 +990,10 @@ const WorkerDetail: React.FC = () => {
               <div className="flex items-center gap-2 mb-3 text-sm">
                 <div className="inline-flex items-center gap-1 text-amber-500">
                   <Star className="w-4 h-4 fill-amber-400" />
-                  <span className="font-semibold">
-                    {averageRating > 0 ? averageRating.toFixed(1) : "—"}
-                  </span>
+                  <span className="font-semibold">{averageRating > 0 ? averageRating.toFixed(1) : "—"}</span>
                 </div>
                 <span className="text-xs text-slate-500">
-                  {reviews.length}{" "}
-                  {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
+                  {reviews.length} {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
                 </span>
               </div>
 
@@ -1037,15 +1005,11 @@ const WorkerDetail: React.FC = () => {
 
               <div className="space-y-3 mb-4">
                 {reviewsLoading && (
-                  <div className="text-xs text-slate-500">
-                    {language === "fr" ? "Chargement des avis..." : "Loading reviews..."}
-                  </div>
+                  <div className="text-xs text-slate-500">{language === "fr" ? "Chargement des avis..." : "Loading reviews..."}</div>
                 )}
 
                 {!reviewsLoading && reviews.length === 0 && (
-                  <div className="text-xs text-slate-500">
-                    {language === "fr" ? "Aucun avis pour le moment." : "No review yet."}
-                  </div>
+                  <div className="text-xs text-slate-500">{language === "fr" ? "Aucun avis pour le moment." : "No review yet."}</div>
                 )}
 
                 {!reviewsLoading &&
@@ -1066,9 +1030,7 @@ const WorkerDetail: React.FC = () => {
                           {Array.from({ length: 5 }).map((_, i) => (
                             <Star
                               key={i}
-                              className={`w-3 h-3 ${
-                                (r.rating || 0) > i ? "text-amber-500 fill-amber-400" : "text-slate-200"
-                              }`}
+                              className={`w-3 h-3 ${(r.rating || 0) > i ? "text-amber-500 fill-amber-400" : "text-slate-200"}`}
                             />
                           ))}
                         </div>
@@ -1121,17 +1083,8 @@ const WorkerDetail: React.FC = () => {
 
                 <div className="flex items-center gap-1 mb-2">
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setNewRating(i + 1)}
-                      className="focus:outline-none"
-                    >
-                      <Star
-                        className={`w-4 h-4 ${
-                          newRating > i ? "text-amber-500 fill-amber-400" : "text-slate-200"
-                        }`}
-                      />
+                    <button key={i} type="button" onClick={() => setNewRating(i + 1)} className="focus:outline-none">
+                      <Star className={`w-4 h-4 ${newRating > i ? "text-amber-500 fill-amber-400" : "text-slate-200"}`} />
                     </button>
                   ))}
                 </div>
@@ -1144,12 +1097,7 @@ const WorkerDetail: React.FC = () => {
                   onChange={(e) => setNewComment(e.target.value)}
                 />
 
-                <Button
-                  type="submit"
-                  size="sm"
-                  className="bg-pro-blue hover:bg-blue-700"
-                  disabled={submitReviewLoading || newRating === 0}
-                >
+                <Button type="submit" size="sm" className="bg-pro-blue hover:bg-blue-700" disabled={submitReviewLoading || newRating === 0}>
                   {submitReviewLoading
                     ? language === "fr"
                       ? "Envoi de l’avis..."
@@ -1165,9 +1113,7 @@ const WorkerDetail: React.FC = () => {
           {/* Colonne droite */}
           <div className="w-full lg:w-[360px] space-y-4">
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-800 mb-3">
-                {language === "fr" ? "Coordonnées directes" : "Direct contact"}
-              </h2>
+              <h2 className="text-sm font-semibold text-slate-800 mb-3">{language === "fr" ? "Coordonnées directes" : "Direct contact"}</h2>
 
               <div className="mb-3">
                 {canReportWorker ? (
@@ -1183,11 +1129,7 @@ const WorkerDetail: React.FC = () => {
                     variant="outline"
                     className="w-full justify-start"
                     onClick={() => navigate("/login")}
-                    title={
-                      language === "fr"
-                        ? "Connectez-vous pour signaler ce profil"
-                        : "Log in to report this profile"
-                    }
+                    title={language === "fr" ? "Connectez-vous pour signaler ce profil" : "Log in to report this profile"}
                   >
                     <AlertTriangle className="w-4 h-4 mr-2" />
                     {tReport.loginToReport}
@@ -1222,13 +1164,9 @@ const WorkerDetail: React.FC = () => {
                 )}
               </div>
 
-              {/* ✅ CTA desktop : ouvre la même modale */}
+              {/* CTA → ouvre la fenêtre contact (sheet mobile / modal desktop) */}
               <div className="mt-3">
-                <Button
-                  type="button"
-                  className="w-full bg-pro-blue hover:bg-blue-700"
-                  onClick={openContact}
-                >
+                <Button type="button" className="w-full bg-pro-blue hover:bg-blue-700" onClick={openContact}>
                   {tContact.cta}
                 </Button>
               </div>
@@ -1236,15 +1174,19 @@ const WorkerDetail: React.FC = () => {
           </div>
         </div>
 
-        {/* ✅ MODALE CONTACT : mobile + desktop */}
+        {/* ✅ CONTACT WINDOW : Sheet (mobile UI) OR Dialog (desktop UI) */}
         {contactOpen && (
           <div className="fixed inset-0 z-50">
             <div className="absolute inset-0 bg-black/40" onClick={closeContact} />
 
-            <div className="absolute left-0 right-0 bottom-0 lg:inset-0 lg:flex lg:items-center lg:justify-center">
+            <div className={isMobileUI ? "absolute inset-x-0 bottom-0" : "absolute inset-0 flex items-center justify-center p-4"}>
               <div
-                className="bg-white rounded-t-2xl lg:rounded-2xl border border-slate-200 shadow-xl w-full lg:w-[560px] max-h-[85vh] overflow-auto"
-                onClick={(e) => e.stopPropagation()}
+                className={[
+                  "bg-white border border-slate-200 shadow-xl overflow-auto",
+                  isMobileUI ? "rounded-t-2xl w-full max-h-[85vh]" : "rounded-2xl w-full max-w-[560px] max-h-[85vh]",
+                ].join(" ")}
+                role="dialog"
+                aria-modal="true"
               >
                 <div className="p-4 border-b border-slate-100 flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -1256,7 +1198,7 @@ const WorkerDetail: React.FC = () => {
                   </Button>
                 </div>
 
-                <div className="p-4">
+                <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
                   {submitError && (
                     <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
                       {submitError}
@@ -1271,30 +1213,22 @@ const WorkerDetail: React.FC = () => {
 
                   <form onSubmit={handleSubmitContact} className="space-y-3 text-sm">
                     <div>
-                      <label className="text-xs text-slate-500 block mb-1">
-                        {language === "fr" ? "Votre nom" : "Your name"}
-                      </label>
+                      <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Votre nom" : "Your name"}</label>
                       <Input value={clientName} onChange={(e) => setClientName(e.target.value)} required />
                     </div>
 
                     <div>
-                      <label className="text-xs text-slate-500 block mb-1">
-                        {language === "fr" ? "Votre téléphone" : "Your phone"}
-                      </label>
+                      <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Votre téléphone" : "Your phone"}</label>
                       <Input value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} required />
                     </div>
 
                     <div>
-                      <label className="text-xs text-slate-500 block mb-1">
-                        {language === "fr" ? "Votre email (facultatif)" : "Your email (optional)"}
-                      </label>
+                      <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Votre email (facultatif)" : "Your email (optional)"}</label>
                       <Input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} />
                     </div>
 
                     <div>
-                      <label className="text-xs text-slate-500 block mb-1">
-                        {language === "fr" ? "Type de demande" : "Request type"}
-                      </label>
+                      <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Type de demande" : "Request type"}</label>
                       <select
                         className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-pro-blue"
                         value={requestType}
@@ -1307,28 +1241,17 @@ const WorkerDetail: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="text-xs text-slate-500 block mb-1">
-                        {language === "fr" ? "Budget approximatif (facultatif)" : "Approx. budget (optional)"}
-                      </label>
-                      <Input
-                        type="number"
-                        value={approxBudget}
-                        onChange={(e) => setApproxBudget(e.target.value)}
-                        placeholder="5000000"
-                      />
+                      <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Budget approximatif (facultatif)" : "Approx. budget (optional)"}</label>
+                      <Input type="number" value={approxBudget} onChange={(e) => setApproxBudget(e.target.value)} placeholder="5000000" />
                     </div>
 
                     <div>
-                      <label className="text-xs text-slate-500 block mb-1">
-                        {language === "fr" ? "Date souhaitée (facultatif)" : "Desired date (optional)"}
-                      </label>
+                      <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Date souhaitée (facultatif)" : "Desired date (optional)"}</label>
                       <Input type="date" value={desiredDate} onChange={(e) => setDesiredDate(e.target.value)} />
                     </div>
 
                     <div>
-                      <label className="text-xs text-slate-500 block mb-1">
-                        {language === "fr" ? "Votre message" : "Your message"}
-                      </label>
+                      <label className="text-xs text-slate-500 block mb-1">{language === "fr" ? "Votre message" : "Your message"}</label>
                       <Textarea
                         rows={4}
                         value={clientMessage}
@@ -1369,9 +1292,7 @@ const WorkerDetail: React.FC = () => {
                   </form>
 
                   <p className="mt-3 text-[11px] text-slate-400">
-                    {language === "fr"
-                      ? "Vos données sont uniquement transmises à ce professionnel."
-                      : "Your data is only shared with this professional."}
+                    {language === "fr" ? "Vos données sont uniquement transmises à ce professionnel." : "Your data is only shared with this professional."}
                   </p>
                 </div>
               </div>
