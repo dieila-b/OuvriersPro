@@ -60,7 +60,9 @@ const AdminAds = lazy(() => import("./pages/AdminAds"));
 const AdminLoginJournalPage = lazy(() => import("./pages/admin/AdminLoginJournalPage"));
 
 // ✅ Admin Modération avis
-const AdminReviewsModerationPage = lazy(() => import("./pages/admin/AdminReviewsModerationPage"));
+const AdminReviewsModerationPage = lazy(
+  () => import("./pages/admin/AdminReviewsModerationPage")
+);
 
 // Espace ouvrier connecté
 const WorkerDashboard = lazy(() => import("./pages/WorkerDashboard"));
@@ -152,7 +154,10 @@ function AuthAuditLogger() {
       user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
       lang: typeof navigator !== "undefined" ? navigator.language : null,
       tz: getTimeZone(),
-      screen: typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
+      screen:
+        typeof window !== "undefined"
+          ? { w: window.innerWidth, h: window.innerHeight }
+          : null,
       referrer: typeof document !== "undefined" ? document.referrer || null : null,
       href: typeof window !== "undefined" ? window.location.href : null,
     });
@@ -167,7 +172,9 @@ function AuthAuditLogger() {
       try {
         console.log("[AuthAuditLogger] Invoking log-login with payload:", payload);
 
-        const { data, error } = await supabase.functions.invoke("log-login", { body: payload });
+        const { data, error } = await supabase.functions.invoke("log-login", {
+          body: payload,
+        });
 
         if (error) {
           console.error("[AuthAuditLogger] log-login error:", {
@@ -438,22 +445,34 @@ const AppRoutes = () => (
 );
 
 /**
- * ✅ Wrapper global qui "fabrique" un vrai viewport desktop quand on force DESKTOP
- * Pour activer les breakpoints Tailwind (lg: etc.) dans l'émulateur.
+ * ✅ Wrapper global qui "fabrique" un vrai viewport desktop UNIQUEMENT en app native (Capacitor)
+ * - Web desktop: NE CHANGE RIEN (sinon ça casse ton layout desktop)
+ * - App/émulateur: rend un canvas desktop + scale
  */
 function DesktopViewport({ children }: { children: React.ReactNode }) {
-  const { isDesktopUI } = useUiModeCtx();
+  const { isDesktopUI, debug } = useUiModeCtx();
 
-  // Tu peux changer la valeur si tu veux: 1200 / 1280
   const DESKTOP_WIDTH = 1200;
+
+  // ✅ Activer le canvas desktop uniquement en native Capacitor
+  const enableDesktopCanvas = Boolean(debug?.native) && isDesktopUI;
 
   useEffect(() => {
     const html = document.documentElement;
 
-    // On garde les variables aussi côté CSS, utile même si ton context les met déjà.
+    // Flags CSS
+    html.setAttribute("data-ui-native", String(Boolean(debug?.native)));
+    html.setAttribute("data-ui-desktop-canvas", String(enableDesktopCanvas));
+
+    // Variables CSS
     html.style.setProperty("--ui-desktop-width", `${DESKTOP_WIDTH}px`);
 
     const computeScale = () => {
+      if (!enableDesktopCanvas) {
+        html.style.setProperty("--ui-scale", "1");
+        return;
+      }
+
       const eff =
         Math.min(
           window.innerWidth || Infinity,
@@ -462,7 +481,7 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
           window.screen?.width || Infinity
         ) || 9999;
 
-      const scale = isDesktopUI ? Math.min(1, Math.max(0.35, eff / DESKTOP_WIDTH)) : 1;
+      const scale = Math.min(1, Math.max(0.35, eff / DESKTOP_WIDTH));
       html.style.setProperty("--ui-scale", String(scale));
     };
 
@@ -474,10 +493,14 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
       window.removeEventListener("resize", computeScale);
       window.visualViewport?.removeEventListener("resize", computeScale);
     };
-  }, [isDesktopUI]);
+  }, [debug?.native, enableDesktopCanvas]);
 
+  // ✅ Web: ne pas wrapper (sinon ça change le desktop)
+  if (!enableDesktopCanvas) return <>{children}</>;
+
+  // ✅ Native: wrapper "canvas desktop"
   return (
-    <div id="ui-desktop-viewport" data-ui-viewport={isDesktopUI ? "desktop" : "mobile"}>
+    <div id="ui-desktop-viewport" data-ui-viewport="desktop">
       {children}
     </div>
   );
@@ -495,7 +518,6 @@ const App = () => {
             <Toaster />
             <Sonner />
 
-            {/* ✅ IMPORTANT: met tout le rendu sous ce viewport */}
             <DesktopViewport>
               <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
                 <AppRoutes />
