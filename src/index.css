@@ -161,6 +161,7 @@
 
 /* ---------------------------
    ✅ MODE DESKTOP FORCÉ EN APP/ÉMULATEUR (CAPACITOR)
+   (Conserve tes réglages, mais surtout ne touche pas au web desktop)
 ---------------------------- */
 
 html[data-ui-mode="desktop"] body,
@@ -175,25 +176,27 @@ body[data-ui-mode="desktop"] .safe-area-bottom {
 }
 
 /* ---------------------------
-   ✅ VRAI "VIEWPORT DESKTOP" DANS ÉMULATEUR
-   - rendu en 1200px
-   - scale pour rentrer dans l'écran
-   => active les breakpoints Tailwind (lg:, xl:)
+   ✅ VRAI "VIEWPORT DESKTOP" UNIQUEMENT EN NATIVE (CAPACITOR)
+   - évite de casser le rendu desktop web
 ---------------------------- */
 
-html[data-ui-mode="desktop"] #ui-desktop-viewport {
+html[data-ui-native="true"][data-ui-desktop-canvas="true"] #ui-desktop-viewport {
   width: var(--ui-desktop-width, 1200px);
   max-width: none;
 
-  transform: scale(var(--ui-scale, 1));
-  transform-origin: top left;
+  /* ✅ centré */
+  margin: 0 auto;
 
-  /* garde le scroll vertical cohérent malgré le scale */
+  /* ✅ scale pour rentrer dans l'écran */
+  transform: scale(var(--ui-scale, 1));
+  transform-origin: top center;
+
+  /* ✅ garde le scroll vertical cohérent malgré le scale */
   min-height: calc(100dvh / var(--ui-scale, 1));
 }
 
-html[data-ui-mode="desktop"],
-html[data-ui-mode="desktop"] body {
+html[data-ui-native="true"][data-ui-desktop-canvas="true"],
+html[data-ui-native="true"][data-ui-desktop-canvas="true"] body {
   overflow-x: hidden;
 }
 
