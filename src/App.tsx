@@ -257,8 +257,6 @@ function AuthAuditLogger() {
 
 /**
  * ✅ Badge debug global (optionnel)
- * Affiche: UI mode + native + widths
- * (Tu peux supprimer ce composant plus tard)
  */
 function UiDebugBadge() {
   const { isMobileUI, debug } = useUiModeCtx();
@@ -429,8 +427,6 @@ const AppRoutes = () => (
           <Route path="contenu" element={<AdminContent />} />
           <Route path="faq-questions" element={<AdminFaqQuestions />} />
           <Route path="journal-connexions" element={<AdminLoginJournalPage />} />
-
-          {/* ✅ Modération avis */}
           <Route path="moderation-avis" element={<AdminReviewsModerationPage />} />
         </Route>
 
@@ -440,6 +436,52 @@ const AppRoutes = () => (
     </Suspense>
   </>
 );
+
+/**
+ * ✅ Wrapper global qui "fabrique" un vrai viewport desktop quand on force DESKTOP
+ * Pour activer les breakpoints Tailwind (lg: etc.) dans l'émulateur.
+ */
+function DesktopViewport({ children }: { children: React.ReactNode }) {
+  const { isDesktopUI } = useUiModeCtx();
+
+  // Tu peux changer la valeur si tu veux: 1200 / 1280
+  const DESKTOP_WIDTH = 1200;
+
+  useEffect(() => {
+    const html = document.documentElement;
+
+    // On garde les variables aussi côté CSS, utile même si ton context les met déjà.
+    html.style.setProperty("--ui-desktop-width", `${DESKTOP_WIDTH}px`);
+
+    const computeScale = () => {
+      const eff =
+        Math.min(
+          window.innerWidth || Infinity,
+          document.documentElement?.clientWidth || Infinity,
+          window.visualViewport?.width || Infinity,
+          window.screen?.width || Infinity
+        ) || 9999;
+
+      const scale = isDesktopUI ? Math.min(1, Math.max(0.35, eff / DESKTOP_WIDTH)) : 1;
+      html.style.setProperty("--ui-scale", String(scale));
+    };
+
+    computeScale();
+    window.addEventListener("resize", computeScale);
+    window.visualViewport?.addEventListener("resize", computeScale);
+
+    return () => {
+      window.removeEventListener("resize", computeScale);
+      window.visualViewport?.removeEventListener("resize", computeScale);
+    };
+  }, [isDesktopUI]);
+
+  return (
+    <div id="ui-desktop-viewport" data-ui-viewport={isDesktopUI ? "desktop" : "mobile"}>
+      {children}
+    </div>
+  );
+}
 
 const App = () => {
   const queryClient = useAppQueryClient();
@@ -452,9 +494,13 @@ const App = () => {
           <UiModeProvider>
             <Toaster />
             <Sonner />
-            <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
-              <AppRoutes />
-            </div>
+
+            {/* ✅ IMPORTANT: met tout le rendu sous ce viewport */}
+            <DesktopViewport>
+              <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
+                <AppRoutes />
+              </div>
+            </DesktopViewport>
           </UiModeProvider>
         </LanguageProvider>
       </TooltipProvider>
