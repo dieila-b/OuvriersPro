@@ -95,7 +95,8 @@
     box-sizing: border-box;
   }
 
-  /* ✅ IMPORTANT: évite que le navigateur “simule” une largeur desktop sur mobile */
+  /* ✅ IMPORTANT: on garde un layout stable, mais on ne “force” plus une logique mobile via CSS.
+     Le mode Desktop vs Mobile doit être piloté par ton hook global useUiMode(). */
   html {
     width: 100%;
     max-width: 100%;
@@ -103,8 +104,6 @@
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
     scroll-behavior: smooth;
-
-    /* ✅ évite les sauts de layout à cause de la scrollbar */
     scrollbar-gutter: stable both-edges;
   }
 
@@ -122,13 +121,14 @@
     overflow-x: hidden;
   }
 
-  /* ✅ Support mobile moderne: la vraie hauteur d’écran */
+  /* ✅ Root: on laisse la hauteur moderne, mais sans "hacks" qui peuvent perturber l'émulateur.
+     (Desktop forcé en app -> géré par useUiMode, pas par CSS) */
   #root {
     width: 100%;
     max-width: 100%;
     min-height: 100%;
     min-height: 100dvh;
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   /* ✅ Médias ne doivent jamais déborder */
@@ -160,6 +160,25 @@
   button {
     min-width: 0;
   }
+}
+
+/* ---------------------------
+   ✅ MODE DESKTOP FORCÉ EN APP/ÉMULATEUR (CAPACITOR)
+   Le hook useUiMode() ajoute [data-ui-mode="desktop"] sur <html> ou <body>.
+   Ici on supprime la plupart des comportements "mobile-first" visibles (sticky CTA, etc.)
+---------------------------- */
+
+html[data-ui-mode="desktop"] body,
+body[data-ui-mode="desktop"] {
+  /* Empêche certains navigateurs/webviews de grossir le texte comme sur mobile */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Optionnel: si ton UI mobile utilise des safe-area paddings, on neutralise en desktop forcé */
+html[data-ui-mode="desktop"] .safe-area-bottom,
+body[data-ui-mode="desktop"] .safe-area-bottom {
+  padding-bottom: 0 !important;
 }
 
 /* ---------------------------
