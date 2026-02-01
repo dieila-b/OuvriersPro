@@ -8,6 +8,9 @@ import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 
+// ✅ UI Mode global (desktop forcé dans Capacitor / émulateur)
+import { UiModeProvider, useUiModeCtx } from "@/contexts/UiModeContext";
+
 // Protection routes
 import PrivateRoute from "./components/PrivateRoute";
 
@@ -16,8 +19,6 @@ import AdminLayout from "@/components/layout/AdminLayout";
 
 /**
  * ✅ Lazy pages (gros gain perf sur mobile)
- * Astuce: on garde NotFound/Index en lazy aussi (ok),
- * mais tu peux les passer en import direct si tu préfères.
  */
 const Index = lazy(() => import("./pages/Index"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -76,10 +77,7 @@ const ClientReviews = lazy(() => import("./pages/ClientReviews"));
 const ClientContactForm = lazy(() => import("./pages/ClientContactForm"));
 
 /**
- * ✅ QueryClient optimisé (moins de refetch inutiles, meilleur UX mobile)
- * - staleTime: évite de recharger en boucle
- * - refetchOnWindowFocus: false (en mobile, ça refetch trop)
- * - retry: réduit la sensation de "freeze" si réseau instable
+ * ✅ QueryClient optimisé
  */
 const useAppQueryClient = () =>
   useMemo(
@@ -87,8 +85,8 @@ const useAppQueryClient = () =>
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 60_000, // 1 min
-            gcTime: 10 * 60_000, // 10 min
+            staleTime: 60_000,
+            gcTime: 10 * 60_000,
             refetchOnWindowFocus: false,
             refetchOnReconnect: true,
             retry: 1,
@@ -257,12 +255,43 @@ function AuthAuditLogger() {
   return null;
 }
 
+/**
+ * ✅ Badge debug global (optionnel)
+ * Affiche: UI mode + native + widths
+ * (Tu peux supprimer ce composant plus tard)
+ */
+function UiDebugBadge() {
+  const { isMobileUI, debug } = useUiModeCtx();
+  if (!debug) return null;
+
+  return (
+    <div className="fixed top-2 left-2 z-[9999]">
+      <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600 shadow-sm">
+        <span className="font-semibold">UI:</span>
+        <span className={isMobileUI ? "text-emerald-700" : "text-indigo-700"}>
+          {isMobileUI ? "MOBILE" : "DESKTOP"}
+        </span>
+        <span className="text-slate-400">|</span>
+        <span>native={String(debug.native)}</span>
+        <span className="text-slate-400">|</span>
+        <span>forcedDesktopInApp={String(debug.forcedDesktopInApp)}</span>
+        <span className="text-slate-400">|</span>
+        <span>eff={debug.effWidth}px</span>
+        <span>inner={debug.innerWidth}px</span>
+        <span>doc={debug.docWidth}px</span>
+        <span>vv={debug.vvWidth ?? "—"}px</span>
+        <span>dpr={debug.dpr}</span>
+      </div>
+    </div>
+  );
+}
+
 const AppRoutes = () => (
   <>
     <ScrollManager />
     <AuthAuditLogger />
+    <UiDebugBadge />
 
-    {/* ✅ fallback simple (rapide et safe) */}
     <Suspense fallback={<div className="p-6 text-gray-600">Chargement…</div>}>
       <Routes>
         {/* Public */}
@@ -419,11 +448,14 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <LanguageProvider>
-          <Toaster />
-          <Sonner />
-          <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
-            <AppRoutes />
-          </div>
+          {/* ✅ UI mode global pour TOUTE l'app */}
+          <UiModeProvider>
+            <Toaster />
+            <Sonner />
+            <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
+              <AppRoutes />
+            </div>
+          </UiModeProvider>
         </LanguageProvider>
       </TooltipProvider>
     </QueryClientProvider>
