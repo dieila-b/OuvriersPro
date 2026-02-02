@@ -7,8 +7,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
+import { Capacitor } from "@capacitor/core";
 
-// ✅ UI Mode global (desktop forcé dans Capacitor / émulateur)
+// ✅ UI Mode global
 import { UiModeProvider, useUiModeCtx } from "@/contexts/UiModeContext";
 
 // Protection routes
@@ -18,7 +19,7 @@ import PrivateRoute from "./components/PrivateRoute";
 import AdminLayout from "@/components/layout/AdminLayout";
 
 /**
- * ✅ Lazy pages (gros gain perf sur mobile)
+ * ✅ Lazy pages
  */
 const Index = lazy(() => import("./pages/Index"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -28,48 +29,31 @@ const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const MonCompte = lazy(() => import("./pages/MonCompte"));
 
-// ✅ Forfaits
 const Forfaits = lazy(() => import("./pages/Forfaits"));
-
-// ✅ FAQ + pages publiques
 const Faq = lazy(() => import("./pages/Faq"));
 const About = lazy(() => import("./pages/About"));
 const Partners = lazy(() => import("./pages/Partners"));
 
-// ✅ Pages légales
 const Terms = lazy(() => import("./pages/Terms"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const CookiesPolicy = lazy(() => import("./pages/Cookies"));
 
-// ✅ Admin FAQ Questions
 const AdminFaqQuestions = lazy(() => import("./pages/AdminFaqQuestions"));
-
-// ✅ Admin: CMS Contenu du site
 const AdminContent = lazy(() => import("./pages/AdminContent"));
-
-// ✅ Admin: Signalements
 const AdminReports = lazy(() => import("./pages/AdminReports"));
 
-// Back-office Admin
 const AdminOuvrierContacts = lazy(() => import("./pages/AdminOuvrierContacts"));
 const AdminOuvrierInscriptions = lazy(() => import("./pages/AdminOuvrierInscriptions"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminAds = lazy(() => import("./pages/AdminAds"));
 
-// ✅ Admin Journal de connexions
 const AdminLoginJournalPage = lazy(() => import("./pages/admin/AdminLoginJournalPage"));
+const AdminReviewsModerationPage = lazy(() => import("./pages/admin/AdminReviewsModerationPage"));
 
-// ✅ Admin Modération avis
-const AdminReviewsModerationPage = lazy(
-  () => import("./pages/admin/AdminReviewsModerationPage")
-);
-
-// Espace ouvrier connecté
 const WorkerDashboard = lazy(() => import("./pages/WorkerDashboard"));
 const WorkerMessagesPage = lazy(() => import("./pages/WorkerMessagesPage"));
 const WorkerReviewsPage = lazy(() => import("./pages/WorkerReviews"));
 
-// Espace Client / Particulier
 const ClientDashboard = lazy(() => import("./pages/ClientDashboard"));
 const ClientProfile = lazy(() => import("./pages/ClientProfile"));
 const ClientRequestsList = lazy(() => import("./pages/ClientRequestsList"));
@@ -124,7 +108,7 @@ function ScrollManager() {
 }
 
 /**
- * ✅ Journal de connexion (Supabase Edge Function) — non bloquant
+ * ✅ Journal de connexion — non bloquant
  */
 function AuthAuditLogger() {
   const didInitRef = useRef(false);
@@ -133,8 +117,8 @@ function AuthAuditLogger() {
     if (didInitRef.current) return;
     didInitRef.current = true;
 
-    const DEBUG = true; // garde tel quel
-    const COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+    const DEBUG = true;
+    const COOLDOWN_MS = 10 * 60 * 1000;
     const LS_KEY = "op_login_journal:last_refresh";
 
     const getTimeZone = () => {
@@ -152,10 +136,7 @@ function AuthAuditLogger() {
       user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
       lang: typeof navigator !== "undefined" ? navigator.language : null,
       tz: getTimeZone(),
-      screen:
-        typeof window !== "undefined"
-          ? { w: window.innerWidth, h: window.innerHeight }
-          : null,
+      screen: typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
       referrer: typeof document !== "undefined" ? document.referrer || null : null,
       href: typeof window !== "undefined" ? window.location.href : null,
     });
@@ -168,17 +149,14 @@ function AuthAuditLogger() {
       meta: any;
     }) => {
       try {
-        const { data, error } = await supabase.functions.invoke("log-login", {
-          body: payload,
-        });
-
+        const { data, error } = await supabase.functions.invoke("log-login", { body: payload });
         if (error) {
           console.error("[AuthAuditLogger] log-login error:", error);
         } else {
           console.log("[AuthAuditLogger] log-login success:", data);
         }
-      } catch (e: any) {
-        console.error("[AuthAuditLogger] log-login invoke exception:", e);
+      } catch (e) {
+        console.error("[AuthAuditLogger] invoke exception:", e);
       }
     };
 
@@ -212,9 +190,8 @@ function AuthAuditLogger() {
     };
 
     const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
-      if (evt === "SIGNED_IN") {
-        log("login", session, "SIGNED_IN");
-      } else if (evt === "SIGNED_OUT") {
+      if (evt === "SIGNED_IN") log("login", session, "SIGNED_IN");
+      else if (evt === "SIGNED_OUT") {
         safeInvoke({
           event: "logout",
           success: true,
@@ -227,20 +204,33 @@ function AuthAuditLogger() {
       }
     });
 
-    return () => {
-      sub.subscription.unsubscribe();
-    };
+    return () => sub.subscription.unsubscribe();
   }, []);
 
   return null;
 }
 
 /**
- * ✅ Badge debug global (DEV ONLY)
+ * ✅ Badge debug (NE PAS afficher sur Desktop web)
+ * - S'affiche uniquement si:
+ *   - on est en Capacitor (native=true)
+ *   - et ?uiDebug=1
+ *   - et en DEV
  */
 function UiDebugBadge() {
   const { isMobileUI, debug } = useUiModeCtx();
   if (!debug) return null;
+
+  const isNative = (() => {
+    try {
+      return Capacitor?.isNativePlatform?.() ?? false;
+    } catch {
+      return false;
+    }
+  })();
+
+  const show = isNative && import.meta.env.DEV && new URLSearchParams(window.location.search).has("uiDebug");
+  if (!show) return null;
 
   return (
     <div className="fixed top-2 left-2 z-[9999]">
@@ -268,9 +258,7 @@ const AppRoutes = () => (
   <>
     <ScrollManager />
     <AuthAuditLogger />
-
-    {/* ✅ Afficher le badge UNIQUEMENT en dev */}
-    {import.meta.env.DEV ? <UiDebugBadge /> : null}
+    <UiDebugBadge />
 
     <Suspense fallback={<div className="p-6 text-gray-600">Chargement…</div>}>
       <Routes>
@@ -420,31 +408,35 @@ const AppRoutes = () => (
 );
 
 /**
- * ✅ Wrapper global qui "fabrique" un vrai viewport desktop UNIQUEMENT en app native (Capacitor)
- * - Web desktop: NE CHANGE RIEN (sinon ça casse ton layout desktop)
- * - App/émulateur: rend un canvas desktop + scale
+ * ✅ Wrapper viewport desktop: on applique le "fake desktop viewport"
+ * UNIQUEMENT quand on est en Capacitor native.
+ * (Sur le web, on ne touche à rien => ton Desktop redevient normal)
  */
 function DesktopViewport({ children }: { children: React.ReactNode }) {
-  const { isDesktopUI, debug } = useUiModeCtx();
+  const { isDesktopUI } = useUiModeCtx();
+
+  const isNative = (() => {
+    try {
+      return Capacitor?.isNativePlatform?.() ?? false;
+    } catch {
+      return false;
+    }
+  })();
 
   const DESKTOP_WIDTH = 1200;
 
-  const enableDesktopCanvas = Boolean(debug?.native) && isDesktopUI;
-
   useEffect(() => {
     const html = document.documentElement;
+    html.setAttribute("data-ui-native", isNative ? "true" : "false");
+  }, [isNative]);
 
-    html.setAttribute("data-ui-native", String(Boolean(debug?.native)));
-    html.setAttribute("data-ui-desktop-canvas", String(enableDesktopCanvas));
+  useEffect(() => {
+    if (!isNative) return;
 
+    const html = document.documentElement;
     html.style.setProperty("--ui-desktop-width", `${DESKTOP_WIDTH}px`);
 
     const computeScale = () => {
-      if (!enableDesktopCanvas) {
-        html.style.setProperty("--ui-scale", "1");
-        return;
-      }
-
       const eff =
         Math.min(
           window.innerWidth || Infinity,
@@ -453,7 +445,7 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
           window.screen?.width || Infinity
         ) || 9999;
 
-      const scale = Math.min(1, Math.max(0.35, eff / DESKTOP_WIDTH));
+      const scale = isDesktopUI ? Math.min(1, Math.max(0.35, eff / DESKTOP_WIDTH)) : 1;
       html.style.setProperty("--ui-scale", String(scale));
     };
 
@@ -465,12 +457,10 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
       window.removeEventListener("resize", computeScale);
       window.visualViewport?.removeEventListener("resize", computeScale);
     };
-  }, [debug?.native, enableDesktopCanvas]);
-
-  if (!enableDesktopCanvas) return <>{children}</>;
+  }, [isDesktopUI, isNative]);
 
   return (
-    <div id="ui-desktop-viewport" data-ui-viewport="desktop">
+    <div id="ui-desktop-viewport" data-ui-viewport={isDesktopUI ? "desktop" : "mobile"}>
       {children}
     </div>
   );
