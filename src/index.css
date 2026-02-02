@@ -45,7 +45,7 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-    /* ✅ variables utilisées par le viewport desktop */
+    /* ✅ variables utilisées par le viewport desktop (native seulement) */
     --ui-desktop-width: 1200px;
     --ui-scale: 1;
   }
@@ -119,7 +119,6 @@
     @apply bg-background text-foreground;
     text-rendering: optimizeLegibility;
 
-    /* ✅ Empêche le scroll horizontal fantôme */
     overflow-x: hidden;
   }
 
@@ -161,42 +160,36 @@
 
 /* ---------------------------
    ✅ MODE DESKTOP FORCÉ EN APP/ÉMULATEUR (CAPACITOR)
-   (Conserve tes réglages, mais surtout ne touche pas au web desktop)
+   IMPORTANT: UNIQUEMENT si data-ui-native="true"
 ---------------------------- */
 
-html[data-ui-mode="desktop"] body,
-body[data-ui-mode="desktop"] {
+html[data-ui-native="true"][data-ui-mode="desktop"] body,
+body[data-ui-native="true"][data-ui-mode="desktop"] {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
-html[data-ui-mode="desktop"] .safe-area-bottom,
-body[data-ui-mode="desktop"] .safe-area-bottom {
+html[data-ui-native="true"][data-ui-mode="desktop"] .safe-area-bottom,
+body[data-ui-native="true"][data-ui-mode="desktop"] .safe-area-bottom {
   padding-bottom: 0 !important;
 }
 
 /* ---------------------------
-   ✅ VRAI "VIEWPORT DESKTOP" UNIQUEMENT EN NATIVE (CAPACITOR)
-   - évite de casser le rendu desktop web
+   ✅ VRAI "VIEWPORT DESKTOP" DANS ÉMULATEUR (NATIVE ONLY)
 ---------------------------- */
 
-html[data-ui-native="true"][data-ui-desktop-canvas="true"] #ui-desktop-viewport {
+html[data-ui-native="true"][data-ui-mode="desktop"] #ui-desktop-viewport {
   width: var(--ui-desktop-width, 1200px);
   max-width: none;
 
-  /* ✅ centré */
-  margin: 0 auto;
-
-  /* ✅ scale pour rentrer dans l'écran */
   transform: scale(var(--ui-scale, 1));
-  transform-origin: top center;
+  transform-origin: top left;
 
-  /* ✅ garde le scroll vertical cohérent malgré le scale */
   min-height: calc(100dvh / var(--ui-scale, 1));
 }
 
-html[data-ui-native="true"][data-ui-desktop-canvas="true"],
-html[data-ui-native="true"][data-ui-desktop-canvas="true"] body {
+html[data-ui-native="true"][data-ui-mode="desktop"],
+html[data-ui-native="true"][data-ui-mode="desktop"] body {
   overflow-x: hidden;
 }
 
