@@ -8,12 +8,14 @@ const config: CapacitorConfig = {
   bundledWebRuntime: false,
 
   /**
-   * ✅ PROD / APK packagé :
-   * - NE PAS mettre server.url (sinon ça charge un site distant)
-   * - androidScheme doit rester "https" (valeur standard Capacitor)
+   * IMPORTANT
+   * - Ne mets PAS "server.url" si tu veux que l’émulateur charge les assets packagés (dist).
+   * - "server.url" sert UNIQUEMENT pour le live reload (dev).
    */
   server: {
     androidScheme: "https",
+    // cleartext: true, // uniquement si url http en dev
+    // url: "http://192.168.x.x:5173", // uniquement en dev live reload
   },
 };
 
