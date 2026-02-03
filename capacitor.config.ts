@@ -1,3 +1,4 @@
+// capacitor.config.ts
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
@@ -6,11 +7,17 @@ const config: CapacitorConfig = {
   webDir: "dist",
   bundledWebRuntime: false,
 
-  // ✅ important pour l’affichage + URL internes
+  /**
+   * IMPORTANT
+   * - Ne mets PAS "server.url" ici si tu veux que l’émulateur charge le contenu packagé (dist).
+   * - "server.url" est uniquement pour le mode live reload (dev) et sinon ça charge le site distant.
+   */
   server: {
     androidScheme: "https",
-    // Si tu veux charger le site en live pendant dev, on peut ajouter url ici (optionnel)
-    // url: "https://ton-site.netlify.app",
+
+    // ✅ À utiliser seulement si tu fais du live reload (dev)
+    // Exemple :
+    // url: "http://192.168.1.10:5173",
     // cleartext: true,
   },
 };
