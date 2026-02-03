@@ -15,6 +15,13 @@ import ContactModal from "@/components/contact/ContactModal";
 
 import ProxiLogo from "@/assets/logo-proxiservices.png";
 
+// ✅ Cache-busting : change à chaque build (Vite)
+const BUILD_TAG =
+  // @ts-ignore
+  (import.meta as any).env?.VITE_BUILD_TAG ||
+  // fallback (dev)
+  String(Date.now());
+
 const Header = () => {
   const { t, language, setLanguage } = useLanguage();
   const { user, isWorker } = useAuthProfile();
@@ -57,6 +64,9 @@ const Header = () => {
     return cms("header.btn_become_provider", "Devenir Prestataire", "Become a Provider");
   }, [language]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ✅ URL versionnée pour casser le cache (Android/WebView inclus)
+  const logoSrc = useMemo(() => `${ProxiLogo}?v=${encodeURIComponent(BUILD_TAG)}`, []);
+
   return (
     <>
       <header className="sticky top-0 z-40 w-full max-w-full">
@@ -66,7 +76,7 @@ const Header = () => {
               <Link to="/" className="min-w-0 flex items-center shrink-0">
                 <div className="inline-flex items-center rounded-xl bg-white ring-1 ring-black/5 shadow-sm px-2 py-1">
                   <img
-                    src={ProxiLogo}
+                    src={logoSrc}
                     alt={cms("brand.name", "ProxiServices", "ProxiServices")}
                     className="
                       h-12 sm:h-14
@@ -77,6 +87,8 @@ const Header = () => {
                     "
                     loading="eager"
                     decoding="async"
+                    // @ts-ignore
+                    fetchpriority="high"
                   />
                 </div>
               </Link>
@@ -84,7 +96,6 @@ const Header = () => {
               <nav className="hidden md:flex" aria-hidden="true" />
 
               <div className="hidden md:flex min-w-0 items-center gap-2">
-                {/* ✅ Devenir Prestataire => page Forfaits (comme ta capture) */}
                 <Link to="/forfaits" className="min-w-0">
                   <Button variant="outline" size="sm" className="rounded-full whitespace-nowrap">
                     {becomeProviderLabel}
