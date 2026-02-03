@@ -119,16 +119,30 @@ const WorkerDetail: React.FC = () => {
   const [contactOpen, setContactOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
 
+  const anyModalOpen = contactOpen || galleryOpen;
+
   // ✅ Empêcher le scroll du body quand une modale est ouverte
   useEffect(() => {
-    const opened = contactOpen || galleryOpen;
-    if (!opened) return;
+    if (!anyModalOpen) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = prev;
     };
-  }, [contactOpen, galleryOpen]);
+  }, [anyModalOpen]);
+
+  // ✅ ESC pour fermer
+  useEffect(() => {
+    if (!anyModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setContactOpen(false);
+        setGalleryOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [anyModalOpen]);
 
   const tVotes = useMemo(() => {
     return {
@@ -239,11 +253,11 @@ const WorkerDetail: React.FC = () => {
           return;
         }
 
-        const { data: workerRow, error: workerErr } = await sup (abase
+        const { data: workerRow, error: workerErr } = await supabase
           .from("op_ouvriers")
           .select("id")
           .eq("user_id", authUserId)
-          .maybeSingle());
+          .maybeSingle();
 
         if (cancelled) return;
 
@@ -537,10 +551,14 @@ const WorkerDetail: React.FC = () => {
 
   // Contact submit
   const resetContactForm = () => {
+    setClientName("");
+    setClientPhone("");
+    setClientEmail("");
     setRequestType("Demande de devis");
     setApproxBudget("");
     setDesiredDate("");
     setClientMessage("");
+    setAcceptedSharing(true);
   };
 
   const openContact = useCallback(() => {
@@ -601,7 +619,9 @@ const WorkerDetail: React.FC = () => {
       if (selectClientError && selectClientError.code !== "PGRST116") {
         console.error("select client error", selectClientError);
         throw new Error(
-          language === "fr" ? "Impossible de récupérer votre profil client." : "Unable to fetch your client profile."
+          language === "fr"
+            ? "Impossible de récupérer votre profil client."
+            : "Unable to fetch your client profile."
         );
       }
 
@@ -623,7 +643,9 @@ const WorkerDetail: React.FC = () => {
         if (insertClientError || !newClient) {
           console.error("insert client error", insertClientError);
           throw new Error(
-            language === "fr" ? "Impossible de créer votre profil client." : "Unable to create your client profile."
+            language === "fr"
+              ? "Impossible de créer votre profil client."
+              : "Unable to create your client profile."
           );
         }
 
@@ -631,12 +653,18 @@ const WorkerDetail: React.FC = () => {
       }
 
       if (!clientProfileId) {
-        throw new Error(language === "fr" ? "Profil client introuvable. Veuillez réessayer." : "Client profile not found.");
+        throw new Error(
+          language === "fr"
+            ? "Profil client introuvable. Veuillez réessayer."
+            : "Client profile not found."
+        );
       }
 
       const detailedMessageLines: string[] = [];
       if (requestType)
-        detailedMessageLines.push(`${language === "fr" ? "Type de demande" : "Request type"} : ${requestType}`);
+        detailedMessageLines.push(
+          `${language === "fr" ? "Type de demande" : "Request type"} : ${requestType}`
+        );
       if (approxBudget)
         detailedMessageLines.push(
           `${language === "fr" ? "Budget approximatif (facultatif)" : "Approx. budget (optional)"} : ${approxBudget}`
@@ -707,7 +735,11 @@ const WorkerDetail: React.FC = () => {
       const user = sessionData.session?.user ?? null;
 
       if (!user) {
-        throw new Error(language === "fr" ? "Veuillez vous connecter pour laisser un avis." : "Please log in to leave a review.");
+        throw new Error(
+          language === "fr"
+            ? "Veuillez vous connecter pour laisser un avis."
+            : "Please log in to leave a review."
+        );
       }
 
       const payloadBase: any = {
@@ -722,12 +754,22 @@ const WorkerDetail: React.FC = () => {
       let insertError: any = null;
       let inserted: any = null;
 
-      const attempt1 = await supabase.from("op_ouvrier_reviews").insert(payloadWithStatus).select("id").maybeSingle();
+      const attempt1 = await supabase
+        .from("op_ouvrier_reviews")
+        .insert(payloadWithStatus)
+        .select("id")
+        .maybeSingle();
+
       insertError = attempt1.error;
       inserted = attempt1.data;
 
       if (insertError && /column .*status/i.test(insertError.message || "")) {
-        const attempt2 = await supabase.from("op_ouvrier_reviews").insert(payloadBase).select("id").maybeSingle();
+        const attempt2 = await supabase
+          .from("op_ouvrier_reviews")
+          .insert(payloadBase)
+          .select("id")
+          .maybeSingle();
+
         insertError = attempt2.error;
         inserted = attempt2.data;
       }
@@ -1083,7 +1125,12 @@ const WorkerDetail: React.FC = () => {
                   onChange={(e) => setNewComment(e.target.value)}
                 />
 
-                <Button type="submit" size="sm" className="bg-pro-blue hover:bg-blue-700" disabled={submitReviewLoading || newRating === 0}>
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="bg-pro-blue hover:bg-blue-700"
+                  disabled={submitReviewLoading || newRating === 0}
+                >
                   {submitReviewLoading
                     ? language === "fr"
                       ? "Envoi de l’avis..."
@@ -1164,7 +1211,7 @@ const WorkerDetail: React.FC = () => {
           </div>
         </div>
 
-        {/* ✅ CONTACT WINDOW : (mobile => bottom sheet style) / (desktop => centered dialog style) */}
+        {/* ✅ CONTACT WINDOW */}
         {contactOpen && (
           <div className="fixed inset-0 z-50">
             <div className="absolute inset-0 bg-black/40" onClick={closeContact} />
@@ -1190,7 +1237,9 @@ const WorkerDetail: React.FC = () => {
 
                 <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
                   {submitError && (
-                    <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{submitError}</div>
+                    <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                      {submitError}
+                    </div>
                   )}
                   {submitSuccess && (
                     <div className="mb-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">
@@ -1232,7 +1281,12 @@ const WorkerDetail: React.FC = () => {
                       <label className="text-xs text-slate-500 block mb-1">
                         {language === "fr" ? "Budget approximatif (facultatif)" : "Approx. budget (optional)"}
                       </label>
-                      <Input type="number" value={approxBudget} onChange={(e) => setApproxBudget(e.target.value)} placeholder="5000000" />
+                      <Input
+                        type="number"
+                        value={approxBudget}
+                        onChange={(e) => setApproxBudget(e.target.value)}
+                        placeholder="5000000"
+                      />
                     </div>
 
                     <div>
@@ -1282,7 +1336,9 @@ const WorkerDetail: React.FC = () => {
                   </form>
 
                   <p className="mt-3 text-[11px] text-slate-400">
-                    {language === "fr" ? "Vos données sont uniquement transmises à ce professionnel." : "Your data is only shared with this professional."}
+                    {language === "fr"
+                      ? "Vos données sont uniquement transmises à ce professionnel."
+                      : "Your data is only shared with this professional."}
                   </p>
                 </div>
               </div>
@@ -1290,7 +1346,7 @@ const WorkerDetail: React.FC = () => {
           </div>
         )}
 
-        {/* ✅ GALLERY WINDOW : (mobile => bottom sheet style) / (desktop => centered dialog style) */}
+        {/* ✅ GALLERY WINDOW */}
         {galleryOpen && (
           <div className="fixed inset-0 z-50">
             <div className="absolute inset-0 bg-black/40" onClick={closeGallery} />
@@ -1357,7 +1413,6 @@ const WorkerDetail: React.FC = () => {
             </div>
           </div>
         )}
-
       </div>
     </div>
   );
