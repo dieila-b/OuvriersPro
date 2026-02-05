@@ -15,7 +15,6 @@ import ContactModal from "@/components/contact/ContactModal";
 
 import ProxiLogo from "@/assets/logo-proxiservices.png";
 
-
 const Header = () => {
   const { t, language, setLanguage } = useLanguage();
   const { user, isWorker } = useAuthProfile();
