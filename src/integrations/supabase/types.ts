@@ -316,8 +316,6 @@ export type Database = {
           contact_id: string | null
           created_at: string
           id: string
-          media_path: string | null
-          media_type: string | null
           message: string
           sender_role: string | null
           worker_id: string
@@ -328,8 +326,6 @@ export type Database = {
           contact_id?: string | null
           created_at?: string
           id?: string
-          media_path?: string | null
-          media_type?: string | null
           message: string
           sender_role?: string | null
           worker_id: string
@@ -340,8 +336,6 @@ export type Database = {
           contact_id?: string | null
           created_at?: string
           id?: string
-          media_path?: string | null
-          media_type?: string | null
           message?: string
           sender_role?: string | null
           worker_id?: string
@@ -463,9 +457,6 @@ export type Database = {
           full_name: string | null
           id: string
           ip_hint: string | null
-          media_path: string | null
-          media_type: string | null
-          media_url: string | null
           message: string
           page_url: string | null
           status: Database["public"]["Enums"]["op_contact_status"]
@@ -479,9 +470,6 @@ export type Database = {
           full_name?: string | null
           id?: string
           ip_hint?: string | null
-          media_path?: string | null
-          media_type?: string | null
-          media_url?: string | null
           message: string
           page_url?: string | null
           status?: Database["public"]["Enums"]["op_contact_status"]
@@ -495,9 +483,6 @@ export type Database = {
           full_name?: string | null
           id?: string
           ip_hint?: string | null
-          media_path?: string | null
-          media_type?: string | null
-          media_url?: string | null
           message?: string
           page_url?: string | null
           status?: Database["public"]["Enums"]["op_contact_status"]
@@ -689,102 +674,54 @@ export type Database = {
         }
         Relationships: []
       }
-      op_media_photos: {
-        Row: {
-          created_at: string
-          id: string
-          owner_id: string | null
-          public_url: string | null
-          storage_path: string
-          title: string | null
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          owner_id?: string | null
-          public_url?: string | null
-          storage_path: string
-          title?: string | null
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          owner_id?: string | null
-          public_url?: string | null
-          storage_path?: string
-          title?: string | null
-        }
-        Relationships: []
-      }
       op_ouvrier_contacts: {
         Row: {
           client_email: string | null
           client_id: string | null
           client_name: string | null
           client_phone: string | null
-          client_unread_count: number
           created_at: string
           email: string | null
           full_name: string
           id: string
-          last_message_at: string | null
-          last_message_preview: string | null
-          last_sender_role: string | null
           message: string
           origin: string | null
           phone: string | null
           status: string
-          unread_for_client: boolean
-          unread_for_worker: boolean
           worker_id: string
           worker_name: string | null
-          worker_unread_count: number
         }
         Insert: {
           client_email?: string | null
           client_id?: string | null
           client_name?: string | null
           client_phone?: string | null
-          client_unread_count?: number
           created_at?: string
           email?: string | null
           full_name: string
           id?: string
-          last_message_at?: string | null
-          last_message_preview?: string | null
-          last_sender_role?: string | null
           message: string
           origin?: string | null
           phone?: string | null
           status?: string
-          unread_for_client?: boolean
-          unread_for_worker?: boolean
           worker_id: string
           worker_name?: string | null
-          worker_unread_count?: number
         }
         Update: {
           client_email?: string | null
           client_id?: string | null
           client_name?: string | null
           client_phone?: string | null
-          client_unread_count?: number
           created_at?: string
           email?: string | null
           full_name?: string
           id?: string
-          last_message_at?: string | null
-          last_message_preview?: string | null
-          last_sender_role?: string | null
           message?: string
           origin?: string | null
           phone?: string | null
           status?: string
-          unread_for_client?: boolean
-          unread_for_worker?: boolean
           worker_id?: string
           worker_name?: string | null
-          worker_unread_count?: number
         }
         Relationships: [
           {
@@ -1008,20 +945,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "op_opp_photo_fk"
-            columns: ["photo_id"]
-            isOneToOne: false
-            referencedRelation: "op_media_photos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "op_opp_portfolio_fk"
-            columns: ["portfolio_id"]
-            isOneToOne: false
-            referencedRelation: "op_ouvrier_portfolios"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "op_ouvrier_portfolio_photos_photo_id_fkey"
             columns: ["photo_id"]
             isOneToOne: false
@@ -1036,30 +959,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      op_ouvrier_portfolios: {
-        Row: {
-          created_at: string
-          id: string
-          title: string | null
-          updated_at: string
-          worker_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          title?: string | null
-          updated_at?: string
-          worker_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          title?: string | null
-          updated_at?: string
-          worker_id?: string
-        }
-        Relationships: []
       }
       op_ouvrier_projects: {
         Row: {
@@ -2645,14 +2544,6 @@ export type Database = {
       gettransactionid: { Args: never; Returns: unknown }
       is_admin: { Args: { uid: string }; Returns: boolean }
       longtransactionsenabled: { Args: never; Returns: boolean }
-      mark_contact_read: {
-        Args: { p_contact_id: string; p_role: string }
-        Returns: undefined
-      }
-      mark_contact_read_by_worker: {
-        Args: { p_contact_id: string }
-        Returns: undefined
-      }
       op_current_user_id: { Args: never; Returns: string }
       op_is_admin: { Args: never; Returns: boolean }
       op_log_login_event: {
