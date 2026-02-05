@@ -13,7 +13,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import ContactModal from "@/components/contact/ContactModal";
 
-import ProxiLogo from "@/assets/logo-proxiservices.png";
+import ProxiLogo from "@/assets/logo-proxiservices-v2.png";
 
 const Header = () => {
   const { t, language, setLanguage } = useLanguage();
