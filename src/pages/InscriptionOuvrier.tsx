@@ -27,7 +27,6 @@ interface WorkerFormState {
   profession: string;
   description: string;
   hourlyRate: string;
-
   latitude: string;
   longitude: string;
   accuracy: string;
@@ -161,14 +160,17 @@ const InscriptionOuvrier: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // ✅ Important pour Android/Capacitor: éviter les "full reload" (window.location.href)
-  const isNative = (() => {
-    try {
-      return Capacitor?.isNativePlatform?.() ?? false;
-    } catch {
-      return false;
-    }
-  })();
+  // ✅ Détection native plus robuste (Capacitor + protocole)
+  const isNative =
+    (() => {
+      try {
+        return Capacitor?.isNativePlatform?.() ?? false;
+      } catch {
+        return false;
+      }
+    })() ||
+    window.location.protocol === "capacitor:" ||
+    window.location.protocol === "file:";
 
   /**
    * ✅ Garde-fou: plans payants masqués → on force FREE
@@ -185,10 +187,16 @@ const InscriptionOuvrier: React.FC = () => {
     return requestedPlan;
   }, [requestedPlan]);
 
-  // ✅ Normalise l'URL sans recharger (corrige des cas Android où un reload peut provoquer un 404)
+  /**
+   * ✅ IMPORTANT (HashRouter / Android):
+   * - si ton app utilise HashRouter, la route réelle est "/#/inscription-ouvrier"
+   * - on normalise toujours vers une navigation React Router (pas de reload)
+   * - et on force FREE si plan payant masqué
+   */
   useEffect(() => {
     if (plan !== requestedPlan) {
-      navigate(`/inscription-ouvrier?plan=FREE`, { replace: true });
+      // ✅ navigation interne (HashRouter ok)
+      navigate("/inscription-ouvrier?plan=FREE", { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan, requestedPlan]);
@@ -234,6 +242,14 @@ const InscriptionOuvrier: React.FC = () => {
     }
   }, [isPaidPlan]);
 
+  // ✅ Si on revient d’un paiement avec payment_ref, on met à jour l’état
+  useEffect(() => {
+    const status = searchParams.get("payment_status");
+    const ref = searchParams.get("payment_ref");
+    setPaymentCompleted(status === "success");
+    setPaymentReference(ref);
+  }, [searchParams]);
+
   const planMeta = useMemo(() => {
     if (plan === "MONTHLY") {
       return {
@@ -272,7 +288,10 @@ const InscriptionOuvrier: React.FC = () => {
 
   const selectedRegion = useMemo(() => GUINEA_REGIONS.find((r) => r.name === form.region) || null, [form.region]);
   const availableCities: GuineaCity[] = form.country === "GN" && selectedRegion ? selectedRegion.cities : [];
-  const selectedCity = useMemo(() => availableCities.find((c) => c.name === form.city) || null, [availableCities, form.city]);
+  const selectedCity = useMemo(
+    () => availableCities.find((c) => c.name === form.city) || null,
+    [availableCities, form.city]
+  );
   const availableCommunes: GuineaCommune[] = form.country === "GN" && selectedCity ? selectedCity.communes : [];
   const selectedCommune = useMemo(
     () => availableCommunes.find((c) => c.name === form.commune) || null,
@@ -357,15 +376,26 @@ const InscriptionOuvrier: React.FC = () => {
   };
 
   /**
-   * ✅ Fix 404 Android (Capacitor) :
-   * - En natif, une URL relative "/.netlify/functions/..." peut répondre 404 (origin capacitor://localhost)
-   * - On construit une URL absolue si VITE_WEB_BASE_URL est défini (recommandé).
-   * - Sinon on garde le comportement web actuel.
+   * ✅ Fix 404 Android (Capacitor) pour les fonctions Netlify :
+   * - En natif, l’origin est "capacitor://localhost" → "/.netlify/functions/..." => 404
+   * - On construit une URL absolue si VITE_WEB_BASE_URL est défini.
    */
   const getApiBaseUrl = () => {
     const envBase = (import.meta as any)?.env?.VITE_WEB_BASE_URL as string | undefined;
     if (isNative && envBase) return envBase.replace(/\/$/, "");
     return ""; // web: on garde relatif
+  };
+
+  /**
+   * ✅ Fix 404 Android (HashRouter) pour les retours paiement:
+   * - en natif, on force "/#/" dans success/cancel
+   * - sinon, web classique
+   */
+  const buildReturnUrl = (status: "success" | "cancel") => {
+    const origin = window.location.origin;
+    const basePath = isNative ? "/#/" : "/";
+    const refPart = status === "success" ? "&payment_ref={REF}" : "";
+    return `${origin}${basePath}inscription-ouvrier?plan=${plan}&payment_status=${status}${refPart}`;
   };
 
   const handleStartPayment = async () => {
@@ -389,8 +419,8 @@ const InscriptionOuvrier: React.FC = () => {
       setError(null);
       setLoading(true);
 
-      const successUrl = `${window.location.origin}/inscription-ouvrier?plan=${plan}&payment_status=success&payment_ref={REF}`;
-      const cancelUrl = `${window.location.origin}/inscription-ouvrier?plan=${plan}&payment_status=cancel`;
+      const successUrl = buildReturnUrl("success");
+      const cancelUrl = buildReturnUrl("cancel");
 
       const apiBase = getApiBaseUrl();
       const endpoint = `${apiBase}/.netlify/functions/payments-start`;
@@ -416,7 +446,7 @@ const InscriptionOuvrier: React.FC = () => {
       const data = await res.json();
       if (!data.redirectUrl) throw new Error("Missing redirectUrl from payment API.");
 
-      // ✅ NOTE: pour les redirections paiement, c’est normal d’utiliser href
+      // ✅ Redirection externe paiement: OK d'utiliser href
       window.location.href = data.redirectUrl as string;
     } catch (err: any) {
       console.error("Erreur démarrage paiement:", err);
@@ -550,7 +580,8 @@ const InscriptionOuvrier: React.FC = () => {
       if (opUserError) throw opUserError;
 
       const hourlyRateTrim = form.hourlyRate.trim();
-      const hourlyRateNumber = hourlyRateTrim === "" ? null : Number.isFinite(Number(hourlyRateTrim)) ? Number(hourlyRateTrim) : null;
+      const hourlyRateNumber =
+        hourlyRateTrim === "" ? null : Number.isFinite(Number(hourlyRateTrim)) ? Number(hourlyRateTrim) : null;
 
       const isFreePlan = plan === "FREE";
       const isManualMobileMoney = !isFreePlan && paymentMethod === "mobile_money";
@@ -675,7 +706,9 @@ const InscriptionOuvrier: React.FC = () => {
               <div className="mb-3">
                 <div className="text-xl font-bold text-pro-blue">{planMeta.label}</div>
                 <div className="text-gray-700">{planMeta.price}</div>
-                <div className="inline-block mt-2 px-3 py-1 text-xs rounded-full bg-green-100 text-green-700">{planMeta.badge}</div>
+                <div className="inline-block mt-2 px-3 py-1 text-xs rounded-full bg-green-100 text-green-700">
+                  {planMeta.badge}
+                </div>
               </div>
               <p className="text-sm text-gray-600">{planMeta.description}</p>
 
@@ -742,7 +775,6 @@ const InscriptionOuvrier: React.FC = () => {
                     )}
                   </div>
 
-                  {/* ✅ Fix Android: pas de window.location.href (peut déclencher un reload -> 404 selon config) */}
                   <Button
                     type="button"
                     onClick={() => navigate("/", { replace: true })}
@@ -755,68 +787,35 @@ const InscriptionOuvrier: React.FC = () => {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {language === "fr" ? "Prénom" : "First name"}
-                      </label>
-                      <Input
-                        required
-                        value={form.firstName}
-                        onChange={handleChange("firstName")}
-                        placeholder={language === "fr" ? "Votre prénom" : "First name"}
-                      />
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Prénom" : "First name"}</label>
+                      <Input required value={form.firstName} onChange={handleChange("firstName")} placeholder={language === "fr" ? "Votre prénom" : "First name"} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {language === "fr" ? "Nom" : "Last name"}
-                      </label>
-                      <Input
-                        required
-                        value={form.lastName}
-                        onChange={handleChange("lastName")}
-                        placeholder={language === "fr" ? "Votre nom" : "Last name"}
-                      />
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Nom" : "Last name"}</label>
+                      <Input required value={form.lastName} onChange={handleChange("lastName")} placeholder={language === "fr" ? "Votre nom" : "Last name"} />
                     </div>
                   </div>
 
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                      <Input
-                        type="email"
-                        required
-                        value={form.email}
-                        onChange={handleChange("email")}
-                        placeholder="vous@exemple.com"
-                      />
+                      <Input type="email" required value={form.email} onChange={handleChange("email")} placeholder="vous@exemple.com" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {language === "fr" ? "Mot de passe" : "Password"}
-                      </label>
-                      <Input
-                        type="password"
-                        required
-                        minLength={6}
-                        value={form.password}
-                        onChange={handleChange("password")}
-                        placeholder={language === "fr" ? "Au moins 6 caractères" : "At least 6 characters"}
-                      />
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Mot de passe" : "Password"}</label>
+                      <Input type="password" required minLength={6} value={form.password} onChange={handleChange("password")} placeholder={language === "fr" ? "Au moins 6 caractères" : "At least 6 characters"} />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === "fr" ? "Téléphone" : "Phone"}
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Téléphone" : "Phone"}</label>
                     <Input required value={form.phone} onChange={handleChange("phone")} placeholder="+224 6X XX XX XX" />
                   </div>
 
                   <div className="border border-gray-200 rounded-lg p-3 bg-white">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                       <div>
-                        <div className="text-sm font-semibold text-gray-800">
-                          {language === "fr" ? "Géolocalisation (recommandé)" : "Geolocation (recommended)"}
-                        </div>
+                        <div className="text-sm font-semibold text-gray-800">{language === "fr" ? "Géolocalisation (recommandé)" : "Geolocation (recommended)"}</div>
                         <div className="text-xs text-gray-600">
                           {language === "fr"
                             ? "Permet aux clients de vous trouver parmi les ouvriers les plus proches."
@@ -831,22 +830,17 @@ const InscriptionOuvrier: React.FC = () => {
 
                     {form.latitude && form.longitude && (
                       <div className="mt-2 text-xs text-emerald-700">
-                        {language === "fr" ? "Position détectée" : "Location detected"} — {Number(form.latitude).toFixed(6)},{" "}
-                        {Number(form.longitude).toFixed(6)}
+                        {language === "fr" ? "Position détectée" : "Location detected"} — {Number(form.latitude).toFixed(6)}, {Number(form.longitude).toFixed(6)}
                         {form.accuracy ? ` • ±${form.accuracy}m` : ""}
                       </div>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === "fr" ? "Pays" : "Country"}
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Pays" : "Country"}</label>
                     <select
                       value={form.country}
-                      onChange={(e) =>
-                        setForm((prev) => ({ ...prev, country: e.target.value, region: "", city: "", commune: "", district: "" }))
-                      }
+                      onChange={(e) => setForm((prev) => ({ ...prev, country: e.target.value, region: "", city: "", commune: "", district: "" }))}
                       className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
                     >
                       {countryOptions.map((c) => (
@@ -860,9 +854,7 @@ const InscriptionOuvrier: React.FC = () => {
                   {form.country === "GN" ? (
                     <>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === "fr" ? "Région" : "Region"}
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Région" : "Region"}</label>
                         <select
                           value={form.region}
                           onChange={(e) => setForm((prev) => ({ ...prev, region: e.target.value, city: "", commune: "", district: "" }))}
@@ -879,9 +871,7 @@ const InscriptionOuvrier: React.FC = () => {
 
                       <div className="grid md:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {language === "fr" ? "Ville" : "City"}
-                          </label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Ville" : "City"}</label>
                           <select
                             value={form.city}
                             onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value, commune: "", district: "" }))}
@@ -898,18 +888,14 @@ const InscriptionOuvrier: React.FC = () => {
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {language === "fr" ? "Code postal" : "Postal code"}
-                          </label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Code postal" : "Postal code"}</label>
                           <Input value={form.postalCode} onChange={handleChange("postalCode")} placeholder="1000" />
                         </div>
                       </div>
 
                       <div className="grid md:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {language === "fr" ? "Commune" : "Commune"}
-                          </label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Commune" : "Commune"}</label>
                           <select
                             value={form.commune}
                             onChange={(e) => setForm((prev) => ({ ...prev, commune: e.target.value, district: "" }))}
@@ -926,9 +912,7 @@ const InscriptionOuvrier: React.FC = () => {
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {language === "fr" ? "Quartier" : "Neighborhood"}
-                          </label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Quartier" : "Neighborhood"}</label>
                           <select
                             value={form.district}
                             onChange={(e) => setForm((prev) => ({ ...prev, district: e.target.value }))}
@@ -949,35 +933,22 @@ const InscriptionOuvrier: React.FC = () => {
                     <>
                       <div className="grid md:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {language === "fr" ? "Ville" : "City"}
-                          </label>
-                          <Input
-                            required
-                            value={form.city}
-                            onChange={handleChange("city")}
-                            placeholder={language === "fr" ? "Votre ville" : "Your city"}
-                          />
+                          <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Ville" : "City"}</label>
+                          <Input required value={form.city} onChange={handleChange("city")} placeholder={language === "fr" ? "Votre ville" : "Your city"} />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {language === "fr" ? "Code postal" : "Postal code"}
-                          </label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Code postal" : "Postal code"}</label>
                           <Input value={form.postalCode} onChange={handleChange("postalCode")} placeholder="75001" />
                         </div>
                       </div>
 
                       <div className="grid md:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {language === "fr" ? "Commune / Région" : "District / Region"}
-                          </label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Commune / Région" : "District / Region"}</label>
                           <Input value={form.commune} onChange={handleChange("commune")} />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {language === "fr" ? "Quartier" : "Neighborhood"}
-                          </label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Quartier" : "Neighborhood"}</label>
                           <Input value={form.district} onChange={handleChange("district")} />
                         </div>
                       </div>
@@ -985,69 +956,38 @@ const InscriptionOuvrier: React.FC = () => {
                   )}
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === "fr" ? "Métier principal" : "Main trade"}
-                    </label>
-                    <Input
-                      required
-                      value={form.profession}
-                      onChange={handleChange("profession")}
-                      placeholder={language === "fr" ? "Plombier, électricien, maçon..." : "Plumber, electrician, builder..."}
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Métier principal" : "Main trade"}</label>
+                    <Input required value={form.profession} onChange={handleChange("profession")} placeholder={language === "fr" ? "Plombier, électricien, maçon..." : "Plumber, electrician, builder..."} />
                     {plan === "FREE" && (
-                      <p className="mt-1 text-xs text-gray-500">
-                        {language === "fr"
-                          ? "Avec le plan Gratuit, un seul métier peut être affiché."
-                          : "With the Free plan, only one trade can be listed."}
-                      </p>
+                      <p className="mt-1 text-xs text-gray-500">{language === "fr" ? "Avec le plan Gratuit, un seul métier peut être affiché." : "With the Free plan, only one trade can be listed."}</p>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === "fr" ? "Description de vos services" : "Description of your services"}
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Description de vos services" : "Description of your services"}</label>
                     <textarea
                       required
                       value={form.description}
                       onChange={handleChange("description")}
                       className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue min-h-[100px]"
-                      placeholder={
-                        language === "fr"
-                          ? "Décrivez votre expérience, vos services, vos zones d’intervention..."
-                          : "Describe your experience, services and working area..."
-                      }
+                      placeholder={language === "fr" ? "Décrivez votre expérience, vos services, vos zones d’intervention..." : "Describe your experience, services and working area..."}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === "fr"
-                        ? `Tarif horaire (${currency.symbol} / h) (optionnel)`
-                        : `Hourly rate (${currency.symbol} / h) (optional)`}
-                    </label>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={form.hourlyRate}
-                      onChange={handleChange("hourlyRate")}
-                      placeholder={language === "fr" ? `Ex : 250000 ${currency.symbol}` : `e.g. 20 ${currency.symbol}`}
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? `Tarif horaire (${currency.symbol} / h) (optionnel)` : `Hourly rate (${currency.symbol} / h) (optional)`}</label>
+                    <Input type="number" min={0} value={form.hourlyRate} onChange={handleChange("hourlyRate")} placeholder={language === "fr" ? `Ex : 250000 ${currency.symbol}` : `e.g. 20 ${currency.symbol}`} />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {language === "fr" ? "Photo de profil (optionnel)" : "Profile picture (optional)"}
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Photo de profil (optionnel)" : "Profile picture (optional)"}</label>
                     <input
                       type="file"
                       accept="image/*"
                       onChange={handleFileChange}
                       className="block w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-pro-blue file:text-white hover:file:bg-blue-700"
                     />
-                    <p className="mt-1 text-xs text-gray-500">
-                      {language === "fr" ? "Format JPG ou PNG recommandé, taille max ~2 Mo." : "JPG or PNG recommended, max size ~2MB."}
-                    </p>
+                    <p className="mt-1 text-xs text-gray-500">{language === "fr" ? "Format JPG ou PNG recommandé, taille max ~2 Mo." : "JPG or PNG recommended, max size ~2MB."}</p>
                   </div>
 
                   {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">{error}</div>}
@@ -1074,43 +1014,19 @@ const InscriptionOuvrier: React.FC = () => {
                           <div className="text-xs font-semibold text-amber-800 mb-1">{language === "fr" ? "Choisissez un moyen de paiement" : "Choose a payment method"}</div>
                           <div className="space-y-1 text-xs text-amber-900">
                             <label className="flex items-center gap-2">
-                              <input
-                                type="radio"
-                                name="paymentMethod"
-                                value="card"
-                                checked={paymentMethod === "card"}
-                                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                              />
+                              <input type="radio" name="paymentMethod" value="card" checked={paymentMethod === "card"} onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)} />
                               <span>{language === "fr" ? "Carte bancaire (Visa, MasterCard...)" : "Credit / debit card (via Stripe)"}</span>
                             </label>
                             <label className="flex items-center gap-2">
-                              <input
-                                type="radio"
-                                name="paymentMethod"
-                                value="paypal"
-                                checked={paymentMethod === "paypal"}
-                                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                              />
+                              <input type="radio" name="paymentMethod" value="paypal" checked={paymentMethod === "paypal"} onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)} />
                               <span>PayPal</span>
                             </label>
                             <label className="flex items-center gap-2">
-                              <input
-                                type="radio"
-                                name="paymentMethod"
-                                value="mobile_money"
-                                checked={paymentMethod === "mobile_money"}
-                                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                              />
+                              <input type="radio" name="paymentMethod" value="mobile_money" checked={paymentMethod === "mobile_money"} onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)} />
                               <span>{language === "fr" ? "Mobile Money (Orange Money, MTN, etc.)" : "Mobile money"}</span>
                             </label>
                             <label className="flex items-center gap-2">
-                              <input
-                                type="radio"
-                                name="paymentMethod"
-                                value="google_pay"
-                                checked={paymentMethod === "google_pay"}
-                                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                              />
+                              <input type="radio" name="paymentMethod" value="google_pay" checked={paymentMethod === "google_pay"} onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)} />
                               <span>Google Pay</span>
                             </label>
                           </div>
@@ -1137,20 +1053,12 @@ const InscriptionOuvrier: React.FC = () => {
                             )}
                           </div>
                           <div>
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={handleStartPayment}
-                              className="bg-amber-600 hover:bg-amber-700"
-                              disabled={loading}
-                            >
+                            <Button type="button" size="sm" onClick={handleStartPayment} className="bg-amber-600 hover:bg-amber-700" disabled={loading}>
                               {language === "fr" ? "Procéder au paiement" : "Proceed to payment"}
                             </Button>
                             {paymentCompleted && (
                               <p className="text-[11px] text-emerald-700 mt-1">
-                                {language === "fr"
-                                  ? "Paiement confirmé. Vous pouvez maintenant valider votre inscription."
-                                  : "Payment confirmed. You can now submit your registration."}
+                                {language === "fr" ? "Paiement confirmé. Vous pouvez maintenant valider votre inscription." : "Payment confirmed. You can now submit your registration."}
                               </p>
                             )}
                           </div>
@@ -1182,7 +1090,6 @@ const InscriptionOuvrier: React.FC = () => {
                       </p>
                     )}
 
-                    {/* Petit hint natif si pas de base URL configurée (utile si tu réactives les paiements plus tard) */}
                     {isNative && plan !== "FREE" && !(import.meta as any)?.env?.VITE_WEB_BASE_URL && (
                       <p className="mt-2 text-[11px] text-amber-700">
                         {language === "fr"
