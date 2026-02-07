@@ -4,7 +4,14 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Routes, Route, useLocation, Navigate } from "react-router-dom";
+import {
+  Routes,
+  Route,
+  useLocation,
+  Navigate,
+  BrowserRouter,
+  HashRouter,
+} from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Capacitor } from "@capacitor/core";
@@ -476,6 +483,27 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * ✅ Router natif vs web (fix 404 Capacitor)
+ * - Native (capacitor://localhost ou file://) => HashRouter
+ * - Web => BrowserRouter
+ */
+function RouterSwitch({ children }: { children: React.ReactNode }) {
+  const isNative =
+    (() => {
+      try {
+        return Capacitor?.isNativePlatform?.() ?? false;
+      } catch {
+        return false;
+      }
+    })() ||
+    window.location.protocol === "capacitor:" ||
+    window.location.protocol === "file:";
+
+  const Router = isNative ? HashRouter : BrowserRouter;
+  return <Router>{children}</Router>;
+}
+
 const App = () => {
   const queryClient = useAppQueryClient();
 
@@ -486,11 +514,13 @@ const App = () => {
           <UiModeProvider>
             <Toaster />
             <Sonner />
-            <DesktopViewport>
-              <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
-                <AppRoutes />
-              </div>
-            </DesktopViewport>
+            <RouterSwitch>
+              <DesktopViewport>
+                <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
+                  <AppRoutes />
+                </div>
+              </DesktopViewport>
+            </RouterSwitch>
           </UiModeProvider>
         </LanguageProvider>
       </TooltipProvider>
