@@ -234,7 +234,6 @@ function UiDebugBadge() {
     }
   })();
 
-  // ✅ Sur HashRouter, le querystring peut être après "#"
   const hasUiDebug = (() => {
     try {
       const search =
@@ -253,7 +252,9 @@ function UiDebugBadge() {
     <div className="fixed top-2 left-2 z-[9999]">
       <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600 shadow-sm">
         <span className="font-semibold">UI:</span>
-        <span className={isMobileUI ? "text-emerald-700" : "text-indigo-700"}>{isMobileUI ? "MOBILE" : "DESKTOP"}</span>
+        <span className={isMobileUI ? "text-emerald-700" : "text-indigo-700"}>
+          {isMobileUI ? "MOBILE" : "DESKTOP"}
+        </span>
         <span className="text-slate-400">|</span>
         <span>native={String(debug.native)}</span>
         <span className="text-slate-400">|</span>
@@ -438,8 +439,7 @@ const AppRoutes = () => (
 );
 
 /**
- * ✅ Wrapper viewport desktop: on applique le "fake desktop viewport"
- * UNIQUEMENT quand on est en Capacitor native.
+ * ✅ Wrapper viewport desktop: appliqué UNIQUEMENT quand on est en Capacitor native.
  */
 function DesktopViewport({ children }: { children: React.ReactNode }) {
   const { isDesktopUI } = useUiModeCtx();
@@ -496,23 +496,22 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * ✅ Router natif vs web (fix 404 Capacitor)
- * - Native (capacitor://localhost ou file://) => HashRouter
- * - Web => BrowserRouter
+ * ✅ RouterSwitch (clé)
+ * - Si l'app charge les fichiers packagés -> hostname "localhost" -> HashRouter (anti-404)
+ * - Si l'app charge le site Netlify (server.url) -> hostname != "localhost" -> BrowserRouter (desktop=mobile)
  */
 function RouterSwitch({ children }: { children: React.ReactNode }) {
-  const isNative =
-    (() => {
-      try {
-        return Capacitor?.isNativePlatform?.() ?? false;
-      } catch {
-        return false;
-      }
-    })() ||
-    window.location.protocol === "capacitor:" ||
-    window.location.protocol === "file:";
+  const isNative = (() => {
+    try {
+      return Capacitor?.isNativePlatform?.() ?? false;
+    } catch {
+      return false;
+    }
+  })();
 
-  const Router = isNative ? HashRouter : BrowserRouter;
+  const isPackagedLocal = isNative && window.location.hostname === "localhost";
+  const Router = isPackagedLocal ? HashRouter : BrowserRouter;
+
   return <Router>{children}</Router>;
 }
 
