@@ -7,11 +7,13 @@ const config: CapacitorConfig = {
   webDir: "dist",
   bundledWebRuntime: false,
 
+  // ✅ Mode "wrapper web" : l'app charge toujours la dernière version Netlify
   server: {
+    url: "https://proxiservices.netlify.app",
     androidScheme: "https",
-    hostname: "localhost",
-    // cleartext: true, // uniquement si url http en dev
-    // url: "http://192.168.x.x:5173", // uniquement en dev live reload
+    cleartext: false,
+    // Optionnel mais recommandé si tu ouvres des sous-domaines
+    allowNavigation: ["https://proxiservices.netlify.app", "*.netlify.app"],
   },
 };
 
