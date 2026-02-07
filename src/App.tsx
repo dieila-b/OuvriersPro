@@ -234,7 +234,19 @@ function UiDebugBadge() {
     }
   })();
 
-  const show = isNative && import.meta.env.DEV && new URLSearchParams(window.location.search).has("uiDebug");
+  // ✅ Sur HashRouter, le querystring peut être après "#"
+  const hasUiDebug = (() => {
+    try {
+      const search =
+        window.location.search ||
+        (window.location.hash.includes("?") ? "?" + window.location.hash.split("?").slice(1).join("?") : "");
+      return new URLSearchParams(search).has("uiDebug");
+    } catch {
+      return false;
+    }
+  })();
+
+  const show = isNative && import.meta.env.DEV && hasUiDebug;
   if (!show) return null;
 
   return (
