@@ -27,10 +27,10 @@ const SubscriptionSection = () => {
 
   /**
    * ✅ CTA Flow
-   * - true  => CTA vers /devenir-prestataire
-   * - false => CTA vers /inscription-ouvrier (direct)
+   * - true  => CTA vers /devenir-prestataire (⚠️ route doit exister)
+   * - false => CTA vers /inscription-ouvrier (direct) ✅
    */
-  const USE_BECOME_PROVIDER_FLOW = true;
+  const USE_BECOME_PROVIDER_FLOW = false;
 
   const cms = (key: string, fallbackFr: string, fallbackEn: string) => {
     const v = t(key);
@@ -281,7 +281,6 @@ const SubscriptionSection = () => {
                     </ul>
                   )}
 
-                  {/* ✅ CTA: /devenir-prestataire ou /inscription-ouvrier selon ton flow */}
                   <Button
                     className="w-full h-11 rounded-xl text-sm sm:text-base bg-pro-blue hover:bg-pro-blue/90 text-white"
                     onClick={() => goToProviderFlow(plan.code)}
