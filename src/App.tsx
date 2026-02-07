@@ -212,10 +212,6 @@ function AuthAuditLogger() {
 
 /**
  * ✅ Badge debug (NE PAS afficher sur Desktop web)
- * - S'affiche uniquement si:
- *   - on est en Capacitor (native=true)
- *   - et ?uiDebug=1
- *   - et en DEV
  */
 function UiDebugBadge() {
   const { isMobileUI, debug } = useUiModeCtx();
@@ -279,10 +275,28 @@ const AppRoutes = () => (
         <Route path="/confidentialite" element={<Privacy />} />
         <Route path="/cookies" element={<CookiesPolicy />} />
 
-        <Route path="/mon-compte" element={<MonCompte />} />
+        {/* ✅ Mon compte : si connecté, la page gère ; sinon renvoie login via PrivateRoute */}
+        <Route
+          path="/mon-compte"
+          element={
+            <PrivateRoute allowedRoles={["user", "worker", "admin"]}>
+              <MonCompte />
+            </PrivateRoute>
+          }
+        />
 
         <Route path="/login" element={<Login />} />
+
+        {/* ✅ Route “canonique” d’inscription */}
         <Route path="/register" element={<Register />} />
+
+        {/* ✅ Aliases pour éviter les 404 depuis CTA / anciens liens */}
+        <Route path="/inscription" element={<Navigate to="/register" replace />} />
+        <Route path="/signup" element={<Navigate to="/register" replace />} />
+        <Route path="/sign-up" element={<Navigate to="/register" replace />} />
+        <Route path="/creer-profil" element={<Navigate to="/register" replace />} />
+        <Route path="/creation-profil" element={<Navigate to="/register" replace />} />
+        <Route path="/creer-mon-profil" element={<Navigate to="/register" replace />} />
 
         <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
 
@@ -410,7 +424,6 @@ const AppRoutes = () => (
 /**
  * ✅ Wrapper viewport desktop: on applique le "fake desktop viewport"
  * UNIQUEMENT quand on est en Capacitor native.
- * (Sur le web, on ne touche à rien => ton Desktop redevient normal)
  */
 function DesktopViewport({ children }: { children: React.ReactNode }) {
   const { isDesktopUI } = useUiModeCtx();
