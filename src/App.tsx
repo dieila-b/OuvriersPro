@@ -11,6 +11,7 @@ import {
   Navigate,
   BrowserRouter,
   HashRouter,
+  useNavigate,
 } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
@@ -234,27 +235,14 @@ function UiDebugBadge() {
     }
   })();
 
-  const hasUiDebug = (() => {
-    try {
-      const search =
-        window.location.search ||
-        (window.location.hash.includes("?") ? "?" + window.location.hash.split("?").slice(1).join("?") : "");
-      return new URLSearchParams(search).has("uiDebug");
-    } catch {
-      return false;
-    }
-  })();
-
-  const show = isNative && import.meta.env.DEV && hasUiDebug;
+  const show = isNative && import.meta.env.DEV && new URLSearchParams(window.location.search).has("uiDebug");
   if (!show) return null;
 
   return (
     <div className="fixed top-2 left-2 z-[9999]">
       <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600 shadow-sm">
         <span className="font-semibold">UI:</span>
-        <span className={isMobileUI ? "text-emerald-700" : "text-indigo-700"}>
-          {isMobileUI ? "MOBILE" : "DESKTOP"}
-        </span>
+        <span className={isMobileUI ? "text-emerald-700" : "text-indigo-700"}>{isMobileUI ? "MOBILE" : "DESKTOP"}</span>
         <span className="text-slate-400">|</span>
         <span>native={String(debug.native)}</span>
         <span className="text-slate-400">|</span>
@@ -270,11 +258,118 @@ function UiDebugBadge() {
   );
 }
 
+/**
+ * ✅ Intercepteur de liens en natif (CAPACITOR)
+ * Objectif: empêcher qu’un <a href="/..."> fasse un "full reload" => 404
+ */
+function NativeLinkInterceptor() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const isNative =
+    (() => {
+      try {
+        return Capacitor?.isNativePlatform?.() ?? false;
+      } catch {
+        return false;
+      }
+    })() ||
+    window.location.protocol === "capacitor:" ||
+    window.location.protocol === "file:";
+
+  useEffect(() => {
+    if (!isNative) return;
+
+    const onClickCapture = (e: MouseEvent) => {
+      try {
+        if (e.defaultPrevented) return;
+        if (e.button !== 0) return; // clic gauche seulement
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+
+        const target = e.target as HTMLElement | null;
+        if (!target) return;
+
+        const a = target.closest("a") as HTMLAnchorElement | null;
+        if (!a) return;
+
+        const href = a.getAttribute("href") || "";
+        if (!href) return;
+
+        // ne pas intercepter:
+        // - external
+        // - mailto/tel
+        // - downloads
+        // - target blank
+        if (a.target === "_blank") return;
+        if (href.startsWith("http://") || href.startsWith("https://")) return;
+        if (href.startsWith("mailto:") || href.startsWith("tel:")) return;
+        if (a.hasAttribute("download")) return;
+
+        // Ancres
+        if (href.startsWith("#")) {
+          // laisse ScrollManager gérer
+          return;
+        }
+
+        // Normalise chemins relatifs (ex: "inscription-ouvrier" depuis /forfaits)
+        // => on convertit en absolu
+        let next = href;
+        if (!next.startsWith("/")) {
+          const base = location.pathname.endsWith("/")
+            ? location.pathname.slice(0, -1)
+            : location.pathname;
+          next = `${base}/${next}`;
+        }
+
+        // On évite le full reload et on route via SPA
+        e.preventDefault();
+        navigate(next, { replace: false });
+      } catch {
+        // no-op
+      }
+    };
+
+    document.addEventListener("click", onClickCapture, true);
+    return () => document.removeEventListener("click", onClickCapture, true);
+  }, [isNative, navigate, location.pathname]);
+
+  return null;
+}
+
+/**
+ * ✅ Route de secours: corrige certains chemins “dérivés” qui finissent en 404
+ * Ex:
+ * - /forfaits/inscription-ouvrier  => /inscription-ouvrier
+ * - /forfaits#/inscription-ouvrier => /inscription-ouvrier
+ */
+function SmartNotFound() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const p = location.pathname || "";
+    const s = location.search || "";
+
+    // si une page construit un lien relatif incorrect
+    if (p.includes("inscription-ouvrier")) {
+      navigate(`/inscription-ouvrier${s}`, { replace: true });
+      return;
+    }
+    if (p.includes("register")) {
+      navigate(`/register${s}`, { replace: true });
+      return;
+    }
+  }, [location.pathname, location.search, navigate]);
+
+  return <NotFound />;
+}
+
 const AppRoutes = () => (
   <>
     <ScrollManager />
     <AuthAuditLogger />
     <UiDebugBadge />
+    <NativeLinkInterceptor />
 
     <Suspense fallback={<div className="p-6 text-gray-600">Chargement…</div>}>
       <Routes>
@@ -431,15 +526,16 @@ const AppRoutes = () => (
           <Route path="moderation-avis" element={<AdminReviewsModerationPage />} />
         </Route>
 
-        {/* 404 */}
-        <Route path="*" element={<NotFound />} />
+        {/* 404 (avec correcteur) */}
+        <Route path="*" element={<SmartNotFound />} />
       </Routes>
     </Suspense>
   </>
 );
 
 /**
- * ✅ Wrapper viewport desktop: appliqué UNIQUEMENT quand on est en Capacitor native.
+ * ✅ Wrapper viewport desktop: on applique le "fake desktop viewport"
+ * UNIQUEMENT quand on est en Capacitor native.
  */
 function DesktopViewport({ children }: { children: React.ReactNode }) {
   const { isDesktopUI } = useUiModeCtx();
@@ -496,22 +592,23 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * ✅ RouterSwitch (clé)
- * - Si l'app charge les fichiers packagés -> hostname "localhost" -> HashRouter (anti-404)
- * - Si l'app charge le site Netlify (server.url) -> hostname != "localhost" -> BrowserRouter (desktop=mobile)
+ * ✅ Router natif vs web (fix 404 Capacitor)
+ * - Native => HashRouter
+ * - Web => BrowserRouter
  */
 function RouterSwitch({ children }: { children: React.ReactNode }) {
-  const isNative = (() => {
-    try {
-      return Capacitor?.isNativePlatform?.() ?? false;
-    } catch {
-      return false;
-    }
-  })();
+  const isNative =
+    (() => {
+      try {
+        return Capacitor?.isNativePlatform?.() ?? false;
+      } catch {
+        return false;
+      }
+    })() ||
+    window.location.protocol === "capacitor:" ||
+    window.location.protocol === "file:";
 
-  const isPackagedLocal = isNative && window.location.hostname === "localhost";
-  const Router = isPackagedLocal ? HashRouter : BrowserRouter;
-
+  const Router = isNative ? HashRouter : BrowserRouter;
   return <Router>{children}</Router>;
 }
 
