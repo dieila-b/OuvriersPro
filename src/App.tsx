@@ -117,9 +117,16 @@ function AuthAuditLogger() {
     if (didInitRef.current) return;
     didInitRef.current = true;
 
-    const DEBUG = true;
     const COOLDOWN_MS = 10 * 60 * 1000;
     const LS_KEY = "op_login_journal:last_refresh";
+
+    const isNative = (() => {
+      try {
+        return Capacitor?.isNativePlatform?.() ?? false;
+      } catch {
+        return false;
+      }
+    })();
 
     const getTimeZone = () => {
       try {
@@ -145,16 +152,13 @@ function AuthAuditLogger() {
       event: "login" | "logout" | "refresh";
       success: boolean;
       email: string | null;
-      source: "web";
+      source: "web" | "native";
       meta: any;
     }) => {
       try {
         const { data, error } = await supabase.functions.invoke("log-login", { body: payload });
-        if (error) {
-          console.error("[AuthAuditLogger] log-login error:", error);
-        } else {
-          console.log("[AuthAuditLogger] log-login success:", data);
-        }
+        if (error) console.error("[AuthAuditLogger] log-login error:", error);
+        else console.log("[AuthAuditLogger] log-login success:", data);
       } catch (e) {
         console.error("[AuthAuditLogger] invoke exception:", e);
       }
@@ -175,16 +179,14 @@ function AuthAuditLogger() {
     const log = (event: "login" | "logout" | "refresh", session: any, reason: string) => {
       const email = session?.user?.email ?? null;
       const userId = session?.user?.id ?? null;
-
       if (!session?.user) return;
-
       if (event === "refresh" && !shouldLogRefresh()) return;
 
       return safeInvoke({
         event,
         success: true,
         email,
-        source: "web",
+        source: isNative ? "native" : "web",
         meta: baseMeta(userId, reason),
       });
     };
@@ -196,7 +198,7 @@ function AuthAuditLogger() {
           event: "logout",
           success: true,
           email: session?.user?.email ?? null,
-          source: "web",
+          source: isNative ? "native" : "web",
           meta: baseMeta(session?.user?.id ?? null, "SIGNED_OUT"),
         });
       } else if (evt === "INITIAL_SESSION") {
@@ -232,9 +234,7 @@ function UiDebugBadge() {
     <div className="fixed top-2 left-2 z-[9999]">
       <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600 shadow-sm">
         <span className="font-semibold">UI:</span>
-        <span className={isMobileUI ? "text-emerald-700" : "text-indigo-700"}>
-          {isMobileUI ? "MOBILE" : "DESKTOP"}
-        </span>
+        <span className={isMobileUI ? "text-emerald-700" : "text-indigo-700"}>{isMobileUI ? "MOBILE" : "DESKTOP"}</span>
         <span className="text-slate-400">|</span>
         <span>native={String(debug.native)}</span>
         <span className="text-slate-400">|</span>
@@ -275,7 +275,6 @@ const AppRoutes = () => (
         <Route path="/confidentialite" element={<Privacy />} />
         <Route path="/cookies" element={<CookiesPolicy />} />
 
-        {/* ✅ Mon compte : si connecté, la page gère ; sinon renvoie login via PrivateRoute */}
         <Route
           path="/mon-compte"
           element={
@@ -286,11 +285,9 @@ const AppRoutes = () => (
         />
 
         <Route path="/login" element={<Login />} />
-
-        {/* ✅ Route “canonique” d’inscription */}
         <Route path="/register" element={<Register />} />
 
-        {/* ✅ Aliases pour éviter les 404 depuis CTA / anciens liens */}
+        {/* Aliases */}
         <Route path="/inscription" element={<Navigate to="/register" replace />} />
         <Route path="/signup" element={<Navigate to="/register" replace />} />
         <Route path="/sign-up" element={<Navigate to="/register" replace />} />
