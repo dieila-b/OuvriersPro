@@ -1,6 +1,7 @@
 // src/pages/Forfaits.tsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { Capacitor } from "@capacitor/core";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,9 +14,56 @@ type PlanCode = "FREE" | "MONTHLY" | "YEARLY";
 const Forfaits: React.FC = () => {
   const navigate = useNavigate();
 
+  // ✅ Détection native robuste
+  const isNative =
+    (() => {
+      try {
+        return Capacitor?.isNativePlatform?.() ?? false;
+      } catch {
+        return false;
+      }
+    })() ||
+    window.location.protocol === "capacitor:" ||
+    window.location.protocol === "file:";
+
+  /**
+   * ✅ Navigation robuste (fix 404 en app)
+   * - Web: navigate() normal
+   * - Native: forcer le hash (HashRouter) -> pas de reload serveur, pas de 404
+   */
   const go = (plan: PlanCode) => {
-    navigate(`/inscription-ouvrier?plan=${plan}`);
-    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+    const path = `/inscription-ouvrier`;
+    const search = `?plan=${encodeURIComponent(plan)}`;
+    const target = `${path}${search}`;
+
+    // Toujours remonter en haut (sans déclencher de reload)
+    const scrollTop = () => {
+      try {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } catch {}
+    };
+
+    try {
+      if (isNative) {
+        // Force HashRouter route
+        // Exemple final: #/inscription-ouvrier?plan=FREE
+        window.location.hash = `#${target}`;
+        // sécurité: si jamais un composant bloque, on tente aussi navigate
+        try {
+          navigate(target);
+        } catch {}
+        scrollTop();
+        return;
+      }
+
+      // Web
+      navigate(target);
+      scrollTop();
+    } catch {
+      // fallback ultime
+      if (isNative) window.location.hash = `#${target}`;
+      else window.location.href = target;
+    }
   };
 
   /**
@@ -40,7 +88,7 @@ const Forfaits: React.FC = () => {
         </div>
 
         <div className={`grid gap-6 ${onlyFree ? "md:grid-cols-1" : "md:grid-cols-3"}`}>
-          {/* ✅ FREE (actif) - version améliorée, même structure */}
+          {/* ✅ FREE */}
           <Card
             className={[
               "shadow-lg border border-gray-200 overflow-hidden",
@@ -70,7 +118,7 @@ const Forfaits: React.FC = () => {
             </CardHeader>
 
             <CardContent className="space-y-5">
-              {/* 3 bénéfices (comme la capture) */}
+              {/* Bénéfices */}
               <div className="space-y-4">
                 <div className="flex gap-3">
                   <ShieldCheck className="w-5 h-5 text-green-600 mt-0.5" />
@@ -126,10 +174,15 @@ const Forfaits: React.FC = () => {
                 </ul>
               </div>
 
-              {/* CTA */}
+              {/* ✅ CTA (fix 404 native) */}
               <Button
+                type="button"
                 className="w-full h-12 rounded-xl bg-gray-900 hover:bg-gray-950 text-white flex items-center justify-center gap-2"
-                onClick={() => go("FREE")}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  go("FREE");
+                }}
               >
                 Créer mon profil gratuitement <ArrowRight className="w-4 h-4" />
               </Button>
@@ -140,7 +193,7 @@ const Forfaits: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* ⛔ Mensuel (masqué provisoirement) */}
+          {/* ⛔ Mensuel */}
           {SHOW_MONTHLY && (
             <Card className="shadow-sm border-blue-200">
               <CardHeader>
@@ -153,14 +206,18 @@ const Forfaits: React.FC = () => {
                   <li>Mise en avant dans la recherche</li>
                   <li>Contacts illimités</li>
                 </ul>
-                <Button className="w-full bg-pro-blue hover:bg-blue-700" onClick={() => go("MONTHLY")}>
+                <Button
+                  type="button"
+                  className="w-full bg-pro-blue hover:bg-blue-700"
+                  onClick={() => go("MONTHLY")}
+                >
                   Choisir ce plan
                 </Button>
               </CardContent>
             </Card>
           )}
 
-          {/* ⛔ Annuel (masqué provisoirement) */}
+          {/* ⛔ Annuel */}
           {SHOW_YEARLY && (
             <Card className="shadow-sm">
               <CardHeader>
@@ -173,7 +230,11 @@ const Forfaits: React.FC = () => {
                   <li>Profil complet + mise en avant</li>
                   <li>Contacts illimités</li>
                 </ul>
-                <Button className="w-full bg-pro-blue hover:bg-blue-700" onClick={() => go("YEARLY")}>
+                <Button
+                  type="button"
+                  className="w-full bg-pro-blue hover:bg-blue-700"
+                  onClick={() => go("YEARLY")}
+                >
                   Choisir ce plan
                 </Button>
               </CardContent>
@@ -181,7 +242,6 @@ const Forfaits: React.FC = () => {
           )}
         </div>
 
-        {/* ✅ Bloc "Bientôt" (uniquement quand il n'y a que Gratuit) */}
         {onlyFree && (
           <div className="mt-8 flex justify-center">
             <div className="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white shadow-sm px-4 sm:px-6 py-4 text-center">
