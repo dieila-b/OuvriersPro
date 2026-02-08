@@ -116,6 +116,105 @@ function ScrollManager() {
 }
 
 /**
+ * ✅ FIX GLOBAL 404 en Capacitor
+ * Intercepte les <a href="/..."> internes (ou href="./...") en natif,
+ * pour faire une navigation React Router (HashRouter) au lieu d'un reload.
+ */
+function NativeLinkInterceptor() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const isNative =
+    (() => {
+      try {
+        return Capacitor?.isNativePlatform?.() ?? false;
+      } catch {
+        return false;
+      }
+    })() ||
+    window.location.protocol === "capacitor:" ||
+    window.location.protocol === "file:";
+
+  // 1) Normalise les URLs "sans hash" en natif (ex: /inscription-ouvrier?plan=FREE)
+  useEffect(() => {
+    if (!isNative) return;
+
+    // Si on est en natif mais qu'on a un pathname "réel" (pas un hash route),
+    // on force une redirection vers le hash équivalent.
+    const p = window.location.pathname || "/";
+    const s = window.location.search || "";
+    // Sur Capacitor, on doit rester sur "#/..."
+    if (p && p !== "/" && !window.location.hash) {
+      const target = `${p}${s}`;
+      // remplace sans empiler l'historique
+      window.location.replace(`#${target.startsWith("/") ? target : `/${target}`}`);
+    }
+  }, [isNative]);
+
+  // 2) Intercepte les clics sur les liens internes pour éviter un reload => 404
+  useEffect(() => {
+    if (!isNative) return;
+
+    const isModifiedClick = (e: MouseEvent) =>
+      e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0;
+
+    const handler = (e: MouseEvent) => {
+      if (isModifiedClick(e)) return;
+
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+
+      // Remonte jusqu'au <a>
+      const a = target.closest("a") as HTMLAnchorElement | null;
+      if (!a) return;
+
+      const hrefAttr = a.getAttribute("href") || "";
+      if (!hrefAttr) return;
+
+      // Ignore ancres, tel/mailto, downloads, target=_blank, etc.
+      if (hrefAttr.startsWith("#")) return;
+      if (hrefAttr.startsWith("mailto:") || hrefAttr.startsWith("tel:")) return;
+      if (a.hasAttribute("download")) return;
+      if ((a.getAttribute("target") || "").toLowerCase() === "_blank") return;
+
+      // Ignore externes http(s)
+      if (hrefAttr.startsWith("http://") || hrefAttr.startsWith("https://")) return;
+
+      // On ne gère que les routes internes ("/..." ou "./..." ou "inscription-ouvrier")
+      const isInternal =
+        hrefAttr.startsWith("/") ||
+        hrefAttr.startsWith("./") ||
+        !hrefAttr.includes(":"); // pas un schéma
+
+      if (!isInternal) return;
+
+      // Empêche le reload qui mène au 404
+      e.preventDefault();
+
+      // Nettoie "./"
+      let to = hrefAttr.startsWith("./") ? hrefAttr.slice(1) : hrefAttr;
+
+      // Si le lien est relatif sans "/"
+      if (!to.startsWith("/")) {
+        // On le rend relatif à la racine de l'app (comportement SPA attendu)
+        to = `/${to}`;
+      }
+
+      // Si déjà sur la même route, ne fait rien
+      const current = `${location.pathname}${location.search}`;
+      if (current === to) return;
+
+      navigate(to);
+    };
+
+    document.addEventListener("click", handler, true);
+    return () => document.removeEventListener("click", handler, true);
+  }, [isNative, navigate, location.pathname, location.search]);
+
+  return null;
+}
+
+/**
  * ✅ Journal de connexion — non bloquant
  */
 function AuthAuditLogger() {
@@ -256,112 +355,6 @@ function UiDebugBadge() {
       </div>
     </div>
   );
-}
-
-/**
- * ✅ Intercepteur de liens en natif (CAPACITOR)
- * Objectif: empêcher qu’un <a href="/..."> fasse un "full reload" => 404
- */
-function NativeLinkInterceptor() {
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const isNative =
-    (() => {
-      try {
-        return Capacitor?.isNativePlatform?.() ?? false;
-      } catch {
-        return false;
-      }
-    })() ||
-    window.location.protocol === "capacitor:" ||
-    window.location.protocol === "file:";
-
-  useEffect(() => {
-    if (!isNative) return;
-
-    const onClickCapture = (e: MouseEvent) => {
-      try {
-        if (e.defaultPrevented) return;
-        if (e.button !== 0) return; // clic gauche seulement
-        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-
-        const target = e.target as HTMLElement | null;
-        if (!target) return;
-
-        const a = target.closest("a") as HTMLAnchorElement | null;
-        if (!a) return;
-
-        const href = a.getAttribute("href") || "";
-        if (!href) return;
-
-        // ne pas intercepter:
-        // - external
-        // - mailto/tel
-        // - downloads
-        // - target blank
-        if (a.target === "_blank") return;
-        if (href.startsWith("http://") || href.startsWith("https://")) return;
-        if (href.startsWith("mailto:") || href.startsWith("tel:")) return;
-        if (a.hasAttribute("download")) return;
-
-        // Ancres
-        if (href.startsWith("#")) {
-          // laisse ScrollManager gérer
-          return;
-        }
-
-        // Normalise chemins relatifs (ex: "inscription-ouvrier" depuis /forfaits)
-        // => on convertit en absolu
-        let next = href;
-        if (!next.startsWith("/")) {
-          const base = location.pathname.endsWith("/")
-            ? location.pathname.slice(0, -1)
-            : location.pathname;
-          next = `${base}/${next}`;
-        }
-
-        // On évite le full reload et on route via SPA
-        e.preventDefault();
-        navigate(next, { replace: false });
-      } catch {
-        // no-op
-      }
-    };
-
-    document.addEventListener("click", onClickCapture, true);
-    return () => document.removeEventListener("click", onClickCapture, true);
-  }, [isNative, navigate, location.pathname]);
-
-  return null;
-}
-
-/**
- * ✅ Route de secours: corrige certains chemins “dérivés” qui finissent en 404
- * Ex:
- * - /forfaits/inscription-ouvrier  => /inscription-ouvrier
- * - /forfaits#/inscription-ouvrier => /inscription-ouvrier
- */
-function SmartNotFound() {
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    const p = location.pathname || "";
-    const s = location.search || "";
-
-    // si une page construit un lien relatif incorrect
-    if (p.includes("inscription-ouvrier")) {
-      navigate(`/inscription-ouvrier${s}`, { replace: true });
-      return;
-    }
-    if (p.includes("register")) {
-      navigate(`/register${s}`, { replace: true });
-      return;
-    }
-  }, [location.pathname, location.search, navigate]);
-
-  return <NotFound />;
 }
 
 const AppRoutes = () => (
@@ -526,8 +519,8 @@ const AppRoutes = () => (
           <Route path="moderation-avis" element={<AdminReviewsModerationPage />} />
         </Route>
 
-        {/* 404 (avec correcteur) */}
-        <Route path="*" element={<SmartNotFound />} />
+        {/* 404 */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>
   </>
@@ -593,7 +586,7 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
 
 /**
  * ✅ Router natif vs web (fix 404 Capacitor)
- * - Native => HashRouter
+ * - Native (capacitor://localhost ou file://) => HashRouter
  * - Web => BrowserRouter
  */
 function RouterSwitch({ children }: { children: React.ReactNode }) {
