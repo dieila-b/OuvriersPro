@@ -11,7 +11,6 @@ import {
   Navigate,
   BrowserRouter,
   HashRouter,
-  useNavigate,
 } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
@@ -111,105 +110,6 @@ function ScrollManager() {
 
     return () => window.clearTimeout(t);
   }, [location.pathname, location.hash]);
-
-  return null;
-}
-
-/**
- * ✅ FIX GLOBAL 404 en Capacitor
- * Intercepte les <a href="/..."> internes (ou href="./...") en natif,
- * pour faire une navigation React Router (HashRouter) au lieu d'un reload.
- */
-function NativeLinkInterceptor() {
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const isNative =
-    (() => {
-      try {
-        return Capacitor?.isNativePlatform?.() ?? false;
-      } catch {
-        return false;
-      }
-    })() ||
-    window.location.protocol === "capacitor:" ||
-    window.location.protocol === "file:";
-
-  // 1) Normalise les URLs "sans hash" en natif (ex: /inscription-ouvrier?plan=FREE)
-  useEffect(() => {
-    if (!isNative) return;
-
-    // Si on est en natif mais qu'on a un pathname "réel" (pas un hash route),
-    // on force une redirection vers le hash équivalent.
-    const p = window.location.pathname || "/";
-    const s = window.location.search || "";
-    // Sur Capacitor, on doit rester sur "#/..."
-    if (p && p !== "/" && !window.location.hash) {
-      const target = `${p}${s}`;
-      // remplace sans empiler l'historique
-      window.location.replace(`#${target.startsWith("/") ? target : `/${target}`}`);
-    }
-  }, [isNative]);
-
-  // 2) Intercepte les clics sur les liens internes pour éviter un reload => 404
-  useEffect(() => {
-    if (!isNative) return;
-
-    const isModifiedClick = (e: MouseEvent) =>
-      e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0;
-
-    const handler = (e: MouseEvent) => {
-      if (isModifiedClick(e)) return;
-
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-
-      // Remonte jusqu'au <a>
-      const a = target.closest("a") as HTMLAnchorElement | null;
-      if (!a) return;
-
-      const hrefAttr = a.getAttribute("href") || "";
-      if (!hrefAttr) return;
-
-      // Ignore ancres, tel/mailto, downloads, target=_blank, etc.
-      if (hrefAttr.startsWith("#")) return;
-      if (hrefAttr.startsWith("mailto:") || hrefAttr.startsWith("tel:")) return;
-      if (a.hasAttribute("download")) return;
-      if ((a.getAttribute("target") || "").toLowerCase() === "_blank") return;
-
-      // Ignore externes http(s)
-      if (hrefAttr.startsWith("http://") || hrefAttr.startsWith("https://")) return;
-
-      // On ne gère que les routes internes ("/..." ou "./..." ou "inscription-ouvrier")
-      const isInternal =
-        hrefAttr.startsWith("/") ||
-        hrefAttr.startsWith("./") ||
-        !hrefAttr.includes(":"); // pas un schéma
-
-      if (!isInternal) return;
-
-      // Empêche le reload qui mène au 404
-      e.preventDefault();
-
-      // Nettoie "./"
-      let to = hrefAttr.startsWith("./") ? hrefAttr.slice(1) : hrefAttr;
-
-      // Si le lien est relatif sans "/"
-      if (!to.startsWith("/")) {
-        // On le rend relatif à la racine de l'app (comportement SPA attendu)
-        to = `/${to}`;
-      }
-
-      // Si déjà sur la même route, ne fait rien
-      const current = `${location.pathname}${location.search}`;
-      if (current === to) return;
-
-      navigate(to);
-    };
-
-    document.addEventListener("click", handler, true);
-    return () => document.removeEventListener("click", handler, true);
-  }, [isNative, navigate, location.pathname, location.search]);
 
   return null;
 }
@@ -341,7 +241,9 @@ function UiDebugBadge() {
     <div className="fixed top-2 left-2 z-[9999]">
       <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600 shadow-sm">
         <span className="font-semibold">UI:</span>
-        <span className={isMobileUI ? "text-emerald-700" : "text-indigo-700"}>{isMobileUI ? "MOBILE" : "DESKTOP"}</span>
+        <span className={isMobileUI ? "text-emerald-700" : "text-indigo-700"}>
+          {isMobileUI ? "MOBILE" : "DESKTOP"}
+        </span>
         <span className="text-slate-400">|</span>
         <span>native={String(debug.native)}</span>
         <span className="text-slate-400">|</span>
@@ -362,7 +264,6 @@ const AppRoutes = () => (
     <ScrollManager />
     <AuthAuditLogger />
     <UiDebugBadge />
-    <NativeLinkInterceptor />
 
     <Suspense fallback={<div className="p-6 text-gray-600">Chargement…</div>}>
       <Routes>
@@ -403,7 +304,15 @@ const AppRoutes = () => (
         <Route path="/creation-profil" element={<Navigate to="/register" replace />} />
         <Route path="/creer-mon-profil" element={<Navigate to="/register" replace />} />
 
+        {/* ✅ FIX: si un lien/navigate est RELATIF depuis /forfaits, on retombe ici */}
+        <Route path="/forfaits/inscription-ouvrier" element={<Navigate to="/inscription-ouvrier" replace />} />
+        <Route path="/forfaits/inscription-ouvrier/*" element={<Navigate to="/inscription-ouvrier" replace />} />
+        {/* ✅ Alias optionnel si un bouton pointe vers ce slug */}
+        <Route path="/devenir-prestataire" element={<Navigate to="/inscription-ouvrier" replace />} />
+        <Route path="/forfaits/devenir-prestataire" element={<Navigate to="/inscription-ouvrier" replace />} />
+
         <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
+        <Route path="/inscription-ouvrier/*" element={<Navigate to="/inscription-ouvrier" replace />} />
 
         <Route
           path="/ouvrier/:id"
@@ -586,20 +495,17 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
 
 /**
  * ✅ Router natif vs web (fix 404 Capacitor)
- * - Native (capacitor://localhost ou file://) => HashRouter
+ * - Native (capacitor) => HashRouter
  * - Web => BrowserRouter
  */
 function RouterSwitch({ children }: { children: React.ReactNode }) {
-  const isNative =
-    (() => {
-      try {
-        return Capacitor?.isNativePlatform?.() ?? false;
-      } catch {
-        return false;
-      }
-    })() ||
-    window.location.protocol === "capacitor:" ||
-    window.location.protocol === "file:";
+  const isNative = (() => {
+    try {
+      return Capacitor?.isNativePlatform?.() ?? false;
+    } catch {
+      return false;
+    }
+  })();
 
   const Router = isNative ? HashRouter : BrowserRouter;
   return <Router>{children}</Router>;
