@@ -6,15 +6,7 @@ const config: CapacitorConfig = {
   appName: "ProxiServices",
   webDir: "dist",
   bundledWebRuntime: false,
-
-  // ✅ Mode "wrapper web" : l'app charge toujours la dernière version Netlify
-  server: {
-    url: "https://proxiservices.netlify.app",
-    androidScheme: "https",
-    cleartext: false,
-    // Optionnel mais recommandé si tu ouvres des sous-domaines
-    allowNavigation: ["https://proxiservices.netlify.app", "*.netlify.app"],
-  },
+  // ✅ pas de server.url
 };
 
 export default config;
