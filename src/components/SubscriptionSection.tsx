@@ -1,5 +1,7 @@
 // src/components/SubscriptionSection.tsx
 import React, { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { Capacitor } from "@capacitor/core";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +19,7 @@ import {
 
 const SubscriptionSection = () => {
   const { t, language } = useLanguage();
+  const navigate = useNavigate();
 
   /**
    * ✅ Plans payants masqués provisoirement
@@ -52,10 +55,50 @@ const SubscriptionSection = () => {
     }
   };
 
+  // ✅ Détection native robuste
+  const isNative =
+    (() => {
+      try {
+        return Capacitor?.isNativePlatform?.() ?? false;
+      } catch {
+        return false;
+      }
+    })() ||
+    window.location.protocol === "capacitor:" ||
+    window.location.protocol === "file:";
+
+  /**
+   * ✅ Navigation SPA robuste (fix 404 mobile)
+   * - Web: navigate()
+   * - Native: window.location.hash = "#/route?x=y" (HashRouter)
+   */
   const goToProviderFlow = (planCode: string) => {
     const qs = `?plan=${encodeURIComponent(planCode)}`;
-    const target = USE_BECOME_PROVIDER_FLOW ? `/devenir-prestataire${qs}` : `/inscription-ouvrier${qs}`;
-    window.location.assign(target);
+    const path = USE_BECOME_PROVIDER_FLOW ? `/devenir-prestataire${qs}` : `/inscription-ouvrier${qs}`;
+
+    try {
+      if (isNative) {
+        // IMPORTANT: HashRouter attend "#/..."
+        window.location.hash = `#${path}`;
+        // sécurité: si besoin, on tente aussi navigate (ne doit pas reloader)
+        try {
+          navigate(path);
+        } catch {}
+      } else {
+        navigate(path);
+      }
+
+      // scroll top
+      requestAnimationFrame(() => {
+        try {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } catch {}
+      });
+    } catch {
+      // fallback ultime
+      if (isNative) window.location.hash = `#${path}`;
+      else window.location.href = path;
+    }
   };
 
   const plans = useMemo(() => {
@@ -282,8 +325,13 @@ const SubscriptionSection = () => {
                   )}
 
                   <Button
+                    type="button"
                     className="w-full h-11 rounded-xl text-sm sm:text-base bg-pro-blue hover:bg-pro-blue/90 text-white"
-                    onClick={() => goToProviderFlow(plan.code)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      goToProviderFlow(plan.code);
+                    }}
                   >
                     <span className="inline-flex items-center gap-2">
                       {plan.btn}
@@ -291,7 +339,7 @@ const SubscriptionSection = () => {
                     </span>
                   </Button>
 
-                  {plan.isFree && (
+                  {(plan as any).isFree && (
                     <p className="mt-3 text-center text-xs text-gray-500">
                       {cms(
                         "pricing.plan.free.note",
