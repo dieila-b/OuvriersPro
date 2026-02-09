@@ -17,6 +17,26 @@ import {
   User,
 } from "lucide-react";
 
+const isNativeRuntime = () => {
+  try {
+    if (Capacitor?.isNativePlatform?.()) return true;
+  } catch {}
+
+  try {
+    const p = window.location?.protocol;
+    if (p === "capacitor:" || p === "file:") return true;
+
+    const host = window.location?.hostname;
+    const origin = window.location?.origin || "";
+    if (host === "localhost" && origin.startsWith("https://localhost")) return true;
+
+    const ua = navigator?.userAgent || "";
+    if (ua.includes("wv") || ua.includes("Capacitor")) return true;
+  } catch {}
+
+  return false;
+};
+
 const SubscriptionSection = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
@@ -30,7 +50,7 @@ const SubscriptionSection = () => {
 
   /**
    * ✅ CTA Flow
-   * - true  => CTA vers /devenir-prestataire (⚠️ route doit exister)
+   * - true  => CTA vers /devenir-prestataire (route existe maintenant)
    * - false => CTA vers /inscription-ouvrier (direct) ✅
    */
   const USE_BECOME_PROVIDER_FLOW = false;
@@ -55,49 +75,40 @@ const SubscriptionSection = () => {
     }
   };
 
-  // ✅ Détection native robuste
-  const isNative =
-    (() => {
-      try {
-        return Capacitor?.isNativePlatform?.() ?? false;
-      } catch {
-        return false;
-      }
-    })() ||
-    window.location.protocol === "capacitor:" ||
-    window.location.protocol === "file:";
+  const isNative = isNativeRuntime();
 
   /**
-   * ✅ Navigation SPA robuste (fix 404 mobile)
+   * ✅ Navigation SPA robuste (zéro 404)
+   * - Native: force hash + navigate (pas de reload)
    * - Web: navigate()
-   * - Native: window.location.hash = "#/route?x=y" (HashRouter)
    */
   const goToProviderFlow = (planCode: string) => {
     const qs = `?plan=${encodeURIComponent(planCode)}`;
-    const path = USE_BECOME_PROVIDER_FLOW ? `/devenir-prestataire${qs}` : `/inscription-ouvrier${qs}`;
+    const target = USE_BECOME_PROVIDER_FLOW ? `/devenir-prestataire${qs}` : `/inscription-ouvrier${qs}`;
 
     try {
       if (isNative) {
-        // IMPORTANT: HashRouter attend "#/..."
-        window.location.hash = `#${path}`;
-        // sécurité: si besoin, on tente aussi navigate (ne doit pas reloader)
+        // Force HashRouter route: #/inscription-ouvrier?plan=FREE
         try {
-          navigate(path);
+          window.location.hash = `#${target}`;
         } catch {}
+
+        navigate(target);
       } else {
-        navigate(path);
+        navigate(target);
       }
 
-      // scroll top
       requestAnimationFrame(() => {
         try {
           window.scrollTo({ top: 0, behavior: "smooth" });
         } catch {}
       });
     } catch {
-      // fallback ultime
-      if (isNative) window.location.hash = `#${path}`;
-      else window.location.href = path;
+      // fallback ultime (sans reload en natif)
+      try {
+        if (isNative) window.location.hash = `#${target}`;
+        else window.location.href = target;
+      } catch {}
     }
   };
 
