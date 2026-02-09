@@ -11,32 +11,40 @@ import { ArrowRight, CheckCircle2, Clock, ShieldCheck } from "lucide-react";
 
 type PlanCode = "FREE" | "MONTHLY" | "YEARLY";
 
+const isNativeRuntime = () => {
+  try {
+    if (Capacitor?.isNativePlatform?.()) return true;
+  } catch {}
+
+  try {
+    const p = window.location?.protocol;
+    if (p === "capacitor:" || p === "file:") return true;
+
+    const host = window.location?.hostname;
+    const origin = window.location?.origin || "";
+    if (host === "localhost" && origin.startsWith("https://localhost")) return true;
+
+    const ua = navigator?.userAgent || "";
+    if (ua.includes("wv") || ua.includes("Capacitor")) return true;
+  } catch {}
+
+  return false;
+};
+
 const Forfaits: React.FC = () => {
   const navigate = useNavigate();
-
-  // ✅ Détection native robuste
-  const isNative =
-    (() => {
-      try {
-        return Capacitor?.isNativePlatform?.() ?? false;
-      } catch {
-        return false;
-      }
-    })() ||
-    window.location.protocol === "capacitor:" ||
-    window.location.protocol === "file:";
+  const isNative = isNativeRuntime();
 
   /**
-   * ✅ Navigation robuste (fix 404 en app)
-   * - Web: navigate() normal
-   * - Native: forcer le hash (HashRouter) -> pas de reload serveur, pas de 404
+   * ✅ Navigation robuste (zéro 404)
+   * - Native: on force hash + navigate (SPA)
+   * - Web: navigate()
    */
   const go = (plan: PlanCode) => {
     const path = `/inscription-ouvrier`;
     const search = `?plan=${encodeURIComponent(plan)}`;
     const target = `${path}${search}`;
 
-    // Toujours remonter en haut (sans déclencher de reload)
     const scrollTop = () => {
       try {
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -45,13 +53,13 @@ const Forfaits: React.FC = () => {
 
     try {
       if (isNative) {
-        // Force HashRouter route
-        // Exemple final: #/inscription-ouvrier?plan=FREE
-        window.location.hash = `#${target}`;
-        // sécurité: si jamais un composant bloque, on tente aussi navigate
+        // Force HashRouter route: #/inscription-ouvrier?plan=FREE
         try {
-          navigate(target);
+          window.location.hash = `#${target}`;
         } catch {}
+
+        // SPA navigation (ne doit PAS reloader)
+        navigate(target);
         scrollTop();
         return;
       }
@@ -60,15 +68,16 @@ const Forfaits: React.FC = () => {
       navigate(target);
       scrollTop();
     } catch {
-      // fallback ultime
-      if (isNative) window.location.hash = `#${target}`;
-      else window.location.href = target;
+      // fallback ultime (sans reload en natif)
+      try {
+        if (isNative) window.location.hash = `#${target}`;
+        else window.location.href = target;
+      } catch {}
     }
   };
 
   /**
    * ✅ Masquage provisoire des forfaits payants sur le site
-   * Quand tu voudras les réactiver, mets à true.
    */
   const SHOW_MONTHLY = false;
   const SHOW_YEARLY = false;
@@ -174,7 +183,7 @@ const Forfaits: React.FC = () => {
                 </ul>
               </div>
 
-              {/* ✅ CTA (fix 404 native) */}
+              {/* ✅ CTA (zéro 404) */}
               <Button
                 type="button"
                 className="w-full h-12 rounded-xl bg-gray-900 hover:bg-gray-950 text-white flex items-center justify-center gap-2"
