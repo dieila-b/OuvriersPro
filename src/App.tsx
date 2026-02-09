@@ -70,6 +70,32 @@ const ClientReviews = lazy(() => import("./pages/ClientReviews"));
 const ClientContactForm = lazy(() => import("./pages/ClientContactForm"));
 
 /**
+ * ✅ Détection native robuste (Capacitor / WebView)
+ * Objectif: garantir HashRouter quand on est dans l’app.
+ */
+const isNativeRuntime = () => {
+  try {
+    if (Capacitor?.isNativePlatform?.()) return true;
+  } catch {}
+
+  try {
+    const p = window.location?.protocol;
+    if (p === "capacitor:" || p === "file:") return true;
+
+    // En Capacitor, on voit très souvent https://localhost
+    const host = window.location?.hostname;
+    const origin = window.location?.origin || "";
+    if (host === "localhost" && origin.startsWith("https://localhost")) return true;
+
+    // fallback: UA WebView Android
+    const ua = navigator?.userAgent || "";
+    if (ua.includes("wv") || ua.includes("Capacitor")) return true;
+  } catch {}
+
+  return false;
+};
+
+/**
  * ✅ QueryClient optimisé
  */
 const useAppQueryClient = () =>
@@ -127,13 +153,7 @@ function AuthAuditLogger() {
     const COOLDOWN_MS = 10 * 60 * 1000;
     const LS_KEY = "op_login_journal:last_refresh";
 
-    const isNative = (() => {
-      try {
-        return Capacitor?.isNativePlatform?.() ?? false;
-      } catch {
-        return false;
-      }
-    })();
+    const isNative = isNativeRuntime();
 
     const getTimeZone = () => {
       try {
@@ -226,14 +246,7 @@ function UiDebugBadge() {
   const { isMobileUI, debug } = useUiModeCtx();
   if (!debug) return null;
 
-  const isNative = (() => {
-    try {
-      return Capacitor?.isNativePlatform?.() ?? false;
-    } catch {
-      return false;
-    }
-  })();
-
+  const isNative = isNativeRuntime();
   const show = isNative && import.meta.env.DEV && new URLSearchParams(window.location.search).has("uiDebug");
   if (!show) return null;
 
@@ -304,11 +317,13 @@ const AppRoutes = () => (
         <Route path="/creation-profil" element={<Navigate to="/register" replace />} />
         <Route path="/creer-mon-profil" element={<Navigate to="/register" replace />} />
 
-        {/* ✅ FIX: si un lien/navigate est RELATIF depuis /forfaits, on retombe ici */}
+        {/* ✅ Fix: liens relatifs depuis /forfaits */}
         <Route path="/forfaits/inscription-ouvrier" element={<Navigate to="/inscription-ouvrier" replace />} />
         <Route path="/forfaits/inscription-ouvrier/*" element={<Navigate to="/inscription-ouvrier" replace />} />
-        {/* ✅ Alias optionnel si un bouton pointe vers ce slug */}
-        <Route path="/devenir-prestataire" element={<Navigate to="/inscription-ouvrier" replace />} />
+
+        {/* ✅ Fix: devenir-prestataire (direct + wildcard) */}
+        <Route path="/devenir-prestataire" element={<InscriptionOuvrier />} />
+        <Route path="/devenir-prestataire/*" element={<Navigate to="/inscription-ouvrier" replace />} />
         <Route path="/forfaits/devenir-prestataire" element={<Navigate to="/inscription-ouvrier" replace />} />
 
         <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
@@ -441,15 +456,7 @@ const AppRoutes = () => (
  */
 function DesktopViewport({ children }: { children: React.ReactNode }) {
   const { isDesktopUI } = useUiModeCtx();
-
-  const isNative = (() => {
-    try {
-      return Capacitor?.isNativePlatform?.() ?? false;
-    } catch {
-      return false;
-    }
-  })();
-
+  const isNative = isNativeRuntime();
   const DESKTOP_WIDTH = 1200;
 
   useEffect(() => {
@@ -495,18 +502,11 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
 
 /**
  * ✅ Router natif vs web (fix 404 Capacitor)
- * - Native (capacitor) => HashRouter
+ * - Native => HashRouter
  * - Web => BrowserRouter
  */
 function RouterSwitch({ children }: { children: React.ReactNode }) {
-  const isNative = (() => {
-    try {
-      return Capacitor?.isNativePlatform?.() ?? false;
-    } catch {
-      return false;
-    }
-  })();
-
+  const isNative = isNativeRuntime();
   const Router = isNative ? HashRouter : BrowserRouter;
   return <Router>{children}</Router>;
 }
