@@ -1,7 +1,7 @@
 // src/pages/Forfaits.tsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Capacitor } from "@capacitor/core";
+// Capacitor import removed — navigation uses React Router only
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,69 +11,18 @@ import { ArrowRight, CheckCircle2, Clock, ShieldCheck } from "lucide-react";
 
 type PlanCode = "FREE" | "MONTHLY" | "YEARLY";
 
-const isNativeRuntime = () => {
-  try {
-    if (Capacitor?.isNativePlatform?.()) return true;
-  } catch {}
-
-  try {
-    const p = window.location?.protocol;
-    if (p === "capacitor:" || p === "file:") return true;
-
-    const host = window.location?.hostname;
-    const origin = window.location?.origin || "";
-    if (host === "localhost" && origin.startsWith("https://localhost")) return true;
-
-    const ua = navigator?.userAgent || "";
-    if (ua.includes("wv") || ua.includes("Capacitor")) return true;
-  } catch {}
-
-  return false;
-};
 
 const Forfaits: React.FC = () => {
   const navigate = useNavigate();
-  const isNative = isNativeRuntime();
-
   /**
-   * ✅ Navigation robuste (zéro 404)
-   * - Native: on force hash + navigate (SPA)
-   * - Web: navigate()
+   * ✅ Navigation SPA uniquement via React Router (zéro 404, zéro reload)
    */
   const go = (plan: PlanCode) => {
-    const path = `/inscription-ouvrier`;
-    const search = `?plan=${encodeURIComponent(plan)}`;
-    const target = `${path}${search}`;
-
-    const scrollTop = () => {
-      try {
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      } catch {}
-    };
-
-    try {
-      if (isNative) {
-        // Force HashRouter route: #/inscription-ouvrier?plan=FREE
-        try {
-          window.location.hash = `#${target}`;
-        } catch {}
-
-        // SPA navigation (ne doit PAS reloader)
-        navigate(target);
-        scrollTop();
-        return;
-      }
-
-      // Web
-      navigate(target);
-      scrollTop();
-    } catch {
-      // fallback ultime (sans reload en natif)
-      try {
-        if (isNative) window.location.hash = `#${target}`;
-        else window.location.href = target;
-      } catch {}
-    }
+    const target = `/inscription-ouvrier?plan=${encodeURIComponent(plan)}`;
+    navigate(target);
+    requestAnimationFrame(() => {
+      try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+    });
   };
 
   /**

@@ -1,7 +1,7 @@
 // src/components/SubscriptionSection.tsx
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Capacitor } from "@capacitor/core";
+// Capacitor import removed — navigation uses React Router only
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,25 +17,6 @@ import {
   User,
 } from "lucide-react";
 
-const isNativeRuntime = () => {
-  try {
-    if (Capacitor?.isNativePlatform?.()) return true;
-  } catch {}
-
-  try {
-    const p = window.location?.protocol;
-    if (p === "capacitor:" || p === "file:") return true;
-
-    const host = window.location?.hostname;
-    const origin = window.location?.origin || "";
-    if (host === "localhost" && origin.startsWith("https://localhost")) return true;
-
-    const ua = navigator?.userAgent || "";
-    if (ua.includes("wv") || ua.includes("Capacitor")) return true;
-  } catch {}
-
-  return false;
-};
 
 const SubscriptionSection = () => {
   const { t, language } = useLanguage();
@@ -75,41 +56,16 @@ const SubscriptionSection = () => {
     }
   };
 
-  const isNative = isNativeRuntime();
-
   /**
-   * ✅ Navigation SPA robuste (zéro 404)
-   * - Native: force hash + navigate (pas de reload)
-   * - Web: navigate()
+   * ✅ Navigation SPA uniquement via React Router (zéro 404, zéro reload)
    */
   const goToProviderFlow = (planCode: string) => {
     const qs = `?plan=${encodeURIComponent(planCode)}`;
     const target = USE_BECOME_PROVIDER_FLOW ? `/devenir-prestataire${qs}` : `/inscription-ouvrier${qs}`;
-
-    try {
-      if (isNative) {
-        // Force HashRouter route: #/inscription-ouvrier?plan=FREE
-        try {
-          window.location.hash = `#${target}`;
-        } catch {}
-
-        navigate(target);
-      } else {
-        navigate(target);
-      }
-
-      requestAnimationFrame(() => {
-        try {
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        } catch {}
-      });
-    } catch {
-      // fallback ultime (sans reload en natif)
-      try {
-        if (isNative) window.location.hash = `#${target}`;
-        else window.location.href = target;
-      } catch {}
-    }
+    navigate(target);
+    requestAnimationFrame(() => {
+      try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+    });
   };
 
   const plans = useMemo(() => {

@@ -374,7 +374,7 @@ const WorkerDashboard: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
         <div className="max-w-md bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
           <div className="text-sm text-red-600 mb-3">{error}</div>
-          <Button onClick={() => (window.location.href = "/")} className="bg-pro-blue hover:bg-blue-700">
+          <Button onClick={() => navigate("/")} className="bg-pro-blue hover:bg-blue-700">
             {language === "fr" ? "Retour à l'accueil" : "Return to home"}
           </Button>
         </div>
