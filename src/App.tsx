@@ -75,27 +75,21 @@ const ClientContactForm = lazy(() => import("./pages/ClientContactForm"));
  * Objectif: garantir HashRouter quand on est dans l’app.
  */
 const isNativeRuntime = () => {
-  // 1. Capacitor SDK
+  // 1) Capacitor SDK
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
 
   try {
     const p = window.location?.protocol ?? "";
-    // 2. file:// or capacitor:// → always native
     if (p === "capacitor:" || p === "file:") return true;
 
-    // 3. Capacitor loads from https://localhost (Android) or capacitor://localhost (iOS)
     const host = window.location?.hostname ?? "";
+    // Android: https://localhost ; iOS: capacitor://localhost
     if (host === "localhost") return true;
 
-    // 4. UA WebView hints
     const ua = navigator?.userAgent ?? "";
     if (ua.includes("wv") || ua.includes("Capacitor")) return true;
-
-    // 5. Not running on a real web server (no standard port 80/443 hostname)
-    // e.g. Capacitor sometimes uses IP-based origins
-    if (p === "https:" && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) return true;
   } catch {}
 
   return false;
@@ -302,18 +296,19 @@ function GlobalLinkInterceptor() {
         href.startsWith("blob:") ||
         href.startsWith("data:") ||
         anchor.target === "_blank"
-      ) return;
+      ) {
+        return;
+      }
 
       // Internal route: intercept and use React Router
       if (href.startsWith("/") || href.startsWith("#")) {
         e.preventDefault();
         e.stopPropagation();
-        console.info("[GlobalLinkInterceptor] Intercepted <a> click:", href);
         navigate(href);
       }
     };
 
-    document.addEventListener("click", handler, true); // capture phase
+    document.addEventListener("click", handler, true);
     return () => document.removeEventListener("click", handler, true);
   }, [navigate]);
 
@@ -500,12 +495,14 @@ const AppRoutes = () => (
 );
 
 /**
- * ✅ Wrapper viewport desktop: on applique le "fake desktop viewport"
- * UNIQUEMENT quand on est en Capacitor native.
+ * ✅ Wrapper viewport desktop (native uniquement)
+ * IMPORTANT: on évite les scales trop bas → sinon l’écran devient illisible.
  */
 function DesktopViewport({ children }: { children: React.ReactNode }) {
   const { isDesktopUI } = useUiModeCtx();
   const isNative = isNativeRuntime();
+
+  // Largeur “desktop” de référence si tu actives le mode desktop dans l’app
   const DESKTOP_WIDTH = 1200;
 
   useEffect(() => {
@@ -517,9 +514,18 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
     if (!isNative) return;
 
     const html = document.documentElement;
+
+    // Toujours 1 par défaut en mobile => lisible
+    html.style.setProperty("--ui-scale", "1");
     html.style.setProperty("--ui-desktop-width", `${DESKTOP_WIDTH}px`);
 
+    // Si le mode desktop est actif, on applique un scale MAIS jamais trop bas.
     const computeScale = () => {
+      if (!isDesktopUI) {
+        html.style.setProperty("--ui-scale", "1");
+        return;
+      }
+
       const eff =
         Math.min(
           window.innerWidth || Infinity,
@@ -528,7 +534,9 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
           window.screen?.width || Infinity
         ) || 9999;
 
-      const scale = isDesktopUI ? Math.min(1, Math.max(0.35, eff / DESKTOP_WIDTH)) : 1;
+      // ✅ Lisible: on clamp à MIN 0.85 (au lieu de 0.35)
+      const minScale = 0.85;
+      const scale = Math.min(1, Math.max(minScale, eff / DESKTOP_WIDTH));
       html.style.setProperty("--ui-scale", String(scale));
     };
 
@@ -556,8 +564,11 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
  */
 function RouterSwitch({ children }: { children: React.ReactNode }) {
   const isNative = isNativeRuntime();
-  // Debug: log which router is used (visible in Capacitor WebView console / Chrome DevTools remote)
-  console.info(`[RouterSwitch] isNative=${isNative}, protocol=${window.location?.protocol}, hostname=${window.location?.hostname}, UA=${navigator?.userAgent?.substring(0, 80)}`);
+  if (import.meta.env.DEV) {
+    console.info(
+      `[RouterSwitch] isNative=${isNative}, protocol=${window.location?.protocol}, hostname=${window.location?.hostname}`
+    );
+  }
   const Router = isNative ? HashRouter : BrowserRouter;
   return <Router>{children}</Router>;
 }
