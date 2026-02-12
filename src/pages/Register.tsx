@@ -179,7 +179,7 @@ const Register: React.FC = () => {
       // Succès : on redirige selon le type
       if (accountType === "worker") {
         // Ouvrier : aller directement aux forfaits sur la page d'accueil
-        window.location.href = "/#subscription";
+        navigate("/#subscription");
       } else {
         // Client : retour à l’accueil classique
         navigate("/");
@@ -228,7 +228,7 @@ const Register: React.FC = () => {
               // 👉 Si l'utilisateur clique sur l’onglet "Ouvrier Pro",
               // on l'envoie directement sur la section forfaits
               if (value === "worker") {
-                window.location.href = "/#subscription";
+                navigate("/#subscription");
               }
             }}
             className="mb-4"

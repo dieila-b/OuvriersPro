@@ -99,6 +99,6 @@ Deno.serve(async (req) => {
 
     return json(200, { translatedText });
   } catch (e) {
-    return json(500, { error: "Unexpected error", details: String(e?.message ?? e) });
+    return json(500, { error: "Unexpected error", details: String((e as Error)?.message ?? e) });
   }
 });
