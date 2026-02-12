@@ -8,6 +8,7 @@ import {
   Routes,
   Route,
   useLocation,
+  useNavigate,
   Navigate,
   BrowserRouter,
   HashRouter,
@@ -277,11 +278,54 @@ function UiDebugBadge() {
   );
 }
 
+/**
+ * ✅ Intercepteur global : redirige les clics sur <a href="/..."> vers React Router
+ * Empêche tout reload WebView en Capacitor (élimine les 404 natifs).
+ */
+function GlobalLinkInterceptor() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!anchor) return;
+
+      const href = anchor.getAttribute("href");
+      if (!href) return;
+
+      // Ignore external links, mailto, tel, anchors, etc.
+      if (
+        href.startsWith("http://") ||
+        href.startsWith("https://") ||
+        href.startsWith("mailto:") ||
+        href.startsWith("tel:") ||
+        href.startsWith("blob:") ||
+        href.startsWith("data:") ||
+        anchor.target === "_blank"
+      ) return;
+
+      // Internal route: intercept and use React Router
+      if (href.startsWith("/") || href.startsWith("#")) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.info("[GlobalLinkInterceptor] Intercepted <a> click:", href);
+        navigate(href);
+      }
+    };
+
+    document.addEventListener("click", handler, true); // capture phase
+    return () => document.removeEventListener("click", handler, true);
+  }, [navigate]);
+
+  return null;
+}
+
 const AppRoutes = () => (
   <>
     <ScrollManager />
     <AuthAuditLogger />
     <UiDebugBadge />
+    <GlobalLinkInterceptor />
 
     <Suspense fallback={<div className="p-6 text-gray-600">Chargement…</div>}>
       <Routes>
