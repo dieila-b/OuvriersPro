@@ -74,22 +74,27 @@ const ClientContactForm = lazy(() => import("./pages/ClientContactForm"));
  * Objectif: garantir HashRouter quand on est dans l’app.
  */
 const isNativeRuntime = () => {
+  // 1. Capacitor SDK
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
 
   try {
-    const p = window.location?.protocol;
+    const p = window.location?.protocol ?? "";
+    // 2. file:// or capacitor:// → always native
     if (p === "capacitor:" || p === "file:") return true;
 
-    // En Capacitor, on voit très souvent https://localhost
-    const host = window.location?.hostname;
-    const origin = window.location?.origin || "";
-    if (host === "localhost" && origin.startsWith("https://localhost")) return true;
+    // 3. Capacitor loads from https://localhost (Android) or capacitor://localhost (iOS)
+    const host = window.location?.hostname ?? "";
+    if (host === "localhost") return true;
 
-    // fallback: UA WebView Android
-    const ua = navigator?.userAgent || "";
+    // 4. UA WebView hints
+    const ua = navigator?.userAgent ?? "";
     if (ua.includes("wv") || ua.includes("Capacitor")) return true;
+
+    // 5. Not running on a real web server (no standard port 80/443 hostname)
+    // e.g. Capacitor sometimes uses IP-based origins
+    if (p === "https:" && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) return true;
   } catch {}
 
   return false;
@@ -507,6 +512,8 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
  */
 function RouterSwitch({ children }: { children: React.ReactNode }) {
   const isNative = isNativeRuntime();
+  // Debug: log which router is used (visible in Capacitor WebView console / Chrome DevTools remote)
+  console.info(`[RouterSwitch] isNative=${isNative}, protocol=${window.location?.protocol}, hostname=${window.location?.hostname}, UA=${navigator?.userAgent?.substring(0, 80)}`);
   const Router = isNative ? HashRouter : BrowserRouter;
   return <Router>{children}</Router>;
 }
