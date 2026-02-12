@@ -502,53 +502,13 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
   const { isDesktopUI } = useUiModeCtx();
   const isNative = isNativeRuntime();
 
-  // Largeur “desktop” de référence si tu actives le mode desktop dans l’app
-  const DESKTOP_WIDTH = 1200;
-
   useEffect(() => {
     const html = document.documentElement;
     html.setAttribute("data-ui-native", isNative ? "true" : "false");
-  }, [isNative]);
-
-  useEffect(() => {
-    if (!isNative) return;
-
-    const html = document.documentElement;
-
-    // Toujours 1 par défaut en mobile => lisible
+    // En natif : toujours scale 1, pas de viewport desktop forcé
     html.style.setProperty("--ui-scale", "1");
-    html.style.setProperty("--ui-desktop-width", `${DESKTOP_WIDTH}px`);
-
-    // Si le mode desktop est actif, on applique un scale MAIS jamais trop bas.
-    const computeScale = () => {
-      if (!isDesktopUI) {
-        html.style.setProperty("--ui-scale", "1");
-        return;
-      }
-
-      const eff =
-        Math.min(
-          window.innerWidth || Infinity,
-          document.documentElement?.clientWidth || Infinity,
-          window.visualViewport?.width || Infinity,
-          window.screen?.width || Infinity
-        ) || 9999;
-
-      // ✅ Lisible: on clamp à MIN 0.85 (au lieu de 0.35)
-      const minScale = 0.85;
-      const scale = Math.min(1, Math.max(minScale, eff / DESKTOP_WIDTH));
-      html.style.setProperty("--ui-scale", String(scale));
-    };
-
-    computeScale();
-    window.addEventListener("resize", computeScale);
-    window.visualViewport?.addEventListener("resize", computeScale);
-
-    return () => {
-      window.removeEventListener("resize", computeScale);
-      window.visualViewport?.removeEventListener("resize", computeScale);
-    };
-  }, [isDesktopUI, isNative]);
+    html.style.setProperty("--ui-desktop-width", "100%");
+  }, [isNative]);
 
   return (
     <div id="ui-desktop-viewport" data-ui-viewport={isDesktopUI ? "desktop" : "mobile"}>

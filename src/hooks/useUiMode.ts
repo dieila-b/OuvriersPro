@@ -34,7 +34,7 @@ export function useUiMode(options?: {
   /** width used for "desktop render" when forcing desktop on small screens */
   desktopRenderWidth?: number; // 👈 NEW
 }) {
-  const forceDesktopInApp = options?.forceDesktopInApp ?? true;
+  const forceDesktopInApp = options?.forceDesktopInApp ?? false;
   const desktopMinWidth = options?.desktopMinWidth ?? 1024;
   const desktopRenderWidth = options?.desktopRenderWidth ?? 1200; // 👈 NEW
 
