@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ProxiServices</string>
+    <string name="title_activity_main">ProxiServices</string>
+    <string name="package_name">com.proxiservices.app</string>
+    <string name="custom_url_scheme">com.proxiservices.app</string>
+</resources>
