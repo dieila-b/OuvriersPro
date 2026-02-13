@@ -682,13 +682,25 @@ const InscriptionOuvrier: React.FC = () => {
   const canSubmit = !loading && (!isPaidPlan || paymentCompleted);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-12">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 py-10 md:py-14">
       <div className="container mx-auto px-4 max-w-5xl">
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl md:text-4xl font-bold text-pro-gray mb-2">
+        {/* ✅ Bouton Retour à l'accueil (toujours visible) */}
+        <div className="mb-6 flex items-center justify-start">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => navigate("/", { replace: true })}
+            className="rounded-xl px-3 text-slate-700 hover:text-slate-900 hover:bg-white/70 border border-transparent hover:border-slate-200 shadow-sm"
+          >
+            {language === "fr" ? "← Retour à l'accueil" : "← Back to home"}
+          </Button>
+        </div>
+
+        <div className="mb-10 text-center">
+          <h1 className="text-3xl md:text-4xl font-bold text-pro-gray mb-2 tracking-tight">
             {language === "fr" ? "Devenir Ouvrier Pro" : "Become a Pro Worker"}
           </h1>
-          <p className="text-gray-600 max-w-2xl mx-auto">
+          <p className="text-slate-600 max-w-2xl mx-auto leading-relaxed">
             {language === "fr"
               ? "Complétez votre profil pour être visible auprès des particuliers et professionnels près de chez vous."
               : "Complete your profile to be visible to clients near you."}
@@ -696,23 +708,23 @@ const InscriptionOuvrier: React.FC = () => {
         </div>
 
         <div className="grid md:grid-cols-3 gap-8 items-start">
-          <Card className="md:col-span-1 shadow-lg">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold text-pro-gray">
+          <Card className="md:col-span-1 shadow-lg rounded-2xl border-slate-200/70 bg-white/80 backdrop-blur">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold text-pro-gray">
                 {language === "fr" ? "Plan sélectionné" : "Selected plan"}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="mb-3">
+              <div className="mb-4">
                 <div className="text-xl font-bold text-pro-blue">{planMeta.label}</div>
-                <div className="text-gray-700">{planMeta.price}</div>
-                <div className="inline-block mt-2 px-3 py-1 text-xs rounded-full bg-green-100 text-green-700">
+                <div className="text-slate-700">{planMeta.price}</div>
+                <div className="inline-flex items-center mt-2 px-3 py-1 text-xs rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
                   {planMeta.badge}
                 </div>
               </div>
-              <p className="text-sm text-gray-600">{planMeta.description}</p>
+              <p className="text-sm text-slate-600 leading-relaxed">{planMeta.description}</p>
 
-              <ul className="mt-4 text-sm text-gray-700 list-disc list-inside space-y-1">
+              <ul className="mt-5 text-sm text-slate-700 list-disc list-inside space-y-1.5">
                 {plan === "FREE" ? (
                   <>
                     <li>{language === "fr" ? "1 métier affiché, contacts limités" : "1 listed trade, limited contacts"}</li>
@@ -724,14 +736,18 @@ const InscriptionOuvrier: React.FC = () => {
                     <li>{language === "fr" ? "Contacts clients illimités" : "Unlimited client contacts"}</li>
                   </>
                 )}
-                <li>{language === "fr" ? "Votre inscription sera vérifiée par notre équipe." : "Your registration will be reviewed by our team."}</li>
+                <li>
+                  {language === "fr"
+                    ? "Votre inscription sera vérifiée par notre équipe."
+                    : "Your registration will be reviewed by our team."}
+                </li>
               </ul>
             </CardContent>
           </Card>
 
-          <Card className="md:col-span-2 shadow-lg">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold text-pro-gray">
+          <Card className="md:col-span-2 shadow-lg rounded-2xl border-slate-200/70 bg-white/90 backdrop-blur">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold text-pro-gray">
                 {success
                   ? language === "fr"
                     ? "Inscription réussie"
@@ -745,7 +761,7 @@ const InscriptionOuvrier: React.FC = () => {
             <CardContent>
               {success ? (
                 <div className="space-y-6 text-center py-10">
-                  <div className="text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-4 text-base md:text-lg">
+                  <div className="text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-4 text-base md:text-lg leading-relaxed">
                     {language === "fr" ? (
                       plan === "FREE" ? (
                         <>
@@ -778,222 +794,371 @@ const InscriptionOuvrier: React.FC = () => {
                   <Button
                     type="button"
                     onClick={() => navigate("/", { replace: true })}
-                    className="bg-pro-blue hover:bg-blue-700 px-6 py-3 text-base md:text-lg"
+                    className="bg-pro-blue hover:bg-blue-700 px-6 py-3 text-base md:text-lg rounded-xl shadow-sm"
                   >
                     {language === "fr" ? "Retour à l'accueil" : "Return to home"}
                   </Button>
                 </div>
               ) : (
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Prénom" : "First name"}</label>
-                      <Input required value={form.firstName} onChange={handleChange("firstName")} placeholder={language === "fr" ? "Votre prénom" : "First name"} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Nom" : "Last name"}</label>
-                      <Input required value={form.lastName} onChange={handleChange("lastName")} placeholder={language === "fr" ? "Votre nom" : "Last name"} />
-                    </div>
-                  </div>
-
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                      <Input type="email" required value={form.email} onChange={handleChange("email")} placeholder="vous@exemple.com" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Mot de passe" : "Password"}</label>
-                      <Input type="password" required minLength={6} value={form.password} onChange={handleChange("password")} placeholder={language === "fr" ? "Au moins 6 caractères" : "At least 6 characters"} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Téléphone" : "Phone"}</label>
-                    <Input required value={form.phone} onChange={handleChange("phone")} placeholder="+224 6X XX XX XX" />
-                  </div>
-
-                  <div className="border border-gray-200 rounded-lg p-3 bg-white">
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* 🔹 Section: Identité */}
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5 shadow-sm">
+                    <div className="mb-3 flex items-center justify-between">
                       <div>
-                        <div className="text-sm font-semibold text-gray-800">{language === "fr" ? "Géolocalisation (recommandé)" : "Geolocation (recommended)"}</div>
-                        <div className="text-xs text-gray-600">
-                          {language === "fr"
-                            ? "Permet aux clients de vous trouver parmi les ouvriers les plus proches."
-                            : "Helps clients find you among the closest workers."}
+                        <div className="text-sm font-semibold text-slate-900">
+                          {language === "fr" ? "Identité" : "Identity"}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {language === "fr" ? "Renseignez vos informations de base." : "Fill your basic details."}
                         </div>
                       </div>
-
-                      <Button type="button" variant="outline" onClick={handleGeolocate} disabled={geoLoading || loading}>
-                        {geoLoading ? (language === "fr" ? "Localisation..." : "Locating...") : language === "fr" ? "Se géolocaliser" : "Use my location"}
-                      </Button>
                     </div>
 
-                    {form.latitude && form.longitude && (
-                      <div className="mt-2 text-xs text-emerald-700">
-                        {language === "fr" ? "Position détectée" : "Location detected"} — {Number(form.latitude).toFixed(6)}, {Number(form.longitude).toFixed(6)}
-                        {form.accuracy ? ` • ±${form.accuracy}m` : ""}
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          {language === "fr" ? "Prénom" : "First name"}
+                        </label>
+                        <Input
+                          required
+                          value={form.firstName}
+                          onChange={handleChange("firstName")}
+                          placeholder={language === "fr" ? "Votre prénom" : "First name"}
+                          className="rounded-xl"
+                        />
                       </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          {language === "fr" ? "Nom" : "Last name"}
+                        </label>
+                        <Input
+                          required
+                          value={form.lastName}
+                          onChange={handleChange("lastName")}
+                          placeholder={language === "fr" ? "Votre nom" : "Last name"}
+                          className="rounded-xl"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4 mt-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                        <Input
+                          type="email"
+                          required
+                          value={form.email}
+                          onChange={handleChange("email")}
+                          placeholder="vous@exemple.com"
+                          className="rounded-xl"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          {language === "fr" ? "Mot de passe" : "Password"}
+                        </label>
+                        <Input
+                          type="password"
+                          required
+                          minLength={6}
+                          value={form.password}
+                          onChange={handleChange("password")}
+                          placeholder={language === "fr" ? "Au moins 6 caractères" : "At least 6 characters"}
+                          className="rounded-xl"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        {language === "fr" ? "Téléphone" : "Phone"}
+                      </label>
+                      <Input
+                        required
+                        value={form.phone}
+                        onChange={handleChange("phone")}
+                        placeholder="+224 6X XX XX XX"
+                        className="rounded-xl"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 🔹 Section: Localisation */}
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5 shadow-sm">
+                    <div className="mb-3">
+                      <div className="text-sm font-semibold text-slate-900">
+                        {language === "fr" ? "Localisation" : "Location"}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {language === "fr"
+                          ? "Aide les clients à vous trouver plus facilement."
+                          : "Helps clients find you more easily."}
+                      </div>
+                    </div>
+
+                    <div className="border border-slate-200 rounded-2xl p-3 bg-slate-50">
+                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-800">
+                            {language === "fr" ? "Géolocalisation (recommandé)" : "Geolocation (recommended)"}
+                          </div>
+                          <div className="text-xs text-slate-600">
+                            {language === "fr"
+                              ? "Permet aux clients de vous trouver parmi les ouvriers les plus proches."
+                              : "Helps clients find you among the closest workers."}
+                          </div>
+                        </div>
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleGeolocate}
+                          disabled={geoLoading || loading}
+                          className="rounded-xl"
+                        >
+                          {geoLoading
+                            ? language === "fr"
+                              ? "Localisation..."
+                              : "Locating..."
+                            : language === "fr"
+                            ? "Se géolocaliser"
+                            : "Use my location"}
+                        </Button>
+                      </div>
+
+                      {form.latitude && form.longitude && (
+                        <div className="mt-2 text-xs text-emerald-700">
+                          {language === "fr" ? "Position détectée" : "Location detected"} —{" "}
+                          {Number(form.latitude).toFixed(6)}, {Number(form.longitude).toFixed(6)}
+                          {form.accuracy ? ` • ±${form.accuracy}m` : ""}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        {language === "fr" ? "Pays" : "Country"}
+                      </label>
+                      <select
+                        value={form.country}
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, country: e.target.value, region: "", city: "", commune: "", district: "" }))
+                        }
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
+                      >
+                        {countryOptions.map((c) => (
+                          <option key={c.code} value={c.code}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {form.country === "GN" ? (
+                      <>
+                        <div className="mt-4">
+                          <label className="block text-sm font-medium text-slate-700 mb-1">
+                            {language === "fr" ? "Région" : "Region"}
+                          </label>
+                          <select
+                            value={form.region}
+                            onChange={(e) => setForm((prev) => ({ ...prev, region: e.target.value, city: "", commune: "", district: "" }))}
+                            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
+                          >
+                            <option value="">{language === "fr" ? "Choisissez une région" : "Select a region"}</option>
+                            {GUINEA_REGIONS.map((r) => (
+                              <option key={r.name} value={r.name}>
+                                {r.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-4 mt-4">
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                              {language === "fr" ? "Ville" : "City"}
+                            </label>
+                            <select
+                              value={form.city}
+                              onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value, commune: "", district: "" }))}
+                              disabled={!form.region}
+                              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-slate-100"
+                            >
+                              <option value="">{language === "fr" ? "Choisissez une ville" : "Select a city"}</option>
+                              {availableCities.map((city) => (
+                                <option key={city.name} value={city.name}>
+                                  {city.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                              {language === "fr" ? "Code postal" : "Postal code"}
+                            </label>
+                            <Input value={form.postalCode} onChange={handleChange("postalCode")} placeholder="1000" className="rounded-xl" />
+                          </div>
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-4 mt-4">
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                              {language === "fr" ? "Commune" : "Commune"}
+                            </label>
+                            <select
+                              value={form.commune}
+                              onChange={(e) => setForm((prev) => ({ ...prev, commune: e.target.value, district: "" }))}
+                              disabled={!form.city}
+                              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-slate-100"
+                            >
+                              <option value="">{language === "fr" ? "Choisissez une commune" : "Select a commune"}</option>
+                              {availableCommunes.map((commune) => (
+                                <option key={commune.name} value={commune.name}>
+                                  {commune.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                              {language === "fr" ? "Quartier" : "Neighborhood"}
+                            </label>
+                            <select
+                              value={form.district}
+                              onChange={(e) => setForm((prev) => ({ ...prev, district: e.target.value }))}
+                              disabled={!form.commune}
+                              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-slate-100"
+                            >
+                              <option value="">{language === "fr" ? "Choisissez un quartier" : "Select a neighborhood"}</option>
+                              {availableDistricts.map((q) => (
+                                <option key={q} value={q}>
+                                  {q}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="grid md:grid-cols-2 gap-4 mt-4">
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                              {language === "fr" ? "Ville" : "City"}
+                            </label>
+                            <Input required value={form.city} onChange={handleChange("city")} placeholder={language === "fr" ? "Votre ville" : "Your city"} className="rounded-xl" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                              {language === "fr" ? "Code postal" : "Postal code"}
+                            </label>
+                            <Input value={form.postalCode} onChange={handleChange("postalCode")} placeholder="75001" className="rounded-xl" />
+                          </div>
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-4 mt-4">
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                              {language === "fr" ? "Commune / Région" : "District / Region"}
+                            </label>
+                            <Input value={form.commune} onChange={handleChange("commune")} className="rounded-xl" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                              {language === "fr" ? "Quartier" : "Neighborhood"}
+                            </label>
+                            <Input value={form.district} onChange={handleChange("district")} className="rounded-xl" />
+                          </div>
+                        </div>
+                      </>
                     )}
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Pays" : "Country"}</label>
-                    <select
-                      value={form.country}
-                      onChange={(e) => setForm((prev) => ({ ...prev, country: e.target.value, region: "", city: "", commune: "", district: "" }))}
-                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
-                    >
-                      {countryOptions.map((c) => (
-                        <option key={c.code} value={c.code}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </select>
+                  {/* 🔹 Section: Activité */}
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5 shadow-sm">
+                    <div className="mb-3">
+                      <div className="text-sm font-semibold text-slate-900">
+                        {language === "fr" ? "Activité" : "Activity"}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {language === "fr" ? "Décrivez votre métier et vos services." : "Describe your trade and services."}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        {language === "fr" ? "Métier principal" : "Main trade"}
+                      </label>
+                      <Input
+                        required
+                        value={form.profession}
+                        onChange={handleChange("profession")}
+                        placeholder={language === "fr" ? "Plombier, électricien, maçon..." : "Plumber, electrician, builder..."}
+                        className="rounded-xl"
+                      />
+                      {plan === "FREE" && (
+                        <p className="mt-1 text-xs text-slate-500">
+                          {language === "fr" ? "Avec le plan Gratuit, un seul métier peut être affiché." : "With the Free plan, only one trade can be listed."}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        {language === "fr" ? "Description de vos services" : "Description of your services"}
+                      </label>
+                      <textarea
+                        required
+                        value={form.description}
+                        onChange={handleChange("description")}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue min-h-[110px] bg-white"
+                        placeholder={language === "fr" ? "Décrivez votre expérience, vos services, vos zones d’intervention..." : "Describe your experience, services and working area..."}
+                      />
+                    </div>
+
+                    <div className="mt-4 grid md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          {language === "fr" ? `Tarif horaire (${currency.symbol} / h) (optionnel)` : `Hourly rate (${currency.symbol} / h) (optional)`}
+                        </label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={form.hourlyRate}
+                          onChange={handleChange("hourlyRate")}
+                          placeholder={language === "fr" ? `Ex : 250000 ${currency.symbol}` : `e.g. 20 ${currency.symbol}`}
+                          className="rounded-xl"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          {language === "fr" ? "Photo de profil (optionnel)" : "Profile picture (optional)"}
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileChange}
+                          className="block w-full text-sm text-slate-700 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-pro-blue file:text-white hover:file:bg-blue-700"
+                        />
+                        <p className="mt-1 text-xs text-slate-500">
+                          {language === "fr" ? "Format JPG ou PNG recommandé, taille max ~2 Mo." : "JPG or PNG recommended, max size ~2MB."}
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
-                  {form.country === "GN" ? (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Région" : "Region"}</label>
-                        <select
-                          value={form.region}
-                          onChange={(e) => setForm((prev) => ({ ...prev, region: e.target.value, city: "", commune: "", district: "" }))}
-                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white"
-                        >
-                          <option value="">{language === "fr" ? "Choisissez une région" : "Select a region"}</option>
-                          {GUINEA_REGIONS.map((r) => (
-                            <option key={r.name} value={r.name}>
-                              {r.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Ville" : "City"}</label>
-                          <select
-                            value={form.city}
-                            onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value, commune: "", district: "" }))}
-                            disabled={!form.region}
-                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
-                          >
-                            <option value="">{language === "fr" ? "Choisissez une ville" : "Select a city"}</option>
-                            {availableCities.map((city) => (
-                              <option key={city.name} value={city.name}>
-                                {city.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Code postal" : "Postal code"}</label>
-                          <Input value={form.postalCode} onChange={handleChange("postalCode")} placeholder="1000" />
-                        </div>
-                      </div>
-
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Commune" : "Commune"}</label>
-                          <select
-                            value={form.commune}
-                            onChange={(e) => setForm((prev) => ({ ...prev, commune: e.target.value, district: "" }))}
-                            disabled={!form.city}
-                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
-                          >
-                            <option value="">{language === "fr" ? "Choisissez une commune" : "Select a commune"}</option>
-                            {availableCommunes.map((commune) => (
-                              <option key={commune.name} value={commune.name}>
-                                {commune.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Quartier" : "Neighborhood"}</label>
-                          <select
-                            value={form.district}
-                            onChange={(e) => setForm((prev) => ({ ...prev, district: e.target.value }))}
-                            disabled={!form.commune}
-                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue bg-white disabled:bg-gray-100"
-                          >
-                            <option value="">{language === "fr" ? "Choisissez un quartier" : "Select a neighborhood"}</option>
-                            {availableDistricts.map((q) => (
-                              <option key={q} value={q}>
-                                {q}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Ville" : "City"}</label>
-                          <Input required value={form.city} onChange={handleChange("city")} placeholder={language === "fr" ? "Votre ville" : "Your city"} />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Code postal" : "Postal code"}</label>
-                          <Input value={form.postalCode} onChange={handleChange("postalCode")} placeholder="75001" />
-                        </div>
-                      </div>
-
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Commune / Région" : "District / Region"}</label>
-                          <Input value={form.commune} onChange={handleChange("commune")} />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Quartier" : "Neighborhood"}</label>
-                          <Input value={form.district} onChange={handleChange("district")} />
-                        </div>
-                      </div>
-                    </>
+                  {error && (
+                    <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-2xl px-4 py-3">
+                      {error}
+                    </div>
                   )}
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Métier principal" : "Main trade"}</label>
-                    <Input required value={form.profession} onChange={handleChange("profession")} placeholder={language === "fr" ? "Plombier, électricien, maçon..." : "Plumber, electrician, builder..."} />
-                    {plan === "FREE" && (
-                      <p className="mt-1 text-xs text-gray-500">{language === "fr" ? "Avec le plan Gratuit, un seul métier peut être affiché." : "With the Free plan, only one trade can be listed."}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Description de vos services" : "Description of your services"}</label>
-                    <textarea
-                      required
-                      value={form.description}
-                      onChange={handleChange("description")}
-                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pro-blue focus:border-pro-blue min-h-[100px]"
-                      placeholder={language === "fr" ? "Décrivez votre expérience, vos services, vos zones d’intervention..." : "Describe your experience, services and working area..."}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? `Tarif horaire (${currency.symbol} / h) (optionnel)` : `Hourly rate (${currency.symbol} / h) (optional)`}</label>
-                    <Input type="number" min={0} value={form.hourlyRate} onChange={handleChange("hourlyRate")} placeholder={language === "fr" ? `Ex : 250000 ${currency.symbol}` : `e.g. 20 ${currency.symbol}`} />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{language === "fr" ? "Photo de profil (optionnel)" : "Profile picture (optional)"}</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileChange}
-                      className="block w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-pro-blue file:text-white hover:file:bg-blue-700"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">{language === "fr" ? "Format JPG ou PNG recommandé, taille max ~2 Mo." : "JPG or PNG recommended, max size ~2MB."}</p>
-                  </div>
-
-                  {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">{error}</div>}
-
                   {plan !== "FREE" && (
-                    <div className="border border-amber-100 bg-amber-50 rounded-lg p-4 mb-3">
+                    <div className="border border-amber-100 bg-amber-50 rounded-2xl p-4 md:p-5 mb-3 shadow-sm">
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                         <div>
                           <div className="text-sm font-semibold text-amber-800">{language === "fr" ? "Résumé de votre abonnement" : "Subscription summary"}</div>
@@ -1053,7 +1218,7 @@ const InscriptionOuvrier: React.FC = () => {
                             )}
                           </div>
                           <div>
-                            <Button type="button" size="sm" onClick={handleStartPayment} className="bg-amber-600 hover:bg-amber-700" disabled={loading}>
+                            <Button type="button" size="sm" onClick={handleStartPayment} className="bg-amber-600 hover:bg-amber-700 rounded-xl" disabled={loading}>
                               {language === "fr" ? "Procéder au paiement" : "Proceed to payment"}
                             </Button>
                             {paymentCompleted && (
@@ -1068,7 +1233,7 @@ const InscriptionOuvrier: React.FC = () => {
                   )}
 
                   <div className="pt-2">
-                    <Button type="submit" disabled={!canSubmit} className="w-full bg-pro-blue hover:bg-blue-700 disabled:opacity-60">
+                    <Button type="submit" disabled={!canSubmit} className="w-full bg-pro-blue hover:bg-blue-700 disabled:opacity-60 rounded-xl py-5 shadow-sm">
                       {loading
                         ? language === "fr"
                           ? "Enregistrement..."
