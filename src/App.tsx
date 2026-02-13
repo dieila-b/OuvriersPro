@@ -489,21 +489,57 @@ const AppRoutes = () => (
 
 /**
  * ✅ Router natif vs web (fix 404 Capacitor)
- * + ✅ force MOBILE en natif (évite le zoom-out / mode desktop)
+ * + ✅ Fix définitif: reset zoom/scale en natif après render (le bug "normal 2s puis petit")
  */
 function RouterSwitch({ children }: { children: React.ReactNode }) {
   const isNative = isNativeRuntime();
 
   useEffect(() => {
     const html = document.documentElement;
+    const body = document.body;
+
     html.setAttribute("data-ui-native", isNative ? "true" : "false");
 
-    if (isNative) {
-      // 🔒 verrouille mobile en app (même si UiModeContext veut mettre desktop)
-      html.setAttribute("data-ui-mode", "mobile");
+    if (!isNative) return;
+
+    // Force "mobile" dans l'app (même si ton UiModeContext essaie de passer en desktop)
+    html.setAttribute("data-ui-mode", "mobile");
+
+    // Neutralise toutes les tentatives de scale/zoom
+    const hardReset = () => {
+      // 1) Variables éventuelles
       html.style.setProperty("--ui-scale", "1");
       html.style.setProperty("--ui-desktop-width", "100%");
-    }
+
+      // 2) Si un wrapper a un transform, on le neutralise
+      const vp = document.getElementById("ui-desktop-viewport") as HTMLElement | null;
+      if (vp) {
+        vp.style.transform = "none";
+        vp.style.width = "100%";
+        vp.style.maxWidth = "100%";
+      }
+
+      // 3) Empêche un zoom CSS (rare mais ça arrive)
+      (body.style as any).zoom = "1";
+
+      // 4) Si un script modifie le meta viewport, on le remet (Android WebView)
+      const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
+      if (meta) meta.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
+    };
+
+    hardReset();
+    const t1 = window.setTimeout(hardReset, 300);
+    const t2 = window.setTimeout(hardReset, 1200);
+
+    window.addEventListener("resize", hardReset);
+    window.visualViewport?.addEventListener?.("resize", hardReset);
+
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.removeEventListener("resize", hardReset);
+      window.visualViewport?.removeEventListener?.("resize", hardReset);
+    };
   }, [isNative]);
 
   if (import.meta.env.DEV) {
