@@ -72,10 +72,8 @@ const ClientContactForm = lazy(() => import("./pages/ClientContactForm"));
 
 /**
  * ✅ Détection native robuste (Capacitor / WebView)
- * Objectif: garantir HashRouter quand on est dans l’app.
  */
 const isNativeRuntime = () => {
-  // 1) Capacitor SDK
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
@@ -85,7 +83,6 @@ const isNativeRuntime = () => {
     if (p === "capacitor:" || p === "file:") return true;
 
     const host = window.location?.hostname ?? "";
-    // Android: https://localhost ; iOS: capacitor://localhost
     if (host === "localhost") return true;
 
     const ua = navigator?.userAgent ?? "";
@@ -94,6 +91,39 @@ const isNativeRuntime = () => {
 
   return false;
 };
+
+/**
+ * ✅ Forcer le meta viewport en natif
+ * (corrige l'affichage "minuscule" / zoom-out dans la WebView)
+ */
+function useNativeViewportFix() {
+  useEffect(() => {
+    if (!isNativeRuntime()) return;
+
+    const desired =
+      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
+
+    let meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "viewport";
+      document.head.appendChild(meta);
+    }
+
+    // applique seulement si différent pour éviter les loops
+    if (meta.content !== desired) {
+      meta.content = desired;
+      console.info("[NativeViewportFix] viewport meta set to:", desired);
+    }
+
+    // Petit “nudge” si Android garde un scale en cache
+    requestAnimationFrame(() => {
+      try {
+        window.scrollTo(0, 0);
+      } catch {}
+    });
+  }, []);
+}
 
 /**
  * ✅ QueryClient optimisé
@@ -152,7 +182,6 @@ function AuthAuditLogger() {
 
     const COOLDOWN_MS = 10 * 60 * 1000;
     const LS_KEY = "op_login_journal:last_refresh";
-
     const isNative = isNativeRuntime();
 
     const getTimeZone = () => {
@@ -287,7 +316,6 @@ function GlobalLinkInterceptor() {
       const href = anchor.getAttribute("href");
       if (!href) return;
 
-      // Ignore external links, mailto, tel, anchors, etc.
       if (
         href.startsWith("http://") ||
         href.startsWith("https://") ||
@@ -300,7 +328,6 @@ function GlobalLinkInterceptor() {
         return;
       }
 
-      // Internal route: intercept and use React Router
       if (href.startsWith("/") || href.startsWith("#")) {
         e.preventDefault();
         e.stopPropagation();
@@ -361,11 +388,10 @@ const AppRoutes = () => (
         <Route path="/creation-profil" element={<Navigate to="/register" replace />} />
         <Route path="/creer-mon-profil" element={<Navigate to="/register" replace />} />
 
-        {/* ✅ Fix: liens relatifs depuis /forfaits */}
+        {/* Fix routes liées aux liens relatifs */}
         <Route path="/forfaits/inscription-ouvrier" element={<Navigate to="/inscription-ouvrier" replace />} />
         <Route path="/forfaits/inscription-ouvrier/*" element={<Navigate to="/inscription-ouvrier" replace />} />
 
-        {/* ✅ Fix: devenir-prestataire (direct + wildcard) */}
         <Route path="/devenir-prestataire" element={<InscriptionOuvrier />} />
         <Route path="/devenir-prestataire/*" element={<Navigate to="/inscription-ouvrier" replace />} />
         <Route path="/forfaits/devenir-prestataire" element={<Navigate to="/inscription-ouvrier" replace />} />
@@ -495,23 +521,31 @@ const AppRoutes = () => (
 );
 
 /**
- * ✅ Wrapper viewport desktop (native uniquement)
- * IMPORTANT: on évite les scales trop bas → sinon l’écran devient illisible.
+ * ✅ Wrapper "viewport"
+ * - En natif: on FORCE mobile (pas de scale, pas de desktop viewport)
+ * - Sur web: on laisse UiModeCtx décider (desktop/mobile)
  */
-function DesktopViewport({ children }: { children: React.ReactNode }) {
+function ViewportWrapper({ children }: { children: React.ReactNode }) {
   const { isDesktopUI } = useUiModeCtx();
-  const isNative = isNativeRuntime();
+  const native = isNativeRuntime();
 
   useEffect(() => {
     const html = document.documentElement;
-    html.setAttribute("data-ui-native", isNative ? "true" : "false");
-    // En natif : toujours scale 1, pas de viewport desktop forcé
+
+    // tag natif/web
+    html.setAttribute("data-ui-native", native ? "true" : "false");
+
+    // ✅ En natif: on force MOBILE pour éviter tout zoom-out
+    // (même si UiModeProvider tente de forcer desktop)
+    html.setAttribute("data-ui-mode", native ? "mobile" : isDesktopUI ? "desktop" : "mobile");
+
+    // Neutralisation totale des anciennes variables
     html.style.setProperty("--ui-scale", "1");
     html.style.setProperty("--ui-desktop-width", "100%");
-  }, [isNative]);
+  }, [native, isDesktopUI]);
 
   return (
-    <div id="ui-desktop-viewport" data-ui-viewport={isDesktopUI ? "desktop" : "mobile"}>
+    <div id="ui-desktop-viewport" data-ui-viewport={native ? "mobile" : isDesktopUI ? "desktop" : "mobile"}>
       {children}
     </div>
   );
@@ -523,17 +557,13 @@ function DesktopViewport({ children }: { children: React.ReactNode }) {
  * - Web => BrowserRouter
  */
 function RouterSwitch({ children }: { children: React.ReactNode }) {
-  const isNative = isNativeRuntime();
-  if (import.meta.env.DEV) {
-    console.info(
-      `[RouterSwitch] isNative=${isNative}, protocol=${window.location?.protocol}, hostname=${window.location?.hostname}`
-    );
-  }
-  const Router = isNative ? HashRouter : BrowserRouter;
+  const native = isNativeRuntime();
+  const Router = native ? HashRouter : BrowserRouter;
   return <Router>{children}</Router>;
 }
 
 const App = () => {
+  useNativeViewportFix();
   const queryClient = useAppQueryClient();
 
   return (
@@ -544,11 +574,11 @@ const App = () => {
             <Toaster />
             <Sonner />
             <RouterSwitch>
-              <DesktopViewport>
+              <ViewportWrapper>
                 <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
                   <AppRoutes />
                 </div>
-              </DesktopViewport>
+              </ViewportWrapper>
             </RouterSwitch>
           </UiModeProvider>
         </LanguageProvider>
