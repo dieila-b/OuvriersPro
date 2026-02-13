@@ -45,7 +45,7 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-    /* ✅ variables utilisées par le viewport desktop (native seulement) */
+    /* variables utilisées par l'ancien viewport desktop (si besoin plus tard) */
     --ui-desktop-width: 1200px;
     --ui-scale: 1;
   }
@@ -158,44 +158,49 @@
   }
 }
 
-/* ---------------------------
-   ✅ MODE DESKTOP FORCÉ EN APP/ÉMULATEUR (CAPACITOR)
-   IMPORTANT: UNIQUEMENT si data-ui-native="true"
----------------------------- */
+/* =========================================================
+   ✅ MOBILE UI DANS L’APP (CAPACITOR)
+   - on force "mobile" en natif pour éviter tout zoom-out / scale
+   - on neutralise le vieux viewport desktop
+========================================================= */
 
+/* 1) En natif, on force le mode mobile au niveau du HTML */
+html[data-ui-native="true"] {
+  /* si ton UiModeContext met déjà data-ui-mode, ça ne gêne pas.
+     sinon, on l’impose ici pour l'app */
+  --ui-scale: 1;
+}
+
+html[data-ui-native="true"][data-ui-mode="desktop"] {
+  /* override dur : si jamais l’app se met en desktop, on la ramène en mobile */
+  /* NB: on ne peut pas changer l’attribut en CSS, mais on neutralise les styles "desktop" */
+}
+
+/* 2) IMPORTANT : pas de "desktop viewport" ni de transform scale sur mobile */
+html[data-ui-native="true"] #ui-desktop-viewport {
+  width: 100% !important;
+  max-width: 100% !important;
+  transform: none !important;
+  transform-origin: initial !important;
+  min-height: 100dvh !important;
+}
+
+/* 3) Nettoyage des règles desktop-forced (on les rend inoffensives en natif) */
 html[data-ui-native="true"][data-ui-mode="desktop"] body,
 body[data-ui-native="true"][data-ui-mode="desktop"] {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
-html[data-ui-native="true"][data-ui-mode="desktop"] .safe-area-bottom,
-body[data-ui-native="true"][data-ui-mode="desktop"] .safe-area-bottom {
-  padding-bottom: 0 !important;
+/* safe-area */
+html[data-ui-native="true"] .safe-area-bottom,
+body[data-ui-native="true"] .safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
-/* ---------------------------
-   ✅ VRAI "VIEWPORT DESKTOP" DANS ÉMULATEUR (NATIVE ONLY)
----------------------------- */
-
-html[data-ui-native="true"][data-ui-mode="desktop"] #ui-desktop-viewport {
-  width: var(--ui-desktop-width, 1200px);
-  max-width: none;
-
-  transform: scale(var(--ui-scale, 1));
-  transform-origin: top left;
-
-  min-height: calc(100dvh / var(--ui-scale, 1));
-}
-
-html[data-ui-native="true"][data-ui-mode="desktop"],
-html[data-ui-native="true"][data-ui-mode="desktop"] body {
-  overflow-x: hidden;
-}
-
-/* ---------------------------
+/* =========================================================
    ADMIN responsive hardening
----------------------------- */
+========================================================= */
 
 .admin-scrollbar {
   scrollbar-width: thin;
