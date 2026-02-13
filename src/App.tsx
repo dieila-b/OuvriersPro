@@ -89,6 +89,7 @@ const ClientReviews = lazyRetry(() => import("./pages/ClientReviews"));
 const ClientContactForm = lazyRetry(() => import("./pages/ClientContactForm"));
 
 /**
+<<<<<<< HEAD
  * ✅ Détection native robuste
  */
 const isNativeRuntime = () => {
@@ -98,6 +99,11 @@ const isNativeRuntime = () => {
     if (sp.get("forceNative") === "1") return true;
   } catch {}
 
+=======
+ * ✅ Détection native robuste (Capacitor / WebView)
+ */
+const isNativeRuntime = () => {
+>>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
@@ -107,9 +113,19 @@ const isNativeRuntime = () => {
     if (p === "capacitor:" || p === "file:") return true;
   } catch {}
 
+<<<<<<< HEAD
   try {
     const gp = (Capacitor as any)?.getPlatform?.();
     if (gp && gp !== "web") return true;
+=======
+    const host = window.location?.hostname ?? "";
+    if (host === "localhost") return true;
+
+    const ua = navigator?.userAgent ?? "";
+    if (ua.includes("wv") || ua.includes("Capacitor")) return true;
+
+    if (p === "https:" && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) return true;
+>>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
   } catch {}
 
   return false;
@@ -326,6 +342,7 @@ function GlobalLinkInterceptor() {
       )
         return true;
 
+<<<<<<< HEAD
       if (anchor.hasAttribute("download")) return true;
       if ((anchor.getAttribute("rel") || "").includes("external")) return true;
 
@@ -356,6 +373,17 @@ function GlobalLinkInterceptor() {
 
     document.addEventListener("click", handleClick, true);
     return () => document.removeEventListener("click", handleClick, true);
+=======
+      if (href.startsWith("/") || href.startsWith("#")) {
+        e.preventDefault();
+        e.stopPropagation();
+        navigate(href);
+      }
+    };
+
+    document.addEventListener("click", handler, true);
+    return () => document.removeEventListener("click", handler, true);
+>>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
   }, [navigate]);
 
   return null;
@@ -587,6 +615,7 @@ const AppRoutes = () => (
 );
 
 /**
+<<<<<<< HEAD
  * ✅ Router stable:
  * - Web: BrowserRouter (URLs propres /login)
  * - Native (Capacitor): HashRouter (stable en file:// et WebView)
@@ -594,6 +623,34 @@ const AppRoutes = () => (
 function RouterSwitch({ children }: { children: React.ReactNode }) {
   const native = isNativeRuntime();
   return native ? <HashRouter>{children}</HashRouter> : <BrowserRouter>{children}</BrowserRouter>;
+=======
+ * ✅ Router natif vs web (fix 404 Capacitor)
+ * + ✅ force MOBILE en natif (évite le zoom-out / mode desktop)
+ */
+function RouterSwitch({ children }: { children: React.ReactNode }) {
+  const isNative = isNativeRuntime();
+
+  useEffect(() => {
+    const html = document.documentElement;
+    html.setAttribute("data-ui-native", isNative ? "true" : "false");
+
+    if (isNative) {
+      // 🔒 verrouille mobile en app (même si UiModeContext veut mettre desktop)
+      html.setAttribute("data-ui-mode", "mobile");
+      html.style.setProperty("--ui-scale", "1");
+      html.style.setProperty("--ui-desktop-width", "100%");
+    }
+  }, [isNative]);
+
+  if (import.meta.env.DEV) {
+    console.info(
+      `[RouterSwitch] isNative=${isNative}, protocol=${window.location?.protocol}, hostname=${window.location?.hostname}`
+    );
+  }
+
+  const Router = isNative ? HashRouter : BrowserRouter;
+  return <Router>{children}</Router>;
+>>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
 }
 
 const App = () => {
