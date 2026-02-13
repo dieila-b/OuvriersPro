@@ -1,5 +1,5 @@
 // src/components/Header.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Languages, User, Menu, X } from "lucide-react";
@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import ContactModal from "@/components/contact/ContactModal";
 
@@ -29,6 +29,7 @@ const Header = () => {
   const [contactOpen, setContactOpen] = useState(false);
 
   const location = useLocation();
+  const navigate = useNavigate();
 
   const cms = (key: string, fallbackFr: string, fallbackEn: string) => {
     const v = t(key);
@@ -36,8 +37,10 @@ const Header = () => {
     return v;
   };
 
+  // ✅ Ferme le menu à chaque changement de route
   useEffect(() => setMobileOpen(false), [location.pathname, location.search, location.hash]);
 
+  // ✅ Empêche le scroll derrière le menu
   useEffect(() => {
     if (!mobileOpen) {
       document.body.style.overflow = "";
@@ -54,8 +57,11 @@ const Header = () => {
     return cms("header.btn_login", "Se connecter", "Sign in");
   }, [user, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ⚠️ Ton code avait: if (!user) return "/mon-compte";
+  // C’est incohérent (si pas connecté, la route devrait être login).
+  // Adapte si ta route login est différente.
   const accountPath = useMemo(() => {
-    if (!user) return "/mon-compte";
+    if (!user) return "/mon-compte"; // 🔁 change en "/auth/login" si c’est ta vraie page login
     if (isWorker) return "/espace-ouvrier";
     return "/espace-client";
   }, [user, isWorker]);
@@ -66,6 +72,16 @@ const Header = () => {
 
   // ✅ URL versionnée pour casser le cache (Android/WebView inclus)
   const logoSrc = useMemo(() => `${ProxiLogo}?v=${encodeURIComponent(BUILD_TAG)}`, []);
+
+  // ✅ Navigation fiable en mobile (ferme le menu puis navigate)
+  const go = useCallback(
+    (to: string) => {
+      setMobileOpen(false);
+      // petit delay pour éviter que l’overlay capte encore le tap sur WebView
+      requestAnimationFrame(() => navigate(to));
+    },
+    [navigate]
+  );
 
   return (
     <>
@@ -95,6 +111,7 @@ const Header = () => {
 
               <nav className="hidden md:flex" aria-hidden="true" />
 
+              {/* DESKTOP */}
               <div className="hidden md:flex min-w-0 items-center gap-2">
                 <Link to="/forfaits" className="min-w-0">
                   <Button variant="outline" size="sm" className="rounded-full whitespace-nowrap">
@@ -136,6 +153,7 @@ const Header = () => {
                 </DropdownMenu>
               </div>
 
+              {/* MOBILE */}
               <div className="md:hidden min-w-0 flex items-center gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -170,42 +188,54 @@ const Header = () => {
           <div className="h-1 w-full bg-gradient-to-r from-pro-blue/90 via-blue-600/90 to-pro-blue/90" />
         </div>
 
+        {/* MENU MOBILE OVERLAY */}
         {mobileOpen && (
           <div className="md:hidden fixed inset-0 z-50">
+            {/* Overlay en dessous (z-0) */}
             <button
               type="button"
-              className="absolute inset-0 bg-black/35"
+              className="absolute inset-0 bg-black/35 z-0"
               aria-label={cms("header.mobile_close.aria", "Fermer le menu", "Close menu")}
               onClick={() => setMobileOpen(false)}
             />
 
-            <div className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg">
+            {/* Panneau en dessus (z-10) + pointer-events OK */}
+            <div className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg z-10 pointer-events-auto">
               <div className="w-full px-4 sm:px-6 py-3">
                 <div className="flex items-center justify-between gap-3 min-w-0">
                   <span className="text-sm font-semibold text-pro-gray">
                     {cms("header.mobile_menu.title", "Menu", "Menu")}
                   </span>
-                  <Button variant="outline" size="sm" onClick={() => setMobileOpen(false)} className="rounded-full">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    onClick={() => setMobileOpen(false)}
+                    className="rounded-full"
+                  >
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
 
                 <div className="mt-3 flex flex-col gap-1 min-w-0">
-                  <Link
-                    to="/forfaits"
-                    onClick={() => setMobileOpen(false)}
-                    className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue min-w-0"
+                  {/* ✅ navigation fiable via navigate */}
+                  <button
+                    type="button"
+                    onClick={() => go("/forfaits")}
+                    className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue min-w-0 text-left"
                   >
                     <span className="truncate font-medium">{becomeProviderLabel}</span>
-                  </Link>
+                  </button>
 
                   <div className="pt-2">
-                    <Link to={accountPath} onClick={() => setMobileOpen(false)}>
-                      <Button className="w-full rounded-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center justify-center gap-2 whitespace-nowrap">
-                        <User className="w-4 h-4" />
-                        {accountLabel}
-                      </Button>
-                    </Link>
+                    <Button
+                      type="button"
+                      onClick={() => go(accountPath)}
+                      className="w-full rounded-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center justify-center gap-2 whitespace-nowrap"
+                    >
+                      <User className="w-4 h-4" />
+                      {accountLabel}
+                    </Button>
                   </div>
 
                   <div className="pb-2" />
