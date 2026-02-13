@@ -72,29 +72,22 @@ const ClientContactForm = lazy(() => import("./pages/ClientContactForm"));
 
 /**
  * ✅ Détection native robuste (Capacitor / WebView)
- * Objectif: garantir HashRouter quand on est dans l’app.
  */
 const isNativeRuntime = () => {
-  // 1. Capacitor SDK
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
 
   try {
     const p = window.location?.protocol ?? "";
-    // 2. file:// or capacitor:// → always native
     if (p === "capacitor:" || p === "file:") return true;
 
-    // 3. Capacitor loads from https://localhost (Android) or capacitor://localhost (iOS)
     const host = window.location?.hostname ?? "";
     if (host === "localhost") return true;
 
-    // 4. UA WebView hints
     const ua = navigator?.userAgent ?? "";
     if (ua.includes("wv") || ua.includes("Capacitor")) return true;
 
-    // 5. Not running on a real web server (no standard port 80/443 hostname)
-    // e.g. Capacitor sometimes uses IP-based origins
     if (p === "https:" && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) return true;
   } catch {}
 
@@ -293,7 +286,6 @@ function GlobalLinkInterceptor() {
       const href = anchor.getAttribute("href");
       if (!href) return;
 
-      // Ignore external links, mailto, tel, anchors, etc.
       if (
         href.startsWith("http://") ||
         href.startsWith("https://") ||
@@ -304,16 +296,14 @@ function GlobalLinkInterceptor() {
         anchor.target === "_blank"
       ) return;
 
-      // Internal route: intercept and use React Router
       if (href.startsWith("/") || href.startsWith("#")) {
         e.preventDefault();
         e.stopPropagation();
-        console.info("[GlobalLinkInterceptor] Intercepted <a> click:", href);
         navigate(href);
       }
     };
 
-    document.addEventListener("click", handler, true); // capture phase
+    document.addEventListener("click", handler, true);
     return () => document.removeEventListener("click", handler, true);
   }, [navigate]);
 
@@ -366,11 +356,9 @@ const AppRoutes = () => (
         <Route path="/creation-profil" element={<Navigate to="/register" replace />} />
         <Route path="/creer-mon-profil" element={<Navigate to="/register" replace />} />
 
-        {/* ✅ Fix: liens relatifs depuis /forfaits */}
         <Route path="/forfaits/inscription-ouvrier" element={<Navigate to="/inscription-ouvrier" replace />} />
         <Route path="/forfaits/inscription-ouvrier/*" element={<Navigate to="/inscription-ouvrier" replace />} />
 
-        {/* ✅ Fix: devenir-prestataire (direct + wildcard) */}
         <Route path="/devenir-prestataire" element={<InscriptionOuvrier />} />
         <Route path="/devenir-prestataire/*" element={<Navigate to="/inscription-ouvrier" replace />} />
         <Route path="/forfaits/devenir-prestataire" element={<Navigate to="/inscription-ouvrier" replace />} />
@@ -500,64 +488,30 @@ const AppRoutes = () => (
 );
 
 /**
- * ✅ Wrapper viewport desktop: on applique le "fake desktop viewport"
- * UNIQUEMENT quand on est en Capacitor native.
+ * ✅ Router natif vs web (fix 404 Capacitor)
+ * + ✅ force MOBILE en natif (évite le zoom-out / mode desktop)
  */
-function DesktopViewport({ children }: { children: React.ReactNode }) {
-  const { isDesktopUI } = useUiModeCtx();
+function RouterSwitch({ children }: { children: React.ReactNode }) {
   const isNative = isNativeRuntime();
-  const DESKTOP_WIDTH = 1200;
 
   useEffect(() => {
     const html = document.documentElement;
     html.setAttribute("data-ui-native", isNative ? "true" : "false");
+
+    if (isNative) {
+      // 🔒 verrouille mobile en app (même si UiModeContext veut mettre desktop)
+      html.setAttribute("data-ui-mode", "mobile");
+      html.style.setProperty("--ui-scale", "1");
+      html.style.setProperty("--ui-desktop-width", "100%");
+    }
   }, [isNative]);
 
-  useEffect(() => {
-    if (!isNative) return;
+  if (import.meta.env.DEV) {
+    console.info(
+      `[RouterSwitch] isNative=${isNative}, protocol=${window.location?.protocol}, hostname=${window.location?.hostname}`
+    );
+  }
 
-    const html = document.documentElement;
-    html.style.setProperty("--ui-desktop-width", `${DESKTOP_WIDTH}px`);
-
-    const computeScale = () => {
-      const eff =
-        Math.min(
-          window.innerWidth || Infinity,
-          document.documentElement?.clientWidth || Infinity,
-          window.visualViewport?.width || Infinity,
-          window.screen?.width || Infinity
-        ) || 9999;
-
-      const scale = isDesktopUI ? Math.min(1, Math.max(0.35, eff / DESKTOP_WIDTH)) : 1;
-      html.style.setProperty("--ui-scale", String(scale));
-    };
-
-    computeScale();
-    window.addEventListener("resize", computeScale);
-    window.visualViewport?.addEventListener("resize", computeScale);
-
-    return () => {
-      window.removeEventListener("resize", computeScale);
-      window.visualViewport?.removeEventListener("resize", computeScale);
-    };
-  }, [isDesktopUI, isNative]);
-
-  return (
-    <div id="ui-desktop-viewport" data-ui-viewport={isDesktopUI ? "desktop" : "mobile"}>
-      {children}
-    </div>
-  );
-}
-
-/**
- * ✅ Router natif vs web (fix 404 Capacitor)
- * - Native => HashRouter
- * - Web => BrowserRouter
- */
-function RouterSwitch({ children }: { children: React.ReactNode }) {
-  const isNative = isNativeRuntime();
-  // Debug: log which router is used (visible in Capacitor WebView console / Chrome DevTools remote)
-  console.info(`[RouterSwitch] isNative=${isNative}, protocol=${window.location?.protocol}, hostname=${window.location?.hostname}, UA=${navigator?.userAgent?.substring(0, 80)}`);
   const Router = isNative ? HashRouter : BrowserRouter;
   return <Router>{children}</Router>;
 }
@@ -573,11 +527,9 @@ const App = () => {
             <Toaster />
             <Sonner />
             <RouterSwitch>
-              <DesktopViewport>
-                <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
-                  <AppRoutes />
-                </div>
-              </DesktopViewport>
+              <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
+                <AppRoutes />
+              </div>
             </RouterSwitch>
           </UiModeProvider>
         </LanguageProvider>

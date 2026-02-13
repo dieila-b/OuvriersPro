@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. */
+/* Definition of the design system. */
 
 @layer base {
   :root {
@@ -45,7 +45,7 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-    /* ✅ variables utilisées par le viewport desktop (native seulement) */
+    /* gardées mais plus utilisées pour scaler l'app */
     --ui-desktop-width: 1200px;
     --ui-scale: 1;
   }
@@ -53,32 +53,23 @@
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
-
     --card: 222.2 84% 4.9%;
     --card-foreground: 210 40% 98%;
-
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
-
     --primary: 210 40% 98%;
     --primary-foreground: 222.2 47.4% 11.2%;
-
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
-
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
-
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
-
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
-
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -91,7 +82,6 @@
 }
 
 @layer base {
-  /* ✅ Base (Tailwind + Layout safe) */
   *,
   *::before,
   *::after {
@@ -158,45 +148,36 @@
   }
 }
 
-/* ---------------------------
-   ✅ MODE DESKTOP FORCÉ EN APP/ÉMULATEUR (CAPACITOR)
-   IMPORTANT: UNIQUEMENT si data-ui-native="true"
----------------------------- */
+/* =========================================================
+   ✅ CAPACITOR (NATIVE) : INTERDICTION DE SCALE / DESKTOP VIEWPORT
+   - empêche l'effet "tout devient minuscule après 2s"
+   - supprime le blanc en bas causé par min-height / scale
+========================================================= */
 
-html[data-ui-native="true"][data-ui-mode="desktop"] body,
-body[data-ui-native="true"][data-ui-mode="desktop"] {
+html[data-ui-native="true"] {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
-html[data-ui-native="true"][data-ui-mode="desktop"] .safe-area-bottom,
-body[data-ui-native="true"][data-ui-mode="desktop"] .safe-area-bottom {
-  padding-bottom: 0 !important;
+/* neutralise toute règle "desktop" en natif */
+html[data-ui-native="true"][data-ui-mode="desktop"] #ui-desktop-viewport,
+html[data-ui-native="true"] #ui-desktop-viewport {
+  width: 100% !important;
+  max-width: 100% !important;
+  transform: none !important;
+  transform-origin: initial !important;
+  min-height: 100dvh !important;
 }
 
-/* ---------------------------
-   ✅ VRAI "VIEWPORT DESKTOP" DANS ÉMULATEUR (NATIVE ONLY)
----------------------------- */
-
-html[data-ui-native="true"][data-ui-mode="desktop"] #ui-desktop-viewport {
-  width: var(--ui-desktop-width, 1200px);
-  max-width: none;
-
-  transform: scale(var(--ui-scale, 1));
-  transform-origin: top left;
-
-  min-height: calc(100dvh / var(--ui-scale, 1));
-}
-
-html[data-ui-native="true"][data-ui-mode="desktop"],
-html[data-ui-native="true"][data-ui-mode="desktop"] body {
-  overflow-x: hidden;
+/* safe-area */
+html[data-ui-native="true"] .safe-area-bottom,
+body[data-ui-native="true"] .safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 /* ---------------------------
    ADMIN responsive hardening
 ---------------------------- */
-
 .admin-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.65) transparent;
