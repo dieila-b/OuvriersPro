@@ -34,7 +34,7 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-    /* neutralisé */
+    /* neutralisé (évite largeur desktop fixe) */
     --ui-desktop-width: 100%;
     --ui-scale: 1;
   }
@@ -59,6 +59,7 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
+
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -68,9 +69,7 @@
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
-}
 
-@layer base {
   *,
   *::before,
   *::after {
@@ -101,7 +100,6 @@
   #root {
     width: 100%;
     max-width: 100%;
-    min-height: 100%;
     min-height: 100dvh;
     overflow-x: clip;
   }
@@ -146,9 +144,15 @@ html[data-ui-native="true"] #ui-desktop-viewport {
   transform-origin: initial !important;
 }
 
-/* Protection anti “zoom-out” caché */
+/* Anti “zoom-out” / anti scale caché */
+html[data-ui-native="true"] #root,
+html[data-ui-native="true"] body,
+html[data-ui-native="true"] #ui-desktop-viewport {
+  zoom: 1 !important;
+}
+
+/* Protection anti transform global */
 html[data-ui-native="true"] * {
-  /* évite qu’un composant applique un transform global par héritage visuel */
   -webkit-text-size-adjust: 100%;
 }
 
