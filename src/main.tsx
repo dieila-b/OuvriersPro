@@ -14,6 +14,24 @@ window.addEventListener("error", (event) => {
   console.error("[Global] Uncaught error:", event.error);
 });
 
+/**
+ * ✅ WebView Android: améliore la fiabilité des taps
+ * - empêche certaines sélections/gestures qui bloquent les click
+ * - rend les boutons plus réactifs (sans casser desktop)
+ */
+try {
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  if (isAndroid) {
+    document.addEventListener(
+      "touchstart",
+      () => {
+        // no-op: améliore la “clickability” sur certains WebView
+      },
+      { passive: true }
+    );
+  }
+} catch {}
+
 const rootEl = document.getElementById("root");
 if (!rootEl) throw new Error("Root element #root not found");
 
