@@ -330,7 +330,7 @@ function GlobalLinkInterceptor() {
  * ✅ Guard natif anti-404 (téléphone réel)
  * IMPORTANT:
  * - Pas d'import statique @capacitor/app / @capacitor/browser (sinon Preview Lovable casse)
- * - On charge dynamiquement UNIQUEMENT en natif
+ * - On charge dynamiquement UNIQUEMENT en natif (avec @vite-ignore)
  */
 function NativeRoutingGuard() {
   const navigate = useNavigate();
@@ -365,8 +365,12 @@ function NativeRoutingGuard() {
     (async () => {
       // 2) Deep links / intents via Capacitor App plugin (si dispo)
       try {
-        const mod = await import("@capacitor/app");
-        const CapApp = mod.App;
+        const capAppMod = "@capacitor/app";
+        const capBrowserMod = "@capacitor/browser";
+
+        const mod: any = await import(/* @vite-ignore */ capAppMod);
+        const CapApp = mod?.App;
+        if (!CapApp?.addListener) return;
 
         const sub = CapApp.addListener("appUrlOpen", async (event: any) => {
           try {
@@ -376,8 +380,9 @@ function NativeRoutingGuard() {
             // URLs externes => navigateur système si plugin dispo, sinon window.open
             if (incoming.startsWith("http://") || incoming.startsWith("https://")) {
               try {
-                const b = await import("@capacitor/browser");
-                await b.Browser.open({ url: incoming });
+                const b: any = await import(/* @vite-ignore */ capBrowserMod);
+                if (b?.Browser?.open) await b.Browser.open({ url: incoming });
+                else window.open(incoming, "_blank");
               } catch {
                 window.open(incoming, "_blank");
               }
