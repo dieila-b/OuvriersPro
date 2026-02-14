@@ -18,6 +18,117 @@ type SearchPayload = {
   near?: string;
 };
 
+/**
+ * ✅ Détection native robuste (Capacitor / WebView)
+ */
+function isNativeRuntime(): boolean {
+  const wCap = (() => {
+    try {
+      return (window as any)?.Capacitor ?? null;
+    } catch {
+      return null;
+    }
+  })();
+
+  try {
+    if (wCap?.isNativePlatform?.()) return true;
+  } catch {}
+
+  try {
+    const p = window.location?.protocol ?? "";
+    if (p === "capacitor:" || p === "file:") return true;
+  } catch {}
+
+  // Cas courant Android Capacitor local server
+  try {
+    const { protocol, hostname } = window.location;
+    if (wCap && protocol === "http:" && hostname === "localhost") return true;
+  } catch {}
+
+  return false;
+}
+
+/**
+ * ✅ Fix “tap qui ne clique pas” sur Android WebView:
+ * - Sur certains devices, des overlays/filters/backdrop/scale peuvent empêcher les click React.
+ * - On convertit touchend -> click uniquement en natif, avec anti double-fire.
+ */
+function useNativeTapToClickFix(enabled: boolean) {
+  useEffect(() => {
+    if (!enabled) return;
+    if (!isNativeRuntime()) return;
+
+    let lastSyntheticAt = 0;
+
+    const isClickable = (el: HTMLElement | null) => {
+      if (!el) return false;
+      const tag = el.tagName.toLowerCase();
+      if (tag === "button") return true;
+      if (tag === "a" && (el as HTMLAnchorElement).href) return true;
+      if (el.getAttribute("role") === "button") return true;
+      if (el.hasAttribute("data-clickable")) return true;
+      // certains composants shadcn/radix
+      if (el.getAttribute("data-radix-collection-item") != null) return true;
+      return false;
+    };
+
+    const closestClickable = (start: HTMLElement | null) => {
+      let cur: HTMLElement | null = start;
+      while (cur) {
+        if (isClickable(cur)) return cur;
+        cur = cur.parentElement;
+      }
+      return null;
+    };
+
+    const shouldIgnoreTarget = (el: HTMLElement) => {
+      // ignore input typing / textarea
+      const tag = el.tagName.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return true;
+
+      // ignore if disabled
+      if ((el as any).disabled) return true;
+      if (el.getAttribute("aria-disabled") === "true") return true;
+
+      return false;
+    };
+
+    const onTouchEndCapture = (e: TouchEvent) => {
+      const now = Date.now();
+      if (now - lastSyntheticAt < 350) return;
+
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+
+      const clickable = closestClickable(target);
+      if (!clickable) return;
+
+      if (shouldIgnoreTarget(clickable)) return;
+
+      // ✅ dispatch click synthétique (bubbles) — sans preventDefault global
+      try {
+        lastSyntheticAt = now;
+        clickable.dispatchEvent(
+          new MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+          })
+        );
+      } catch {
+        // ignore
+      }
+    };
+
+    // capture = plus fiable en WebView
+    document.addEventListener("touchend", onTouchEndCapture, true);
+
+    return () => {
+      document.removeEventListener("touchend", onTouchEndCapture, true);
+    };
+  }, [enabled]);
+}
+
 const Index = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -25,6 +136,9 @@ const Index = () => {
 
   const isSearchRoute = location.pathname === "/search" || location.pathname === "/rechercher";
   const isHomeRoute = location.pathname === "/";
+
+  // ✅ Fix tap->click natif (IMPORTANT)
+  useNativeTapToClickFix(true);
 
   // ✅ Pour masquer la section abonnement si ouvrier connecté
   const [workerCheckLoading, setWorkerCheckLoading] = useState(true);
@@ -184,7 +298,7 @@ const Index = () => {
     }
   }, [isHomeRoute, location.hash, hasAnySearchParam, searchPayload]);
 
-  // ✅ 2) Scroll ancres (#search, #subscription...) sur l’accueil (sans “vide” au-dessus)
+  // ✅ 2) Scroll ancres (#search, #subscription...) sur l’accueil
   useEffect(() => {
     if (!isHomeRoute) return;
     if (!location.hash) return;
@@ -229,29 +343,30 @@ const Index = () => {
   }, [isHomeRoute, location.hash]);
 
   return (
-    <div className="min-h-dvh w-full min-w-0 overflow-x-hidden bg-white flex flex-col">
+    <div
+      className="min-h-dvh w-full min-w-0 overflow-x-hidden bg-white flex flex-col"
+      style={{ WebkitTapHighlightColor: "transparent" }}
+    >
       <Header />
 
-      <main className="w-full flex-1 min-w-0">
-        <>
-          <HeroSection />
+      {/* ✅ Important : main en “relative” pour éviter des stacking contexts bizarres */}
+      <main className="w-full flex-1 min-w-0 relative">
+        <HeroSection />
+        <FeaturesSection />
 
-          <FeaturesSection />
+        <div id="search" className="w-full">
+          <WorkerSearchSection />
+        </div>
 
-          <div id="search" className="w-full">
-            <WorkerSearchSection />
+        {/* ✅ IMPORTANT :
+            - si ouvrier connecté => on masque la section "Rejoignez ProxiServices"
+            - sinon on l'affiche normalement
+        */}
+        {!workerCheckLoading && !isWorker && (
+          <div id="subscription" className="w-full">
+            <SubscriptionSection />
           </div>
-
-          {/* ✅ IMPORTANT :
-              - si ouvrier connecté => on masque la section "Rejoignez ProxiServices"
-              - sinon on l'affiche normalement
-          */}
-          {!workerCheckLoading && !isWorker && (
-            <div id="subscription" className="w-full">
-              <SubscriptionSection />
-            </div>
-          )}
-        </>
+        )}
       </main>
 
       <Footer />
