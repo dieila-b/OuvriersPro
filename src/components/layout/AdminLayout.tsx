@@ -35,13 +35,7 @@ function matchActive(activePath: string, it: NavItem) {
   return it.end ? activePath === it.to : activePath.startsWith(it.to);
 }
 
-function itemClass({
-  isActive,
-  collapsed,
-}: {
-  isActive: boolean;
-  collapsed: boolean;
-}) {
+function itemClass({ isActive, collapsed }: { isActive: boolean; collapsed: boolean }) {
   return cn(
     "w-full flex items-center gap-3 rounded-xl text-sm font-medium transition",
     "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
@@ -52,18 +46,9 @@ function itemClass({
   );
 }
 
-function Breadcrumb({
-  activePath,
-  items,
-}: {
-  activePath: string;
-  items: NavItem[];
-}) {
+function Breadcrumb({ activePath, items }: { activePath: string; items: NavItem[] }) {
   const active = useMemo(() => {
-    return (
-      items.find((it) => matchActive(activePath, it)) ||
-      items.find((it) => it.to === "/admin/dashboard")
-    );
+    return items.find((it) => matchActive(activePath, it)) || items.find((it) => it.to === "/admin/dashboard");
   }, [activePath, items]);
 
   return (
@@ -97,24 +82,15 @@ function Sidebar({
     <div className="h-full flex flex-col min-h-0">
       {/* Brand */}
       <div className="px-3 pt-4 pb-4 border-b border-slate-200/70">
-        <div
-          className={cn(
-            "flex items-center gap-3 min-w-0",
-            collapsed && "justify-center"
-          )}
-        >
+        <div className={cn("flex items-center gap-3 min-w-0", collapsed && "justify-center")}>
           <div className="h-10 w-10 rounded-2xl bg-pro-blue text-white flex items-center justify-center text-sm font-bold shadow-sm shrink-0">
             PS
           </div>
 
           {!collapsed && (
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-slate-900 truncate">
-                Administration
-              </div>
-              <div className="text-[11px] text-slate-500 truncate">
-                Back-office
-              </div>
+              <div className="text-sm font-semibold text-slate-900 truncate">Administration</div>
+              <div className="text-[11px] text-slate-500 truncate">Back-office</div>
             </div>
           )}
 
@@ -128,32 +104,21 @@ function Sidebar({
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40",
                 collapsed && "ml-0"
               )}
+              style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
               aria-label={collapsed ? "Étendre le menu" : "Réduire le menu"}
               title={collapsed ? "Étendre" : "Réduire"}
             >
-              {collapsed ? (
-                <PanelLeftOpen className="h-5 w-5" />
-              ) : (
-                <PanelLeftClose className="h-5 w-5" />
-              )}
+              {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
             </button>
           )}
         </div>
       </div>
 
       {/* Nav */}
-      <div
-        className={cn(
-          "flex-1 min-h-0 overflow-y-auto overscroll-contain",
-          collapsed ? "px-2 py-3" : "px-3 py-4",
-          "space-y-5"
-        )}
-      >
+      <div className={cn("flex-1 min-h-0 overflow-y-auto overscroll-contain", collapsed ? "px-2 py-3" : "px-3 py-4", "space-y-5")}>
         <div>
           {!collapsed && (
-            <div className="px-2 py-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-              Menu
-            </div>
+            <div className="px-2 py-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Menu</div>
           )}
           <div className={cn("mt-2", collapsed ? "space-y-2" : "space-y-1")}>
             {core.map((it) => {
@@ -168,6 +133,7 @@ function Sidebar({
                   className={itemClass({ isActive, collapsed })}
                   onClick={onNavigate}
                   title={collapsed ? it.label : undefined}
+                  style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
                 >
                   {Icon ? (
                     <span
@@ -188,9 +154,7 @@ function Sidebar({
 
         <div>
           {!collapsed && (
-            <div className="px-2 py-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-              Contenu
-            </div>
+            <div className="px-2 py-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Contenu</div>
           )}
           <div className={cn("mt-2", collapsed ? "space-y-2" : "space-y-1")}>
             {content.map((it) => {
@@ -205,6 +169,7 @@ function Sidebar({
                   className={itemClass({ isActive, collapsed })}
                   onClick={onNavigate}
                   title={collapsed ? it.label : undefined}
+                  style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
                 >
                   {Icon ? (
                     <span
@@ -226,21 +191,13 @@ function Sidebar({
         {!collapsed && (
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 flex items-start gap-2">
             <Shield className="h-4 w-4 mt-0.5" />
-            <div>
-              Astuce : utilise le bouton en haut pour réduire/étendre la sidebar.
-            </div>
+            <div>Astuce : utilise le bouton en haut pour réduire/étendre la sidebar.</div>
           </div>
         )}
       </div>
 
-      {/* Bottom actions (sticky bottom inside sidebar) */}
-      <div
-        className={cn(
-          "border-t border-slate-200/70 bg-white/80 backdrop-blur",
-          collapsed ? "px-2 py-3" : "px-4 py-4",
-          "space-y-2"
-        )}
-      >
+      {/* Bottom actions */}
+      <div className={cn("border-t border-slate-200/70 bg-white", collapsed ? "px-2 py-3" : "px-4 py-4", "space-y-2")}>
         {collapsed ? (
           <>
             <Link
@@ -249,6 +206,7 @@ function Sidebar({
               onClick={onNavigate}
               title="Retour au site"
               aria-label="Retour au site"
+              style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
             >
               <ExternalLink className="h-4 w-4" />
             </Link>
@@ -260,6 +218,7 @@ function Sidebar({
               to="/"
               className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50 shadow-sm"
               onClick={onNavigate}
+              style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
             >
               <ExternalLink className="h-4 w-4" />
               Retour au site
@@ -289,81 +248,27 @@ export default function AdminLayout() {
 
   const navItems: NavItem[] = useMemo(
     () => [
-      {
-        to: "/admin/dashboard",
-        label: "Tableau de bord",
-        end: true,
-        group: "core",
-        icon: LayoutDashboard,
-      },
-      {
-        to: "/admin/ouvrier-contacts",
-        label: "Demandes de contact",
-        group: "core",
-        icon: PhoneCall,
-      },
-      {
-        to: "/admin/ouvriers",
-        label: "Inscriptions prestataires",
-        group: "core",
-        icon: UserCheck,
-      },
-      {
-        to: "/admin/publicites",
-        label: "Publicités",
-        group: "core",
-        icon: Megaphone,
-      },
-      {
-        to: "/admin/signalements",
-        label: "Signalements",
-        group: "core",
-        icon: Flag,
-      },
-      {
-        to: "/admin/journal-connexions",
-        label: "Journal de connexions",
-        group: "core",
-        icon: LogIn,
-      },
-
-      // ✅ Nouveau : Modération avis
-      {
-        to: "/admin/moderation-avis",
-        label: "Modération avis",
-        group: "core",
-        icon: MessageCircle,
-      },
-
-      {
-        to: "/admin/faq-questions",
-        label: "Questions FAQ",
-        group: "content",
-        icon: BookOpen,
-      },
-      {
-        to: "/admin/contenu",
-        label: "Contenu du site",
-        group: "content",
-        icon: FileText,
-      },
+      { to: "/admin/dashboard", label: "Tableau de bord", end: true, group: "core", icon: LayoutDashboard },
+      { to: "/admin/ouvrier-contacts", label: "Demandes de contact", group: "core", icon: PhoneCall },
+      { to: "/admin/ouvriers", label: "Inscriptions prestataires", group: "core", icon: UserCheck },
+      { to: "/admin/publicites", label: "Publicités", group: "core", icon: Megaphone },
+      { to: "/admin/signalements", label: "Signalements", group: "core", icon: Flag },
+      { to: "/admin/journal-connexions", label: "Journal de connexions", group: "core", icon: LogIn },
+      { to: "/admin/moderation-avis", label: "Modération avis", group: "core", icon: MessageCircle },
+      { to: "/admin/faq-questions", label: "Questions FAQ", group: "content", icon: BookOpen },
+      { to: "/admin/contenu", label: "Contenu du site", group: "content", icon: FileText },
     ],
     []
   );
 
-  // Persist collapsed state
   useEffect(() => {
     try {
       localStorage.setItem("admin_sidebar_collapsed", collapsed ? "1" : "0");
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, [collapsed]);
 
-  // Close drawer on navigation
   useEffect(() => setDrawerOpen(false), [location.pathname]);
 
-  // Lock body scroll when drawer open
   useEffect(() => {
     if (!drawerOpen) return;
     const prev = document.body.style.overflow;
@@ -373,7 +278,6 @@ export default function AdminLayout() {
     };
   }, [drawerOpen]);
 
-  // ESC closes drawer
   useEffect(() => {
     if (!drawerOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -383,16 +287,14 @@ export default function AdminLayout() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [drawerOpen]);
 
-  // ✅ largeur responsive desktop sidebar
   const desktopSidebarWidth = collapsed ? "w-[88px]" : "w-[280px]";
 
   return (
     <div data-admin className="min-h-dvh bg-slate-50">
-      {/* Top header (always responsive) */}
-      <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/80 backdrop-blur">
+      {/* ✅ header sans blur (WebView friendly) */}
+      <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white">
         <div className="mx-auto w-full max-w-[1600px] px-3 sm:px-6 lg:px-8 py-3">
           <div className="flex items-center gap-3">
-            {/* Mobile menu button */}
             <button
               type="button"
               className="md:hidden inline-flex items-center justify-center h-10 w-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 shadow-sm
@@ -400,16 +302,15 @@ export default function AdminLayout() {
               aria-label={drawerOpen ? "Fermer le menu" : "Ouvrir le menu"}
               aria-expanded={drawerOpen}
               onClick={() => setDrawerOpen((v) => !v)}
+              style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
             >
               {drawerOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
 
-            {/* Breadcrumb */}
             <div className="min-w-0 flex-1">
               <Breadcrumb activePath={activePath} items={navItems} />
             </div>
 
-            {/* Desktop quick actions */}
             <div className="hidden md:flex items-center gap-2 shrink-0">
               <Link
                 to="/"
@@ -419,6 +320,7 @@ export default function AdminLayout() {
                   "border border-transparent hover:border-slate-200",
                   "focus:outline-none focus-visible:ring-2 focus-visible:ring-pro-blue/40"
                 )}
+                style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
               >
                 <ExternalLink className="h-4 w-4" />
                 Retour au site
@@ -430,17 +332,9 @@ export default function AdminLayout() {
         </div>
       </header>
 
-      {/* Main layout: sidebar left + content */}
       <div className="mx-auto w-full max-w-[1600px]">
         <div className="flex min-h-[calc(100dvh-64px)]">
-          {/* Desktop/Tablet sidebar */}
-          <aside
-            className={cn(
-              "hidden md:block shrink-0 border-r border-slate-200/70 bg-white/65 backdrop-blur",
-              desktopSidebarWidth
-            )}
-          >
-            {/* ✅ sticky + hauteur correcte + scroll interne */}
+          <aside className={cn("hidden md:block shrink-0 border-r border-slate-200/70 bg-white", desktopSidebarWidth)}>
             <div className="sticky top-[64px] h-[calc(100dvh-64px)] min-h-0">
               <Sidebar
                 navItems={navItems}
@@ -452,7 +346,6 @@ export default function AdminLayout() {
             </div>
           </aside>
 
-          {/* Content */}
           <main className="min-w-0 flex-1 px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
             <Outlet />
           </main>
@@ -464,12 +357,11 @@ export default function AdminLayout() {
         <div
           className={cn(
             "fixed inset-0 z-40 bg-black/35 transition-opacity",
-            drawerOpen
-              ? "opacity-100 pointer-events-auto"
-              : "opacity-0 pointer-events-none"
+            drawerOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
           )}
           onClick={() => setDrawerOpen(false)}
           aria-hidden="true"
+          style={{ WebkitTapHighlightColor: "transparent" }}
         />
 
         <div
@@ -481,14 +373,9 @@ export default function AdminLayout() {
           role="dialog"
           aria-modal="true"
           aria-label="Menu admin"
+          style={{ WebkitTapHighlightColor: "transparent" }}
         >
-          {/* ✅ mobile = non-collapsed + scroll interne */}
-          <Sidebar
-            navItems={navItems}
-            activePath={activePath}
-            collapsed={false}
-            onNavigate={() => setDrawerOpen(false)}
-          />
+          <Sidebar navItems={navItems} activePath={activePath} collapsed={false} onNavigate={() => setDrawerOpen(false)} />
         </div>
       </div>
     </div>
