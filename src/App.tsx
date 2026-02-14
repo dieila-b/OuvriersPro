@@ -75,7 +75,6 @@ const ClientContactForm = lazy(() => import("./pages/ClientContactForm"));
  * Objectif: ne JAMAIS repasser en BrowserRouter sur téléphone.
  */
 const isNativeRuntime = () => {
-  // Capacitor injecté sur window en natif (souvent disponible très tôt)
   const wCap = (() => {
     try {
       return (window as any)?.Capacitor ?? null;
@@ -84,30 +83,25 @@ const isNativeRuntime = () => {
     }
   })();
 
-  // 1) Check officiel
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
 
-  // 2) Même check via window.Capacitor
   try {
     if (wCap?.isNativePlatform?.()) return true;
   } catch {}
 
-  // 3) Protocols natifs classiques
   try {
     const p = window.location?.protocol ?? "";
     if (p === "capacitor:" || p === "file:") return true;
   } catch {}
 
-  // 4) ✅ Cas fréquent sur device : http://localhost (Capacitor local server)
-  // On le considère natif UNIQUEMENT si Capacitor existe sur window.
+  // ✅ Cas device (Capacitor local server): http://localhost
   try {
     const { hostname, protocol } = window.location;
     if (wCap && protocol === "http:" && hostname === "localhost") return true;
   } catch {}
 
-  // 5) getPlatform fallback
   try {
     const gp = (Capacitor as any)?.getPlatform?.();
     if (gp && gp !== "web") return true;
@@ -157,6 +151,71 @@ function ScrollManager() {
 
     return () => window.clearTimeout(t);
   }, [location.pathname, location.hash]);
+
+  return null;
+}
+
+/**
+ * ✅ HARD TAP FIX (Android WebView / Emulator)
+ * Objectif : récupérer les clicks même si une couche/wrapper mange les events.
+ */
+function NativeTapFix() {
+  const isNative = isNativeRuntime();
+
+  useEffect(() => {
+    if (!isNative) return;
+
+    const fixKnownWrappers = () => {
+      try {
+        const root = document.getElementById("root");
+        if (root) root.style.pointerEvents = "auto";
+
+        const uiVp = document.getElementById("ui-desktop-viewport");
+        if (uiVp) {
+          uiVp.style.pointerEvents = "auto";
+          uiVp.style.transform = "none";
+          uiVp.style.filter = "none";
+          (uiVp.style as any).backdropFilter = "none";
+          // évite un wrapper plein écran fixed qui couvre tout
+          if (getComputedStyle(uiVp).position === "fixed") uiVp.style.position = "relative";
+        }
+
+        document.body.style.pointerEvents = "auto";
+        document.documentElement.style.pointerEvents = "auto";
+      } catch {}
+    };
+
+    fixKnownWrappers();
+    const t = window.setInterval(fixKnownWrappers, 700);
+
+    const rescuePointerEvents = (ev: any) => {
+      try {
+        const x = ev?.clientX ?? (ev?.touches?.[0]?.clientX ?? null);
+        const y = ev?.clientY ?? (ev?.touches?.[0]?.clientY ?? null);
+        if (x == null || y == null) return;
+
+        let el = document.elementFromPoint(x, y) as HTMLElement | null;
+        let hops = 0;
+
+        while (el && hops < 14) {
+          const pe = getComputedStyle(el).pointerEvents;
+          if (pe === "none") el.style.pointerEvents = "auto";
+          el = el.parentElement;
+          hops++;
+        }
+      } catch {}
+    };
+
+    // capture=true : passe avant les handlers “cassés”
+    document.addEventListener("pointerdown", rescuePointerEvents, true);
+    document.addEventListener("touchstart", rescuePointerEvents as any, true);
+
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("pointerdown", rescuePointerEvents, true);
+      document.removeEventListener("touchstart", rescuePointerEvents as any, true);
+    };
+  }, [isNative]);
 
   return null;
 }
@@ -313,7 +372,8 @@ function GlobalLinkInterceptor() {
         href.startsWith("blob:") ||
         href.startsWith("data:") ||
         anchor.target === "_blank"
-      ) return true;
+      )
+        return true;
 
       if (anchor.hasAttribute("download")) return true;
       if ((anchor.getAttribute("rel") || "").includes("external")) return true;
@@ -340,16 +400,13 @@ function GlobalLinkInterceptor() {
 
       if (href.startsWith("/") || href.startsWith("#")) {
         e.preventDefault();
-        // ⚠️ IMPORTANT: pas de stopPropagation (sinon menus/overlays cassent)
         requestAnimationFrame(() => navigate(href));
       }
     };
 
     document.addEventListener("click", handleClick, false);
 
-    return () => {
-      document.removeEventListener("click", handleClick, false);
-    };
+    return () => document.removeEventListener("click", handleClick, false);
   }, [navigate]);
 
   return null;
@@ -432,6 +489,9 @@ function NativeRoutingGuard() {
 
 const AppRoutes = () => (
   <>
+    {/* ✅ HARD TAP FIX MUST be first */}
+    <NativeTapFix />
+
     <ScrollManager />
     <AuthAuditLogger />
     <UiDebugBadge />
@@ -630,9 +690,12 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
 
       const vp = document.getElementById("ui-desktop-viewport") as HTMLElement | null;
       if (vp) {
+        vp.style.pointerEvents = "auto";
         vp.style.transform = "none";
         vp.style.width = "100%";
         vp.style.maxWidth = "100%";
+        vp.style.filter = "none";
+        (vp.style as any).backdropFilter = "none";
       }
 
       (body.style as any).zoom = "1";
@@ -642,8 +705,8 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
     };
 
     hardReset();
-    const t1 = window.setTimeout(hardReset, 300);
-    const t2 = window.setTimeout(hardReset, 1200);
+    const t1 = window.setTimeout(hardReset, 250);
+    const t2 = window.setTimeout(hardReset, 900);
 
     window.addEventListener("resize", hardReset);
     window.visualViewport?.addEventListener?.("resize", hardReset);
