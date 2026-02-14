@@ -71,15 +71,27 @@ const ClientReviews = lazy(() => import("./pages/ClientReviews"));
 const ClientContactForm = lazy(() => import("./pages/ClientContactForm"));
 
 /**
- * ✅ Détection native : source de vérité = Capacitor
- * (évite les faux négatifs sur certains téléphones)
+ * ✅ Détection native ULTRA robuste (Capacitor + fallback protocol)
+ * Objectif: ne JAMAIS repasser en BrowserRouter sur téléphone.
  */
 const isNativeRuntime = () => {
   try {
-    return Capacitor.isNativePlatform();
-  } catch {
-    return false;
-  }
+    if (Capacitor?.isNativePlatform?.()) return true;
+  } catch {}
+
+  // Fallbacks (certains devices retournent des infos bizarres)
+  try {
+    const p = window.location?.protocol ?? "";
+    if (p === "capacitor:" || p === "file:") return true;
+  } catch {}
+
+  try {
+    // getPlatform est fiable aussi
+    // (web / android / ios)
+    if ((Capacitor as any)?.getPlatform?.() && (Capacitor as any).getPlatform() !== "web") return true;
+  } catch {}
+
+  return false;
 };
 
 /**
@@ -260,20 +272,16 @@ function UiDebugBadge() {
 }
 
 /**
- * ✅ Intercepteur global : redirige les clics sur <a href="/..."> vers React Router
- * Empêche tout reload WebView en Capacitor (élimine les 404 natifs).
+ * ✅ Intercepteur global :
+ * - capte click + touchend + pointerup (téléphones)
+ * - transforme <a href="/..."> en navigation React Router
+ * - empêche un reload WebView (source classique des 404 sur device)
  */
 function GlobalLinkInterceptor() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      const anchor = (e.target as HTMLElement)?.closest?.("a[href]") as HTMLAnchorElement | null;
-      if (!anchor) return;
-
-      const href = anchor.getAttribute("href");
-      if (!href) return;
-
+    const shouldIgnore = (anchor: HTMLAnchorElement, href: string) => {
       if (
         href.startsWith("http://") ||
         href.startsWith("https://") ||
@@ -282,18 +290,41 @@ function GlobalLinkInterceptor() {
         href.startsWith("blob:") ||
         href.startsWith("data:") ||
         anchor.target === "_blank"
-      ) return;
+      ) return true;
 
+      // téléchargement / externes
+      if (anchor.hasAttribute("download") || anchor.getAttribute("rel")?.includes("external")) return true;
+
+      return false;
+    };
+
+    const handle = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      const anchor = target?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!anchor) return;
+
+      const href = anchor.getAttribute("href") || "";
+      if (!href) return;
+
+      if (shouldIgnore(anchor, href)) return;
+
+      // interne
       if (href.startsWith("/") || href.startsWith("#")) {
         e.preventDefault();
         e.stopPropagation();
-        // ✅ important: garder SPA
         requestAnimationFrame(() => navigate(href));
       }
     };
 
-    document.addEventListener("click", handler, true);
-    return () => document.removeEventListener("click", handler, true);
+    document.addEventListener("click", handle as any, true);
+    document.addEventListener("touchend", handle as any, true);
+    document.addEventListener("pointerup", handle as any, true);
+
+    return () => {
+      document.removeEventListener("click", handle as any, true);
+      document.removeEventListener("touchend", handle as any, true);
+      document.removeEventListener("pointerup", handle as any, true);
+    };
   }, [navigate]);
 
   return null;
@@ -494,6 +525,7 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
     // Force "mobile" dans l'app
     html.setAttribute("data-ui-mode", "mobile");
 
+    // Neutralise toutes les tentatives de scale/zoom
     const hardReset = () => {
       html.style.setProperty("--ui-scale", "1");
       html.style.setProperty("--ui-desktop-width", "100%");
@@ -527,11 +559,12 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
   }, [isNative]);
 
   if (import.meta.env.DEV) {
-    console.info(`[RouterSwitch] native=${isNative}, href=${window.location.href}`);
+    console.info(`[RouterSwitch] isNative=${isNative}, href=${window.location?.href}`);
   }
 
-  // ✅ Déterministe : natif = HashRouter (évite 404 sur téléphone)
-  return isNative ? <HashRouter>{children}</HashRouter> : <BrowserRouter>{children}</BrowserRouter>;
+  // ✅ natif = HashRouter (évite les 404 quand la WebView recharge)
+  const Router = isNative ? HashRouter : BrowserRouter;
+  return <Router>{children}</Router>;
 }
 
 const App = () => {
