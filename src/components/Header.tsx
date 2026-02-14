@@ -61,10 +61,10 @@ const Header = () => {
   // C’est incohérent (si pas connecté, la route devrait être login).
   // Adapte si ta route login est différente.
   const accountPath = useMemo(() => {
-    if (!user) return "/mon-compte"; // 🔁 change en "/auth/login" si c’est ta vraie page login
+    if (!user) return "/login";
     if (isWorker) return "/espace-ouvrier";
     return "/espace-client";
-  }, [user, isWorker]);
+}, [user, isWorker]);
 
   const becomeProviderLabel = useMemo(() => {
     return cms("header.btn_become_provider", "Devenir Prestataire", "Become a Provider");
