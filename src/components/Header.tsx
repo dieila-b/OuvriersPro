@@ -76,91 +76,110 @@ const Header = () => {
   const go = useCallback(
     (to: string) => {
       setMobileOpen(false);
-      // requestAnimationFrame évite certains taps “perdus” sur WebView
       requestAnimationFrame(() => navigate(to));
     },
     [navigate]
   );
 
-  // ✅ Rend le portal uniquement quand le DOM est prêt (SSR-safe / preview-safe)
+  // ✅ Helper “tap” ultra robuste WebView
+  const tap = useCallback(
+    (to: string) => (e: any) => {
+      try {
+        e?.preventDefault?.();
+        e?.stopPropagation?.();
+      } catch {}
+      go(to);
+    },
+    [go]
+  );
+
+  // ✅ Rend le portal uniquement quand le DOM est prêt
   const canPortal = typeof document !== "undefined" && !!document.body;
 
-  const MobileOverlay = mobileOpen && canPortal
-    ? createPortal(
-        <div
-          className="md:hidden fixed inset-0 z-[9999]"
-          style={{ WebkitTapHighlightColor: "transparent" }}
-          // ✅ Important : ne pas laisser les events remonter à des parents
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          {/* Backdrop */}
+  const MobileOverlay =
+    mobileOpen && canPortal
+      ? createPortal(
           <div
-            className="absolute inset-0 bg-black/35"
-            onClick={() => setMobileOpen(false)}
-            onPointerDown={() => setMobileOpen(false)}
-            aria-label={cms("header.mobile_close.aria", "Fermer le menu", "Close menu")}
-          />
-
-          {/* Panel */}
-          <div
-            className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg"
+            className="md:hidden fixed inset-0 z-[9999]"
+            style={{ WebkitTapHighlightColor: "transparent" }}
             onClick={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
           >
-            <div className="w-full px-4 sm:px-6 py-3">
-              <div className="flex items-center justify-between gap-3 min-w-0">
-                <span className="text-sm font-semibold text-pro-gray">
-                  {cms("header.mobile_menu.title", "Menu", "Menu")}
-                </span>
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/35"
+              aria-label={cms("header.mobile_close.aria", "Fermer le menu", "Close menu")}
+              onClick={() => setMobileOpen(false)}
+              onPointerDown={() => setMobileOpen(false)}
+              onTouchEnd={() => setMobileOpen(false)}
+            />
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  className="rounded-full"
-                  onClick={() => setMobileOpen(false)}
-                  onPointerDown={() => setMobileOpen(false)}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
+            {/* Panel */}
+            <div
+              className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg"
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
+            >
+              <div className="w-full px-4 sm:px-6 py-3">
+                <div className="flex items-center justify-between gap-3 min-w-0">
+                  <span className="text-sm font-semibold text-pro-gray">
+                    {cms("header.mobile_menu.title", "Menu", "Menu")}
+                  </span>
 
-              <div className="mt-3 flex flex-col gap-2 min-w-0">
-                {/* Devenir prestataire */}
-                <button
-                  type="button"
-                  className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue min-w-0 text-left"
-                  onClick={() => go("/forfaits")}
-                  onPointerDown={() => go("/forfaits")} // ✅ WebView: pointerdown parfois plus fiable que click
-                >
-                  <span className="truncate font-medium">{becomeProviderLabel}</span>
-                </button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    className="rounded-full"
+                    onClick={() => setMobileOpen(false)}
+                    onPointerDown={() => setMobileOpen(false)}
+                    onTouchEnd={() => setMobileOpen(false)}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
 
-                {/* Connexion / Compte */}
-                <Button
-                  type="button"
-                  className="w-full rounded-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center justify-center gap-2 whitespace-nowrap"
-                  onClick={() => go(accountPath)}
-                  onPointerDown={() => go(accountPath)}
-                >
-                  <User className="w-4 h-4" />
-                  {accountLabel}
-                </Button>
+                <div className="mt-3 flex flex-col gap-3 min-w-0">
+                  {/* ✅ Devenir prestataire (button natif + multi events) */}
+                  <button
+                    type="button"
+                    className="w-full text-left py-2 font-medium text-pro-gray hover:text-pro-blue"
+                    style={{ touchAction: "manipulation" as any }}
+                    onTouchEnd={tap("/forfaits")}
+                    onPointerUp={tap("/forfaits")}
+                    onClick={tap("/forfaits")}
+                  >
+                    {becomeProviderLabel}
+                  </button>
 
-                <div className="h-1" />
+                  {/* ✅ Connexion / Compte (button natif + multi events) */}
+                  <button
+                    type="button"
+                    className="w-full rounded-full bg-pro-blue text-white py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
+                    style={{ touchAction: "manipulation" as any }}
+                    onTouchEnd={tap(accountPath)}
+                    onPointerUp={tap(accountPath)}
+                    onClick={tap(accountPath)}
+                  >
+                    <User className="w-4 h-4" />
+                    {accountLabel}
+                  </button>
+
+                  <div className="h-1" />
+                </div>
               </div>
             </div>
-          </div>
-        </div>,
-        document.body
-      )
-    : null;
+          </div>,
+          document.body
+        )
+      : null;
 
   return (
     <>
       <header className="sticky top-0 z-40 w-full max-w-full">
-        <div className="bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 border-b border-gray-200 overflow-hidden">
+        {/* ✅ IMPORTANT: on retire backdrop-blur (souvent bug taps Android WebView) */}
+        <div className="bg-white border-b border-gray-200 overflow-hidden">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-16 sm:h-[72px] min-w-0 flex items-center justify-between gap-3">
               <Link to="/" className="min-w-0 flex items-center shrink-0">
@@ -251,7 +270,8 @@ const Header = () => {
                   size="sm"
                   type="button"
                   onClick={() => setMobileOpen((v) => !v)}
-                  onPointerDown={() => setMobileOpen((v) => !v)} // ✅ WebView
+                  onPointerDown={() => setMobileOpen((v) => !v)}
+                  onTouchEnd={() => setMobileOpen((v) => !v)}
                   aria-label={cms("header.mobile_menu.aria", "Menu mobile", "Mobile menu")}
                   className="rounded-full px-3 whitespace-nowrap"
                 >
