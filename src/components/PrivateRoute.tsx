@@ -1,95 +1,109 @@
 // src/components/PrivateRoute.tsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 
-type Role = "admin" | "worker" | "user";
+type Role = "user" | "worker" | "admin";
 
-interface PrivateRouteProps {
-  children: React.ReactElement;
-  allowedRoles?: Role[]; // ex: ['admin'] ou ['worker']
-}
+type Props = {
+  children: React.ReactNode;
+  allowedRoles?: Role[];
+  /** Route vers laquelle on envoie si pas connecté */
+  loginPath?: string;
+  /** Route vers laquelle on envoie si connecté mais rôle non autorisé */
+  forbiddenRedirectTo?: string;
+  /** Affiche un mini loader pendant la vérif session */
+  showLoader?: boolean;
+};
 
-const PrivateRoute: React.FC<PrivateRouteProps> = ({
-  children,
-  allowedRoles,
-}) => {
-  const [loading, setLoading] = useState(true);
-  const [isAllowed, setIsAllowed] = useState(false);
-  const location = useLocation();
+function useSupabaseSession() {
+  const [loading, setLoading] = React.useState(true);
+  const [session, setSession] = React.useState<any>(null);
 
   useEffect(() => {
-    let isMounted = true;
+    let mounted = true;
 
-    const checkAuth = async () => {
-      setLoading(true);
-
-      // 1) Récupère l'utilisateur connecté
-      const { data, error } = await supabase.auth.getUser();
-      const user = data?.user;
-
-      if (!isMounted) return;
-
-      if (error || !user) {
-        setIsAllowed(false);
-        setLoading(false);
-        return;
-      }
-
-      // 2) Si aucun rôle exigé, on laisse passer
-      if (!allowedRoles || allowedRoles.length === 0) {
-        setIsAllowed(true);
-        setLoading(false);
-        return;
-      }
-
-      // 3) Va chercher le rôle dans op_users
-      const { data: profile, error: profileError } = await supabase
-        .from("op_users")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (!isMounted) return;
-
-      if (profileError || !profile) {
-        setIsAllowed(false);
-      } else {
-        const role = profile.role as Role;
-        setIsAllowed(allowedRoles.includes(role));
-      }
-
+    // 1) session initiale
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setSession(data?.session ?? null);
       setLoading(false);
-    };
+    });
 
-    checkAuth();
+    // 2) updates
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, newSession) => {
+      if (!mounted) return;
+      setSession(newSession ?? null);
+    });
 
     return () => {
-      isMounted = false;
+      mounted = false;
+      sub.subscription.unsubscribe();
     };
-  }, [allowedRoles]);
+  }, []);
 
+  return { loading, session };
+}
+
+/**
+ * ✅ PrivateRoute robuste:
+ * - ne bloque pas silencieusement
+ * - attend la session avant de rediriger
+ * - redirige vers /login si non connecté
+ * - check rôle via user_metadata.role OU app_metadata.role
+ */
+const PrivateRoute: React.FC<Props> = ({
+  children,
+  allowedRoles = ["user", "worker", "admin"],
+  loginPath = "/login",
+  forbiddenRedirectTo = "/",
+  showLoader = true,
+}) => {
+  const location = useLocation();
+  const { loading, session } = useSupabaseSession();
+
+  const role = useMemo<Role | null>(() => {
+    const u = session?.user;
+    if (!u) return null;
+
+    const r =
+      (u.user_metadata?.role as Role | undefined) ||
+      (u.app_metadata?.role as Role | undefined) ||
+      null;
+
+    return r;
+  }, [session]);
+
+  // ✅ Pendant le chargement, on ne redirige pas (évite clignotement + “rien ne se passe”)
   if (loading) {
+    if (!showLoader) return null;
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-sm text-slate-500">
-          Vérification de vos droits...
-        </div>
+      <div className="min-h-[40vh] w-full flex items-center justify-center p-6 text-slate-600">
+        Chargement…
       </div>
     );
   }
 
-  if (!isAllowed) {
+  // ✅ Pas connecté → login, en gardant la route voulue pour retour après connexion
+  if (!session?.user) {
     return (
       <Navigate
-        to="/login"
+        to={loginPath}
         replace
-        state={{ from: location.pathname || "/" }}
+        state={{ from: location.pathname + location.search + location.hash }}
       />
     );
   }
 
-  return children;
+  // ✅ Connecté mais rôle absent → on considère "user" par défaut (à adapter si tu préfères bloquer)
+  const effectiveRole: Role = (role ?? "user") as Role;
+
+  // ✅ Rôle non autorisé → redirection
+  if (!allowedRoles.includes(effectiveRole)) {
+    return <Navigate to={forbiddenRedirectTo} replace />;
+  }
+
+  return <>{children}</>;
 };
 
 export default PrivateRoute;
