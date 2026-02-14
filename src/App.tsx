@@ -71,27 +71,15 @@ const ClientReviews = lazy(() => import("./pages/ClientReviews"));
 const ClientContactForm = lazy(() => import("./pages/ClientContactForm"));
 
 /**
- * ✅ Détection native robuste (Capacitor / WebView)
+ * ✅ Détection native : source de vérité = Capacitor
+ * (évite les faux négatifs sur certains téléphones)
  */
 const isNativeRuntime = () => {
   try {
-    if (Capacitor?.isNativePlatform?.()) return true;
-  } catch {}
-
-  try {
-    const p = window.location?.protocol ?? "";
-    if (p === "capacitor:" || p === "file:") return true;
-
-    const host = window.location?.hostname ?? "";
-    if (host === "localhost") return true;
-
-    const ua = navigator?.userAgent ?? "";
-    if (ua.includes("wv") || ua.includes("Capacitor")) return true;
-
-    if (p === "https:" && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) return true;
-  } catch {}
-
-  return false;
+    return Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
 };
 
 /**
@@ -299,7 +287,8 @@ function GlobalLinkInterceptor() {
       if (href.startsWith("/") || href.startsWith("#")) {
         e.preventDefault();
         e.stopPropagation();
-        navigate(href);
+        // ✅ important: garder SPA
+        requestAnimationFrame(() => navigate(href));
       }
     };
 
@@ -489,7 +478,7 @@ const AppRoutes = () => (
 
 /**
  * ✅ Router natif vs web (fix 404 Capacitor)
- * + ✅ Fix définitif: reset zoom/scale en natif après render (le bug "normal 2s puis petit")
+ * + ✅ Fix définitif: reset zoom/scale en natif après render
  */
 function RouterSwitch({ children }: { children: React.ReactNode }) {
   const isNative = isNativeRuntime();
@@ -502,16 +491,13 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
 
     if (!isNative) return;
 
-    // Force "mobile" dans l'app (même si ton UiModeContext essaie de passer en desktop)
+    // Force "mobile" dans l'app
     html.setAttribute("data-ui-mode", "mobile");
 
-    // Neutralise toutes les tentatives de scale/zoom
     const hardReset = () => {
-      // 1) Variables éventuelles
       html.style.setProperty("--ui-scale", "1");
       html.style.setProperty("--ui-desktop-width", "100%");
 
-      // 2) Si un wrapper a un transform, on le neutralise
       const vp = document.getElementById("ui-desktop-viewport") as HTMLElement | null;
       if (vp) {
         vp.style.transform = "none";
@@ -519,10 +505,8 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
         vp.style.maxWidth = "100%";
       }
 
-      // 3) Empêche un zoom CSS (rare mais ça arrive)
       (body.style as any).zoom = "1";
 
-      // 4) Si un script modifie le meta viewport, on le remet (Android WebView)
       const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
       if (meta) meta.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
     };
@@ -543,13 +527,11 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
   }, [isNative]);
 
   if (import.meta.env.DEV) {
-    console.info(
-      `[RouterSwitch] isNative=${isNative}, protocol=${window.location?.protocol}, hostname=${window.location?.hostname}`
-    );
+    console.info(`[RouterSwitch] native=${isNative}, href=${window.location.href}`);
   }
 
-  const Router = isNative ? HashRouter : BrowserRouter;
-  return <Router>{children}</Router>;
+  // ✅ Déterministe : natif = HashRouter (évite 404 sur téléphone)
+  return isNative ? <HashRouter>{children}</HashRouter> : <BrowserRouter>{children}</BrowserRouter>;
 }
 
 const App = () => {
