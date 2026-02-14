@@ -5,11 +5,16 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  // ✅ CRITIQUE pour Capacitor (file://...) : évite /assets absolu
+  base: "./",
+
   server: {
     host: "::",
     port: 8080,
   },
+
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -20,10 +25,9 @@ export default defineConfig(({ mode }) => ({
   build: {
     sourcemap: false,
     reportCompressedSize: true,
-    chunkSizeWarningLimit: 800, // évite warning trop agressif, sans masquer les vrais soucis
+    chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: {
-        // ✅ Découpe simple et efficace (adapté à ton app)
         manualChunks: {
           react: ["react", "react-dom"],
           router: ["react-router-dom"],
