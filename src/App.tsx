@@ -71,20 +71,46 @@ const ClientReviews = lazy(() => import("./pages/ClientReviews"));
 const ClientContactForm = lazy(() => import("./pages/ClientContactForm"));
 
 /**
- * ✅ Détection native ULTRA robuste (Capacitor + fallback protocol)
+ * ✅ Détection native ULTRA robuste (Capacitor + localhost fallback)
+ * Objectif: ne JAMAIS repasser en BrowserRouter sur téléphone.
  */
 const isNativeRuntime = () => {
+  // Capacitor injecté sur window en natif (souvent disponible très tôt)
+  const wCap = (() => {
+    try {
+      return (window as any)?.Capacitor ?? null;
+    } catch {
+      return null;
+    }
+  })();
+
+  // 1) Check officiel
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
 
+  // 2) Même check via window.Capacitor
+  try {
+    if (wCap?.isNativePlatform?.()) return true;
+  } catch {}
+
+  // 3) Protocols natifs classiques
   try {
     const p = window.location?.protocol ?? "";
     if (p === "capacitor:" || p === "file:") return true;
   } catch {}
 
+  // 4) ✅ Cas fréquent sur device : http://localhost (Capacitor local server)
+  // On le considère natif UNIQUEMENT si Capacitor existe sur window.
   try {
-    if ((Capacitor as any)?.getPlatform?.() && (Capacitor as any).getPlatform() !== "web") return true;
+    const { hostname, protocol } = window.location;
+    if (wCap && protocol === "http:" && hostname === "localhost") return true;
+  } catch {}
+
+  // 5) getPlatform fallback
+  try {
+    const gp = (Capacitor as any)?.getPlatform?.();
+    if (gp && gp !== "web") return true;
   } catch {}
 
   return false;
@@ -268,12 +294,16 @@ function UiDebugBadge() {
 }
 
 /**
- * ✅ Intercepteur global (anti-reload WebView / anti-404 sur device)
+ * ✅ Intercepteur global SAFE (Natif uniquement)
+ * But: empêcher les reload WebView si un <a href="/..."> traîne quelque part,
+ * SANS casser les onClick des boutons / overlays.
  */
 function GlobalLinkInterceptor() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (!isNativeRuntime()) return;
+
     const shouldIgnore = (anchor: HTMLAnchorElement, href: string) => {
       if (
         href.startsWith("http://") ||
@@ -283,21 +313,20 @@ function GlobalLinkInterceptor() {
         href.startsWith("blob:") ||
         href.startsWith("data:") ||
         anchor.target === "_blank"
-      )
-        return true;
+      ) return true;
 
-      if (anchor.hasAttribute("download") || anchor.getAttribute("rel")?.includes("external")) return true;
+      if (anchor.hasAttribute("download")) return true;
+      if ((anchor.getAttribute("rel") || "").includes("external")) return true;
 
       return false;
     };
 
     const normalizeHref = (href: string) => {
-      // ✅ sécurise : certains liens peuvent venir sous forme "#/route"
       if (href.startsWith("#/")) return href.slice(1); // => "/route"
       return href;
     };
 
-    const handle = (e: Event) => {
+    const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       const anchor = target?.closest?.("a[href]") as HTMLAnchorElement | null;
       if (!anchor) return;
@@ -311,19 +340,15 @@ function GlobalLinkInterceptor() {
 
       if (href.startsWith("/") || href.startsWith("#")) {
         e.preventDefault();
-        e.stopPropagation();
+        // ⚠️ IMPORTANT: pas de stopPropagation (sinon menus/overlays cassent)
         requestAnimationFrame(() => navigate(href));
       }
     };
 
-    document.addEventListener("click", handle as any, true);
-    document.addEventListener("touchend", handle as any, true);
-    document.addEventListener("pointerup", handle as any, true);
+    document.addEventListener("click", handleClick, false);
 
     return () => {
-      document.removeEventListener("click", handle as any, true);
-      document.removeEventListener("touchend", handle as any, true);
-      document.removeEventListener("pointerup", handle as any, true);
+      document.removeEventListener("click", handleClick, false);
     };
   }, [navigate]);
 
