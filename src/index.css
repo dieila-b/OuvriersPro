@@ -95,6 +95,8 @@
     @apply bg-background text-foreground;
     text-rendering: optimizeLegibility;
     overflow-x: hidden;
+    /* ✅ évite certains blocages de tap */
+    -webkit-tap-highlight-color: transparent;
   }
 
   #root {
@@ -102,15 +104,20 @@
     max-width: 100%;
     min-height: 100dvh;
     overflow-x: clip;
+    pointer-events: auto;
   }
 
+  /* Médias */
   img,
   video,
-  canvas,
-  svg {
+  canvas {
     max-width: 100%;
     height: auto;
     display: block;
+  }
+  svg {
+    max-width: 100%;
+    height: auto;
   }
 
   input,
@@ -119,11 +126,22 @@
   button {
     min-width: 0;
   }
+
+  /* ✅ Très important : rendre les taps plus “directs” sur Android WebView */
+  a,
+  button,
+  [role="button"],
+  input[type="button"],
+  input[type="submit"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 /* =========================================================
-   ✅ FIX DEFINITIF "AFFICHAGE MINUSCULE" EN CAPACITOR
-   Objectif: aucune transform/scale/viewport desktop en natif
+   ✅ FIX DEFINITIF NATIF (CAPACITOR) :
+   - Pas de viewport desktop transformé
+   - Pas d’overlay “fantôme” qui capture les taps
 ========================================================= */
 
 html[data-ui-native="true"],
@@ -135,25 +153,36 @@ html[data-ui-native="true"] body {
   text-size-adjust: 100%;
 }
 
-/* Le wrapper ne doit JAMAIS fixer une largeur type 1200px en natif */
+/* ✅ Le wrapper ne doit JAMAIS fixer une largeur ni transformer en natif */
 html[data-ui-native="true"] #ui-desktop-viewport {
   width: 100% !important;
   max-width: 100% !important;
   min-height: 100dvh !important;
   transform: none !important;
   transform-origin: initial !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  pointer-events: auto !important;
 }
 
-/* Anti “zoom-out” / anti scale caché */
-html[data-ui-native="true"] #root,
+/* ✅ Empêche un parent de “manger” les events */
 html[data-ui-native="true"] body,
-html[data-ui-native="true"] #ui-desktop-viewport {
+html[data-ui-native="true"] #root {
+  pointer-events: auto !important;
   zoom: 1 !important;
 }
 
-/* Protection anti transform global */
+/* ✅ Protection anti transform global (source de non-clic sur WebView) */
 html[data-ui-native="true"] * {
   -webkit-text-size-adjust: 100%;
+}
+
+/* ✅ En natif, si un header/backdrop-filter existe, il peut casser les taps */
+html[data-ui-native="true"] .backdrop-blur,
+html[data-ui-native="true"] [style*="backdrop-filter"],
+html[data-ui-native="true"] [style*="BackDropFilter"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 /* safe-area */
