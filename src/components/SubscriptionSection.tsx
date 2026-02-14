@@ -1,22 +1,11 @@
 // src/components/SubscriptionSection.tsx
-import React, { useMemo } from "react";
+import React, { useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-// Capacitor import removed — navigation uses React Router only
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  CheckCircle2,
-  Sparkles,
-  ShieldCheck,
-  Clock,
-  ArrowRight,
-  BarChart3,
-  Headphones,
-  User,
-} from "lucide-react";
-
+import { CheckCircle2, Sparkles, ShieldCheck, Clock, ArrowRight, BarChart3, Headphones, User } from "lucide-react";
 
 const SubscriptionSection = () => {
   const { t, language } = useLanguage();
@@ -36,11 +25,14 @@ const SubscriptionSection = () => {
    */
   const USE_BECOME_PROVIDER_FLOW = false;
 
-  const cms = (key: string, fallbackFr: string, fallbackEn: string) => {
-    const v = t(key);
-    if (!v || v === key) return language === "fr" ? fallbackFr : fallbackEn;
-    return v;
-  };
+  const cms = useCallback(
+    (key: string, fallbackFr: string, fallbackEn: string) => {
+      const v = t(key);
+      if (!v || v === key) return language === "fr" ? fallbackFr : fallbackEn;
+      return v;
+    },
+    [t, language]
+  );
 
   const parseAmount = (s: string, fallback: number) => {
     const raw = (s ?? "").toString().replace(/\s/g, "").replace(/,/g, ".");
@@ -57,16 +49,25 @@ const SubscriptionSection = () => {
   };
 
   /**
-   * ✅ Navigation SPA uniquement via React Router (zéro 404, zéro reload)
+   * ✅ Navigation SPA uniquement via React Router
+   * + ✅ rAF pour fiabiliser le tap en WebView (Capacitor)
    */
-  const goToProviderFlow = (planCode: string) => {
-    const qs = `?plan=${encodeURIComponent(planCode)}`;
-    const target = USE_BECOME_PROVIDER_FLOW ? `/devenir-prestataire${qs}` : `/inscription-ouvrier${qs}`;
-    navigate(target);
-    requestAnimationFrame(() => {
-      try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
-    });
-  };
+  const goToProviderFlow = useCallback(
+    (planCode: string) => {
+      const qs = `?plan=${encodeURIComponent(planCode)}`;
+      const target = USE_BECOME_PROVIDER_FLOW ? `/devenir-prestataire${qs}` : `/inscription-ouvrier${qs}`;
+
+      requestAnimationFrame(() => {
+        navigate(target);
+        try {
+          window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+        } catch {
+          window.scrollTo(0, 0);
+        }
+      });
+    },
+    [navigate]
+  );
 
   const plans = useMemo(() => {
     const all = [
@@ -159,25 +160,28 @@ const SubscriptionSection = () => {
       if (p.code === "YEARLY") return SHOW_YEARLY;
       return true;
     });
-  }, [language, t]);
+  }, [cms, language, t]);
 
-  const benefits = [
-    {
-      icon: User,
-      title: cms("pricing.benefit1.title", "Profil vérifié", "Verified profile"),
-      description: cms("pricing.benefit1.desc", "Badge de confiance sur votre profil", "Trust badge on your profile"),
-    },
-    {
-      icon: BarChart3,
-      title: cms("pricing.benefit2.title", "Analytics détaillés", "Detailed analytics"),
-      description: cms("pricing.benefit2.desc", "Suivez vos performances et optimisez", "Track performance and optimize"),
-    },
-    {
-      icon: Headphones,
-      title: cms("pricing.benefit3.title", "Support dédié", "Dedicated support"),
-      description: cms("pricing.benefit3.desc", "Assistance prioritaire 7j/7", "Priority support 7 days a week"),
-    },
-  ];
+  const benefits = useMemo(
+    () => [
+      {
+        icon: User,
+        title: cms("pricing.benefit1.title", "Profil vérifié", "Verified profile"),
+        description: cms("pricing.benefit1.desc", "Badge de confiance sur votre profil", "Trust badge on your profile"),
+      },
+      {
+        icon: BarChart3,
+        title: cms("pricing.benefit2.title", "Analytics détaillés", "Detailed analytics"),
+        description: cms("pricing.benefit2.desc", "Suivez vos performances et optimisez", "Track performance and optimize"),
+      },
+      {
+        icon: Headphones,
+        title: cms("pricing.benefit3.title", "Support dédié", "Dedicated support"),
+        description: cms("pricing.benefit3.desc", "Assistance prioritaire 7j/7", "Priority support 7 days a week"),
+      },
+    ],
+    [cms]
+  );
 
   const onlyFree = plans.length === 1 && plans[0].code === "FREE";
   const gridClass = onlyFree
