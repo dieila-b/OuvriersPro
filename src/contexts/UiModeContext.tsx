@@ -1,6 +1,29 @@
 // src/contexts/UiModeContext.tsx
-import React, { createContext, useContext, ReactNode, useMemo } from "react";
+import React, { createContext, useContext, ReactNode } from "react";
 import { useUiMode, UiDebug, UiMode } from "@/hooks/useUiMode";
+
+// ✅ Détection native locale (évite import circulaire avec App.tsx)
+const isNativeRuntime = () => {
+  try {
+    // window.Capacitor est très fiable en natif
+    const wCap = (window as any)?.Capacitor;
+    if (wCap?.isNativePlatform?.()) return true;
+  } catch {}
+
+  try {
+    const p = window.location?.protocol ?? "";
+    if (p === "capacitor:" || p === "file:") return true;
+  } catch {}
+
+  // ✅ Capacitor Android utilise souvent http://localhost
+  try {
+    const wCap = (window as any)?.Capacitor;
+    const { protocol, hostname } = window.location;
+    if (wCap && protocol === "http:" && hostname === "localhost") return true;
+  } catch {}
+
+  return false;
+};
 
 type UiModeContextValue = {
   mode: UiMode;
@@ -11,46 +34,18 @@ type UiModeContextValue = {
 
 const UiModeContext = createContext<UiModeContextValue | null>(null);
 
-/**
- * ✅ Détection native robuste (Capacitor / file / android webview)
- * Objectif: NE JAMAIS forcer le desktop dans l’app.
- */
-function isNativeRuntime() {
-  try {
-    const p = window.location?.protocol ?? "";
-    if (p === "capacitor:" || p === "file:") return true;
-  } catch {}
-
-  // Android WebView Capacitor expose souvent "wv" ou "Capacitor" dans UA
-  try {
-    const ua = navigator.userAgent || "";
-    if (/Capacitor/i.test(ua)) return true;
-  } catch {}
-
-  return false;
-}
-
 export function UiModeProvider({ children }: { children: ReactNode }) {
-  const native = useMemo(() => {
-    try {
-      return isNativeRuntime();
-    } catch {
-      return false;
-    }
-  }, []);
+  const native = isNativeRuntime();
 
   /**
-   * ✅ FIX IMPORTANT:
-   * - en natif => PAS de desktop forcé (sinon wrapper/scale et taps perdus)
-   * - sur web => tu peux garder ton comportement normal
+   * ✅ IMPORTANT :
+   * - En natif (émulateur/téléphone) => NE JAMAIS forcer le desktop.
+   * - Sinon, le wrapper desktop/scale peut “manger” les taps sur WebView.
    */
   const ui = useUiMode({
-    forceDesktopInApp: false, // ✅ FIX: ne jamais forcer desktop dans Capacitor
-    desktopMinWidth: 1024,
+    forceDesktopInApp: false,      // ✅ FIX CRITIQUE
+    desktopMinWidth: native ? 0 : 1024,
   });
-
-  // Optionnel: si ton hook expose debug.native etc, ça reste OK.
-  // Si tu veux, on peut enrichir `debug` plus tard, mais on évite de casser l’API.
 
   return <UiModeContext.Provider value={ui}>{children}</UiModeContext.Provider>;
 }
