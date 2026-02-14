@@ -110,8 +110,6 @@ const Header = () => {
               className="absolute inset-0 bg-black/35"
               aria-label={cms("header.mobile_close.aria", "Fermer le menu", "Close menu")}
               onClick={() => setMobileOpen(false)}
-              onPointerDown={() => setMobileOpen(false)}
-              onTouchEnd={() => setMobileOpen(false)}
             />
 
             {/* Panel */}
@@ -133,8 +131,6 @@ const Header = () => {
                     type="button"
                     className="rounded-full"
                     onClick={() => setMobileOpen(false)}
-                    onPointerDown={() => setMobileOpen(false)}
-                    onTouchEnd={() => setMobileOpen(false)}
                   >
                     <X className="w-4 h-4" />
                   </Button>
@@ -146,9 +142,7 @@ const Header = () => {
                     type="button"
                     className="w-full text-left py-2 font-medium text-pro-gray hover:text-pro-blue"
                     style={{ touchAction: "manipulation" as any }}
-                    onTouchEnd={tap("/forfaits")}
-                    onPointerUp={tap("/forfaits")}
-                    onClick={tap("/forfaits")}
+                    onClick={() => go("/forfaits")}
                   >
                     {becomeProviderLabel}
                   </button>
@@ -158,9 +152,7 @@ const Header = () => {
                     type="button"
                     className="w-full rounded-full bg-pro-blue text-white py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
                     style={{ touchAction: "manipulation" as any }}
-                    onTouchEnd={tap(accountPath)}
-                    onPointerUp={tap(accountPath)}
-                    onClick={tap(accountPath)}
+                    onClick={() => go(accountPath)}
                   >
                     <User className="w-4 h-4" />
                     {accountLabel}
@@ -270,8 +262,6 @@ const Header = () => {
                   size="sm"
                   type="button"
                   onClick={() => setMobileOpen((v) => !v)}
-                  onPointerDown={() => setMobileOpen((v) => !v)}
-                  onTouchEnd={() => setMobileOpen((v) => !v)}
                   aria-label={cms("header.mobile_menu.aria", "Menu mobile", "Mobile menu")}
                   className="rounded-full px-3 whitespace-nowrap"
                 >
