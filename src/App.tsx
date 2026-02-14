@@ -72,7 +72,6 @@ const ClientContactForm = lazy(() => import("./pages/ClientContactForm"));
 
 /**
  * ✅ Détection native ULTRA robuste (Capacitor + fallback protocol)
- * Objectif: ne JAMAIS repasser en BrowserRouter sur téléphone.
  */
 const isNativeRuntime = () => {
   try {
@@ -269,10 +268,7 @@ function UiDebugBadge() {
 }
 
 /**
- * ✅ Intercepteur global :
- * - capte click + touchend + pointerup (téléphones)
- * - transforme <a href="/..."> en navigation React Router
- * - empêche un reload WebView (source classique des 404 sur device)
+ * ✅ Intercepteur global (anti-reload WebView / anti-404 sur device)
  */
 function GlobalLinkInterceptor() {
   const navigate = useNavigate();
@@ -295,15 +291,23 @@ function GlobalLinkInterceptor() {
       return false;
     };
 
+    const normalizeHref = (href: string) => {
+      // ✅ sécurise : certains liens peuvent venir sous forme "#/route"
+      if (href.startsWith("#/")) return href.slice(1); // => "/route"
+      return href;
+    };
+
     const handle = (e: Event) => {
       const target = e.target as HTMLElement | null;
       const anchor = target?.closest?.("a[href]") as HTMLAnchorElement | null;
       if (!anchor) return;
 
-      const href = anchor.getAttribute("href") || "";
+      let href = anchor.getAttribute("href") || "";
       if (!href) return;
 
       if (shouldIgnore(anchor, href)) return;
+
+      href = normalizeHref(href);
 
       if (href.startsWith("/") || href.startsWith("#")) {
         e.preventDefault();
@@ -328,9 +332,6 @@ function GlobalLinkInterceptor() {
 
 /**
  * ✅ Guard natif anti-404 (téléphone réel)
- * IMPORTANT:
- * - Pas d'import statique @capacitor/app / @capacitor/browser (sinon Preview Lovable casse)
- * - On charge dynamiquement UNIQUEMENT en natif (avec @vite-ignore)
  */
 function NativeRoutingGuard() {
   const navigate = useNavigate();
@@ -338,12 +339,10 @@ function NativeRoutingGuard() {
   useEffect(() => {
     if (!isNativeRuntime()) return;
 
-    // 1) Force hash routing si on arrive sans "#/..."
     try {
       const u = new URL(window.location.href);
       const hasHashRoute = (u.hash || "").startsWith("#/");
 
-      // Si hash vide => force "#/"
       if (!u.hash || u.hash === "#") {
         u.hash = "#/";
         window.history.replaceState({}, "", u.toString());
@@ -363,7 +362,6 @@ function NativeRoutingGuard() {
     let removeListener: null | (() => void) = null;
 
     (async () => {
-      // 2) Deep links / intents via Capacitor App plugin (si dispo)
       try {
         const capAppMod = "@capacitor/app";
         const capBrowserMod = "@capacitor/browser";
@@ -377,7 +375,6 @@ function NativeRoutingGuard() {
             const incoming = event?.url || "";
             if (!incoming) return;
 
-            // URLs externes => navigateur système si plugin dispo, sinon window.open
             if (incoming.startsWith("http://") || incoming.startsWith("https://")) {
               try {
                 const b: any = await import(/* @vite-ignore */ capBrowserMod);
@@ -397,9 +394,7 @@ function NativeRoutingGuard() {
         });
 
         removeListener = () => sub.remove();
-      } catch {
-        // plugin non installé => on ignore (mais l'app continue)
-      }
+      } catch {}
     })();
 
     return () => {
@@ -590,7 +585,6 @@ const AppRoutes = () => (
 
 /**
  * ✅ Router natif vs web (fix 404 Capacitor)
- * + ✅ Fix définitif: reset zoom/scale en natif après render
  */
 function RouterSwitch({ children }: { children: React.ReactNode }) {
   const isNative = isNativeRuntime();
