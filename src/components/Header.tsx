@@ -1,5 +1,6 @@
 // src/components/Header.tsx
 import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Languages, User, Menu, X } from "lucide-react";
@@ -57,7 +58,7 @@ const Header = () => {
     return cms("header.btn_login", "Se connecter", "Sign in");
   }, [user, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ✅ Si pas connecté => login (évite impression “rien ne se passe” si /mon-compte est protégé)
+  // ✅ Si pas connecté => login
   const accountPath = useMemo(() => {
     if (!user) return "/login";
     if (isWorker) return "/espace-ouvrier";
@@ -71,14 +72,90 @@ const Header = () => {
   // ✅ URL versionnée pour casser le cache (Android/WebView inclus)
   const logoSrc = useMemo(() => `${ProxiLogo}?v=${encodeURIComponent(BUILD_TAG)}`, []);
 
-  // ✅ Navigation fiable en mobile (ferme le menu puis navigate)
+  // ✅ Navigation robuste (ferme menu puis navigate)
   const go = useCallback(
     (to: string) => {
       setMobileOpen(false);
+      // requestAnimationFrame évite certains taps “perdus” sur WebView
       requestAnimationFrame(() => navigate(to));
     },
     [navigate]
   );
+
+  // ✅ Rend le portal uniquement quand le DOM est prêt (SSR-safe / preview-safe)
+  const canPortal = typeof document !== "undefined" && !!document.body;
+
+  const MobileOverlay = mobileOpen && canPortal
+    ? createPortal(
+        <div
+          className="md:hidden fixed inset-0 z-[9999]"
+          style={{ WebkitTapHighlightColor: "transparent" }}
+          // ✅ Important : ne pas laisser les events remonter à des parents
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/35"
+            onClick={() => setMobileOpen(false)}
+            onPointerDown={() => setMobileOpen(false)}
+            aria-label={cms("header.mobile_close.aria", "Fermer le menu", "Close menu")}
+          />
+
+          {/* Panel */}
+          <div
+            className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div className="w-full px-4 sm:px-6 py-3">
+              <div className="flex items-center justify-between gap-3 min-w-0">
+                <span className="text-sm font-semibold text-pro-gray">
+                  {cms("header.mobile_menu.title", "Menu", "Menu")}
+                </span>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  className="rounded-full"
+                  onClick={() => setMobileOpen(false)}
+                  onPointerDown={() => setMobileOpen(false)}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+
+              <div className="mt-3 flex flex-col gap-2 min-w-0">
+                {/* Devenir prestataire */}
+                <button
+                  type="button"
+                  className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue min-w-0 text-left"
+                  onClick={() => go("/forfaits")}
+                  onPointerDown={() => go("/forfaits")} // ✅ WebView: pointerdown parfois plus fiable que click
+                >
+                  <span className="truncate font-medium">{becomeProviderLabel}</span>
+                </button>
+
+                {/* Connexion / Compte */}
+                <Button
+                  type="button"
+                  className="w-full rounded-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center justify-center gap-2 whitespace-nowrap"
+                  onClick={() => go(accountPath)}
+                  onPointerDown={() => go(accountPath)}
+                >
+                  <User className="w-4 h-4" />
+                  {accountLabel}
+                </Button>
+
+                <div className="h-1" />
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )
+    : null;
 
   return (
     <>
@@ -172,7 +249,9 @@ const Header = () => {
                 <Button
                   variant="outline"
                   size="sm"
+                  type="button"
                   onClick={() => setMobileOpen((v) => !v)}
+                  onPointerDown={() => setMobileOpen((v) => !v)} // ✅ WebView
                   aria-label={cms("header.mobile_menu.aria", "Menu mobile", "Mobile menu")}
                   className="rounded-full px-3 whitespace-nowrap"
                 >
@@ -184,65 +263,10 @@ const Header = () => {
 
           <div className="h-1 w-full bg-gradient-to-r from-pro-blue/90 via-blue-600/90 to-pro-blue/90" />
         </div>
-
-        {/* MENU MOBILE OVERLAY (fix taps WebView Android) */}
-        {mobileOpen && (
-          <div className="md:hidden fixed inset-0 z-50 pointer-events-none">
-            {/* Backdrop cliquable */}
-            <div
-              className="absolute inset-0 bg-black/35 pointer-events-auto"
-              aria-label={cms("header.mobile_close.aria", "Fermer le menu", "Close menu")}
-              onClick={() => setMobileOpen(false)}
-            />
-
-            {/* Panel */}
-            <div
-              className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg pointer-events-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="w-full px-4 sm:px-6 py-3">
-                <div className="flex items-center justify-between gap-3 min-w-0">
-                  <span className="text-sm font-semibold text-pro-gray">
-                    {cms("header.mobile_menu.title", "Menu", "Menu")}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    type="button"
-                    onClick={() => setMobileOpen(false)}
-                    className="rounded-full"
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                <div className="mt-3 flex flex-col gap-1 min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => go("/forfaits")}
-                    className="flex items-center gap-2 py-2 text-pro-gray hover:text-pro-blue min-w-0 text-left"
-                  >
-                    <span className="truncate font-medium">{becomeProviderLabel}</span>
-                  </button>
-
-                  <div className="pt-2">
-                    <Button
-                      type="button"
-                      onClick={() => go(accountPath)}
-                      className="w-full rounded-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center justify-center gap-2 whitespace-nowrap"
-                    >
-                      <User className="w-4 h-4" />
-                      {accountLabel}
-                    </Button>
-                  </div>
-
-                  <div className="pb-2" />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </header>
+
+      {/* ✅ Portal overlay rendu au niveau BODY */}
+      {MobileOverlay}
 
       <ContactModal open={contactOpen} onOpenChange={setContactOpen} cooldownSeconds={30} />
     </>
