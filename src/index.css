@@ -95,7 +95,6 @@
     @apply bg-background text-foreground;
     text-rendering: optimizeLegibility;
     overflow-x: hidden;
-    /* ✅ évite certains blocages de tap */
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -107,7 +106,6 @@
     pointer-events: auto;
   }
 
-  /* Médias */
   img,
   video,
   canvas {
@@ -127,7 +125,7 @@
     min-width: 0;
   }
 
-  /* ✅ Très important : rendre les taps plus “directs” sur Android WebView */
+  /* ✅ taps plus “directs” sur Android WebView */
   a,
   button,
   [role="button"],
@@ -162,22 +160,29 @@ html[data-ui-native="true"] #ui-desktop-viewport {
   transform-origin: initial !important;
   filter: none !important;
   backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   pointer-events: auto !important;
 }
 
 /* ✅ Empêche un parent de “manger” les events */
 html[data-ui-native="true"] body,
-html[data-ui-native="true"] #root {
+html[data-ui-native="true"] #root,
+html[data-ui-native="true"] #ui-desktop-viewport {
   pointer-events: auto !important;
   zoom: 1 !important;
 }
 
-/* ✅ Protection anti transform global (source de non-clic sur WebView) */
+/* ✅ Si une lib met pointer-events:none en inline, on neutralise en natif */
+html[data-ui-native="true"] [style*="pointer-events: none"] {
+  pointer-events: auto !important;
+}
+
+/* ✅ Protection anti transform global */
 html[data-ui-native="true"] * {
   -webkit-text-size-adjust: 100%;
 }
 
-/* ✅ En natif, si un header/backdrop-filter existe, il peut casser les taps */
+/* ✅ En natif, backdrop-filter peut casser les taps (WebView) */
 html[data-ui-native="true"] .backdrop-blur,
 html[data-ui-native="true"] [style*="backdrop-filter"],
 html[data-ui-native="true"] [style*="BackDropFilter"] {
