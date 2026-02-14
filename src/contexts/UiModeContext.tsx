@@ -43,8 +43,9 @@ export function UiModeProvider({ children }: { children: ReactNode }) {
    * - Sinon, le wrapper desktop/scale peut “manger” les taps sur WebView.
    */
   const ui = useUiMode({
-    forceDesktopInApp: false,      // ✅ FIX CRITIQUE
-    desktopMinWidth: native ? 0 : 1024,
+    forceDesktopInApp: false,
+    // ✅ FIX CRITIQUE : 99999 force le mode mobile en natif (0 = TOUJOURS desktop !)
+    desktopMinWidth: native ? 99999 : 1024,
   });
 
   return <UiModeContext.Provider value={ui}>{children}</UiModeContext.Provider>;

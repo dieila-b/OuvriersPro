@@ -156,8 +156,8 @@ function ScrollManager() {
 }
 
 /**
- * ✅ HARD TAP FIX (Android WebView / Emulator)
- * Objectif : récupérer les clicks même si une couche/wrapper mange les events.
+ * ✅ Fixe pointer-events:none sur les wrappers connus (natif uniquement).
+ * NE dispatch PAS de clicks synthétiques (cause de double-fire).
  */
 function NativeTapFix() {
   const isNative = isNativeRuntime();
@@ -170,13 +170,12 @@ function NativeTapFix() {
         const root = document.getElementById("root");
         if (root) root.style.pointerEvents = "auto";
 
-        const uiVp = document.getElementById("ui-desktop-viewport");
+        const uiVp = document.getElementById("ui-desktop-viewport") as HTMLElement | null;
         if (uiVp) {
           uiVp.style.pointerEvents = "auto";
           uiVp.style.transform = "none";
           uiVp.style.filter = "none";
           (uiVp.style as any).backdropFilter = "none";
-          // évite un wrapper plein écran fixed qui couvre tout
           if (getComputedStyle(uiVp).position === "fixed") uiVp.style.position = "relative";
         }
 
@@ -188,32 +187,8 @@ function NativeTapFix() {
     fixKnownWrappers();
     const t = window.setInterval(fixKnownWrappers, 700);
 
-    const rescuePointerEvents = (ev: any) => {
-      try {
-        const x = ev?.clientX ?? (ev?.touches?.[0]?.clientX ?? null);
-        const y = ev?.clientY ?? (ev?.touches?.[0]?.clientY ?? null);
-        if (x == null || y == null) return;
-
-        let el = document.elementFromPoint(x, y) as HTMLElement | null;
-        let hops = 0;
-
-        while (el && hops < 14) {
-          const pe = getComputedStyle(el).pointerEvents;
-          if (pe === "none") el.style.pointerEvents = "auto";
-          el = el.parentElement;
-          hops++;
-        }
-      } catch {}
-    };
-
-    // capture=true : passe avant les handlers “cassés”
-    document.addEventListener("pointerdown", rescuePointerEvents, true);
-    document.addEventListener("touchstart", rescuePointerEvents as any, true);
-
     return () => {
       window.clearInterval(t);
-      document.removeEventListener("pointerdown", rescuePointerEvents, true);
-      document.removeEventListener("touchstart", rescuePointerEvents as any, true);
     };
   }, [isNative]);
 
