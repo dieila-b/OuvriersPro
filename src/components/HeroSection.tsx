@@ -1,5 +1,5 @@
 // src/components/HeroSection.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,9 +8,42 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import AdSlot from "@/components/AdSlot";
 
+/**
+ * ✅ Détection native robuste (Capacitor / WebView)
+ * But : éviter les comportements WebView (clicks mangés) et
+ * isoler certains composants (ex: AdSlot iframe).
+ */
+function isNativeRuntime(): boolean {
+  const wCap = (() => {
+    try {
+      return (window as any)?.Capacitor ?? null;
+    } catch {
+      return null;
+    }
+  })();
+
+  try {
+    if (wCap?.isNativePlatform?.()) return true;
+  } catch {}
+
+  try {
+    const p = window.location?.protocol ?? "";
+    if (p === "capacitor:" || p === "file:") return true;
+  } catch {}
+
+  // Cas courant Android Capacitor local server
+  try {
+    const { protocol, hostname } = window.location;
+    if (wCap && protocol === "http:" && hostname === "localhost") return true;
+  } catch {}
+
+  return false;
+}
+
 const HeroSection = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
+  const native = useMemo(() => isNativeRuntime(), []);
 
   const cms = (key: string, fallbackFr: string, fallbackEn: string) => {
     const v = t(key);
@@ -105,7 +138,7 @@ const HeroSection = () => {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const handleGeoLocate = () => {
+  const handleGeoLocate = useCallback(() => {
     setGeoError(null);
     setGeoLoading(true);
 
@@ -140,9 +173,9 @@ const HeroSection = () => {
       },
       { enableHighAccuracy: true, timeout: 9000, maximumAge: 0 }
     );
-  };
+  }, [cms]);
 
-  const handleSearch = () => {
+  const handleSearch = useCallback(() => {
     const job = searchTerm.trim();
     const qDistrict = district.trim();
 
@@ -159,10 +192,20 @@ const HeroSection = () => {
       pathname: "/rechercher",
       search: params.toString() ? `?${params.toString()}` : "",
     });
-  };
+  }, [searchTerm, district, geo, navigate]);
 
   return (
-    <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden">
+    <section
+      className="relative w-full text-white overflow-hidden"
+      style={{ WebkitTapHighlightColor: "transparent" }}
+    >
+      {/* ✅ Fond décoratif séparé + non cliquable (évite capture events) */}
+      <div
+        className="absolute inset-0 bg-gradient-to-br from-pro-blue to-blue-600 pointer-events-none"
+        aria-hidden="true"
+      />
+
+      {/* Contenu */}
       <div className="relative z-10 w-full px-4 sm:px-6 lg:px-10 py-8 sm:py-10">
         <div className="w-full max-w-5xl mx-auto text-center">
           <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
@@ -181,6 +224,7 @@ const HeroSection = () => {
               handleSearch();
             }}
             className="w-full bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl text-gray-900 relative z-20"
+            style={{ touchAction: "manipulation" }}
           >
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-3 items-stretch min-w-0">
               {/* Job */}
@@ -199,7 +243,10 @@ const HeroSection = () => {
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
 
                 {openJobs && (filteredJobs.length > 0 || loadingOptions) && (
-                  <div className="absolute z-50 mt-1 w-full min-w-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                  <div
+                    className="absolute z-50 mt-1 w-full min-w-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden"
+                    style={{ touchAction: "manipulation" }}
+                  >
                     {loadingOptions && (
                       <div className="px-3 py-2 text-xs text-gray-500">
                         {cms("common.loading", "Chargement...", "Loading...")}
@@ -214,7 +261,12 @@ const HeroSection = () => {
                             setSearchTerm(j);
                             setOpenJobs(false);
                           }}
+                          onPointerDown={() => {
+                            setSearchTerm(j);
+                            setOpenJobs(false);
+                          }}
                           className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          style={{ touchAction: "manipulation" }}
                         >
                           {j}
                         </button>
@@ -241,15 +293,20 @@ const HeroSection = () => {
                 <button
                   type="button"
                   onClick={handleGeoLocate}
+                  onPointerDown={handleGeoLocate}
                   className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center rounded-md border border-gray-200 bg-white px-2 py-1 text-gray-600 hover:bg-gray-50"
                   aria-label={cms("home.search.geo.cta", "Utiliser ma position", "Use my location")}
                   title={cms("home.search.geo.cta", "Utiliser ma position", "Use my location")}
+                  style={{ touchAction: "manipulation" }}
                 >
                   <LocateFixed className={`w-4 h-4 ${geoLoading ? "animate-pulse" : ""}`} />
                 </button>
 
                 {openDistricts && (filteredDistricts.length > 0 || loadingOptions) && (
-                  <div className="absolute z-50 mt-1 w-full min-w-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                  <div
+                    className="absolute z-50 mt-1 w-full min-w-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden"
+                    style={{ touchAction: "manipulation" }}
+                  >
                     {loadingOptions && (
                       <div className="px-3 py-2 text-xs text-gray-500">
                         {cms("common.loading", "Chargement...", "Loading...")}
@@ -265,7 +322,13 @@ const HeroSection = () => {
                             setGeo(null);
                             setOpenDistricts(false);
                           }}
+                          onPointerDown={() => {
+                            setDistrict(d);
+                            setGeo(null);
+                            setOpenDistricts(false);
+                          }}
                           className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          style={{ touchAction: "manipulation" }}
                         >
                           {d}
                         </button>
@@ -281,6 +344,15 @@ const HeroSection = () => {
               <Button
                 type="submit"
                 className="lg:col-span-12 w-full h-11 sm:h-12 bg-pro-blue hover:bg-blue-700 text-sm sm:text-base"
+                style={{ touchAction: "manipulation" }}
+                onPointerDown={(e) => {
+                  // certains WebView ratent le submit sur click, on déclenche la recherche ici aussi
+                  // sans empêcher le submit normal
+                  try {
+                    // @ts-ignore
+                    if (e?.pointerType) handleSearch();
+                  } catch {}
+                }}
               >
                 {cms("home.search.btn_search", "Rechercher", "Search")}
               </Button>
@@ -299,8 +371,19 @@ const HeroSection = () => {
         </div>
       </div>
 
+      {/* ✅ Zone pub (AdSlot) :
+          - sur Android WebView, un iframe/slot peut capturer tous les taps.
+          - on neutralise les pointer-events en NATIF pour récupérer les clics.
+          - sur WEB, on laisse normal.
+      */}
       <div className="relative z-0 w-full px-0 pb-8 sm:pb-10 lg:pb-12 mt-4 sm:mt-6">
-        <AdSlot placement="home_feed" className="w-full" />
+        {native ? (
+          <div className="pointer-events-none select-none" aria-hidden="true">
+            <AdSlot placement="home_feed" className="w-full" />
+          </div>
+        ) : (
+          <AdSlot placement="home_feed" className="w-full" />
+        )}
       </div>
     </section>
   );
