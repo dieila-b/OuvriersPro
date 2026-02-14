@@ -20,6 +20,9 @@ import { Capacitor } from "@capacitor/core";
 // ✅ UI Mode global
 import { UiModeProvider, useUiModeCtx } from "@/contexts/UiModeContext";
 
+// ✅ Tap Inspector (debug)
+import TapInspector from "@/components/debug/TapInspector";
+
 // Protection routes
 import PrivateRoute from "./components/PrivateRoute";
 
@@ -96,7 +99,7 @@ const isNativeRuntime = () => {
     if (p === "capacitor:" || p === "file:") return true;
   } catch {}
 
-  // ✅ Cas device (Capacitor local server): http://localhost
+  // ✅ Cas fréquent sur device : http://localhost (Capacitor local server)
   try {
     const { hostname, protocol } = window.location;
     if (wCap && protocol === "http:" && hostname === "localhost") return true;
@@ -151,46 +154,6 @@ function ScrollManager() {
 
     return () => window.clearTimeout(t);
   }, [location.pathname, location.hash]);
-
-  return null;
-}
-
-/**
- * ✅ Fixe pointer-events:none sur les wrappers connus (natif uniquement).
- * NE dispatch PAS de clicks synthétiques (cause de double-fire).
- */
-function NativeTapFix() {
-  const isNative = isNativeRuntime();
-
-  useEffect(() => {
-    if (!isNative) return;
-
-    const fixKnownWrappers = () => {
-      try {
-        const root = document.getElementById("root");
-        if (root) root.style.pointerEvents = "auto";
-
-        const uiVp = document.getElementById("ui-desktop-viewport") as HTMLElement | null;
-        if (uiVp) {
-          uiVp.style.pointerEvents = "auto";
-          uiVp.style.transform = "none";
-          uiVp.style.filter = "none";
-          (uiVp.style as any).backdropFilter = "none";
-          if (getComputedStyle(uiVp).position === "fixed") uiVp.style.position = "relative";
-        }
-
-        document.body.style.pointerEvents = "auto";
-        document.documentElement.style.pointerEvents = "auto";
-      } catch {}
-    };
-
-    fixKnownWrappers();
-    const t = window.setInterval(fixKnownWrappers, 700);
-
-    return () => {
-      window.clearInterval(t);
-    };
-  }, [isNative]);
 
   return null;
 }
@@ -380,7 +343,6 @@ function GlobalLinkInterceptor() {
     };
 
     document.addEventListener("click", handleClick, false);
-
     return () => document.removeEventListener("click", handleClick, false);
   }, [navigate]);
 
@@ -464,8 +426,8 @@ function NativeRoutingGuard() {
 
 const AppRoutes = () => (
   <>
-    {/* ✅ HARD TAP FIX MUST be first */}
-    <NativeTapFix />
+    {/* ✅ DEBUG: inspect taps ONLY in native + dev */}
+    {isNativeRuntime() && import.meta.env.DEV ? <TapInspector /> : null}
 
     <ScrollManager />
     <AuthAuditLogger />
@@ -663,16 +625,6 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
       html.style.setProperty("--ui-scale", "1");
       html.style.setProperty("--ui-desktop-width", "100%");
 
-      const vp = document.getElementById("ui-desktop-viewport") as HTMLElement | null;
-      if (vp) {
-        vp.style.pointerEvents = "auto";
-        vp.style.transform = "none";
-        vp.style.width = "100%";
-        vp.style.maxWidth = "100%";
-        vp.style.filter = "none";
-        (vp.style as any).backdropFilter = "none";
-      }
-
       (body.style as any).zoom = "1";
 
       const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
@@ -680,8 +632,8 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
     };
 
     hardReset();
-    const t1 = window.setTimeout(hardReset, 250);
-    const t2 = window.setTimeout(hardReset, 900);
+    const t1 = window.setTimeout(hardReset, 300);
+    const t2 = window.setTimeout(hardReset, 1200);
 
     window.addEventListener("resize", hardReset);
     window.visualViewport?.addEventListener?.("resize", hardReset);
