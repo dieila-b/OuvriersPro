@@ -17,6 +17,10 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Capacitor } from "@capacitor/core";
 
+// ✅ Plugins Capacitor (anti-404 téléphone)
+import { App as CapApp } from "@capacitor/app";
+import { Browser } from "@capacitor/browser";
+
 // ✅ UI Mode global
 import { UiModeProvider, useUiModeCtx } from "@/contexts/UiModeContext";
 
@@ -79,15 +83,12 @@ const isNativeRuntime = () => {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
 
-  // Fallbacks (certains devices retournent des infos bizarres)
   try {
     const p = window.location?.protocol ?? "";
     if (p === "capacitor:" || p === "file:") return true;
   } catch {}
 
   try {
-    // getPlatform est fiable aussi
-    // (web / android / ios)
     if ((Capacitor as any)?.getPlatform?.() && (Capacitor as any).getPlatform() !== "web") return true;
   } catch {}
 
@@ -290,9 +291,9 @@ function GlobalLinkInterceptor() {
         href.startsWith("blob:") ||
         href.startsWith("data:") ||
         anchor.target === "_blank"
-      ) return true;
+      )
+        return true;
 
-      // téléchargement / externes
       if (anchor.hasAttribute("download") || anchor.getAttribute("rel")?.includes("external")) return true;
 
       return false;
@@ -308,7 +309,6 @@ function GlobalLinkInterceptor() {
 
       if (shouldIgnore(anchor, href)) return;
 
-      // interne
       if (href.startsWith("/") || href.startsWith("#")) {
         e.preventDefault();
         e.stopPropagation();
@@ -330,12 +330,71 @@ function GlobalLinkInterceptor() {
   return null;
 }
 
+/**
+ * ✅ Guard natif anti-404 (téléphone réel)
+ * - Si l'app arrive sans hash (capacitor://localhost/forfaits), on force #/forfaits
+ * - Intercepte appUrlOpen (intents / deep links) pour éviter un reload en "path"
+ * - Ouvre les liens externes dans le navigateur système
+ */
+function NativeRoutingGuard() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isNativeRuntime()) return;
+
+    // 1) Force hash routing si on arrive sans "#/..."
+    try {
+      const href = window.location.href;
+      const u = new URL(href);
+      const hasHashRoute = (u.hash || "").startsWith("#/");
+
+      if (!hasHashRoute) {
+        const path = (u.pathname || "/").replace(/\/+$/, "") || "/";
+        if (path !== "/") {
+          // On remet l'URL en mode hash
+          u.hash = `#${path}`;
+          u.pathname = "/";
+          window.history.replaceState({}, "", u.toString());
+
+          // Et on synchronise React Router
+          navigate(path, { replace: true });
+        }
+      }
+    } catch {}
+
+    // 2) Deep links / intents
+    const sub = CapApp.addListener("appUrlOpen", async (event) => {
+      try {
+        const incoming = event?.url || "";
+        if (!incoming) return;
+
+        // URLs externes => navigateur
+        if (incoming.startsWith("http://") || incoming.startsWith("https://")) {
+          await Browser.open({ url: incoming });
+          return;
+        }
+
+        const u = new URL(incoming);
+        const path = (u.pathname || "/").replace(/\/+$/, "") || "/";
+        if (path && path !== "/") navigate(path, { replace: true });
+      } catch {}
+    });
+
+    return () => {
+      sub.remove();
+    };
+  }, [navigate]);
+
+  return null;
+}
+
 const AppRoutes = () => (
   <>
     <ScrollManager />
     <AuthAuditLogger />
     <UiDebugBadge />
     <GlobalLinkInterceptor />
+    <NativeRoutingGuard />
 
     <Suspense fallback={<div className="p-6 text-gray-600">Chargement…</div>}>
       <Routes>
@@ -522,10 +581,8 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
 
     if (!isNative) return;
 
-    // Force "mobile" dans l'app
     html.setAttribute("data-ui-mode", "mobile");
 
-    // Neutralise toutes les tentatives de scale/zoom
     const hardReset = () => {
       html.style.setProperty("--ui-scale", "1");
       html.style.setProperty("--ui-desktop-width", "100%");
@@ -562,7 +619,6 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
     console.info(`[RouterSwitch] isNative=${isNative}, href=${window.location?.href}`);
   }
 
-  // ✅ natif = HashRouter (évite les 404 quand la WebView recharge)
   const Router = isNative ? HashRouter : BrowserRouter;
   return <Router>{children}</Router>;
 }
