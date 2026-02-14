@@ -57,14 +57,12 @@ const Header = () => {
     return cms("header.btn_login", "Se connecter", "Sign in");
   }, [user, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ⚠️ Ton code avait: if (!user) return "/mon-compte";
-  // C’est incohérent (si pas connecté, la route devrait être login).
-  // Adapte si ta route login est différente.
+  // ✅ Si pas connecté => login (évite impression “rien ne se passe” si /mon-compte est protégé)
   const accountPath = useMemo(() => {
     if (!user) return "/login";
     if (isWorker) return "/espace-ouvrier";
     return "/espace-client";
-}, [user, isWorker]);
+  }, [user, isWorker]);
 
   const becomeProviderLabel = useMemo(() => {
     return cms("header.btn_become_provider", "Devenir Prestataire", "Become a Provider");
@@ -77,7 +75,6 @@ const Header = () => {
   const go = useCallback(
     (to: string) => {
       setMobileOpen(false);
-      // petit delay pour éviter que l’overlay capte encore le tap sur WebView
       requestAnimationFrame(() => navigate(to));
     },
     [navigate]
@@ -188,19 +185,21 @@ const Header = () => {
           <div className="h-1 w-full bg-gradient-to-r from-pro-blue/90 via-blue-600/90 to-pro-blue/90" />
         </div>
 
-        {/* MENU MOBILE OVERLAY */}
+        {/* MENU MOBILE OVERLAY (fix taps WebView Android) */}
         {mobileOpen && (
-          <div className="md:hidden fixed inset-0 z-50">
-            {/* Overlay en dessous (z-0) */}
-            <button
-              type="button"
-              className="absolute inset-0 bg-black/35 z-0"
+          <div className="md:hidden fixed inset-0 z-50 pointer-events-none">
+            {/* Backdrop cliquable */}
+            <div
+              className="absolute inset-0 bg-black/35 pointer-events-auto"
               aria-label={cms("header.mobile_close.aria", "Fermer le menu", "Close menu")}
               onClick={() => setMobileOpen(false)}
             />
 
-            {/* Panneau en dessus (z-10) + pointer-events OK */}
-            <div className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg z-10 pointer-events-auto">
+            {/* Panel */}
+            <div
+              className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg pointer-events-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="w-full px-4 sm:px-6 py-3">
                 <div className="flex items-center justify-between gap-3 min-w-0">
                   <span className="text-sm font-semibold text-pro-gray">
@@ -218,7 +217,6 @@ const Header = () => {
                 </div>
 
                 <div className="mt-3 flex flex-col gap-1 min-w-0">
-                  {/* ✅ navigation fiable via navigate */}
                   <button
                     type="button"
                     onClick={() => go("/forfaits")}
