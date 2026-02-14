@@ -72,7 +72,6 @@ const ClientContactForm = lazy(() => import("./pages/ClientContactForm"));
 
 /**
  * ✅ Détection native ULTRA robuste (Capacitor + localhost fallback)
- * Objectif: ne JAMAIS repasser en BrowserRouter sur téléphone.
  */
 const isNativeRuntime = () => {
   const wCap = (() => {
@@ -96,7 +95,6 @@ const isNativeRuntime = () => {
     if (p === "capacitor:" || p === "file:") return true;
   } catch {}
 
-  // ✅ Cas device (Capacitor local server): http://localhost
   try {
     const { hostname, protocol } = window.location;
     if (wCap && protocol === "http:" && hostname === "localhost") return true;
@@ -156,8 +154,9 @@ function ScrollManager() {
 }
 
 /**
- * ✅ Fixe pointer-events:none sur les wrappers connus (natif uniquement).
- * NE dispatch PAS de clicks synthétiques (cause de double-fire).
+ * ✅ NativeTapFix (natif uniquement)
+ * - Pas de setInterval (évite comportements instables)
+ * - Hard reset sur événements système + 2 timers
  */
 function NativeTapFix() {
   const isNative = isNativeRuntime();
@@ -165,30 +164,60 @@ function NativeTapFix() {
   useEffect(() => {
     if (!isNative) return;
 
-    const fixKnownWrappers = () => {
+    const hardReset = () => {
       try {
-        const root = document.getElementById("root");
+        const html = document.documentElement;
+        const body = document.body;
+
+        // Garantit que rien ne bloque globalement
+        html.style.pointerEvents = "auto";
+        body.style.pointerEvents = "auto";
+
+        const root = document.getElementById("root") as HTMLElement | null;
         if (root) root.style.pointerEvents = "auto";
 
-        const uiVp = document.getElementById("ui-desktop-viewport") as HTMLElement | null;
-        if (uiVp) {
-          uiVp.style.pointerEvents = "auto";
-          uiVp.style.transform = "none";
-          uiVp.style.filter = "none";
-          (uiVp.style as any).backdropFilter = "none";
-          if (getComputedStyle(uiVp).position === "fixed") uiVp.style.position = "relative";
+        // Si un wrapper custom existe (même si non trouvé chez toi), on neutralise
+        const vp = document.getElementById("ui-desktop-viewport") as HTMLElement | null;
+        if (vp) {
+          vp.style.pointerEvents = "auto";
+          vp.style.transform = "none";
+          vp.style.filter = "none";
+          (vp.style as any).backdropFilter = "none";
+          vp.style.width = "100%";
+          vp.style.maxWidth = "100%";
         }
 
-        document.body.style.pointerEvents = "auto";
-        document.documentElement.style.pointerEvents = "auto";
+        // Viewport meta (important Android)
+        const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
+        if (meta) meta.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
+
+        // Evite certains bugs de click liés au zoom CSS
+        (body.style as any).zoom = "1";
       } catch {}
     };
 
-    fixKnownWrappers();
-    const t = window.setInterval(fixKnownWrappers, 700);
+    hardReset();
+    const t1 = window.setTimeout(hardReset, 200);
+    const t2 = window.setTimeout(hardReset, 900);
+
+    const onResize = () => hardReset();
+    const onFocus = () => hardReset();
+
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+
+    window.visualViewport?.addEventListener?.("resize", onResize);
 
     return () => {
-      window.clearInterval(t);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+      window.visualViewport?.removeEventListener?.("resize", onResize);
     };
   }, [isNative]);
 
@@ -329,8 +358,9 @@ function UiDebugBadge() {
 
 /**
  * ✅ Intercepteur global SAFE (Natif uniquement)
- * But: empêcher les reload WebView si un <a href="/..."> traîne quelque part,
- * SANS casser les onClick des boutons / overlays.
+ * - capture:true (on intercepte avant que WebView fasse un reload)
+ * - respecte e.defaultPrevented
+ * - ignore les liens marqués data-no-native-intercept
  */
 function GlobalLinkInterceptor() {
   const navigate = useNavigate();
@@ -339,6 +369,8 @@ function GlobalLinkInterceptor() {
     if (!isNativeRuntime()) return;
 
     const shouldIgnore = (anchor: HTMLAnchorElement, href: string) => {
+      if (anchor.dataset.noNativeIntercept === "1") return true;
+
       if (
         href.startsWith("http://") ||
         href.startsWith("https://") ||
@@ -362,6 +394,8 @@ function GlobalLinkInterceptor() {
     };
 
     const handleClick = (e: MouseEvent) => {
+      if (e.defaultPrevented) return;
+
       const target = e.target as HTMLElement | null;
       const anchor = target?.closest?.("a[href]") as HTMLAnchorElement | null;
       if (!anchor) return;
@@ -379,9 +413,8 @@ function GlobalLinkInterceptor() {
       }
     };
 
-    document.addEventListener("click", handleClick, false);
-
-    return () => document.removeEventListener("click", handleClick, false);
+    document.addEventListener("click", handleClick, true);
+    return () => document.removeEventListener("click", handleClick, true);
   }, [navigate]);
 
   return null;
@@ -464,7 +497,7 @@ function NativeRoutingGuard() {
 
 const AppRoutes = () => (
   <>
-    {/* ✅ HARD TAP FIX MUST be first */}
+    {/* ✅ must be first */}
     <NativeTapFix />
 
     <ScrollManager />
