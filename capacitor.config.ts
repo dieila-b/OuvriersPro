@@ -6,7 +6,18 @@ const config: CapacitorConfig = {
   appName: "ProxiServices",
   webDir: "dist",
   bundledWebRuntime: false,
-  // ✅ pas de server.url
+
+  // ✅ indispensable : empêche Capacitor de router en "path" et force un routing stable
+  android: {
+    allowMixedContent: true,
+  },
+
+  // ✅ important : évite que Capacitor “reload” quand l’URL change
+  plugins: {
+    CapacitorHttp: {
+      enabled: true,
+    },
+  },
 };
 
 export default config;
