@@ -17,10 +17,6 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Capacitor } from "@capacitor/core";
 
-// ✅ Plugins Capacitor (anti-404 téléphone)
-import { App as CapApp } from "@capacitor/app";
-import { Browser } from "@capacitor/browser";
-
 // ✅ UI Mode global
 import { UiModeProvider, useUiModeCtx } from "@/contexts/UiModeContext";
 
@@ -332,9 +328,9 @@ function GlobalLinkInterceptor() {
 
 /**
  * ✅ Guard natif anti-404 (téléphone réel)
- * - Si l'app arrive sans hash (capacitor://localhost/forfaits), on force #/forfaits
- * - Intercepte appUrlOpen (intents / deep links) pour éviter un reload en "path"
- * - Ouvre les liens externes dans le navigateur système
+ * IMPORTANT:
+ * - Pas d'import statique @capacitor/app / @capacitor/browser (sinon Preview Lovable casse)
+ * - On charge dynamiquement UNIQUEMENT en natif
  */
 function NativeRoutingGuard() {
   const navigate = useNavigate();
@@ -344,44 +340,65 @@ function NativeRoutingGuard() {
 
     // 1) Force hash routing si on arrive sans "#/..."
     try {
-      const href = window.location.href;
-      const u = new URL(href);
+      const u = new URL(window.location.href);
       const hasHashRoute = (u.hash || "").startsWith("#/");
+
+      // Si hash vide => force "#/"
+      if (!u.hash || u.hash === "#") {
+        u.hash = "#/";
+        window.history.replaceState({}, "", u.toString());
+      }
 
       if (!hasHashRoute) {
         const path = (u.pathname || "/").replace(/\/+$/, "") || "/";
         if (path !== "/") {
-          // On remet l'URL en mode hash
           u.hash = `#${path}`;
           u.pathname = "/";
           window.history.replaceState({}, "", u.toString());
-
-          // Et on synchronise React Router
           navigate(path, { replace: true });
         }
       }
     } catch {}
 
-    // 2) Deep links / intents
-    const sub = CapApp.addListener("appUrlOpen", async (event) => {
+    let removeListener: null | (() => void) = null;
+
+    (async () => {
+      // 2) Deep links / intents via Capacitor App plugin (si dispo)
       try {
-        const incoming = event?.url || "";
-        if (!incoming) return;
+        const mod = await import("@capacitor/app");
+        const CapApp = mod.App;
 
-        // URLs externes => navigateur
-        if (incoming.startsWith("http://") || incoming.startsWith("https://")) {
-          await Browser.open({ url: incoming });
-          return;
-        }
+        const sub = CapApp.addListener("appUrlOpen", async (event: any) => {
+          try {
+            const incoming = event?.url || "";
+            if (!incoming) return;
 
-        const u = new URL(incoming);
-        const path = (u.pathname || "/").replace(/\/+$/, "") || "/";
-        if (path && path !== "/") navigate(path, { replace: true });
-      } catch {}
-    });
+            // URLs externes => navigateur système si plugin dispo, sinon window.open
+            if (incoming.startsWith("http://") || incoming.startsWith("https://")) {
+              try {
+                const b = await import("@capacitor/browser");
+                await b.Browser.open({ url: incoming });
+              } catch {
+                window.open(incoming, "_blank");
+              }
+              return;
+            }
+
+            const u = new URL(incoming);
+            const path = (u.pathname || "/").replace(/\/+$/, "") || "/";
+            if (path && path !== "/") navigate(path, { replace: true });
+            else navigate("/", { replace: true });
+          } catch {}
+        });
+
+        removeListener = () => sub.remove();
+      } catch {
+        // plugin non installé => on ignore (mais l'app continue)
+      }
+    })();
 
     return () => {
-      sub.remove();
+      if (removeListener) removeListener();
     };
   }, [navigate]);
 
