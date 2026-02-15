@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useEffect, useMemo, useRef, Suspense, lazy } from "react";
+import React, { useEffect, useMemo, useRef, Suspense, lazy, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -158,8 +158,6 @@ function ScrollManager() {
 
 /**
  * ✅ NativeTapFix (natif uniquement)
- * - Pas de setInterval (évite comportements instables)
- * - Hard reset sur événements système + 2 timers
  */
 function NativeTapFix() {
   const isNative = isNativeRuntime();
@@ -178,7 +176,6 @@ function NativeTapFix() {
         const root = document.getElementById("root") as HTMLElement | null;
         if (root) root.style.pointerEvents = "auto";
 
-        // (si jamais un wrapper existe un jour)
         const vp = document.getElementById("ui-desktop-viewport") as HTMLElement | null;
         if (vp) {
           vp.style.pointerEvents = "auto";
@@ -235,7 +232,6 @@ function AuthAuditLogger() {
 
     const COOLDOWN_MS = 10 * 60 * 1000;
     const LS_KEY = "op_login_journal:last_refresh";
-
     const isNative = isNativeRuntime();
 
     const getTimeZone = () => {
@@ -494,14 +490,25 @@ function NativeRoutingGuard() {
 /**
  * ✅ TapInspector Gate
  * Active seulement en natif + si URL contient ?tap=1
+ *
+ * ⚠️ IMPORTANT:
+ * - Sur HashRouter, la query est souvent dans le hash: #/?tap=1
+ * - Donc on lit window.location.search ET window.location.hash
  */
 function TapInspectorGate() {
-  const [enabled, setEnabled] = React.useState(false);
+  const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
     const isNative = isNativeRuntime();
-    const params = new URLSearchParams(window.location.search);
-    const on = params.get("tap") === "1";
+
+    const paramsFromSearch = new URLSearchParams(window.location.search);
+    const paramsFromHash = (() => {
+      const h = window.location.hash || "";
+      const q = h.includes("?") ? h.split("?")[1] : "";
+      return new URLSearchParams(q);
+    })();
+
+    const on = paramsFromSearch.get("tap") === "1" || paramsFromHash.get("tap") === "1";
     setEnabled(isNative && on);
   }, []);
 
@@ -513,6 +520,9 @@ const AppRoutes = () => (
   <>
     {/* ✅ must be first */}
     <NativeTapFix />
+
+    {/* ✅ TapInspector overlay (natif + ?tap=1 / #/?tap=1) */}
+    <TapInspectorGate />
 
     <ScrollManager />
     <AuthAuditLogger />
@@ -761,8 +771,6 @@ const App = () => {
             <RouterSwitch>
               <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
                 <AppRoutes />
-                {/* ✅ TapInspector overlay (natif + ?tap=1) */}
-                <TapInspectorGate />
               </div>
             </RouterSwitch>
           </UiModeProvider>
