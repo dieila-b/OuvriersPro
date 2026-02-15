@@ -196,14 +196,26 @@ body[data-ui-native="true"] .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
-/* ✅ FIX: Toast/Sonner overlays ne doivent JAMAIS capturer les taps en natif */
+/* ✅ FIX: Toast/Sonner/Radix overlays ne doivent JAMAIS capturer les taps en natif */
 html[data-ui-native="true"] [data-sonner-toaster],
-html[data-ui-native="true"] [data-radix-toast-viewport] {
+html[data-ui-native="true"] [data-radix-toast-viewport],
+html[data-ui-native="true"] [data-radix-popper-content-wrapper],
+html[data-ui-native="true"] [data-radix-dismissable-layer],
+html[data-ui-native="true"] [data-radix-focus-guard],
+html[data-ui-native="true"] [data-radix-portal] {
   pointer-events: none !important;
 }
 html[data-ui-native="true"] [data-sonner-toaster] > *,
-html[data-ui-native="true"] [data-radix-toast-viewport] > * {
+html[data-ui-native="true"] [data-radix-toast-viewport] > *,
+html[data-ui-native="true"] [data-radix-popper-content-wrapper] > *,
+html[data-ui-native="true"] [data-radix-portal] > *,
+html[data-ui-native="true"] [data-radix-dismissable-layer] > * {
   pointer-events: auto !important;
+}
+
+/* ✅ Focus guards Radix : éléments 0×0 qui captent le focus/tap */
+html[data-ui-native="true"] [data-radix-focus-guard] {
+  display: none !important;
 }
 
 /* ---------------------------
