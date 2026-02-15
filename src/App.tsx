@@ -20,6 +20,9 @@ import { Capacitor } from "@capacitor/core";
 // ✅ UI Mode global
 import { UiModeProvider, useUiModeCtx } from "@/contexts/UiModeContext";
 
+// ✅ TapInspector (debug taps)
+import TapInspector from "@/components/TapInspector";
+
 // Protection routes
 import PrivateRoute from "./components/PrivateRoute";
 
@@ -169,14 +172,13 @@ function NativeTapFix() {
         const html = document.documentElement;
         const body = document.body;
 
-        // Garantit que rien ne bloque globalement
         html.style.pointerEvents = "auto";
         body.style.pointerEvents = "auto";
 
         const root = document.getElementById("root") as HTMLElement | null;
         if (root) root.style.pointerEvents = "auto";
 
-        // Si un wrapper custom existe (même si non trouvé chez toi), on neutralise
+        // (si jamais un wrapper existe un jour)
         const vp = document.getElementById("ui-desktop-viewport") as HTMLElement | null;
         if (vp) {
           vp.style.pointerEvents = "auto";
@@ -187,11 +189,9 @@ function NativeTapFix() {
           vp.style.maxWidth = "100%";
         }
 
-        // Viewport meta (important Android)
         const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
         if (meta) meta.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
 
-        // Evite certains bugs de click liés au zoom CSS
         (body.style as any).zoom = "1";
       } catch {}
     };
@@ -207,7 +207,6 @@ function NativeTapFix() {
     window.addEventListener("orientationchange", onResize);
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
-
     window.visualViewport?.addEventListener?.("resize", onResize);
 
     return () => {
@@ -358,9 +357,6 @@ function UiDebugBadge() {
 
 /**
  * ✅ Intercepteur global SAFE (Natif uniquement)
- * - capture:true (on intercepte avant que WebView fasse un reload)
- * - respecte e.defaultPrevented
- * - ignore les liens marqués data-no-native-intercept
  */
 function GlobalLinkInterceptor() {
   const navigate = useNavigate();
@@ -389,7 +385,7 @@ function GlobalLinkInterceptor() {
     };
 
     const normalizeHref = (href: string) => {
-      if (href.startsWith("#/")) return href.slice(1); // => "/route"
+      if (href.startsWith("#/")) return href.slice(1);
       return href;
     };
 
@@ -493,6 +489,24 @@ function NativeRoutingGuard() {
   }, [navigate]);
 
   return null;
+}
+
+/**
+ * ✅ TapInspector Gate
+ * Active seulement en natif + si URL contient ?tap=1
+ */
+function TapInspectorGate() {
+  const [enabled, setEnabled] = React.useState(false);
+
+  useEffect(() => {
+    const isNative = isNativeRuntime();
+    const params = new URLSearchParams(window.location.search);
+    const on = params.get("tap") === "1";
+    setEnabled(isNative && on);
+  }, []);
+
+  if (!enabled) return null;
+  return <TapInspector />;
 }
 
 const AppRoutes = () => (
@@ -687,7 +701,6 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
     const body = document.body;
 
     html.setAttribute("data-ui-native", isNative ? "true" : "false");
-
     if (!isNative) return;
 
     html.setAttribute("data-ui-mode", "mobile");
@@ -748,6 +761,8 @@ const App = () => {
             <RouterSwitch>
               <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
                 <AppRoutes />
+                {/* ✅ TapInspector overlay (natif + ?tap=1) */}
+                <TapInspectorGate />
               </div>
             </RouterSwitch>
           </UiModeProvider>
