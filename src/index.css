@@ -196,6 +196,16 @@ body[data-ui-native="true"] .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
+/* ✅ FIX: Toast/Sonner overlays ne doivent JAMAIS capturer les taps en natif */
+html[data-ui-native="true"] [data-sonner-toaster],
+html[data-ui-native="true"] [data-radix-toast-viewport] {
+  pointer-events: none !important;
+}
+html[data-ui-native="true"] [data-sonner-toaster] > *,
+html[data-ui-native="true"] [data-radix-toast-viewport] > * {
+  pointer-events: auto !important;
+}
+
 /* ---------------------------
    ADMIN responsive hardening
 ---------------------------- */
