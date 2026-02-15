@@ -16,7 +16,7 @@ import ContactModal from "@/components/contact/ContactModal";
 
 import ProxiLogo from "@/assets/logo-proxiservices.png";
 
-// ✅ Cache-busting : change à chaque build (Vite)
+// Cache-busting : change à chaque build (Vite)
 const BUILD_TAG =
   // @ts-ignore
   (import.meta as any).env?.VITE_BUILD_TAG ||
@@ -38,10 +38,10 @@ const Header = () => {
     return v;
   };
 
-  // ✅ Ferme le menu à chaque changement de route
+  // Ferme le menu à chaque changement de route
   useEffect(() => setMobileOpen(false), [location.pathname, location.search, location.hash]);
 
-  // ✅ Empêche le scroll derrière le menu
+  // Empêche le scroll derrière le menu
   useEffect(() => {
     if (!mobileOpen) {
       document.body.style.overflow = "";
@@ -58,7 +58,6 @@ const Header = () => {
     return cms("header.btn_login", "Se connecter", "Sign in");
   }, [user, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ✅ Si pas connecté => login
   const accountPath = useMemo(() => {
     if (!user) return "/login";
     if (isWorker) return "/espace-ouvrier";
@@ -69,10 +68,9 @@ const Header = () => {
     return cms("header.btn_become_provider", "Devenir Prestataire", "Become a Provider");
   }, [language]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ✅ URL versionnée pour casser le cache (Android/WebView inclus)
   const logoSrc = useMemo(() => `${ProxiLogo}?v=${encodeURIComponent(BUILD_TAG)}`, []);
 
-  // ✅ Navigation robuste (ferme menu puis navigate)
+  // ✅ Navigation robuste — SANS stopPropagation/preventDefault (casse Android WebView)
   const go = useCallback(
     (to: string) => {
       setMobileOpen(false);
@@ -81,19 +79,7 @@ const Header = () => {
     [navigate]
   );
 
-  // ✅ Helper “tap” ultra robuste WebView
-  const tap = useCallback(
-    (to: string) => (e: any) => {
-      try {
-        e?.preventDefault?.();
-        e?.stopPropagation?.();
-      } catch {}
-      go(to);
-    },
-    [go]
-  );
-
-  // ✅ Rend le portal uniquement quand le DOM est prêt
+  // Rend le portal uniquement quand le DOM est prêt
   const canPortal = typeof document !== "undefined" && !!document.body;
 
   const MobileOverlay =
@@ -102,8 +88,6 @@ const Header = () => {
           <div
             className="md:hidden fixed inset-0 z-[9999]"
             style={{ WebkitTapHighlightColor: "transparent" }}
-            onClick={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
           >
             {/* Backdrop */}
             <div
@@ -112,12 +96,9 @@ const Header = () => {
               onClick={() => setMobileOpen(false)}
             />
 
-            {/* Panel */}
+            {/* Panel — NO stopPropagation on container (kills taps on Android WebView) */}
             <div
               className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg"
-              onClick={(e) => e.stopPropagation()}
-              onPointerDown={(e) => e.stopPropagation()}
-              onTouchEnd={(e) => e.stopPropagation()}
             >
               <div className="w-full px-4 sm:px-6 py-3">
                 <div className="flex items-center justify-between gap-3 min-w-0">
@@ -137,7 +118,6 @@ const Header = () => {
                 </div>
 
                 <div className="mt-3 flex flex-col gap-3 min-w-0">
-                  {/* ✅ Devenir prestataire (button natif + multi events) */}
                   <button
                     type="button"
                     className="w-full text-left py-2 font-medium text-pro-gray hover:text-pro-blue"
@@ -147,7 +127,6 @@ const Header = () => {
                     {becomeProviderLabel}
                   </button>
 
-                  {/* ✅ Connexion / Compte (button natif + multi events) */}
                   <button
                     type="button"
                     className="w-full rounded-full bg-pro-blue text-white py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
@@ -170,7 +149,6 @@ const Header = () => {
   return (
     <>
       <header className="sticky top-0 z-40 w-full max-w-full">
-        {/* ✅ IMPORTANT: on retire backdrop-blur (souvent bug taps Android WebView) */}
         <div className="bg-white border-b border-gray-200 overflow-hidden">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-16 sm:h-[72px] min-w-0 flex items-center justify-between gap-3">
@@ -275,7 +253,6 @@ const Header = () => {
         </div>
       </header>
 
-      {/* ✅ Portal overlay rendu au niveau BODY */}
       {MobileOverlay}
 
       <ContactModal open={contactOpen} onOpenChange={setContactOpen} cooldownSeconds={30} />
