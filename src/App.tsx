@@ -488,29 +488,36 @@ function NativeRoutingGuard() {
 }
 
 /**
- * ✅ TapInspector Gate
- * Active seulement en natif + si URL contient ?tap=1
- *
- * ⚠️ IMPORTANT:
- * - Sur HashRouter, la query est souvent dans le hash: #/?tap=1
- * - Donc on lit window.location.search ET window.location.hash
+ * ✅ TapInspector Gate (HashRouter-friendly + localStorage fallback)
+ * Active si:
+ * - natif ET (?tap=1) dans location.search OU dans location.hash
+ * - OU localStorage.tap === "1" (pratique sur émulateur)
  */
 function TapInspectorGate() {
+  const location = useLocation();
   const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
     const isNative = isNativeRuntime();
 
-    const paramsFromSearch = new URLSearchParams(window.location.search);
-    const paramsFromHash = (() => {
-      const h = window.location.hash || "";
-      const q = h.includes("?") ? h.split("?")[1] : "";
-      return new URLSearchParams(q);
-    })();
+    // query classique ?tap=1
+    const sp = new URLSearchParams(location.search || "");
+    const tapSearch = sp.get("tap") === "1";
 
-    const on = paramsFromSearch.get("tap") === "1" || paramsFromHash.get("tap") === "1";
-    setEnabled(isNative && on);
-  }, []);
+    // query dans hash: #/route?tap=1
+    const hash = location.hash || "";
+    const q = hash.includes("?") ? hash.split("?")[1] : "";
+    const hp = new URLSearchParams(q);
+    const tapHash = hp.get("tap") === "1";
+
+    // fallback localStorage
+    let tapLS = false;
+    try {
+      tapLS = localStorage.getItem("tap") === "1";
+    } catch {}
+
+    setEnabled(isNative && (tapSearch || tapHash || tapLS));
+  }, [location.search, location.hash]);
 
   if (!enabled) return null;
   return <TapInspector />;
@@ -521,14 +528,14 @@ const AppRoutes = () => (
     {/* ✅ must be first */}
     <NativeTapFix />
 
-    {/* ✅ TapInspector overlay (natif + ?tap=1 / #/?tap=1) */}
-    <TapInspectorGate />
-
     <ScrollManager />
     <AuthAuditLogger />
     <UiDebugBadge />
     <GlobalLinkInterceptor />
     <NativeRoutingGuard />
+
+    {/* ✅ TapInspector overlay (natif + ?tap=1 / hash?tap=1 / localStorage.tap=1) */}
+    <TapInspectorGate />
 
     <Suspense fallback={<div className="p-6 text-gray-600">Chargement…</div>}>
       <Routes>
