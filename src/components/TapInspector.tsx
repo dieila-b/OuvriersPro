@@ -37,32 +37,56 @@ export default function TapInspector() {
   const boxRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const onTouch = (e: TouchEvent) => {
-      const t = e.touches?.[0];
-      if (!t) return;
-      const el = document.elementFromPoint(t.clientX, t.clientY);
-      const info = describe(el);
-      setHit(info);
-
-      if (boxRef.current && info?.rect) {
-        boxRef.current.style.left = info.rect.x + "px";
-        boxRef.current.style.top = info.rect.y + "px";
-        boxRef.current.style.width = info.rect.w + "px";
-        boxRef.current.style.height = info.rect.h + "px";
-        boxRef.current.style.display = "block";
-      }
+    const paintBox = (info: Hit | null) => {
+      if (!boxRef.current || !info?.rect) return;
+      boxRef.current.style.left = info.rect.x + "px";
+      boxRef.current.style.top = info.rect.y + "px";
+      boxRef.current.style.width = info.rect.w + "px";
+      boxRef.current.style.height = info.rect.h + "px";
+      boxRef.current.style.display = "block";
     };
 
-    // capture=true pour voir avant que ça soit bloqué
+    const handleAt = (x: number, y: number) => {
+      const el = document.elementFromPoint(x, y);
+      const info = describe(el);
+      setHit(info);
+      paintBox(info);
+
+      // ✅ utile si overlay invisible: on log aussi en console
+      try {
+        console.log("[TapInspector]", info);
+      } catch {}
+    };
+
+    const onTouch = (e: TouchEvent) => {
+      const t = e.touches?.[0] || e.changedTouches?.[0];
+      if (!t) return;
+      handleAt(t.clientX, t.clientY);
+    };
+
+    const onPointer = (e: PointerEvent) => {
+      handleAt(e.clientX, e.clientY);
+    };
+
+    const onMouse = (e: MouseEvent) => {
+      handleAt(e.clientX, e.clientY);
+    };
+
+    // capture=true pour passer avant les handlers qui “mangent” l’event
     window.addEventListener("touchstart", onTouch, { capture: true, passive: true });
+    window.addEventListener("pointerdown", onPointer, { capture: true, passive: true });
+    window.addEventListener("mousedown", onMouse, { capture: true, passive: true });
 
     return () => {
       window.removeEventListener("touchstart", onTouch as any, true);
+      window.removeEventListener("pointerdown", onPointer as any, true);
+      window.removeEventListener("mousedown", onMouse as any, true);
     };
   }, []);
 
   return (
     <>
+      {/* outline de l’élément touché */}
       <div
         ref={boxRef}
         style={{
@@ -70,14 +94,11 @@ export default function TapInspector() {
           zIndex: 2147483647,
           border: "2px solid red",
           pointerEvents: "none",
-          display: hit?.rect ? "block" : "none",
-          left: 0,
-          top: 0,
-          width: 0,
-          height: 0,
+          display: "none",
         }}
       />
 
+      {/* badge */}
       <div
         style={{
           position: "fixed",
@@ -96,7 +117,7 @@ export default function TapInspector() {
       >
         {!hit ? (
           <div>
-            <b>TapInspector actif</b> — touche “Connexion” sur mobile
+            <b>TapInspector actif</b> — touche (ou clique) sur “Connexion”
           </div>
         ) : (
           <>
