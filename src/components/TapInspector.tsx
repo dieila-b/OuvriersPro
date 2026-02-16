@@ -34,7 +34,7 @@ function describe(el: Element | null): Hit | null {
 }
 
 function fmtShort(h: Hit | null) {
-  if (!h) return "TapInspector actif — touche/clique sur “Connexion”";
+  if (!h) return 'TapInspector actif — touche/clique sur “Connexion”';
   const id = h.id ? `#${h.id}` : "";
   return `Hit=${h.tag}${id} | pos=${h.pos ?? "?"} | z=${h.z ?? "?"} | pe=${h.pe ?? "?"}`;
 }
@@ -66,6 +66,16 @@ async function copyText(text: string) {
   }
 }
 
+/**
+ * ✅ TapInspector
+ * - Capture touch/pointer/mouse (capture=true) pour voir ce qui "mange" les taps
+ * - HUD en haut avec bouton COPIER
+ * - Outline rouge sur l’élément hit
+ *
+ * ⚠️ Important:
+ * - Le HUD doit rester cliquable => pointerEvents: "auto"
+ * - On stopPropagation sur le HUD pour éviter que "COPIER" devienne le hit
+ */
 export default function TapInspector() {
   const [hit, setHit] = useState<Hit | null>(null);
   const [count, setCount] = useState(0);
@@ -134,6 +144,12 @@ export default function TapInspector() {
     window.setTimeout(() => setCopied(null), 900);
   };
 
+  const stop = (e: any) => {
+    try {
+      e.stopPropagation();
+    } catch {}
+  };
+
   return (
     <>
       {/* Outline de l’élément touché */}
@@ -147,6 +163,7 @@ export default function TapInspector() {
           display: "none",
           // rend plus stable sur WebView
           transform: "translateZ(0)",
+          willChange: "left, top, width, height",
         }}
       />
 
@@ -161,16 +178,12 @@ export default function TapInspector() {
           transform: "translateZ(0)",
           pointerEvents: "auto", // pour cliquer COPIER
         }}
-        onPointerDown={(e) => {
-          // évite que ton tap sur COPIER déclenche une mesure “parasite”
-          e.stopPropagation();
-        }}
-        onMouseDown={(e) => {
-          e.stopPropagation();
-        }}
-        onTouchStart={(e) => {
-          e.stopPropagation();
-        }}
+        onPointerDown={stop}
+        onPointerUp={stop}
+        onMouseDown={stop}
+        onMouseUp={stop}
+        onTouchStart={stop}
+        onTouchEnd={stop}
       >
         <div
           style={{
@@ -178,7 +191,7 @@ export default function TapInspector() {
             gap: 8,
             alignItems: "center",
             justifyContent: "space-between",
-            background: "rgba(0,0,0,.78)",
+            background: "rgba(0,0,0,.82)",
             color: "white",
             padding: "10px 12px",
             borderRadius: 12,
@@ -188,26 +201,36 @@ export default function TapInspector() {
           }}
         >
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 700 }}>
+            <div style={{ fontWeight: 800 }}>
               TapInspector ON <span style={{ opacity: 0.7 }}>({count})</span>
             </div>
-            <div style={{ opacity: 0.95, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <div
+              style={{
+                opacity: 0.95,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
               {shortText}
             </div>
           </div>
 
           <button
             type="button"
-            onClick={doCopy}
+            onClick={(e) => {
+              stop(e);
+              void doCopy();
+            }}
             style={{
               flex: "0 0 auto",
-              border: "1px solid rgba(255,255,255,.25)",
-              background: "rgba(255,255,255,.12)",
+              border: "1px solid rgba(255,255,255,.28)",
+              background: "rgba(255,255,255,.14)",
               color: "white",
               padding: "8px 10px",
               borderRadius: 10,
               fontSize: 12,
-              fontWeight: 700,
+              fontWeight: 800,
             }}
           >
             {copied === "ok" ? "COPIÉ" : copied === "fail" ? "ÉCHEC" : "COPIER"}
@@ -235,7 +258,8 @@ export default function TapInspector() {
       >
         {!hit ? (
           <div>
-            <b>Conseil:</b> touche “Connexion”, puis envoie-moi la ligne <b>Hit/pos/z/pe</b> (bouton COPIER).
+            <b>Conseil:</b> touche “Connexion”, puis envoie-moi la ligne{" "}
+            <b>Hit/pos/z/pe</b> (bouton COPIER).
           </div>
         ) : (
           <>
@@ -244,7 +268,8 @@ export default function TapInspector() {
               {hit.id ? `#${hit.id}` : ""}
             </div>
             <div>
-              <b>pos:</b> {hit.pos} &nbsp; <b>z:</b> {hit.z} &nbsp; <b>pe:</b> {hit.pe}
+              <b>pos:</b> {hit.pos} &nbsp; <b>z:</b> {hit.z} &nbsp;{" "}
+              <b>pe:</b> {hit.pe}
             </div>
             {hit.cls ? (
               <div>
