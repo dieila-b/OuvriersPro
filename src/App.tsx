@@ -488,36 +488,70 @@ function NativeRoutingGuard() {
 }
 
 /**
- * ✅ TapInspector Gate (HashRouter-friendly + localStorage fallback)
+ * ✅ TapInspector Gate (robuste, ne dépend PAS de react-router)
  * Active si:
- * - natif ET (?tap=1) dans location.search OU dans location.hash
- * - OU localStorage.tap === "1" (pratique sur émulateur)
+ * - natif ET tap=1 dans location.search OU dans location.hash
+ * - OU localStorage.tap === "1"
+ * - OU (DEV + natif) + ?forceTap=1 (pratique)
  */
 function TapInspectorGate() {
-  const location = useLocation();
   const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
     const isNative = isNativeRuntime();
 
-    // query classique ?tap=1
-    const sp = new URLSearchParams(location.search || "");
-    const tapSearch = sp.get("tap") === "1";
+    const readTap = () => {
+      // search ?tap=1
+      const sp = new URLSearchParams(window.location.search || "");
+      const tapSearch = sp.get("tap") === "1" || sp.get("forceTap") === "1";
 
-    // query dans hash: #/route?tap=1
-    const hash = location.hash || "";
-    const q = hash.includes("?") ? hash.split("?")[1] : "";
-    const hp = new URLSearchParams(q);
-    const tapHash = hp.get("tap") === "1";
+      // hash #/route?tap=1 ou #/?tap=1
+      const hash = window.location.hash || "";
+      const q = hash.includes("?") ? hash.split("?")[1] : "";
+      const hp = new URLSearchParams(q);
+      const tapHash = hp.get("tap") === "1" || hp.get("forceTap") === "1";
 
-    // fallback localStorage
-    let tapLS = false;
-    try {
-      tapLS = localStorage.getItem("tap") === "1";
-    } catch {}
+      // localStorage fallback
+      let tapLS = false;
+      try {
+        tapLS = localStorage.getItem("tap") === "1";
+      } catch {}
 
-    setEnabled(isNative && (tapSearch || tapHash || tapLS));
-  }, [location.search, location.hash]);
+      // DEV natif fallback (si tu veux forcer temporairement)
+      const devNativeFallback = import.meta.env.DEV && isNative;
+
+      const ok = isNative && (tapSearch || tapHash || tapLS || devNativeFallback);
+
+      // logs utiles (tu peux laisser, c’est léger)
+      if (import.meta.env.DEV) {
+        try {
+          console.log("[TapInspectorGate]", {
+            href: window.location.href,
+            search: window.location.search,
+            hash: window.location.hash,
+            tapSearch,
+            tapHash,
+            tapLS,
+            devNativeFallback,
+            enabled: ok,
+          });
+        } catch {}
+      }
+
+      return ok;
+    };
+
+    const apply = () => setEnabled(readTap());
+
+    apply();
+    window.addEventListener("hashchange", apply);
+    window.addEventListener("popstate", apply);
+
+    return () => {
+      window.removeEventListener("hashchange", apply);
+      window.removeEventListener("popstate", apply);
+    };
+  }, []);
 
   if (!enabled) return null;
   return <TapInspector />;
@@ -534,7 +568,7 @@ const AppRoutes = () => (
     <GlobalLinkInterceptor />
     <NativeRoutingGuard />
 
-    {/* ✅ TapInspector overlay (natif + ?tap=1 / hash?tap=1 / localStorage.tap=1) */}
+    {/* ✅ TapInspector overlay */}
     <TapInspectorGate />
 
     <Suspense fallback={<div className="p-6 text-gray-600">Chargement…</div>}>
