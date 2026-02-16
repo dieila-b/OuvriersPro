@@ -7,12 +7,17 @@ const config: CapacitorConfig = {
   webDir: "dist",
   bundledWebRuntime: false,
 
-  // ✅ indispensable : empêche Capacitor de router en "path" et force un routing stable
+  // ✅ DEV (émulateur Android) : charge Vite + active TapInspector via HashRouter
+  // 10.0.2.2 = ton PC vu depuis l'émulateur
+  server: {
+    url: "http://10.0.2.2:8080/#/?tap=1",
+    cleartext: true,
+  },
+
   android: {
     allowMixedContent: true,
   },
 
-  // ✅ important : évite que Capacitor “reload” quand l’URL change
   plugins: {
     CapacitorHttp: {
       enabled: true,
