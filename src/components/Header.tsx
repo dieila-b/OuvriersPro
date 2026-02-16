@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import ContactModal from "@/components/contact/ContactModal";
 
@@ -23,9 +23,36 @@ const BUILD_TAG =
   // fallback (dev)
   String(Date.now());
 
+/**
+ * ✅ Détection native robuste (Capacitor/WebView)
+ * Important: en Capacitor packagé, on est souvent sur https://localhost
+ */
+const isNativeRuntime = () => {
+  try {
+    // Capacitor vrai natif
+    // @ts-ignore
+    if ((window as any)?.Capacitor?.isNativePlatform?.()) return true;
+  } catch {}
+
+  try {
+    const p = window.location?.protocol;
+    if (p === "capacitor:" || p === "file:") return true;
+
+    const host = window.location?.hostname;
+    const origin = window.location?.origin || "";
+    if (host === "localhost" && origin.startsWith("https://localhost")) return true;
+
+    const ua = navigator?.userAgent || "";
+    if (ua.includes("wv") || ua.includes("Capacitor")) return true;
+  } catch {}
+
+  return false;
+};
+
 const Header = () => {
   const { t, language, setLanguage } = useLanguage();
   const { user, isWorker } = useAuthProfile();
+
   const [mobileOpen, setMobileOpen] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
 
@@ -70,11 +97,33 @@ const Header = () => {
 
   const logoSrc = useMemo(() => `${ProxiLogo}?v=${encodeURIComponent(BUILD_TAG)}`, []);
 
-  // ✅ Navigation robuste — SANS stopPropagation/preventDefault (casse Android WebView)
+  /**
+   * ✅ Navigation fiable partout:
+   * - Web => navigate(to)
+   * - Native (HashRouter) => force window.location.hash puis navigate(to)
+   *
+   * NOTE: on évite preventDefault/stopPropagation (Android WebView)
+   */
   const go = useCallback(
     (to: string) => {
+      const isNative = isNativeRuntime();
       setMobileOpen(false);
-      requestAnimationFrame(() => navigate(to));
+
+      requestAnimationFrame(() => {
+        try {
+          if (isNative) {
+            // Force #/route (HashRouter)
+            const normalized = to.startsWith("/") ? to : `/${to}`;
+            const desiredHash = `#${normalized}`;
+            if (window.location.hash !== desiredHash) {
+              window.location.hash = desiredHash;
+            }
+          }
+        } catch {}
+
+        // SPA navigation
+        navigate(to);
+      });
     },
     [navigate]
   );
@@ -96,10 +145,8 @@ const Header = () => {
               onClick={() => setMobileOpen(false)}
             />
 
-            {/* Panel — NO stopPropagation on container (kills taps on Android WebView) */}
-            <div
-              className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg"
-            >
+            {/* Panel */}
+            <div className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg">
               <div className="w-full px-4 sm:px-6 py-3">
                 <div className="flex items-center justify-between gap-3 min-w-0">
                   <span className="text-sm font-semibold text-pro-gray">
@@ -152,7 +199,14 @@ const Header = () => {
         <div className="bg-white border-b border-gray-200 overflow-hidden">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-16 sm:h-[72px] min-w-0 flex items-center justify-between gap-3">
-              <Link to="/" className="min-w-0 flex items-center shrink-0">
+              {/* ✅ Logo clickable (SPA) */}
+              <button
+                type="button"
+                onClick={() => go("/")}
+                className="min-w-0 flex items-center shrink-0 text-left"
+                style={{ WebkitTapHighlightColor: "transparent" }}
+                aria-label={cms("brand.name", "ProxiServices", "ProxiServices")}
+              >
                 <div className="inline-flex items-center rounded-xl bg-white ring-1 ring-black/5 shadow-sm px-2 py-1">
                   <img
                     src={logoSrc}
@@ -170,28 +224,32 @@ const Header = () => {
                     fetchpriority="high"
                   />
                 </div>
-              </Link>
+              </button>
 
               <nav className="hidden md:flex" aria-hidden="true" />
 
               {/* DESKTOP */}
               <div className="hidden md:flex min-w-0 items-center gap-2">
-                <Link to="/forfaits" className="min-w-0">
-                  <Button variant="outline" size="sm" className="rounded-full whitespace-nowrap">
-                    {becomeProviderLabel}
-                  </Button>
-                </Link>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full whitespace-nowrap"
+                  onClick={() => go("/forfaits")}
+                >
+                  {becomeProviderLabel}
+                </Button>
 
-                <Link to={accountPath} className="min-w-0">
-                  <Button
-                    size="sm"
-                    className="rounded-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center gap-2 whitespace-nowrap shadow-sm"
-                  >
-                    <User className="w-4 h-4" />
-                    <span className="hidden lg:inline">{accountLabel}</span>
-                    <span className="lg:hidden">{cms("header.btn_account_short", "Compte", "Account")}</span>
-                  </Button>
-                </Link>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="rounded-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center gap-2 whitespace-nowrap shadow-sm"
+                  onClick={() => go(accountPath)}
+                >
+                  <User className="w-4 h-4" />
+                  <span className="hidden lg:inline">{accountLabel}</span>
+                  <span className="lg:hidden">{cms("header.btn_account_short", "Compte", "Account")}</span>
+                </Button>
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -200,6 +258,7 @@ const Header = () => {
                       size="sm"
                       className="rounded-full flex items-center gap-1 whitespace-nowrap"
                       aria-label={cms("header.lang.aria", "Changer de langue", "Change language")}
+                      type="button"
                     >
                       <Languages className="w-4 h-4" />
                       <span className="uppercase">{language}</span>
@@ -220,7 +279,7 @@ const Header = () => {
               <div className="md:hidden min-w-0 flex items-center gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="rounded-full flex items-center gap-1 whitespace-nowrap">
+                    <Button variant="outline" size="sm" className="rounded-full flex items-center gap-1 whitespace-nowrap" type="button">
                       <Languages className="w-4 h-4" />
                       <span className="uppercase">{language}</span>
                     </Button>
