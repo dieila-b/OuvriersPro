@@ -7,21 +7,19 @@ const config: CapacitorConfig = {
   webDir: "dist",
   bundledWebRuntime: false,
 
-  // ✅ DEV (émulateur Android) : charge Vite + active TapInspector via HashRouter
-  // 10.0.2.2 = ton PC vu depuis l'émulateur
+  android: {
+    allowMixedContent: true,
+  },
+
+  // ✅ DEV: force l’app à charger Vite + active TapInspector via #/?tap=1
+  // Ton Vite est sur http://localhost:8080 -> sur l’émulateur c’est http://10.0.2.2:8080
   server: {
     url: "http://10.0.2.2:8080/#/?tap=1",
     cleartext: true,
   },
 
-  android: {
-    allowMixedContent: true,
-  },
-
   plugins: {
-    CapacitorHttp: {
-      enabled: true,
-    },
+    CapacitorHttp: { enabled: true },
   },
 };
 
