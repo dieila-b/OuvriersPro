@@ -23,32 +23,6 @@ const BUILD_TAG =
   // fallback (dev)
   String(Date.now());
 
-/**
- * ✅ Détection native robuste (Capacitor/WebView)
- * Important: en Capacitor packagé, on est souvent sur https://localhost
- */
-const isNativeRuntime = () => {
-  try {
-    // Capacitor vrai natif
-    // @ts-ignore
-    if ((window as any)?.Capacitor?.isNativePlatform?.()) return true;
-  } catch {}
-
-  try {
-    const p = window.location?.protocol;
-    if (p === "capacitor:" || p === "file:") return true;
-
-    const host = window.location?.hostname;
-    const origin = window.location?.origin || "";
-    if (host === "localhost" && origin.startsWith("https://localhost")) return true;
-
-    const ua = navigator?.userAgent || "";
-    if (ua.includes("wv") || ua.includes("Capacitor")) return true;
-  } catch {}
-
-  return false;
-};
-
 const Header = () => {
   const { t, language, setLanguage } = useLanguage();
   const { user, isWorker } = useAuthProfile();
@@ -66,7 +40,9 @@ const Header = () => {
   };
 
   // Ferme le menu à chaque changement de route
-  useEffect(() => setMobileOpen(false), [location.pathname, location.search, location.hash]);
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname, location.search, location.hash]);
 
   // Empêche le scroll derrière le menu
   useEffect(() => {
@@ -98,55 +74,45 @@ const Header = () => {
   const logoSrc = useMemo(() => `${ProxiLogo}?v=${encodeURIComponent(BUILD_TAG)}`, []);
 
   /**
-   * ✅ Navigation fiable partout:
-   * - Web => navigate(to)
-   * - Native (HashRouter) => force window.location.hash puis navigate(to)
-   *
-   * NOTE: on évite preventDefault/stopPropagation (Android WebView)
+   * ✅ Navigation fiable partout (Web + Android WebView)
+   * - On évite window.location.hash / raf combos qui peuvent "manger" le tap sur Android.
+   * - On ferme le menu avant de naviguer.
    */
   const go = useCallback(
     (to: string) => {
-      const isNative = isNativeRuntime();
       setMobileOpen(false);
-
-      requestAnimationFrame(() => {
-        try {
-          if (isNative) {
-            // Force #/route (HashRouter)
-            const normalized = to.startsWith("/") ? to : `/${to}`;
-            const desiredHash = `#${normalized}`;
-            if (window.location.hash !== desiredHash) {
-              window.location.hash = desiredHash;
-            }
-          }
-        } catch {}
-
-        // SPA navigation
-        navigate(to);
-      });
+      navigate(to);
     },
     [navigate]
   );
 
-  // Rend le portal uniquement quand le DOM est prêt
+  // Portal uniquement si DOM prêt
   const canPortal = typeof document !== "undefined" && !!document.body;
 
   const MobileOverlay =
-    mobileOpen && canPortal
+    canPortal
       ? createPortal(
           <div
             className="md:hidden fixed inset-0 z-[9999]"
-            style={{ WebkitTapHighlightColor: "transparent" }}
+            style={{
+              WebkitTapHighlightColor: "transparent",
+              // ✅ Important: si mobileOpen=false, l'overlay ne capture aucun tap
+              pointerEvents: mobileOpen ? "auto" : "none",
+            }}
           >
             {/* Backdrop */}
             <div
               className="absolute inset-0 bg-black/35"
+              style={{ pointerEvents: mobileOpen ? "auto" : "none" }}
               aria-label={cms("header.mobile_close.aria", "Fermer le menu", "Close menu")}
               onClick={() => setMobileOpen(false)}
             />
 
             {/* Panel */}
-            <div className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg">
+            <div
+              className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg"
+              style={{ pointerEvents: mobileOpen ? "auto" : "none" }}
+            >
               <div className="w-full px-4 sm:px-6 py-3">
                 <div className="flex items-center justify-between gap-3 min-w-0">
                   <span className="text-sm font-semibold text-pro-gray">
@@ -159,6 +125,7 @@ const Header = () => {
                     type="button"
                     className="rounded-full"
                     onClick={() => setMobileOpen(false)}
+                    style={{ touchAction: "manipulation" as any }}
                   >
                     <X className="w-4 h-4" />
                   </Button>
@@ -199,12 +166,15 @@ const Header = () => {
         <div className="bg-white border-b border-gray-200 overflow-hidden">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-16 sm:h-[72px] min-w-0 flex items-center justify-between gap-3">
-              {/* ✅ Logo clickable (SPA) */}
+              {/* ✅ Logo clickable */}
               <button
                 type="button"
                 onClick={() => go("/")}
                 className="min-w-0 flex items-center shrink-0 text-left"
-                style={{ WebkitTapHighlightColor: "transparent" }}
+                style={{
+                  WebkitTapHighlightColor: "transparent",
+                  touchAction: "manipulation" as any,
+                }}
                 aria-label={cms("brand.name", "ProxiServices", "ProxiServices")}
               >
                 <div className="inline-flex items-center rounded-xl bg-white ring-1 ring-black/5 shadow-sm px-2 py-1">
@@ -236,6 +206,7 @@ const Header = () => {
                   size="sm"
                   className="rounded-full whitespace-nowrap"
                   onClick={() => go("/forfaits")}
+                  style={{ touchAction: "manipulation" as any }}
                 >
                   {becomeProviderLabel}
                 </Button>
@@ -245,10 +216,13 @@ const Header = () => {
                   size="sm"
                   className="rounded-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center gap-2 whitespace-nowrap shadow-sm"
                   onClick={() => go(accountPath)}
+                  style={{ touchAction: "manipulation" as any }}
                 >
                   <User className="w-4 h-4" />
                   <span className="hidden lg:inline">{accountLabel}</span>
-                  <span className="lg:hidden">{cms("header.btn_account_short", "Compte", "Account")}</span>
+                  <span className="lg:hidden">
+                    {cms("header.btn_account_short", "Compte", "Account")}
+                  </span>
                 </Button>
 
                 <DropdownMenu>
@@ -259,16 +233,23 @@ const Header = () => {
                       className="rounded-full flex items-center gap-1 whitespace-nowrap"
                       aria-label={cms("header.lang.aria", "Changer de langue", "Change language")}
                       type="button"
+                      style={{ touchAction: "manipulation" as any }}
                     >
                       <Languages className="w-4 h-4" />
                       <span className="uppercase">{language}</span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="bg-white">
-                    <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
+                    <DropdownMenuItem
+                      onClick={() => setLanguage("fr")}
+                      className="cursor-pointer"
+                    >
                       {cms("header.lang.fr", "Français", "French")}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
+                    <DropdownMenuItem
+                      onClick={() => setLanguage("en")}
+                      className="cursor-pointer"
+                    >
                       {cms("header.lang.en", "English", "English")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -279,16 +260,28 @@ const Header = () => {
               <div className="md:hidden min-w-0 flex items-center gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="rounded-full flex items-center gap-1 whitespace-nowrap" type="button">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full flex items-center gap-1 whitespace-nowrap"
+                      type="button"
+                      style={{ touchAction: "manipulation" as any }}
+                    >
                       <Languages className="w-4 h-4" />
                       <span className="uppercase">{language}</span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="bg-white">
-                    <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
+                    <DropdownMenuItem
+                      onClick={() => setLanguage("fr")}
+                      className="cursor-pointer"
+                    >
                       {cms("header.lang.fr", "Français", "French")}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
+                    <DropdownMenuItem
+                      onClick={() => setLanguage("en")}
+                      className="cursor-pointer"
+                    >
                       {cms("header.lang.en", "English", "English")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -301,6 +294,7 @@ const Header = () => {
                   onClick={() => setMobileOpen((v) => !v)}
                   aria-label={cms("header.mobile_menu.aria", "Menu mobile", "Mobile menu")}
                   className="rounded-full px-3 whitespace-nowrap"
+                  style={{ touchAction: "manipulation" as any }}
                 >
                   {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
                 </Button>
@@ -312,6 +306,7 @@ const Header = () => {
         </div>
       </header>
 
+      {/* ✅ Overlay toujours monté mais ne capte aucun tap si mobileOpen=false */}
       {MobileOverlay}
 
       <ContactModal open={contactOpen} onOpenChange={setContactOpen} cooldownSeconds={30} />
