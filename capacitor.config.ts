@@ -1,7 +1,7 @@
 // capacitor.config.ts
 import type { CapacitorConfig } from "@capacitor/cli";
 
-const DEV_PORT = 5173; // 👈 change si ton Vite tourne ailleurs
+const DEV_PORT = 5173;
 
 const config: CapacitorConfig = {
   appId: "com.proxiservices.app",
@@ -13,9 +13,9 @@ const config: CapacitorConfig = {
     allowMixedContent: true,
   },
 
-  // ✅ DEV Emulator: charge Vite depuis le PC via 10.0.2.2
+  // ✅ DEV Emulator (PLAN B): adb reverse => Android accède à Vite via localhost
   server: {
-    url: `http://10.0.2.2:${DEV_PORT}/#/`,
+    url: `http://localhost:${DEV_PORT}/#/`,
     cleartext: true,
   },
 
