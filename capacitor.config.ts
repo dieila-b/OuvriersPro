@@ -11,10 +11,17 @@ const config: CapacitorConfig = {
     allowMixedContent: true,
   },
 
-  // ✅ DEV: force l’app à charger Vite + active TapInspector via #/?tap=1
-  // Ton Vite est sur http://localhost:8080 -> sur l’émulateur c’est http://10.0.2.2:8080
+  /**
+   * ✅ DEV (émulateur)
+   * - Vite tourne sur ton PC : http://localhost:8080
+   * - Dans l’émulateur : http://10.0.2.2:8080
+   *
+   * IMPORTANT:
+   * - Ne mets PAS tap=1 par défaut (ça peut activer des overlays)
+   * - Pour activer le traceur: ajoute #/?traceTap=1
+   */
   server: {
-    url: "http://10.0.2.2:8080/#/?tap=1",
+    url: "http://10.0.2.2:8080/#/",
     cleartext: true,
   },
 
