@@ -224,6 +224,125 @@ function NativeTapFix() {
 }
 
 /**
+ * ✅ Plan B — Traceur de taps/clics (NATIF uniquement, activable via ?traceTap=1)
+ */
+function NativeTapTracer() {
+  useEffect(() => {
+    if (!isNativeRuntime()) return;
+
+    const enabled = (() => {
+      try {
+        const sp = new URLSearchParams(window.location.search || "");
+        if (sp.get("traceTap") === "1") return true;
+
+        const hash = window.location.hash || "";
+        const q = hash.includes("?") ? hash.split("?")[1] : "";
+        const hp = new URLSearchParams(q);
+        if (hp.get("traceTap") === "1") return true;
+
+        return localStorage.getItem("traceTap") === "1";
+      } catch {
+        return false;
+      }
+    })();
+
+    if (!enabled) return;
+
+    const marker = document.createElement("div");
+    marker.style.position = "fixed";
+    marker.style.zIndex = "2147483647";
+    marker.style.width = "22px";
+    marker.style.height = "22px";
+    marker.style.borderRadius = "9999px";
+    marker.style.border = "2px solid red";
+    marker.style.background = "rgba(255,0,0,0.15)";
+    marker.style.pointerEvents = "none";
+    marker.style.transform = "translate(-50%, -50%)";
+    marker.style.left = "-9999px";
+    marker.style.top = "-9999px";
+    document.body.appendChild(marker);
+
+    const describeEl = (el: Element | null) => {
+      if (!el) return "null";
+      const h = el as HTMLElement;
+      const id = h.id ? `#${h.id}` : "";
+      const cls =
+        h.className && typeof h.className === "string"
+          ? "." + h.className.trim().split(/\s+/).slice(0, 4).join(".")
+          : "";
+      const tag = el.tagName?.toLowerCase?.() ?? "unknown";
+      return `${tag}${id}${cls}`;
+    };
+
+    const logAt = (x: number, y: number) => {
+      const top = document.elementFromPoint(x, y);
+      const stack = document.elementsFromPoint(x, y).slice(0, 10);
+
+      marker.style.left = `${x}px`;
+      marker.style.top = `${y}px`;
+
+      // outline le top element 150ms
+      try {
+        const ht = top as HTMLElement | null;
+        if (ht) {
+          const prev = ht.style.outline;
+          ht.style.outline = "3px solid rgba(255,0,0,0.8)";
+          window.setTimeout(() => {
+            ht.style.outline = prev;
+          }, 150);
+        }
+      } catch {}
+
+      console.log(
+        "[traceTap] point",
+        { x, y },
+        "top=",
+        describeEl(top),
+        "stack=",
+        stack.map(describeEl)
+      );
+
+      if (top instanceof HTMLElement) {
+        const cs = window.getComputedStyle(top);
+        console.log("[traceTap] top computed", {
+          pointerEvents: cs.pointerEvents,
+          position: cs.position,
+          zIndex: cs.zIndex,
+          opacity: cs.opacity,
+          display: cs.display,
+          visibility: cs.visibility,
+          background: cs.backgroundColor,
+        });
+      }
+    };
+
+    const onPointerDown = (e: PointerEvent) => logAt(e.clientX, e.clientY);
+    const onClick = (e: MouseEvent) => logAt(e.clientX, e.clientY);
+    const onTouchStart = (e: TouchEvent) => {
+      const t = e.touches?.[0];
+      if (t) logAt(t.clientX, t.clientY);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("click", onClick, true);
+    document.addEventListener("touchstart", onTouchStart, true);
+
+    console.warn("[traceTap] ENABLED (native). Disable by removing ?traceTap=1 or localStorage.removeItem('traceTap').");
+
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("click", onClick, true);
+      document.removeEventListener("touchstart", onTouchStart, true);
+      try {
+        marker.remove();
+      } catch {}
+    };
+  }, []);
+
+  return null;
+}
+
+/**
  * ✅ Journal de connexion — non bloquant
  */
 function AuthAuditLogger() {
@@ -541,6 +660,7 @@ const AppRoutes = () => (
   <>
     {/* ✅ must be first */}
     <NativeTapFix />
+    <NativeTapTracer />
 
     <ScrollManager />
     <AuthAuditLogger />
