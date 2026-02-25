@@ -178,12 +178,15 @@ function NativeTapFix() {
 
         const vp = document.getElementById("ui-desktop-viewport") as HTMLElement | null;
         if (vp) {
-          vp.style.pointerEvents = "auto";
+          // ✅ En natif : ce wrapper ne doit JAMAIS capter les taps
+          vp.style.pointerEvents = "none";
+          vp.style.display = "none";
+          vp.style.visibility = "hidden";
           vp.style.transform = "none";
           vp.style.filter = "none";
           (vp.style as any).backdropFilter = "none";
-          vp.style.width = "100%";
-          vp.style.maxWidth = "100%";
+          vp.style.width = "0px";
+          vp.style.maxWidth = "0px";
         }
 
         const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
@@ -586,15 +589,30 @@ const AppRoutes = () => (
         <Route path="/creation-profil" element={<Navigate to="/register" replace />} />
         <Route path="/creer-mon-profil" element={<Navigate to="/register" replace />} />
 
-        <Route path="/forfaits/inscription-ouvrier" element={<Navigate to="/inscription-ouvrier" replace />} />
-        <Route path="/forfaits/inscription-ouvrier/*" element={<Navigate to="/inscription-ouvrier" replace />} />
+        <Route
+          path="/forfaits/inscription-ouvrier"
+          element={<Navigate to="/inscription-ouvrier" replace />}
+        />
+        <Route
+          path="/forfaits/inscription-ouvrier/*"
+          element={<Navigate to="/inscription-ouvrier" replace />}
+        />
 
         <Route path="/devenir-prestataire" element={<InscriptionOuvrier />} />
-        <Route path="/devenir-prestataire/*" element={<Navigate to="/inscription-ouvrier" replace />} />
-        <Route path="/forfaits/devenir-prestataire" element={<Navigate to="/inscription-ouvrier" replace />} />
+        <Route
+          path="/devenir-prestataire/*"
+          element={<Navigate to="/inscription-ouvrier" replace />}
+        />
+        <Route
+          path="/forfaits/devenir-prestataire"
+          element={<Navigate to="/inscription-ouvrier" replace />}
+        />
 
         <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
-        <Route path="/inscription-ouvrier/*" element={<Navigate to="/inscription-ouvrier" replace />} />
+        <Route
+          path="/inscription-ouvrier/*"
+          element={<Navigate to="/inscription-ouvrier" replace />}
+        />
 
         <Route
           path="/ouvrier/:id"
@@ -738,12 +756,15 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
 
       const vp = document.getElementById("ui-desktop-viewport") as HTMLElement | null;
       if (vp) {
-        vp.style.pointerEvents = "auto";
+        // ✅ En natif : on neutralise totalement ce wrapper
+        vp.style.pointerEvents = "none";
+        vp.style.display = "none";
+        vp.style.visibility = "hidden";
         vp.style.transform = "none";
-        vp.style.width = "100%";
-        vp.style.maxWidth = "100%";
         vp.style.filter = "none";
         (vp.style as any).backdropFilter = "none";
+        vp.style.width = "0px";
+        vp.style.maxWidth = "0px";
       }
 
       (body.style as any).zoom = "1";
