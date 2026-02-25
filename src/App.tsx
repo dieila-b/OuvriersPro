@@ -343,6 +343,7 @@ function UiDebugBadge() {
         <span className="text-slate-400">|</span>
         <span>eff={debug.effWidth}px</span>
         <span>inner={debug.innerWidth}px</span>
+        <span className="text-slate-400">|</span>
         <span>doc={debug.docWidth}px</span>
         <span>vv={debug.vvWidth ?? "—"}px</span>
         <span>dpr={debug.dpr}</span>
@@ -489,6 +490,7 @@ function NativeRoutingGuard() {
 
 /**
  * ✅ TapInspector Gate (robuste, ne dépend PAS de react-router)
+ * ✅ FIX: ne s'active plus par défaut en natif DEV (uniquement si explicitement demandé)
  */
 function TapInspectorGate() {
   const [enabled, setEnabled] = useState(false);
@@ -497,6 +499,9 @@ function TapInspectorGate() {
     const isNative = isNativeRuntime();
 
     const readTap = () => {
+      if (!isNative) return false;
+
+      // ✅ Actif seulement si explicitement demandé
       const sp = new URLSearchParams(window.location.search || "");
       const tapSearch = sp.get("tap") === "1" || sp.get("forceTap") === "1";
 
@@ -510,9 +515,7 @@ function TapInspectorGate() {
         tapLS = localStorage.getItem("tap") === "1";
       } catch {}
 
-      const devNativeFallback = import.meta.env.DEV && isNative;
-
-      return isNative && (tapSearch || tapHash || tapLS || devNativeFallback);
+      return tapSearch || tapHash || tapLS;
     };
 
     const apply = () => setEnabled(readTap());
