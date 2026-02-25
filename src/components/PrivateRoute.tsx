@@ -3,7 +3,7 @@ import React, { useEffect, useMemo } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 
-// ✅ on ajoute "client" comme alias possible
+// Rôles acceptés
 type Role = "user" | "client" | "worker" | "admin";
 
 type Props = {
@@ -14,22 +14,66 @@ type Props = {
   showLoader?: boolean;
 };
 
-function useSupabaseSession() {
+const normalizeRole = (r: string | null | undefined): Role | null => {
+  if (!r) return null;
+  const v = String(r).toLowerCase().trim();
+  if (v === "customer") return "client";
+  if (v === "provider") return "worker";
+  if (v === "prestataire") return "worker";
+  if (v === "client") return "client";
+  if (v === "user") return "user";
+  if (v === "worker") return "worker";
+  if (v === "admin") return "admin";
+  return null;
+};
+
+/**
+ * ✅ Session hook robuste
+ * - récupère getSession()
+ * - si une session est annoncée, on la VALIDE via getUser()
+ *   -> si getUser() renvoie AuthSessionMissingError (ou autre), on force session=null
+ */
+function useSupabaseSessionValidated() {
   const [loading, setLoading] = React.useState(true);
   const [session, setSession] = React.useState<any>(null);
 
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setSession(data?.session ?? null);
-      setLoading(false);
-    });
+    const validate = async (incomingSession: any) => {
+      if (!incomingSession?.access_token) return null;
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_evt, newSession) => {
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (error || !data?.user) {
+          // session invalide / expirée / introuvable
+          return null;
+        }
+        return incomingSession;
+      } catch {
+        return null;
+      }
+    };
+
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const s = data?.session ?? null;
+
+        const validated = await validate(s);
+        if (!mounted) return;
+
+        setSession(validated);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_evt, newSession) => {
+      const validated = await validate(newSession ?? null);
       if (!mounted) return;
-      setSession(newSession ?? null);
+      setSession(validated);
+      setLoading(false);
     });
 
     return () => {
@@ -43,8 +87,6 @@ function useSupabaseSession() {
 
 /**
  * ✅ Récupération rôle depuis table profiles si metadata absente
- * - suppose table: profiles (ou public.profiles) avec colonne "role"
- * - si ta colonne s'appelle autrement (ex: user_type), dis-moi et j’adapte
  */
 function useProfileRole(userId: string | null) {
   const [loading, setLoading] = React.useState(false);
@@ -52,6 +94,7 @@ function useProfileRole(userId: string | null) {
 
   useEffect(() => {
     let mounted = true;
+
     if (!userId) {
       setRole(null);
       return;
@@ -69,12 +112,10 @@ function useProfileRole(userId: string | null) {
         if (!mounted) return;
 
         if (error) {
-          // pas bloquant
           console.warn("[PrivateRoute] profiles role fetch error:", error);
           setRole(null);
         } else {
-          const r = (data?.role ?? null) as Role | null;
-          setRole(r);
+          setRole(normalizeRole((data as any)?.role) ?? null);
         }
       } catch (e) {
         if (!mounted) return;
@@ -93,19 +134,6 @@ function useProfileRole(userId: string | null) {
   return { loading, role };
 }
 
-const normalizeRole = (r: string | null | undefined): Role | null => {
-  if (!r) return null;
-  const v = String(r).toLowerCase().trim();
-  if (v === "customer") return "client";
-  if (v === "provider") return "worker";
-  if (v === "prestataire") return "worker";
-  if (v === "client") return "client";
-  if (v === "user") return "user";
-  if (v === "worker") return "worker";
-  if (v === "admin") return "admin";
-  return null;
-};
-
 const PrivateRoute: React.FC<Props> = ({
   children,
   allowedRoles = ["user", "client", "worker", "admin"],
@@ -114,28 +142,26 @@ const PrivateRoute: React.FC<Props> = ({
   showLoader = true,
 }) => {
   const location = useLocation();
-  const { loading: sessionLoading, session } = useSupabaseSession();
+  const { loading: sessionLoading, session } = useSupabaseSessionValidated();
 
   const userId = session?.user?.id ?? null;
 
   const metaRole = useMemo<Role | null>(() => {
     const u = session?.user;
     if (!u) return null;
-
-    const r =
+    return (
       normalizeRole(u.user_metadata?.role) ||
       normalizeRole(u.app_metadata?.role) ||
-      null;
-
-    return r;
+      null
+    );
   }, [session]);
 
   const { loading: profileLoading, role: profileRole } = useProfileRole(userId);
 
-  // ✅ rôle effectif : metadata > profiles > défaut "user"
-  const effectiveRole: Role = (metaRole ?? normalizeRole(profileRole) ?? "user") as Role;
+  // rôle effectif : metadata > profiles > "user"
+  const effectiveRole: Role = (metaRole ?? profileRole ?? "user") as Role;
 
-  // ✅ loader tant que session ou role DB n’est pas prêt (évite les “rien ne se passe”)
+  // loader tant que tout n’est pas stable
   const loading = sessionLoading || (session?.user && profileLoading);
 
   if (loading) {
@@ -147,6 +173,7 @@ const PrivateRoute: React.FC<Props> = ({
     );
   }
 
+  // ✅ pas de user -> go login (c’est ça qui doit arriver chez toi)
   if (!session?.user) {
     return (
       <Navigate
@@ -157,15 +184,13 @@ const PrivateRoute: React.FC<Props> = ({
     );
   }
 
-  // ✅ règle: client = user (synonyme)
-  const roleForAuth: Role = effectiveRole === "client" ? "user" : effectiveRole;
+  // ✅ règles d’équivalence : "client" et "user" sont acceptés si l’un des deux est autorisé
+  const allowed =
+    allowedRoles.includes(effectiveRole) ||
+    (effectiveRole === "client" && allowedRoles.includes("user")) ||
+    (effectiveRole === "user" && allowedRoles.includes("client"));
 
-  // ✅ autorisations : si allowedRoles contient user, on accepte aussi client
-  const allowed = allowedRoles.includes(roleForAuth) || (roleForAuth === "user" && allowedRoles.includes("client"));
-
-  if (!allowed) {
-    return <Navigate to={forbiddenRedirectTo} replace />;
-  }
+  if (!allowed) return <Navigate to={forbiddenRedirectTo} replace />;
 
   return <>{children}</>;
 };
