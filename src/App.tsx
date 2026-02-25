@@ -74,38 +74,17 @@ const ClientReviews = lazy(() => import("./pages/ClientReviews"));
 const ClientContactForm = lazy(() => import("./pages/ClientContactForm"));
 
 /**
- * ✅ Détection native ULTRA robuste (Capacitor + localhost fallback)
+ * ✅ Détection native ROBUSTE (sans faux positif localhost)
+ * Natif = Capacitor isNativePlatform() OU URL capacitor/file.
  */
 const isNativeRuntime = () => {
-  const wCap = (() => {
-    try {
-      return (window as any)?.Capacitor ?? null;
-    } catch {
-      return null;
-    }
-  })();
-
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
 
   try {
-    if (wCap?.isNativePlatform?.()) return true;
-  } catch {}
-
-  try {
     const p = window.location?.protocol ?? "";
     if (p === "capacitor:" || p === "file:") return true;
-  } catch {}
-
-  try {
-    const { hostname, protocol } = window.location;
-    if (wCap && protocol === "http:" && hostname === "localhost") return true;
-  } catch {}
-
-  try {
-    const gp = (Capacitor as any)?.getPlatform?.();
-    if (gp && gp !== "web") return true;
   } catch {}
 
   return false;
@@ -327,7 +306,9 @@ function NativeTapTracer() {
     document.addEventListener("click", onClick, true);
     document.addEventListener("touchstart", onTouchStart, true);
 
-    console.warn("[traceTap] ENABLED (native). Disable by removing ?traceTap=1 or localStorage.removeItem('traceTap').");
+    console.warn(
+      "[traceTap] ENABLED (native). Disable by removing ?traceTap=1 or localStorage.removeItem('traceTap')."
+    );
 
     return () => {
       document.removeEventListener("pointerdown", onPointerDown, true);
@@ -371,7 +352,8 @@ function AuthAuditLogger() {
       user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
       lang: typeof navigator !== "undefined" ? navigator.language : null,
       tz: getTimeZone(),
-      screen: typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
+      screen:
+        typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
       referrer: typeof document !== "undefined" ? document.referrer || null : null,
       href: typeof window !== "undefined" ? window.location.href : null,
     });
@@ -448,7 +430,8 @@ function UiDebugBadge() {
   if (!debug) return null;
 
   const isNative = isNativeRuntime();
-  const show = isNative && import.meta.env.DEV && new URLSearchParams(window.location.search).has("uiDebug");
+  const show =
+    isNative && import.meta.env.DEV && new URLSearchParams(window.location.search).has("uiDebug");
   if (!show) return null;
 
   return (
@@ -467,6 +450,7 @@ function UiDebugBadge() {
         <span>inner={debug.innerWidth}px</span>
         <span className="text-slate-400">|</span>
         <span>doc={debug.docWidth}px</span>
+        <span className="text-slate-400">|</span>
         <span>vv={debug.vvWidth ?? "—"}px</span>
         <span>dpr={debug.dpr}</span>
       </div>
@@ -890,7 +874,8 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
       (body.style as any).zoom = "1";
 
       const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
-      if (meta) meta.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
+      if (meta)
+        meta.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
     };
 
     hardReset();
