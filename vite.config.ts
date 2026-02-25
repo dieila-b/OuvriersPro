@@ -3,14 +3,17 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
-// https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  // ✅ CRITIQUE pour Capacitor (file://...) : évite /assets absolu
+  // ✅ OK pour Capacitor prod (file://...) : évite /assets absolu
   base: "./",
 
   server: {
-    host: "::",
-    port: 8080,
+    host: "0.0.0.0",       // ✅ FORCER IPv4 (au lieu de "::")
+    port: 5173,            // ✅ aligné avec ton dev:emulator
+    strictPort: true,
+    cors: true,
+    // Optionnel mais utile sur émulateur
+    hmr: { host: "localhost" },
   },
 
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
@@ -21,7 +24,6 @@ export default defineConfig(({ mode }) => ({
     },
   },
 
-  // ✅ Perf build (réduction chunks + cache + chargement plus rapide)
   build: {
     sourcemap: false,
     reportCompressedSize: true,
