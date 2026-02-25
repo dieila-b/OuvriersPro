@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useLocation, useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import ContactModal from "@/components/contact/ContactModal";
 
@@ -20,12 +21,16 @@ import ProxiLogo from "@/assets/logo-proxiservices.png";
 const BUILD_TAG =
   // @ts-ignore
   (import.meta as any).env?.VITE_BUILD_TAG ||
-  // fallback (dev)
   String(Date.now());
 
 const Header = () => {
   const { t, language, setLanguage } = useLanguage();
-  const { user, isWorker } = useAuthProfile();
+
+  // ⚠️ On garde ton hook pour isWorker, mais on n'utilise plus user comme "source de vérité"
+  const { isWorker } = useAuthProfile();
+
+  // ✅ Source de vérité auth: session Supabase
+  const [hasSession, setHasSession] = useState(false);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
@@ -38,6 +43,34 @@ const Header = () => {
     if (!v || v === key) return language === "fr" ? fallbackFr : fallbackEn;
     return v;
   };
+
+  // ✅ Sync session
+  useEffect(() => {
+    let mounted = true;
+
+    const refresh = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!mounted) return;
+        setHasSession(!!data?.session?.user);
+      } catch {
+        if (!mounted) return;
+        setHasSession(false);
+      }
+    };
+
+    refresh();
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      if (!mounted) return;
+      setHasSession(!!session?.user);
+    });
+
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
 
   // Ferme le menu à chaque changement de route
   useEffect(() => {
@@ -57,15 +90,17 @@ const Header = () => {
   }, [mobileOpen]);
 
   const accountLabel = useMemo(() => {
-    if (user) return cms("header.btn_account", "Mon compte", "My account");
+    if (hasSession) return cms("header.btn_account", "Mon compte", "My account");
     return cms("header.btn_login", "Se connecter", "Sign in");
-  }, [user, language]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hasSession, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const accountPath = useMemo(() => {
-    if (!user) return "/login";
+    // ✅ si pas de session => login DIRECT
+    if (!hasSession) return "/login";
+    // ✅ si session => dashboard selon rôle
     if (isWorker) return "/espace-ouvrier";
     return "/espace-client";
-  }, [user, isWorker]);
+  }, [hasSession, isWorker]);
 
   const becomeProviderLabel = useMemo(() => {
     return cms("header.btn_become_provider", "Devenir Prestataire", "Become a Provider");
@@ -75,8 +110,6 @@ const Header = () => {
 
   /**
    * ✅ Navigation fiable partout (Web + Android WebView)
-   * - On évite window.location.hash / raf combos qui peuvent "manger" le tap sur Android.
-   * - On ferme le menu avant de naviguer.
    */
   const go = useCallback(
     (to: string) => {
@@ -86,7 +119,6 @@ const Header = () => {
     [navigate]
   );
 
-  // Portal uniquement si DOM prêt
   const canPortal = typeof document !== "undefined" && !!document.body;
 
   const MobileOverlay =
@@ -96,7 +128,6 @@ const Header = () => {
             className="md:hidden fixed inset-0 z-[9999]"
             style={{
               WebkitTapHighlightColor: "transparent",
-              // ✅ Important: si mobileOpen=false, l'overlay ne capture aucun tap
               pointerEvents: mobileOpen ? "auto" : "none",
             }}
           >
@@ -166,7 +197,7 @@ const Header = () => {
         <div className="bg-white border-b border-gray-200 overflow-hidden">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-16 sm:h-[72px] min-w-0 flex items-center justify-between gap-3">
-              {/* ✅ Logo clickable */}
+              {/* Logo */}
               <button
                 type="button"
                 onClick={() => go("/")}
@@ -240,16 +271,10 @@ const Header = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="bg-white">
-                    <DropdownMenuItem
-                      onClick={() => setLanguage("fr")}
-                      className="cursor-pointer"
-                    >
+                    <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
                       {cms("header.lang.fr", "Français", "French")}
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setLanguage("en")}
-                      className="cursor-pointer"
-                    >
+                    <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
                       {cms("header.lang.en", "English", "English")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -272,16 +297,10 @@ const Header = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="bg-white">
-                    <DropdownMenuItem
-                      onClick={() => setLanguage("fr")}
-                      className="cursor-pointer"
-                    >
+                    <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
                       {cms("header.lang.fr", "Français", "French")}
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setLanguage("en")}
-                      className="cursor-pointer"
-                    >
+                    <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
                       {cms("header.lang.en", "English", "English")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -306,7 +325,6 @@ const Header = () => {
         </div>
       </header>
 
-      {/* ✅ Overlay toujours monté mais ne capte aucun tap si mobileOpen=false */}
       {MobileOverlay}
 
       <ContactModal open={contactOpen} onOpenChange={setContactOpen} cooldownSeconds={30} />
