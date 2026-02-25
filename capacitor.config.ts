@@ -13,9 +13,9 @@ const config: CapacitorConfig = {
     allowMixedContent: true,
   },
 
-  // ✅ DEV Emulator (PLAN B): adb reverse => Android accède à Vite via localhost
+  // ✅ Plan B: adb reverse -> 127.0.0.1 côté Android
   server: {
-    url: `http://localhost:${DEV_PORT}/#/`,
+    url: `http://127.0.0.1:${DEV_PORT}/#/`,
     cleartext: true,
   },
 
