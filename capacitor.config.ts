@@ -1,6 +1,8 @@
 // capacitor.config.ts
 import type { CapacitorConfig } from "@capacitor/cli";
 
+const DEV_PORT = 5173; // 👈 change si ton Vite tourne ailleurs
+
 const config: CapacitorConfig = {
   appId: "com.proxiservices.app",
   appName: "ProxiServices",
@@ -11,17 +13,9 @@ const config: CapacitorConfig = {
     allowMixedContent: true,
   },
 
-  /**
-   * ✅ DEV (émulateur)
-   * - Vite tourne sur ton PC : http://localhost:8080
-   * - Dans l’émulateur : http://10.0.2.2:8080
-   *
-   * IMPORTANT:
-   * - Ne mets PAS tap=1 par défaut (ça peut activer des overlays)
-   * - Pour activer le traceur: ajoute #/?traceTap=1
-   */
+  // ✅ DEV Emulator: charge Vite depuis le PC via 10.0.2.2
   server: {
-    url: "http://10.0.2.2:8080/#/",
+    url: `http://10.0.2.2:${DEV_PORT}/#/`,
     cleartext: true,
   },
 
