@@ -87,6 +87,12 @@ const isNativeRuntime = () => {
     if (p === "capacitor:" || p === "file:") return true;
   } catch {}
 
+  // ✅ (optionnel) fallback plateforme Capacitor si dispo
+  try {
+    const gp = (Capacitor as any)?.getPlatform?.();
+    if (gp && gp !== "web") return true;
+  } catch {}
+
   return false;
 };
 
@@ -157,7 +163,6 @@ function NativeTapFix() {
 
         const vp = document.getElementById("ui-desktop-viewport") as HTMLElement | null;
         if (vp) {
-          // ✅ En natif : ce wrapper ne doit JAMAIS capter les taps
           vp.style.pointerEvents = "none";
           vp.style.display = "none";
           vp.style.visibility = "hidden";
@@ -260,7 +265,6 @@ function NativeTapTracer() {
       marker.style.left = `${x}px`;
       marker.style.top = `${y}px`;
 
-      // outline le top element 150ms
       try {
         const ht = top as HTMLElement | null;
         if (ht) {
@@ -352,8 +356,7 @@ function AuthAuditLogger() {
       user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
       lang: typeof navigator !== "undefined" ? navigator.language : null,
       tz: getTimeZone(),
-      screen:
-        typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
+      screen: typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
       referrer: typeof document !== "undefined" ? document.referrer || null : null,
       href: typeof window !== "undefined" ? window.location.href : null,
     });
@@ -488,6 +491,8 @@ function GlobalLinkInterceptor() {
     };
 
     const normalizeHref = (href: string) => {
+      // ✅ corrige aussi le double hash qui arrive parfois
+      if (href.startsWith("#/#/")) return href.replace("#/#/", "#/");
       if (href.startsWith("#/")) return href.slice(1);
       return href;
     };
@@ -506,7 +511,7 @@ function GlobalLinkInterceptor() {
 
       href = normalizeHref(href);
 
-      if (href.startsWith("/") || href.startsWith("#")) {
+      if (href.startsWith("/")) {
         e.preventDefault();
         requestAnimationFrame(() => navigate(href));
       }
@@ -530,6 +535,13 @@ function NativeRoutingGuard() {
 
     try {
       const u = new URL(window.location.href);
+
+      // ✅ Fix double hash: #/#/... -> #/...
+      if ((u.hash || "").startsWith("#/#/")) {
+        u.hash = u.hash.replace("#/#/", "#/");
+        window.history.replaceState({}, "", u.toString());
+      }
+
       const hasHashRoute = (u.hash || "").startsWith("#/");
 
       if (!u.hash || u.hash === "#") {
@@ -596,7 +608,6 @@ function NativeRoutingGuard() {
 
 /**
  * ✅ TapInspector Gate (robuste, ne dépend PAS de react-router)
- * ✅ FIX: ne s'active plus par défaut en natif DEV (uniquement si explicitement demandé)
  */
 function TapInspectorGate() {
   const [enabled, setEnabled] = useState(false);
@@ -607,7 +618,6 @@ function TapInspectorGate() {
     const readTap = () => {
       if (!isNative) return false;
 
-      // ✅ Actif seulement si explicitement demandé
       const sp = new URLSearchParams(window.location.search || "");
       const tapSearch = sp.get("tap") === "1" || sp.get("forceTap") === "1";
 
@@ -642,7 +652,6 @@ function TapInspectorGate() {
 
 const AppRoutes = () => (
   <>
-    {/* ✅ must be first */}
     <NativeTapFix />
     <NativeTapTracer />
 
@@ -840,16 +849,41 @@ const AppRoutes = () => (
 );
 
 /**
- * ✅ Router natif vs web (fix 404 Capacitor)
+ * ✅ Router natif vs web + FIX hash (#/#/)
+ * - Natif => HashRouter
+ * - Web => BrowserRouter
+ * - MAIS si l’URL web contient déjà "#/" (ou "#/#/"), on force HashRouter sinon rien ne route.
  */
 function RouterSwitch({ children }: { children: React.ReactNode }) {
   const isNative = isNativeRuntime();
+
+  const hasHashRoute = (() => {
+    try {
+      const h = window.location.hash || "";
+      return h.startsWith("#/") || h.startsWith("#/#/");
+    } catch {
+      return false;
+    }
+  })();
+
+  // ✅ Fix double hash en web aussi
+  useEffect(() => {
+    try {
+      const u = new URL(window.location.href);
+      if ((u.hash || "").startsWith("#/#/")) {
+        u.hash = u.hash.replace("#/#/", "#/");
+        window.history.replaceState({}, "", u.toString());
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     const html = document.documentElement;
     const body = document.body;
 
     html.setAttribute("data-ui-native", isNative ? "true" : "false");
+
+    // Les resets UI ne doivent s’appliquer qu’en natif
     if (!isNative) return;
 
     html.setAttribute("data-ui-mode", "mobile");
@@ -860,7 +894,6 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
 
       const vp = document.getElementById("ui-desktop-viewport") as HTMLElement | null;
       if (vp) {
-        // ✅ En natif : on neutralise totalement ce wrapper
         vp.style.pointerEvents = "none";
         vp.style.display = "none";
         vp.style.visibility = "hidden";
@@ -874,8 +907,7 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
       (body.style as any).zoom = "1";
 
       const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
-      if (meta)
-        meta.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
+      if (meta) meta.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
     };
 
     hardReset();
@@ -894,10 +926,12 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
   }, [isNative]);
 
   if (import.meta.env.DEV) {
-    console.info(`[RouterSwitch] isNative=${isNative}, href=${window.location?.href}`);
+    console.info(
+      `[RouterSwitch] isNative=${isNative}, hasHashRoute=${hasHashRoute}, href=${window.location?.href}`
+    );
   }
 
-  const Router = isNative ? HashRouter : BrowserRouter;
+  const Router = isNative || hasHashRoute ? HashRouter : BrowserRouter;
   return <Router>{children}</Router>;
 }
 
