@@ -4,15 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  Routes,
-  Route,
-  useLocation,
-  useNavigate,
-  Navigate,
-  BrowserRouter,
-  HashRouter,
-} from "react-router-dom";
+import { Routes, Route, useLocation, useNavigate, Navigate, HashRouter } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Capacitor } from "@capacitor/core";
@@ -74,8 +66,7 @@ const ClientReviews = lazy(() => import("./pages/ClientReviews"));
 const ClientContactForm = lazy(() => import("./pages/ClientContactForm"));
 
 /**
- * ✅ Détection native ROBUSTE (sans faux positif localhost)
- * Natif = Capacitor isNativePlatform() OU URL capacitor/file.
+ * ✅ Détection native ROBUSTE
  */
 const isNativeRuntime = () => {
   try {
@@ -87,7 +78,6 @@ const isNativeRuntime = () => {
     if (p === "capacitor:" || p === "file:") return true;
   } catch {}
 
-  // ✅ (optionnel) fallback plateforme Capacitor si dispo
   try {
     const gp = (Capacitor as any)?.getPlatform?.();
     if (gp && gp !== "web") return true;
@@ -117,9 +107,38 @@ const useAppQueryClient = () =>
     []
   );
 
+/**
+ * ✅ Normalise le hash (corrige définitivement "#/#/..." -> "#/...")
+ * + assure un hash initial "#/" quand l'URL n'en a pas.
+ */
+function HashNormalizer() {
+  useEffect(() => {
+    try {
+      const u = new URL(window.location.href);
+      const h = u.hash || "";
+
+      // Fix double hash "#/#/xxx" => "#/xxx"
+      if (h.startsWith("#/#/")) {
+        u.hash = h.replace("#/#/", "#/");
+        window.history.replaceState({}, "", u.toString());
+        return;
+      }
+
+      // Si aucun hash, on force "#/" (HashRouter stable)
+      if (!h || h === "#") {
+        u.hash = "#/";
+        window.history.replaceState({}, "", u.toString());
+      }
+    } catch {}
+  }, []);
+
+  return null;
+}
+
 function ScrollManager() {
   const location = useLocation();
 
+  // En HashRouter: location.hash est réservé aux ancres internes (ex: "#section")
   useEffect(() => {
     const hash = location.hash?.replace("#", "");
     if (!hash) return;
@@ -174,7 +193,8 @@ function NativeTapFix() {
         }
 
         const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
-        if (meta) meta.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
+        if (meta)
+          meta.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
 
         (body.style as any).zoom = "1";
       } catch {}
@@ -219,6 +239,7 @@ function NativeTapTracer() {
         const sp = new URLSearchParams(window.location.search || "");
         if (sp.get("traceTap") === "1") return true;
 
+        // support query dans le hash
         const hash = window.location.hash || "";
         const q = hash.includes("?") ? hash.split("?")[1] : "";
         const hp = new URLSearchParams(q);
@@ -276,27 +297,7 @@ function NativeTapTracer() {
         }
       } catch {}
 
-      console.log(
-        "[traceTap] point",
-        { x, y },
-        "top=",
-        describeEl(top),
-        "stack=",
-        stack.map(describeEl)
-      );
-
-      if (top instanceof HTMLElement) {
-        const cs = window.getComputedStyle(top);
-        console.log("[traceTap] top computed", {
-          pointerEvents: cs.pointerEvents,
-          position: cs.position,
-          zIndex: cs.zIndex,
-          opacity: cs.opacity,
-          display: cs.display,
-          visibility: cs.visibility,
-          background: cs.backgroundColor,
-        });
-      }
+      console.log("[traceTap] point", { x, y }, "top=", describeEl(top), "stack=", stack.map(describeEl));
     };
 
     const onPointerDown = (e: PointerEvent) => logAt(e.clientX, e.clientY);
@@ -310,9 +311,7 @@ function NativeTapTracer() {
     document.addEventListener("click", onClick, true);
     document.addEventListener("touchstart", onTouchStart, true);
 
-    console.warn(
-      "[traceTap] ENABLED (native). Disable by removing ?traceTap=1 or localStorage.removeItem('traceTap')."
-    );
+    console.warn("[traceTap] ENABLED (native). Disable via ?traceTap=1 or localStorage.removeItem('traceTap').");
 
     return () => {
       document.removeEventListener("pointerdown", onPointerDown, true);
@@ -462,7 +461,8 @@ function UiDebugBadge() {
 }
 
 /**
- * ✅ Intercepteur global SAFE (Natif uniquement)
+ * ✅ Intercepteur global (Natif uniquement)
+ * (sur web, HashRouter gère déjà très bien les liens)
  */
 function GlobalLinkInterceptor() {
   const navigate = useNavigate();
@@ -491,9 +491,8 @@ function GlobalLinkInterceptor() {
     };
 
     const normalizeHref = (href: string) => {
-      // ✅ corrige aussi le double hash qui arrive parfois
       if (href.startsWith("#/#/")) return href.replace("#/#/", "#/");
-      if (href.startsWith("#/")) return href.slice(1);
+      if (href.startsWith("#/")) return href.slice(1); // "#/login" -> "/login"
       return href;
     };
 
@@ -536,27 +535,14 @@ function NativeRoutingGuard() {
     try {
       const u = new URL(window.location.href);
 
-      // ✅ Fix double hash: #/#/... -> #/...
       if ((u.hash || "").startsWith("#/#/")) {
         u.hash = u.hash.replace("#/#/", "#/");
         window.history.replaceState({}, "", u.toString());
       }
 
-      const hasHashRoute = (u.hash || "").startsWith("#/");
-
       if (!u.hash || u.hash === "#") {
         u.hash = "#/";
         window.history.replaceState({}, "", u.toString());
-      }
-
-      if (!hasHashRoute) {
-        const path = (u.pathname || "/").replace(/\/+$/, "") || "/";
-        if (path !== "/") {
-          u.hash = `#${path}`;
-          u.pathname = "/";
-          window.history.replaceState({}, "", u.toString());
-          navigate(path, { replace: true });
-        }
       }
     } catch {}
 
@@ -607,7 +593,7 @@ function NativeRoutingGuard() {
 }
 
 /**
- * ✅ TapInspector Gate (robuste, ne dépend PAS de react-router)
+ * ✅ TapInspector Gate
  */
 function TapInspectorGate() {
   const [enabled, setEnabled] = useState(false);
@@ -655,6 +641,7 @@ const AppRoutes = () => (
     <NativeTapFix />
     <NativeTapTracer />
 
+    <HashNormalizer />
     <ScrollManager />
     <AuthAuditLogger />
     <UiDebugBadge />
@@ -702,30 +689,15 @@ const AppRoutes = () => (
         <Route path="/creation-profil" element={<Navigate to="/register" replace />} />
         <Route path="/creer-mon-profil" element={<Navigate to="/register" replace />} />
 
-        <Route
-          path="/forfaits/inscription-ouvrier"
-          element={<Navigate to="/inscription-ouvrier" replace />}
-        />
-        <Route
-          path="/forfaits/inscription-ouvrier/*"
-          element={<Navigate to="/inscription-ouvrier" replace />}
-        />
+        <Route path="/forfaits/inscription-ouvrier" element={<Navigate to="/inscription-ouvrier" replace />} />
+        <Route path="/forfaits/inscription-ouvrier/*" element={<Navigate to="/inscription-ouvrier" replace />} />
 
         <Route path="/devenir-prestataire" element={<InscriptionOuvrier />} />
-        <Route
-          path="/devenir-prestataire/*"
-          element={<Navigate to="/inscription-ouvrier" replace />}
-        />
-        <Route
-          path="/forfaits/devenir-prestataire"
-          element={<Navigate to="/inscription-ouvrier" replace />}
-        />
+        <Route path="/devenir-prestataire/*" element={<Navigate to="/inscription-ouvrier" replace />} />
+        <Route path="/forfaits/devenir-prestataire" element={<Navigate to="/inscription-ouvrier" replace />} />
 
         <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
-        <Route
-          path="/inscription-ouvrier/*"
-          element={<Navigate to="/inscription-ouvrier" replace />}
-        />
+        <Route path="/inscription-ouvrier/*" element={<Navigate to="/inscription-ouvrier" replace />} />
 
         <Route
           path="/ouvrier/:id"
@@ -849,90 +821,11 @@ const AppRoutes = () => (
 );
 
 /**
- * ✅ Router natif vs web + FIX hash (#/#/)
- * - Natif => HashRouter
- * - Web => BrowserRouter
- * - MAIS si l’URL web contient déjà "#/" (ou "#/#/"), on force HashRouter sinon rien ne route.
+ * ✅ Router unique et stable: HashRouter partout
+ * => Les clics "Se connecter" / "Devenir Prestataire" routent toujours correctement.
  */
 function RouterSwitch({ children }: { children: React.ReactNode }) {
-  const isNative = isNativeRuntime();
-
-  const hasHashRoute = (() => {
-    try {
-      const h = window.location.hash || "";
-      return h.startsWith("#/") || h.startsWith("#/#/");
-    } catch {
-      return false;
-    }
-  })();
-
-  // ✅ Fix double hash en web aussi
-  useEffect(() => {
-    try {
-      const u = new URL(window.location.href);
-      if ((u.hash || "").startsWith("#/#/")) {
-        u.hash = u.hash.replace("#/#/", "#/");
-        window.history.replaceState({}, "", u.toString());
-      }
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    const html = document.documentElement;
-    const body = document.body;
-
-    html.setAttribute("data-ui-native", isNative ? "true" : "false");
-
-    // Les resets UI ne doivent s’appliquer qu’en natif
-    if (!isNative) return;
-
-    html.setAttribute("data-ui-mode", "mobile");
-
-    const hardReset = () => {
-      html.style.setProperty("--ui-scale", "1");
-      html.style.setProperty("--ui-desktop-width", "100%");
-
-      const vp = document.getElementById("ui-desktop-viewport") as HTMLElement | null;
-      if (vp) {
-        vp.style.pointerEvents = "none";
-        vp.style.display = "none";
-        vp.style.visibility = "hidden";
-        vp.style.transform = "none";
-        vp.style.filter = "none";
-        (vp.style as any).backdropFilter = "none";
-        vp.style.width = "0px";
-        vp.style.maxWidth = "0px";
-      }
-
-      (body.style as any).zoom = "1";
-
-      const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
-      if (meta) meta.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
-    };
-
-    hardReset();
-    const t1 = window.setTimeout(hardReset, 250);
-    const t2 = window.setTimeout(hardReset, 900);
-
-    window.addEventListener("resize", hardReset);
-    window.visualViewport?.addEventListener?.("resize", hardReset);
-
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-      window.removeEventListener("resize", hardReset);
-      window.visualViewport?.removeEventListener?.("resize", hardReset);
-    };
-  }, [isNative]);
-
-  if (import.meta.env.DEV) {
-    console.info(
-      `[RouterSwitch] isNative=${isNative}, hasHashRoute=${hasHashRoute}, href=${window.location?.href}`
-    );
-  }
-
-  const Router = isNative || hasHashRoute ? HashRouter : BrowserRouter;
-  return <Router>{children}</Router>;
+  return <HashRouter>{children}</HashRouter>;
 }
 
 const App = () => {
