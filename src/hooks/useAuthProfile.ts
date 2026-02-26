@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import type { User } from "@supabase/supabase-js";
+import type { Session, User } from "@supabase/supabase-js";
 
 type UserRole = "user" | "admin" | "worker";
 
@@ -11,81 +11,73 @@ interface OpUserProfile {
   role: UserRole;
 }
 
+async function fetchProfile(userId: string): Promise<OpUserProfile | null> {
+  const { data, error } = await supabase
+    .from("op_users")
+    .select("id, full_name, phone, role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as OpUserProfile) ?? null;
+}
+
 export function useAuthProfile() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<OpUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Chargement initial
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      const { data, error } = await supabase.auth.getUser();
+    let mounted = true;
 
-      if (error) {
-        console.error("auth.getUser error", error);
-        setUser(null);
+    const applySession = async (session: Session | null) => {
+      const u = session?.user ?? null;
+      if (!mounted) return;
+
+      setUser(u);
+
+      if (!u) {
         setProfile(null);
         setLoading(false);
         return;
       }
 
-      const currentUser = data.user ?? null;
-      setUser(currentUser);
-
-      if (currentUser) {
-        const { data: rows, error: profileError } = await supabase
-          .from("op_users")
-          .select("id, full_name, phone, role")
-          .eq("id", currentUser.id)
-          .limit(1);
-
-        if (profileError) {
-          console.error("load profile error", profileError);
-          setProfile(null);
-        } else {
-          setProfile((rows?.[0] as OpUserProfile) ?? null);
-        }
-      } else {
+      try {
+        const p = await fetchProfile(u.id);
+        if (!mounted) return;
+        setProfile(p);
+      } catch (e) {
+        // non bloquant
+        console.warn("[useAuthProfile] profile fetch error:", e);
+        if (!mounted) return;
         setProfile(null);
+      } finally {
+        if (mounted) setLoading(false);
       }
-
-      setLoading(false);
     };
 
-    load();
+    (async () => {
+      setLoading(true);
 
-    // Écoute des changements de session
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        const sUser = session?.user ?? null;
-        setUser(sUser);
+      // ✅ getSession ne throw pas AuthSessionMissingError
+      const { data } = await supabase.auth.getSession();
+      await applySession(data.session ?? null);
+    })();
 
-        if (!sUser) {
-          setProfile(null);
-          return;
-        }
-
-        (async () => {
-          const { data: rows } = await supabase
-            .from("op_users")
-            .select("id, full_name, phone, role")
-            .eq("id", sUser.id)
-            .limit(1);
-
-          setProfile((rows?.[0] as OpUserProfile) ?? null);
-        })();
-      }
-    );
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setLoading(true);
+      await applySession(session ?? null);
+    });
 
     return () => {
+      mounted = false;
       listener.subscription.unsubscribe();
     };
   }, []);
 
-  const isAdmin = !!profile && profile.role === "admin";
-  const isWorker = !!profile && profile.role === "worker";
-  const isClient = !!profile && profile.role === "user";
+  const isAdmin = profile?.role === "admin";
+  const isWorker = profile?.role === "worker";
+  const isClient = profile?.role === "user";
 
   return { user, profile, isAdmin, isWorker, isClient, loading };
 }
