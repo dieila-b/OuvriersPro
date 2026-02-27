@@ -19,39 +19,29 @@ type SearchPayload = {
 };
 
 /**
- * ✅ Détection native robuste (Capacitor / WebView)
+ * ✅ Native = vrai Capacitor (protocol capacitor/file, ou Capacitor platform != web)
+ * ❌ IMPORTANT: on NE considère JAMAIS "localhost" comme natif sur le Web.
  */
 function isNativeRuntime(): boolean {
-  const wCap = (() => {
-    try {
-      return (window as any)?.Capacitor ?? null;
-    } catch {
-      return null;
-    }
-  })();
-
-  try {
-    if (wCap?.isNativePlatform?.()) return true;
-  } catch {}
-
   try {
     const p = window.location?.protocol ?? "";
     if (p === "capacitor:" || p === "file:") return true;
   } catch {}
 
-  // Cas courant Android Capacitor local server
   try {
-    const { protocol, hostname } = window.location;
-    if (wCap && protocol === "http:" && hostname === "localhost") return true;
+    const cap = (window as any)?.Capacitor;
+    if (cap?.isNativePlatform?.()) return true;
+    const gp = cap?.getPlatform?.();
+    if (gp && gp !== "web") return true;
   } catch {}
 
   return false;
 }
 
 /**
- * ✅ Fix “tap qui ne clique pas” sur Android WebView:
- * - Sur certains devices, des overlays/filters/backdrop/scale peuvent empêcher les click React.
- * - On convertit touchend -> click uniquement en natif, avec anti double-fire.
+ * ✅ Fix “tap qui ne clique pas” sur Android WebView (UNIQUEMENT NATIF)
+ * - convertit touchend -> click sur élément cliquable
+ * - anti double-fire
  */
 function useNativeTapToClickFix(enabled: boolean) {
   useEffect(() => {
@@ -67,7 +57,7 @@ function useNativeTapToClickFix(enabled: boolean) {
       if (tag === "a" && (el as HTMLAnchorElement).href) return true;
       if (el.getAttribute("role") === "button") return true;
       if (el.hasAttribute("data-clickable")) return true;
-      // certains composants shadcn/radix
+      // Radix/shadcn items
       if (el.getAttribute("data-radix-collection-item") != null) return true;
       return false;
     };
@@ -82,14 +72,10 @@ function useNativeTapToClickFix(enabled: boolean) {
     };
 
     const shouldIgnoreTarget = (el: HTMLElement) => {
-      // ignore input typing / textarea
       const tag = el.tagName.toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select") return true;
-
-      // ignore if disabled
       if ((el as any).disabled) return true;
       if (el.getAttribute("aria-disabled") === "true") return true;
-
       return false;
     };
 
@@ -102,10 +88,8 @@ function useNativeTapToClickFix(enabled: boolean) {
 
       const clickable = closestClickable(target);
       if (!clickable) return;
-
       if (shouldIgnoreTarget(clickable)) return;
 
-      // ✅ dispatch click synthétique (bubbles) — sans preventDefault global
       try {
         lastSyntheticAt = now;
         clickable.dispatchEvent(
@@ -120,12 +104,8 @@ function useNativeTapToClickFix(enabled: boolean) {
       }
     };
 
-    // capture = plus fiable en WebView
     document.addEventListener("touchend", onTouchEndCapture, true);
-
-    return () => {
-      document.removeEventListener("touchend", onTouchEndCapture, true);
-    };
+    return () => document.removeEventListener("touchend", onTouchEndCapture, true);
   }, [enabled]);
 }
 
@@ -137,23 +117,27 @@ const Index = () => {
   const isSearchRoute = location.pathname === "/search" || location.pathname === "/rechercher";
   const isHomeRoute = location.pathname === "/";
 
-  // ✅ Fix tap->click natif (IMPORTANT)
+  // ✅ Tap->click: seulement vrai natif
   useNativeTapToClickFix(true);
 
   // ✅ Pour masquer la section abonnement si ouvrier connecté
   const [workerCheckLoading, setWorkerCheckLoading] = useState(true);
   const [isWorker, setIsWorker] = useState(false);
 
-  // ✅ Détecter si l'utilisateur connecté est un ouvrier (table op_ouvriers)
+  /**
+   * ✅ Détecter si l'utilisateur connecté est un ouvrier (table op_ouvriers)
+   * - on utilise getSession() => pas de AuthSessionMissingError
+   */
   useEffect(() => {
     let mounted = true;
 
     const checkWorker = async () => {
+      if (!mounted) return;
       setWorkerCheckLoading(true);
 
       try {
-        const { data } = await supabase.auth.getUser();
-        const user = data?.user;
+        const { data } = await supabase.auth.getSession();
+        const user = data.session?.user ?? null;
 
         if (!mounted) return;
 
@@ -171,11 +155,15 @@ const Index = () => {
         if (!mounted) return;
 
         if (error) {
-          console.warn("[Index] checkWorker error:", error);
+          console.warn("[Index] checkWorker query error:", error);
           setIsWorker(false);
         } else {
           setIsWorker(!!workerRow);
         }
+      } catch (e) {
+        if (!mounted) return;
+        console.warn("[Index] checkWorker exception:", e);
+        setIsWorker(false);
       } finally {
         if (mounted) setWorkerCheckLoading(false);
       }
@@ -183,7 +171,6 @@ const Index = () => {
 
     checkWorker();
 
-    // ✅ Si login/logout, on re-check automatiquement
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
       checkWorker();
     });
@@ -223,11 +210,10 @@ const Index = () => {
     );
   }, [searchPayload]);
 
-  // ✅ Mesure réelle des overlays en haut (header + barres sticky/fixed)
+  // ✅ Mesure des overlays en haut (header + barres sticky/fixed)
   const getTopOverlayOffset = () => {
     const samplesX = [20, Math.floor(window.innerWidth / 2), window.innerWidth - 20];
     const yProbe = 6;
-
     let maxBottom = 0;
 
     const consider = (el: Element | null) => {
@@ -244,14 +230,11 @@ const Index = () => {
             maxBottom = Math.max(maxBottom, r.bottom);
           }
         }
-
         cur = cur.parentElement;
       }
     };
 
-    for (const x of samplesX) {
-      consider(document.elementFromPoint(x, yProbe));
-    }
+    for (const x of samplesX) consider(document.elementFromPoint(x, yProbe));
 
     const headerEl = document.querySelector("header") as HTMLElement | null;
     if (headerEl) {
@@ -262,7 +245,7 @@ const Index = () => {
     return Math.max(0, Math.round(maxBottom));
   };
 
-  // ✅ 0) Si on est sur /search ou /rechercher : on redirige vers l’accueil + #search
+  // ✅ 0) /search ou /rechercher -> accueil + #search
   useEffect(() => {
     if (!isSearchRoute) return;
     if (redirectedRef.current) return;
@@ -281,18 +264,14 @@ const Index = () => {
     navigate(target, { replace: true });
   }, [isSearchRoute, hasAnySearchParam, searchPayload, location.search, navigate]);
 
-  // ✅ 1) Quand on arrive sur l’accueil avec #search + params : on notifie WorkerSearchSection
+  // ✅ 1) Accueil + #search + params : notifie WorkerSearchSection
   useEffect(() => {
     if (!isHomeRoute) return;
     if (location.hash !== "#search") return;
     if (!hasAnySearchParam) return;
 
     try {
-      window.dispatchEvent(
-        new CustomEvent("op:search", {
-          detail: searchPayload,
-        })
-      );
+      window.dispatchEvent(new CustomEvent("op:search", { detail: searchPayload }));
     } catch {
       // ignore
     }
@@ -349,7 +328,6 @@ const Index = () => {
     >
       <Header />
 
-      {/* ✅ Important : main en “relative” pour éviter des stacking contexts bizarres */}
       <main className="w-full flex-1 min-w-0 relative">
         <HeroSection />
         <FeaturesSection />
@@ -358,10 +336,6 @@ const Index = () => {
           <WorkerSearchSection />
         </div>
 
-        {/* ✅ IMPORTANT :
-            - si ouvrier connecté => on masque la section "Rejoignez ProxiServices"
-            - sinon on l'affiche normalement
-        */}
         {!workerCheckLoading && !isWorker && (
           <div id="subscription" className="w-full">
             <SubscriptionSection />
