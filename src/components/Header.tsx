@@ -12,31 +12,34 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
-import { useAuthProfile } from "@/hooks/useAuthProfile";
 import ContactModal from "@/components/contact/ContactModal";
-
 import ProxiLogo from "@/assets/logo-proxiservices.png";
 
-// Cache-busting : change à chaque build (Vite)
+type Role = "user" | "client" | "worker" | "admin";
+
 const BUILD_TAG =
   // @ts-ignore
-  (import.meta as any).env?.VITE_BUILD_TAG ||
-  String(Date.now());
+  (import.meta as any).env?.VITE_BUILD_TAG || String(Date.now());
+
+const normalizeRole = (r: any): Role => {
+  const v = String(r ?? "").toLowerCase().trim();
+  if (v === "admin") return "admin";
+  if (v === "worker" || v === "ouvrier" || v === "provider" || v === "prestataire") return "worker";
+  if (v === "client" || v === "customer") return "client";
+  return "user";
+};
 
 const Header = () => {
   const { t, language, setLanguage } = useLanguage();
-
-  // ⚠️ On garde ton hook pour isWorker, mais on n'utilise plus user comme "source de vérité"
-  const { isWorker } = useAuthProfile();
-
-  // ✅ Source de vérité auth: session Supabase
-  const [hasSession, setHasSession] = useState(false);
-
   const [mobileOpen, setMobileOpen] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
+
+  // ✅ source de vérité
+  const [hasSession, setHasSession] = useState(false);
+  const [role, setRole] = useState<Role>("user");
 
   const cms = (key: string, fallbackFr: string, fallbackEn: string) => {
     const v = t(key);
@@ -44,26 +47,51 @@ const Header = () => {
     return v;
   };
 
-  // ✅ Sync session
+  // ✅ Sync session + rôle depuis op_users
   useEffect(() => {
     let mounted = true;
 
     const refresh = async () => {
       try {
         const { data } = await supabase.auth.getSession();
+        const u = data?.session?.user ?? null;
         if (!mounted) return;
-        setHasSession(!!data?.session?.user);
+
+        setHasSession(!!u?.id);
+
+        if (!u?.id) {
+          setRole("user");
+          return;
+        }
+
+        // rôle metadata fallback
+        const metaRole = normalizeRole(u.user_metadata?.role ?? u.app_metadata?.role ?? null);
+
+        const { data: row, error } = await supabase
+          .from("op_users")
+          .select("role")
+          .eq("id", u.id)
+          .maybeSingle();
+
+        if (!mounted) return;
+
+        if (error) {
+          console.warn("[Header] op_users role fetch error:", error);
+          setRole(metaRole);
+        } else {
+          setRole(normalizeRole(row?.role ?? metaRole));
+        }
       } catch {
         if (!mounted) return;
         setHasSession(false);
+        setRole("user");
       }
     };
 
     refresh();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
-      if (!mounted) return;
-      setHasSession(!!session?.user);
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      refresh();
     });
 
     return () => {
@@ -95,12 +123,12 @@ const Header = () => {
   }, [hasSession, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const accountPath = useMemo(() => {
-    // ✅ si pas de session => login DIRECT
     if (!hasSession) return "/login";
-    // ✅ si session => dashboard selon rôle
-    if (isWorker) return "/espace-ouvrier";
+    if (role === "admin") return "/admin";
+    if (role === "worker") return "/espace-ouvrier";
+    // client + user
     return "/espace-client";
-  }, [hasSession, isWorker]);
+  }, [hasSession, role]);
 
   const becomeProviderLabel = useMemo(() => {
     return cms("header.btn_become_provider", "Devenir Prestataire", "Become a Provider");
@@ -108,9 +136,6 @@ const Header = () => {
 
   const logoSrc = useMemo(() => `${ProxiLogo}?v=${encodeURIComponent(BUILD_TAG)}`, []);
 
-  /**
-   * ✅ Navigation fiable partout (Web + Android WebView)
-   */
   const go = useCallback(
     (to: string) => {
       setMobileOpen(false);
@@ -131,7 +156,6 @@ const Header = () => {
               pointerEvents: mobileOpen ? "auto" : "none",
             }}
           >
-            {/* Backdrop */}
             <div
               className="absolute inset-0 bg-black/35"
               style={{ pointerEvents: mobileOpen ? "auto" : "none" }}
@@ -139,7 +163,6 @@ const Header = () => {
               onClick={() => setMobileOpen(false)}
             />
 
-            {/* Panel */}
             <div
               className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg"
               style={{ pointerEvents: mobileOpen ? "auto" : "none" }}
@@ -197,7 +220,6 @@ const Header = () => {
         <div className="bg-white border-b border-gray-200 overflow-hidden">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-16 sm:h-[72px] min-w-0 flex items-center justify-between gap-3">
-              {/* Logo */}
               <button
                 type="button"
                 onClick={() => go("/")}
@@ -212,13 +234,7 @@ const Header = () => {
                   <img
                     src={logoSrc}
                     alt={cms("brand.name", "ProxiServices", "ProxiServices")}
-                    className="
-                      h-12 sm:h-14
-                      w-auto
-                      max-w-[280px] sm:max-w-[340px] md:max-w-[420px]
-                      object-contain
-                      select-none
-                    "
+                    className="h-12 sm:h-14 w-auto max-w-[280px] sm:max-w-[340px] md:max-w-[420px] object-contain select-none"
                     loading="eager"
                     decoding="async"
                     // @ts-ignore
