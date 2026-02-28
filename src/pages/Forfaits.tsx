@@ -1,7 +1,6 @@
 // src/pages/Forfaits.tsx
-import React from "react";
+import React, { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-// Capacitor import removed — navigation uses React Router only
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,26 +10,103 @@ import { ArrowRight, CheckCircle2, Clock, ShieldCheck } from "lucide-react";
 
 type PlanCode = "FREE" | "MONTHLY" | "YEARLY";
 
+function isNativeRuntime(): boolean {
+  try {
+    const wCap = (window as any)?.Capacitor;
+    if (wCap?.isNativePlatform?.()) return true;
+  } catch {}
+
+  try {
+    const p = window.location?.protocol ?? "";
+    if (p === "capacitor:" || p === "file:") return true;
+  } catch {}
+
+  // cas Android Capacitor local server
+  try {
+    const wCap = (window as any)?.Capacitor;
+    const { protocol, hostname } = window.location;
+    if (wCap && protocol === "http:" && hostname === "localhost") return true;
+  } catch {}
+
+  return false;
+}
+
+/**
+ * HashRouter-friendly path builder
+ * HashRouter attend "#/route?x=1"
+ */
+function toHashPath(pathnameWithQuery: string) {
+  const p = pathnameWithQuery.startsWith("/") ? pathnameWithQuery : `/${pathnameWithQuery}`;
+  return `#${p}`;
+}
 
 const Forfaits: React.FC = () => {
   const navigate = useNavigate();
+  const isNative = useMemo(() => isNativeRuntime(), []);
+
   /**
-   * ✅ Navigation SPA uniquement via React Router (zéro 404, zéro reload)
+   * ✅ Navigation ultra fiable sur Android WebView:
+   * - En natif: on force d'abord window.location.hash (HashRouter)
+   * - Fallback: navigate()
+   * - Self-heal: si détourné, on refait un hash force
    */
-  const go = (plan: PlanCode) => {
-    const target = `/inscription-ouvrier?plan=${encodeURIComponent(plan)}`;
-    navigate(target);
-    requestAnimationFrame(() => {
-      try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
-    });
-  };
+  const go = useCallback(
+    (plan: PlanCode) => {
+      const targetPath = `/inscription-ouvrier?plan=${encodeURIComponent(plan)}`;
+
+      // Scroll top (best effort)
+      const scrollTop = () => {
+        try {
+          window.scrollTo({ top: 0, behavior: "auto" });
+        } catch {}
+      };
+
+      // 1) NATIF: hash-first (plus stable que navigate dans certains WebView)
+      if (isNative) {
+        try {
+          const desiredHash = toHashPath(targetPath);
+
+          // Set hash directly => HashRouter route immédiatement
+          window.location.hash = desiredHash;
+
+          // fallback navigate (au cas où)
+          requestAnimationFrame(() => {
+            try {
+              navigate(targetPath);
+            } catch {}
+          });
+
+          // self-heal si un autre click détourne la nav
+          window.setTimeout(() => {
+            try {
+              const nowHash = window.location.hash || "";
+              // on attend "#/inscription-ouvrier?plan=..."
+              if (!nowHash.includes("/inscription-ouvrier")) {
+                window.location.hash = desiredHash;
+              }
+              scrollTop();
+            } catch {}
+          }, 450);
+
+          scrollTop();
+          return;
+        } catch {
+          // si hash fail => on tombe sur navigate
+        }
+      }
+
+      // 2) WEB/DESKTOP: navigate normal
+      navigate(targetPath);
+      requestAnimationFrame(scrollTop);
+    },
+    [navigate, isNative]
+  );
 
   /**
    * ✅ Masquage provisoire des forfaits payants sur le site
    */
   const SHOW_MONTHLY = false;
   const SHOW_YEARLY = false;
-
   const onlyFree = !SHOW_MONTHLY && !SHOW_YEARLY;
 
   return (
@@ -132,10 +208,11 @@ const Forfaits: React.FC = () => {
                 </ul>
               </div>
 
-              {/* ✅ CTA (zéro 404) */}
+              {/* ✅ CTA ultra stable */}
               <Button
                 type="button"
                 className="w-full h-12 rounded-xl bg-gray-900 hover:bg-gray-950 text-white flex items-center justify-center gap-2"
+                style={{ touchAction: "manipulation" as any }}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -167,7 +244,12 @@ const Forfaits: React.FC = () => {
                 <Button
                   type="button"
                   className="w-full bg-pro-blue hover:bg-blue-700"
-                  onClick={() => go("MONTHLY")}
+                  style={{ touchAction: "manipulation" as any }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    go("MONTHLY");
+                  }}
                 >
                   Choisir ce plan
                 </Button>
@@ -191,7 +273,12 @@ const Forfaits: React.FC = () => {
                 <Button
                   type="button"
                   className="w-full bg-pro-blue hover:bg-blue-700"
-                  onClick={() => go("YEARLY")}
+                  style={{ touchAction: "manipulation" as any }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    go("YEARLY");
+                  }}
                 >
                   Choisir ce plan
                 </Button>
