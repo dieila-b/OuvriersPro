@@ -1,7 +1,9 @@
 // src/pages/MonCompte.tsx
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useMemo, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuthProfile } from "@/hooks/useAuthProfile";
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,49 +17,96 @@ import {
 
 const MonCompte: React.FC = () => {
   const { language } = useLanguage();
+  const navigate = useNavigate();
+  const { user, profile, isAdmin, isWorker, isClient, loading } = useAuthProfile();
 
-  const text = {
-    title: language === "fr" ? "Mon compte" : "My account",
-    subtitle:
-      language === "fr"
-        ? "Connectez-vous ou créez un compte pour accéder aux profils des prestataires et gérer vos demandes."
-        : "Log in or create an account to access provider profiles and manage your requests.",
-    alreadyHaveAccount:
-      language === "fr"
-        ? "Vous avez déjà un compte ?"
-        : "Already have an account?",
-    loginHint:
-      language === "fr"
-        ? "Que vous soyez prestataire, particulier ou entreprise, utilisez le même bouton pour vous connecter."
-        : "Whether you are a provider, individual or company, use the same button to log in.",
-    loginBtn: language === "fr" ? "Se connecter" : "Log in",
-    orLabel:
-      language === "fr"
-        ? "— ou créer un nouveau compte —"
-        : "— or create a new account —",
-    newAccountTitle:
-      language === "fr" ? "Créer un nouveau compte" : "Create a new account",
+  // ✅ empêche les boucles / double redirect en dev (React strict mode)
+  const redirectedRef = useRef(false);
 
-    clientAccountTitle:
-      language === "fr"
-        ? "Compte client / prestataire"
-        : "Client / provider account",
-    clientAccountDesc:
-      language === "fr"
-        ? "Un seul compte pour tous : particuliers, entreprises et prestataires. Créez votre compte ProxiServices, puis choisissez votre usage : rechercher un service ou proposer vos prestations."
-        : "One account for everyone: individuals, companies and providers. Create your ProxiServices account, then choose how you use the platform: find a service or offer your services.",
-    createClientBtn:
-      language === "fr"
-        ? "Créer mon compte (client ou prestataire)"
-        : "Create my account (client or provider)",
+  // ✅ Si l'utilisateur est déjà connecté => rediriger vers son espace
+  useEffect(() => {
+    if (redirectedRef.current) return;
+    if (loading) return;
 
-    workerInfoTitle:
-      language === "fr" ? "Vous êtes prestataire ?" : "Are you a provider?",
-    workerInfoText:
-      language === "fr"
-        ? "Commencez par créer le même compte que les clients. Depuis votre espace, vous pourrez ensuite activer votre profil prestataire, choisir votre forfait et gagner en visibilité auprès des clients."
-        : "Start by creating the same account as clients. From your dashboard, you can then activate your provider profile, choose a plan and increase your visibility with clients.",
-  };
+    if (!user) return;
+
+    redirectedRef.current = true;
+
+    if (isAdmin) {
+      navigate("/admin", { replace: true });
+      return;
+    }
+    if (isWorker) {
+      navigate("/espace-ouvrier", { replace: true });
+      return;
+    }
+    // client = user
+    navigate("/espace-client", { replace: true });
+  }, [loading, user, isAdmin, isWorker, isClient, navigate]);
+
+  const text = useMemo(() => {
+    return {
+      title: language === "fr" ? "Mon compte" : "My account",
+      subtitle:
+        language === "fr"
+          ? "Connectez-vous ou créez un compte pour accéder aux profils des prestataires et gérer vos demandes."
+          : "Log in or create an account to access provider profiles and manage your requests.",
+      alreadyHaveAccount:
+        language === "fr" ? "Vous avez déjà un compte ?" : "Already have an account?",
+      loginHint:
+        language === "fr"
+          ? "Que vous soyez prestataire, particulier ou entreprise, utilisez le même bouton pour vous connecter."
+          : "Whether you are a provider, individual or company, use the same button to log in.",
+      loginBtn: language === "fr" ? "Se connecter" : "Log in",
+      orLabel:
+        language === "fr"
+          ? "— ou créer un nouveau compte —"
+          : "— or create a new account —",
+      newAccountTitle:
+        language === "fr" ? "Créer un nouveau compte" : "Create a new account",
+
+      clientAccountTitle:
+        language === "fr" ? "Compte client / prestataire" : "Client / provider account",
+      clientAccountDesc:
+        language === "fr"
+          ? "Un seul compte pour tous : particuliers, entreprises et prestataires. Créez votre compte ProxiServices, puis choisissez votre usage : rechercher un service ou proposer vos prestations."
+          : "One account for everyone: individuals, companies and providers. Create your ProxiServices account, then choose how you use the platform: find a service or offer your services.",
+      createClientBtn:
+        language === "fr"
+          ? "Créer mon compte (client ou prestataire)"
+          : "Create my account (client or provider)",
+
+      workerInfoTitle:
+        language === "fr" ? "Vous êtes prestataire ?" : "Are you a provider?",
+      workerInfoText:
+        language === "fr"
+          ? "Commencez par créer le même compte que les clients. Depuis votre espace, vous pourrez ensuite activer votre profil prestataire, choisir votre forfait et gagner en visibilité auprès des clients."
+          : "Start by creating the same account as clients. From your dashboard, you can then activate your provider profile, choose a plan and increase your visibility with clients.",
+    };
+  }, [language]);
+
+  // ✅ Pendant le chargement auth, on évite un flash de contenu
+  if (loading) {
+    return (
+      <div className="min-h-[55vh] w-full flex items-center justify-center bg-white">
+        <div className="text-sm text-slate-600">Chargement…</div>
+      </div>
+    );
+  }
+
+  // ✅ Si user connecté, on affiche un fallback léger (le temps du navigate replace)
+  if (user) {
+    return (
+      <div className="min-h-[55vh] w-full flex items-center justify-center bg-white">
+        <div className="text-sm text-slate-600">
+          {language === "fr" ? "Redirection…" : "Redirecting…"}
+          {profile?.role ? (
+            <span className="ml-2 text-slate-400">({profile.role})</span>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-slate-50 to-slate-100">
@@ -66,9 +115,7 @@ const MonCompte: React.FC = () => {
         <header className="mb-8">
           <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-xs font-medium text-slate-500 shadow-sm border border-slate-100 mb-3">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            {language === "fr"
-              ? "Espace sécurisé ProxiServices"
-              : "Secure ProxiServices space"}
+            {language === "fr" ? "Espace sécurisé ProxiServices" : "Secure ProxiServices space"}
           </div>
           <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
             {text.title}
@@ -125,9 +172,7 @@ const MonCompte: React.FC = () => {
             </div>
             <div className="hidden md:inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1 text-[11px] font-medium text-slate-500 border border-slate-100">
               <span className="h-1.5 w-1.5 rounded-full bg-pro-blue" />
-              {language === "fr"
-                ? "Étape 1 : création du compte"
-                : "Step 1: create your account"}
+              {language === "fr" ? "Étape 1 : création du compte" : "Step 1: create your account"}
             </div>
           </div>
 
@@ -162,9 +207,7 @@ const MonCompte: React.FC = () => {
                       <User className="w-3.5 h-3.5 text-pro-blue" />
                     </div>
                     <span className="text-[11px] font-semibold uppercase text-slate-600">
-                      {language === "fr"
-                        ? "Je cherche un service"
-                        : "I’m looking for a service"}
+                      {language === "fr" ? "Je cherche un service" : "I’m looking for a service"}
                     </span>
                   </div>
                   <ul className="space-y-1.5 text-xs text-slate-700">
@@ -178,18 +221,12 @@ const MonCompte: React.FC = () => {
                     </li>
                     <li className="flex items-start gap-1.5">
                       <CheckCircle2 className="mt-[2px] w-3.5 h-3.5 text-emerald-500" />
-                      <span>
-                        {language === "fr"
-                          ? "Suivi de vos demandes"
-                          : "Track your requests"}
-                      </span>
+                      <span>{language === "fr" ? "Suivi de vos demandes" : "Track your requests"}</span>
                     </li>
                     <li className="flex items-start gap-1.5">
                       <CheckCircle2 className="mt-[2px] w-3.5 h-3.5 text-emerald-500" />
                       <span>
-                        {language === "fr"
-                          ? "Historique de vos échanges"
-                          : "History of your conversations"}
+                        {language === "fr" ? "Historique de vos échanges" : "History of your conversations"}
                       </span>
                     </li>
                   </ul>
@@ -202,9 +239,7 @@ const MonCompte: React.FC = () => {
                       <HardHat className="w-3.5 h-3.5 text-amber-600" />
                     </div>
                     <span className="text-[11px] font-semibold uppercase text-slate-600">
-                      {language === "fr"
-                        ? "Je suis prestataire"
-                        : "I’m a provider"}
+                      {language === "fr" ? "Je suis prestataire" : "I’m a provider"}
                     </span>
                   </div>
                   <ul className="space-y-1.5 text-xs text-slate-700">
@@ -240,10 +275,7 @@ const MonCompte: React.FC = () => {
                 asChild
                 className="w-full bg-pro-blue hover:bg-pro-blue/95 rounded-full py-5 text-sm font-semibold shadow-md shadow-pro-blue/20 transition"
               >
-                <Link
-                  to="/register?type=client"
-                  className="flex items-center justify-center gap-2"
-                >
+                <Link to="/register?type=client" className="flex items-center justify-center gap-2">
                   {text.createClientBtn}
                   <ArrowRight className="w-4 h-4" />
                 </Link>
