@@ -9,21 +9,11 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Capacitor } from "@capacitor/core";
 
-// ✅ UI Mode global
 import { UiModeProvider, useUiModeCtx } from "@/contexts/UiModeContext";
-
-// ✅ TapInspector (debug taps)
 import TapInspector from "@/components/TapInspector";
-
-// Protection routes
 import PrivateRoute from "./components/PrivateRoute";
-
-// ✅ Layout admin
 import AdminLayout from "@/components/layout/AdminLayout";
 
-/**
- * ✅ Lazy pages
- */
 /**
  * ✅ Retry wrapper for lazy imports — handles stale chunk errors
  */
@@ -37,15 +27,13 @@ const lazyRetry = (factory: () => Promise<any>, retries = 2): ReturnType<typeof 
           console.warn(`[lazyRetry] Chunk load failed, retrying (${i + 1}/${retries})...`);
           await new Promise((r) => setTimeout(r, 500 * (i + 1)));
         } else {
-          // Last resort: force full page reload to get fresh asset manifest
           console.error("[lazyRetry] All retries failed, reloading page...", err);
           window.location.reload();
-          // Return a never-resolving promise to prevent rendering while reloading
           return new Promise(() => {});
         }
       }
     }
-    return factory(); // fallback (unreachable)
+    return factory();
   });
 
 const Index = lazyRetry(() => import("./pages/Index"));
@@ -89,30 +77,21 @@ const ClientFavoritesList = lazyRetry(() => import("./pages/ClientFavoritesList"
 const ClientReviews = lazyRetry(() => import("./pages/ClientReviews"));
 const ClientContactForm = lazyRetry(() => import("./pages/ClientContactForm"));
 
-/**
- * ✅ Détection native ROBUSTE
- */
 const isNativeRuntime = () => {
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
-
   try {
     const p = window.location?.protocol ?? "";
     if (p === "capacitor:" || p === "file:") return true;
   } catch {}
-
   try {
     const gp = (Capacitor as any)?.getPlatform?.();
     if (gp && gp !== "web") return true;
   } catch {}
-
   return false;
 };
 
-/**
- * ✅ QueryClient optimisé
- */
 const useAppQueryClient = () =>
   useMemo(
     () =>
@@ -132,37 +111,26 @@ const useAppQueryClient = () =>
   );
 
 /**
- * ✅ Normalise le hash (corrige définitivement "#/#/..." -> "#/...")
- * + assure un hash initial "#/" quand l'URL n'en a pas.
+ * ✅ Normalise uniquement "#/#/..." -> "#/..."
+ * (NE FORCE PAS "#/" automatiquement)
  */
 function HashNormalizer() {
   useEffect(() => {
     try {
       const u = new URL(window.location.href);
       const h = u.hash || "";
-
-      // Fix double hash "#/#/xxx" => "#/xxx"
       if (h.startsWith("#/#/")) {
         u.hash = h.replace("#/#/", "#/");
-        window.history.replaceState({}, "", u.toString());
-        return;
-      }
-
-      // Si aucun hash, on force "#/" (HashRouter stable)
-      if (!h || h === "#") {
-        u.hash = "#/";
         window.history.replaceState({}, "", u.toString());
       }
     } catch {}
   }, []);
-
   return null;
 }
 
 function ScrollManager() {
   const location = useLocation();
 
-  // En HashRouter: location.hash est réservé aux ancres internes (ex: "#section")
   useEffect(() => {
     const hash = location.hash?.replace("#", "");
     if (!hash) return;
@@ -184,9 +152,6 @@ function ScrollManager() {
   return null;
 }
 
-/**
- * ✅ NativeTapFix (natif uniquement)
- */
 function NativeTapFix() {
   const isNative = isNativeRuntime();
 
@@ -217,8 +182,7 @@ function NativeTapFix() {
         }
 
         const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
-        if (meta)
-          meta.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
+        if (meta) meta.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
 
         (body.style as any).zoom = "1";
       } catch {}
@@ -251,9 +215,6 @@ function NativeTapFix() {
   return null;
 }
 
-/**
- * ✅ Plan B — Traceur de taps/clics (NATIF uniquement, activable via ?traceTap=1)
- */
 function NativeTapTracer() {
   useEffect(() => {
     if (!isNativeRuntime()) return;
@@ -262,13 +223,10 @@ function NativeTapTracer() {
       try {
         const sp = new URLSearchParams(window.location.search || "");
         if (sp.get("traceTap") === "1") return true;
-
-        // support query dans le hash
         const hash = window.location.hash || "";
         const q = hash.includes("?") ? hash.split("?")[1] : "";
         const hp = new URLSearchParams(q);
         if (hp.get("traceTap") === "1") return true;
-
         return localStorage.getItem("traceTap") === "1";
       } catch {
         return false;
@@ -306,21 +264,8 @@ function NativeTapTracer() {
     const logAt = (x: number, y: number) => {
       const top = document.elementFromPoint(x, y);
       const stack = document.elementsFromPoint(x, y).slice(0, 10);
-
       marker.style.left = `${x}px`;
       marker.style.top = `${y}px`;
-
-      try {
-        const ht = top as HTMLElement | null;
-        if (ht) {
-          const prev = ht.style.outline;
-          ht.style.outline = "3px solid rgba(255,0,0,0.8)";
-          window.setTimeout(() => {
-            ht.style.outline = prev;
-          }, 150);
-        }
-      } catch {}
-
       console.log("[traceTap] point", { x, y }, "top=", describeEl(top), "stack=", stack.map(describeEl));
     };
 
@@ -335,8 +280,6 @@ function NativeTapTracer() {
     document.addEventListener("click", onClick, true);
     document.addEventListener("touchstart", onTouchStart, true);
 
-    console.warn("[traceTap] ENABLED (native). Disable via ?traceTap=1 or localStorage.removeItem('traceTap').");
-
     return () => {
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("click", onClick, true);
@@ -350,9 +293,6 @@ function NativeTapTracer() {
   return null;
 }
 
-/**
- * ✅ Journal de connexion — non bloquant
- */
 function AuthAuditLogger() {
   const didInitRef = useRef(false);
 
@@ -364,37 +304,10 @@ function AuthAuditLogger() {
     const LS_KEY = "op_login_journal:last_refresh";
     const isNative = isNativeRuntime();
 
-    const getTimeZone = () => {
+    const safeInvoke = async (payload: any) => {
       try {
-        return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
-      } catch {
-        return null;
-      }
-    };
-
-    const baseMeta = (userId: string | null, reason?: string) => ({
-      note: "client-side",
-      user_id: userId,
-      reason: reason ?? null,
-      user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
-      lang: typeof navigator !== "undefined" ? navigator.language : null,
-      tz: getTimeZone(),
-      screen: typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
-      referrer: typeof document !== "undefined" ? document.referrer || null : null,
-      href: typeof window !== "undefined" ? window.location.href : null,
-    });
-
-    const safeInvoke = async (payload: {
-      event: "login" | "logout" | "refresh";
-      success: boolean;
-      email: string | null;
-      source: "web" | "native";
-      meta: any;
-    }) => {
-      try {
-        const { data, error } = await supabase.functions.invoke("log-login", { body: payload });
+        const { error } = await supabase.functions.invoke("log-login", { body: payload });
         if (error) console.error("[AuthAuditLogger] log-login error:", error);
-        else console.log("[AuthAuditLogger] log-login success:", data);
       } catch (e) {
         console.error("[AuthAuditLogger] invoke exception:", e);
       }
@@ -413,31 +326,22 @@ function AuthAuditLogger() {
     };
 
     const log = (event: "login" | "logout" | "refresh", session: any, reason: string) => {
-      const email = session?.user?.email ?? null;
-      const userId = session?.user?.id ?? null;
       if (!session?.user) return;
       if (event === "refresh" && !shouldLogRefresh()) return;
 
       return safeInvoke({
         event,
         success: true,
-        email,
+        email: session?.user?.email ?? null,
         source: isNative ? "native" : "web",
-        meta: baseMeta(userId, reason),
+        meta: { reason, user_id: session?.user?.id ?? null },
       });
     };
 
     const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
       if (evt === "SIGNED_IN") log("login", session, "SIGNED_IN");
-      else if (evt === "SIGNED_OUT") {
-        safeInvoke({
-          event: "logout",
-          success: true,
-          email: session?.user?.email ?? null,
-          source: isNative ? "native" : "web",
-          meta: baseMeta(session?.user?.id ?? null, "SIGNED_OUT"),
-        });
-      } else if (evt === "INITIAL_SESSION") {
+      else if (evt === "SIGNED_OUT") log("logout", session, "SIGNED_OUT");
+      else if (evt === "INITIAL_SESSION") {
         if (session?.user) log("refresh", session, "INITIAL_SESSION");
       }
     });
@@ -448,16 +352,12 @@ function AuthAuditLogger() {
   return null;
 }
 
-/**
- * ✅ Badge debug (NE PAS afficher sur Desktop web)
- */
 function UiDebugBadge() {
   const { isMobileUI, debug } = useUiModeCtx();
   if (!debug) return null;
 
   const isNative = isNativeRuntime();
-  const show =
-    isNative && import.meta.env.DEV && new URLSearchParams(window.location.search).has("uiDebug");
+  const show = isNative && import.meta.env.DEV && new URLSearchParams(window.location.search).has("uiDebug");
   if (!show) return null;
 
   return (
@@ -469,156 +369,11 @@ function UiDebugBadge() {
         </span>
         <span className="text-slate-400">|</span>
         <span>native={String(debug.native)}</span>
-        <span className="text-slate-400">|</span>
-        <span>forcedDesktopInApp={String(debug.forcedDesktopInApp)}</span>
-        <span className="text-slate-400">|</span>
-        <span>eff={debug.effWidth}px</span>
-        <span>inner={debug.innerWidth}px</span>
-        <span className="text-slate-400">|</span>
-        <span>doc={debug.docWidth}px</span>
-        <span className="text-slate-400">|</span>
-        <span>vv={debug.vvWidth ?? "—"}px</span>
-        <span>dpr={debug.dpr}</span>
       </div>
     </div>
   );
 }
 
-/**
- * ✅ Intercepteur global (Natif uniquement)
- * (sur web, HashRouter gère déjà très bien les liens)
- */
-function GlobalLinkInterceptor() {
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!isNativeRuntime()) return;
-
-    const shouldIgnore = (anchor: HTMLAnchorElement, href: string) => {
-      if (anchor.dataset.noNativeIntercept === "1") return true;
-
-      if (
-        href.startsWith("http://") ||
-        href.startsWith("https://") ||
-        href.startsWith("mailto:") ||
-        href.startsWith("tel:") ||
-        href.startsWith("blob:") ||
-        href.startsWith("data:") ||
-        anchor.target === "_blank"
-      )
-        return true;
-
-      if (anchor.hasAttribute("download")) return true;
-      if ((anchor.getAttribute("rel") || "").includes("external")) return true;
-
-      return false;
-    };
-
-    const normalizeHref = (href: string) => {
-      if (href.startsWith("#/#/")) return href.replace("#/#/", "#/");
-      if (href.startsWith("#/")) return href.slice(1); // "#/login" -> "/login"
-      return href;
-    };
-
-    const handleClick = (e: MouseEvent) => {
-      if (e.defaultPrevented) return;
-
-      const target = e.target as HTMLElement | null;
-      const anchor = target?.closest?.("a[href]") as HTMLAnchorElement | null;
-      if (!anchor) return;
-
-      let href = anchor.getAttribute("href") || "";
-      if (!href) return;
-
-      if (shouldIgnore(anchor, href)) return;
-
-      href = normalizeHref(href);
-
-      if (href.startsWith("/")) {
-        e.preventDefault();
-        requestAnimationFrame(() => navigate(href));
-      }
-    };
-
-    document.addEventListener("click", handleClick, true);
-    return () => document.removeEventListener("click", handleClick, true);
-  }, [navigate]);
-
-  return null;
-}
-
-/**
- * ✅ Guard natif anti-404 (téléphone réel)
- */
-function NativeRoutingGuard() {
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!isNativeRuntime()) return;
-
-    try {
-      const u = new URL(window.location.href);
-
-      if ((u.hash || "").startsWith("#/#/")) {
-        u.hash = u.hash.replace("#/#/", "#/");
-        window.history.replaceState({}, "", u.toString());
-      }
-
-      if (!u.hash || u.hash === "#") {
-        u.hash = "#/";
-        window.history.replaceState({}, "", u.toString());
-      }
-    } catch {}
-
-    let removeListener: null | (() => void) = null;
-
-    (async () => {
-      try {
-        const capAppMod = "@capacitor/app";
-        const capBrowserMod = "@capacitor/browser";
-
-        const mod: any = await import(/* @vite-ignore */ capAppMod);
-        const CapApp = mod?.App;
-        if (!CapApp?.addListener) return;
-
-        const sub = CapApp.addListener("appUrlOpen", async (event: any) => {
-          try {
-            const incoming = event?.url || "";
-            if (!incoming) return;
-
-            if (incoming.startsWith("http://") || incoming.startsWith("https://")) {
-              try {
-                const b: any = await import(/* @vite-ignore */ capBrowserMod);
-                if (b?.Browser?.open) await b.Browser.open({ url: incoming });
-                else window.open(incoming, "_blank");
-              } catch {
-                window.open(incoming, "_blank");
-              }
-              return;
-            }
-
-            const u = new URL(incoming);
-            const path = (u.pathname || "/").replace(/\/+$/, "") || "/";
-            if (path && path !== "/") navigate(path, { replace: true });
-            else navigate("/", { replace: true });
-          } catch {}
-        });
-
-        removeListener = () => sub.remove();
-      } catch {}
-    })();
-
-    return () => {
-      if (removeListener) removeListener();
-    };
-  }, [navigate]);
-
-  return null;
-}
-
-/**
- * ✅ TapInspector Gate
- */
 function TapInspectorGate() {
   const [enabled, setEnabled] = useState(false);
 
@@ -627,25 +382,16 @@ function TapInspectorGate() {
 
     const readTap = () => {
       if (!isNative) return false;
-
       const sp = new URLSearchParams(window.location.search || "");
-      const tapSearch = sp.get("tap") === "1" || sp.get("forceTap") === "1";
-
-      const hash = window.location.hash || "";
-      const q = hash.includes("?") ? hash.split("?")[1] : "";
-      const hp = new URLSearchParams(q);
-      const tapHash = hp.get("tap") === "1" || hp.get("forceTap") === "1";
-
-      let tapLS = false;
+      if (sp.get("tap") === "1" || sp.get("forceTap") === "1") return true;
       try {
-        tapLS = localStorage.getItem("tap") === "1";
-      } catch {}
-
-      return tapSearch || tapHash || tapLS;
+        return localStorage.getItem("tap") === "1";
+      } catch {
+        return false;
+      }
     };
 
     const apply = () => setEnabled(readTap());
-
     apply();
     window.addEventListener("hashchange", apply);
     window.addEventListener("popstate", apply);
@@ -669,8 +415,6 @@ const AppRoutes = () => (
     <ScrollManager />
     <AuthAuditLogger />
     <UiDebugBadge />
-    <GlobalLinkInterceptor />
-    <NativeRoutingGuard />
 
     <TapInspectorGate />
 
@@ -693,6 +437,7 @@ const AppRoutes = () => (
         <Route path="/confidentialite" element={<Privacy />} />
         <Route path="/cookies" element={<CookiesPolicy />} />
 
+        {/* ✅ Mon compte (protégé) */}
         <Route
           path="/mon-compte"
           element={
@@ -844,10 +589,6 @@ const AppRoutes = () => (
   </>
 );
 
-/**
- * ✅ Router unique et stable: HashRouter partout
- * => Les clics "Se connecter" / "Devenir Prestataire" routent toujours correctement.
- */
 function RouterSwitch({ children }: { children: React.ReactNode }) {
   return <HashRouter>{children}</HashRouter>;
 }
