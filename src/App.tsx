@@ -24,46 +24,70 @@ import AdminLayout from "@/components/layout/AdminLayout";
 /**
  * ✅ Lazy pages
  */
-const Index = lazy(() => import("./pages/Index"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-const InscriptionOuvrier = lazy(() => import("./pages/InscriptionOuvrier"));
-const WorkerDetail = lazy(() => import("./pages/WorkerDetail"));
-const Login = lazy(() => import("./pages/Login"));
-const Register = lazy(() => import("./pages/Register"));
-const MonCompte = lazy(() => import("./pages/MonCompte"));
+/**
+ * ✅ Retry wrapper for lazy imports — handles stale chunk errors
+ */
+const lazyRetry = (factory: () => Promise<any>, retries = 2): ReturnType<typeof lazy> =>
+  lazy(async () => {
+    for (let i = 0; i <= retries; i++) {
+      try {
+        return await factory();
+      } catch (err) {
+        if (i < retries) {
+          console.warn(`[lazyRetry] Chunk load failed, retrying (${i + 1}/${retries})...`);
+          await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+        } else {
+          // Last resort: force full page reload to get fresh asset manifest
+          console.error("[lazyRetry] All retries failed, reloading page...", err);
+          window.location.reload();
+          // Return a never-resolving promise to prevent rendering while reloading
+          return new Promise(() => {});
+        }
+      }
+    }
+    return factory(); // fallback (unreachable)
+  });
 
-const Forfaits = lazy(() => import("./pages/Forfaits"));
-const Faq = lazy(() => import("./pages/Faq"));
-const About = lazy(() => import("./pages/About"));
-const Partners = lazy(() => import("./pages/Partners"));
+const Index = lazyRetry(() => import("./pages/Index"));
+const NotFound = lazyRetry(() => import("./pages/NotFound"));
+const InscriptionOuvrier = lazyRetry(() => import("./pages/InscriptionOuvrier"));
+const WorkerDetail = lazyRetry(() => import("./pages/WorkerDetail"));
+const Login = lazyRetry(() => import("./pages/Login"));
+const Register = lazyRetry(() => import("./pages/Register"));
+const MonCompte = lazyRetry(() => import("./pages/MonCompte"));
 
-const Terms = lazy(() => import("./pages/Terms"));
-const Privacy = lazy(() => import("./pages/Privacy"));
-const CookiesPolicy = lazy(() => import("./pages/Cookies"));
+const Forfaits = lazyRetry(() => import("./pages/Forfaits"));
+const Faq = lazyRetry(() => import("./pages/Faq"));
+const About = lazyRetry(() => import("./pages/About"));
+const Partners = lazyRetry(() => import("./pages/Partners"));
 
-const AdminFaqQuestions = lazy(() => import("./pages/AdminFaqQuestions"));
-const AdminContent = lazy(() => import("./pages/AdminContent"));
-const AdminReports = lazy(() => import("./pages/AdminReports"));
+const Terms = lazyRetry(() => import("./pages/Terms"));
+const Privacy = lazyRetry(() => import("./pages/Privacy"));
+const CookiesPolicy = lazyRetry(() => import("./pages/Cookies"));
 
-const AdminOuvrierContacts = lazy(() => import("./pages/AdminOuvrierContacts"));
-const AdminOuvrierInscriptions = lazy(() => import("./pages/AdminOuvrierInscriptions"));
-const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
-const AdminAds = lazy(() => import("./pages/AdminAds"));
+const AdminFaqQuestions = lazyRetry(() => import("./pages/AdminFaqQuestions"));
+const AdminContent = lazyRetry(() => import("./pages/AdminContent"));
+const AdminReports = lazyRetry(() => import("./pages/AdminReports"));
 
-const AdminLoginJournalPage = lazy(() => import("./pages/admin/AdminLoginJournalPage"));
-const AdminReviewsModerationPage = lazy(() => import("./pages/admin/AdminReviewsModerationPage"));
+const AdminOuvrierContacts = lazyRetry(() => import("./pages/AdminOuvrierContacts"));
+const AdminOuvrierInscriptions = lazyRetry(() => import("./pages/AdminOuvrierInscriptions"));
+const AdminDashboard = lazyRetry(() => import("./pages/AdminDashboard"));
+const AdminAds = lazyRetry(() => import("./pages/AdminAds"));
 
-const WorkerDashboard = lazy(() => import("./pages/WorkerDashboard"));
-const WorkerMessagesPage = lazy(() => import("./pages/WorkerMessagesPage"));
-const WorkerReviewsPage = lazy(() => import("./pages/WorkerReviews"));
+const AdminLoginJournalPage = lazyRetry(() => import("./pages/admin/AdminLoginJournalPage"));
+const AdminReviewsModerationPage = lazyRetry(() => import("./pages/admin/AdminReviewsModerationPage"));
 
-const ClientDashboard = lazy(() => import("./pages/ClientDashboard"));
-const ClientProfile = lazy(() => import("./pages/ClientProfile"));
-const ClientRequestsList = lazy(() => import("./pages/ClientRequestsList"));
-const ClientMessagesPage = lazy(() => import("./pages/ClientMessagesPage"));
-const ClientFavoritesList = lazy(() => import("./pages/ClientFavoritesList"));
-const ClientReviews = lazy(() => import("./pages/ClientReviews"));
-const ClientContactForm = lazy(() => import("./pages/ClientContactForm"));
+const WorkerDashboard = lazyRetry(() => import("./pages/WorkerDashboard"));
+const WorkerMessagesPage = lazyRetry(() => import("./pages/WorkerMessagesPage"));
+const WorkerReviewsPage = lazyRetry(() => import("./pages/WorkerReviews"));
+
+const ClientDashboard = lazyRetry(() => import("./pages/ClientDashboard"));
+const ClientProfile = lazyRetry(() => import("./pages/ClientProfile"));
+const ClientRequestsList = lazyRetry(() => import("./pages/ClientRequestsList"));
+const ClientMessagesPage = lazyRetry(() => import("./pages/ClientMessagesPage"));
+const ClientFavoritesList = lazyRetry(() => import("./pages/ClientFavoritesList"));
+const ClientReviews = lazyRetry(() => import("./pages/ClientReviews"));
+const ClientContactForm = lazyRetry(() => import("./pages/ClientContactForm"));
 
 /**
  * ✅ Détection native ROBUSTE
