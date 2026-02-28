@@ -13,12 +13,20 @@ type LocationState = {
 
 function safeRedirectPath(raw: string | null) {
   if (!raw) return null;
-  const v = raw.trim();
+  let v = raw.trim();
+
+  // ✅ accepte "#/xxx" (HashRouter) et normalise -> "/xxx"
+  if (v.startsWith("#/")) v = v.slice(1); // "#/x" -> "/x"
+  if (v.startsWith("#")) v = v.slice(1);  // "#x" -> "x" (puis invalidé)
 
   // ✅ sécurité: on n'autorise que les chemins internes
   if (!v.startsWith("/")) return null;
   if (v.startsWith("//")) return null;
   if (v.toLowerCase().startsWith("/http")) return null;
+
+  // ✅ évite le double hash déjà présent dans certains cas
+  if (v.startsWith("/#/")) v = v.replace("/#/", "/");
+  if (v.includes("#/#/")) v = v.replace("#/#/", "#/");
 
   return v;
 }
@@ -37,20 +45,20 @@ const Login: React.FC = () => {
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const redirectParam = useMemo(() => safeRedirectPath(searchParams.get("redirect")), [searchParams]);
 
-  // ✅ si déjà connecté, on redirige direct (utile quand on revient sur /login par erreur)
+  // ✅ Si déjà connecté, rediriger immédiatement (sans appeler getUser)
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    (async () => {
+      const { data } = await supabase.auth.getSession();
       if (!mounted) return;
-      if (data.session) {
-        if (redirectParam) {
-          navigate(redirectParam, { replace: true });
-        } else {
-          navigate("/espace-client", { replace: true });
-        }
+
+      if (data.session?.user) {
+        // ✅ priorité au redirectParam (si valide)
+        if (redirectParam) navigate(redirectParam, { replace: true });
+        else navigate("/espace-client", { replace: true });
       }
-    });
+    })();
 
     return () => {
       mounted = false;
@@ -72,7 +80,11 @@ const Login: React.FC = () => {
 
       const user = data.user;
       if (!user) {
-        throw new Error(language === "fr" ? "Impossible de récupérer votre compte." : "Could not fetch user session.");
+        throw new Error(
+          language === "fr"
+            ? "Impossible de récupérer votre session."
+            : "Could not fetch user session."
+        );
       }
 
       const userId = user.id;
@@ -107,22 +119,25 @@ const Login: React.FC = () => {
         profile = inserted;
       }
 
-      const role = (profile?.role as string) || "user";
+      const roleRaw = String(profile?.role ?? "user").toLowerCase();
+      const role =
+        roleRaw === "ouvrier" || roleRaw === "provider" || roleRaw === "prestataire"
+          ? "worker"
+          : roleRaw === "client" || roleRaw === "particulier"
+          ? "user"
+          : roleRaw;
 
-      // ✅ redirect explicite (ex: /login?redirect=/ouvrier/xxx)
-      // IMPORTANT : on évite de rediriger un ouvrier/admin vers une fiche publique.
-      if (redirectParam && role !== "admin" && role !== "worker" && role !== "ouvrier") {
+      // ✅ redirect explicite autorisé uniquement pour les clients
+      if (redirectParam && role !== "admin" && role !== "worker") {
         navigate(redirectParam, { replace: true });
         return;
       }
 
-      // Sinon, on redirige selon le rôle
+      // ✅ Redirect par rôle (stables / conformes à tes routes)
       if (role === "admin") {
-        navigate("/admin/dashboard", { replace: true });
-      } else if (role === "worker" || role === "ouvrier") {
+        navigate("/admin", { replace: true });
+      } else if (role === "worker") {
         navigate("/espace-ouvrier", { replace: true });
-      } else if (role === "user" || role === "client" || role === "particulier") {
-        navigate("/espace-client", { replace: true });
       } else {
         navigate("/espace-client", { replace: true });
       }
@@ -187,7 +202,6 @@ const Login: React.FC = () => {
               </div>
             )}
 
-            {/* ✅ Boutons */}
             <div className="space-y-2">
               <Button type="submit" disabled={loading} className="w-full bg-pro-blue hover:bg-blue-700">
                 {loading
@@ -199,7 +213,6 @@ const Login: React.FC = () => {
                   : "Sign in"}
               </Button>
 
-              {/* ✅ Retour à l'accueil */}
               <Button type="button" variant="outline" className="w-full" onClick={() => navigate("/")}>
                 {language === "fr" ? "Retour à l'accueil" : "Back to home"}
               </Button>
@@ -225,8 +238,8 @@ const Login: React.FC = () => {
 
             <p className="mt-2 text-xs text-slate-500">
               {language === "fr"
-                ? "Les administrateurs sont redirigés vers le back-office, les ouvriers vers leur espace personnel, et les autres utilisateurs vers leur espace client."
-                : "Admins are redirected to the back-office, workers to their dashboard, and other users to their client space."}
+                ? "Admins → back-office, ouvriers → espace ouvrier, autres utilisateurs → espace client."
+                : "Admins → back-office, workers → worker dashboard, others → client space."}
             </p>
           </form>
         </CardContent>
