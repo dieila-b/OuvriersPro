@@ -1,10 +1,6 @@
 // src/pages/Register.tsx
 import React, { useEffect, useState } from "react";
-import {
-  Link,
-  useNavigate,
-  useSearchParams,
-} from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -12,22 +8,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import {
-  ArrowLeft,
-  Loader2,
-  User,
-  HardHat,
-  Mail,
-  Phone,
-  Lock,
-} from "lucide-react";
+import { ArrowLeft, Loader2, User, HardHat, Mail, Phone, Lock } from "lucide-react";
 
 type AccountType = "client" | "worker";
 
@@ -37,7 +20,7 @@ type FormState = {
   phone: string;
   password: string;
   confirmPassword: string;
-  profession: string; // surtout pour les ouvriers
+  profession: string;
 };
 
 const Register: React.FC = () => {
@@ -45,7 +28,6 @@ const Register: React.FC = () => {
   const { language } = useLanguage();
   const [searchParams] = useSearchParams();
 
-  // Type de compte (client / worker) détecté via ?type=
   const [accountType, setAccountType] = useState<AccountType>("client");
 
   const [form, setForm] = useState<FormState>({
@@ -60,9 +42,6 @@ const Register: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // ----------------------------
-  //   Textes FR / EN
-  // ----------------------------
   const text = {
     title: language === "fr" ? "Créer un compte" : "Create an account",
     back: language === "fr" ? "Retour" : "Back",
@@ -80,65 +59,50 @@ const Register: React.FC = () => {
     email: language === "fr" ? "Email" : "Email",
     phone: language === "fr" ? "Téléphone" : "Phone",
     password: language === "fr" ? "Mot de passe" : "Password",
-    confirmPassword:
-      language === "fr" ? "Confirmer le mot de passe" : "Confirm password",
-    professionLabel:
-      language === "fr"
-        ? "Métier principal (facultatif)"
-        : "Main profession (optional)",
-    alreadyAccount:
-      language === "fr"
-        ? "Vous avez déjà un compte ?"
-        : "Already have an account?",
+    confirmPassword: language === "fr" ? "Confirmer le mot de passe" : "Confirm password",
+    professionLabel: language === "fr" ? "Métier principal (facultatif)" : "Main profession (optional)",
+    alreadyAccount: language === "fr" ? "Vous avez déjà un compte ?" : "Already have an account?",
     login: language === "fr" ? "Se connecter" : "Log in",
-    submitClient:
-      language === "fr" ? "Créer mon compte client" : "Create customer account",
-    submitWorker:
-      language === "fr"
-        ? "Créer mon compte Ouvrier Pro"
-        : "Create my Pro worker account",
+    submitClient: language === "fr" ? "Créer mon compte client" : "Create customer account",
+    submitWorker: language === "fr" ? "Créer mon compte Ouvrier Pro" : "Create my Pro worker account",
     pwdTooShort:
       language === "fr"
         ? "Le mot de passe doit contenir au moins 6 caractères."
         : "Password must be at least 6 characters long.",
-    pwdMismatch:
-      language === "fr"
-        ? "Les mots de passe ne correspondent pas."
-        : "Passwords do not match.",
+    pwdMismatch: language === "fr" ? "Les mots de passe ne correspondent pas." : "Passwords do not match.",
     genericError:
       language === "fr"
         ? "Une erreur est survenue lors de la création du compte."
         : "An error occurred while creating your account.",
   };
 
-  // ----------------------------
-  //  Détecter ?type=client / worker
-  // ----------------------------
+  // Détecter ?type=client / worker
   useEffect(() => {
     const typeParam = (searchParams.get("type") || "").toLowerCase();
-    if (typeParam === "worker" || typeParam === "ouvrier") {
-      setAccountType("worker");
-    } else if (typeParam === "client") {
-      setAccountType("client");
-    }
+    if (typeParam === "worker" || typeParam === "ouvrier") setAccountType("worker");
+    else if (typeParam === "client") setAccountType("client");
   }, [searchParams]);
 
-  // ----------------------------
-  //  Gestion des champs
-  // ----------------------------
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  // Si déjà connecté, on sort d’ici (évite boucle mon-compte/login/register)
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+      if (data.session?.user) {
+        navigate("/espace-client", { replace: true });
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [navigate]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  // ----------------------------
-  //  Soumission formulaire
-  // ----------------------------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -147,7 +111,6 @@ const Register: React.FC = () => {
       setErrorMsg(text.pwdTooShort);
       return;
     }
-
     if (form.password !== form.confirmPassword) {
       setErrorMsg(text.pwdMismatch);
       return;
@@ -156,15 +119,17 @@ const Register: React.FC = () => {
     setSubmitting(true);
 
     try {
-      const { error } = await supabase.auth.signUp({
-        email: form.email.trim(),
+      const normalizedEmail = form.email.trim().toLowerCase();
+
+      const { data, error } = await supabase.auth.signUp({
+        email: normalizedEmail,
         password: form.password,
         options: {
           data: {
-            full_name: form.fullName,
-            phone: form.phone,
-            role: accountType === "worker" ? "worker" : "client",
-            profession: form.profession || null,
+            full_name: form.fullName || null,
+            phone: form.phone || null,
+            role: accountType === "worker" ? "worker" : "user",
+            profession: accountType === "worker" ? form.profession || null : null,
           },
         },
       });
@@ -172,17 +137,17 @@ const Register: React.FC = () => {
       if (error) {
         console.error("register error:", error);
         setErrorMsg(error.message || text.genericError);
-        setSubmitting(false);
         return;
       }
 
-      // Succès : on redirige selon le type
+      // ✅ Important: si email confirmation activée, session peut être null
+      // Dans tous les cas : on redirige vers la prochaine étape logique, sans "#anchor".
       if (accountType === "worker") {
-        // Ouvrier : aller directement aux forfaits sur la page d'accueil
-        navigate("/#subscription");
+        // Forfaits = choix plan (stable, web + mobile)
+        navigate("/forfaits", { replace: true });
       } else {
-        // Client : retour à l’accueil classique
-        navigate("/");
+        // Client : page compte (qui enverra vers espace-client après login)
+        navigate("/login", { replace: true });
       }
     } catch (err) {
       console.error(err);
@@ -192,9 +157,6 @@ const Register: React.FC = () => {
     }
   };
 
-  // ----------------------------
-  //  Render
-  // ----------------------------
   const isWorker = accountType === "worker";
 
   return (
@@ -218,18 +180,13 @@ const Register: React.FC = () => {
             {isWorker ? text.subtitleWorker : text.subtitleClient}
           </p>
 
-          {/* Tabs client / worker, synchronisés avec ?type */}
+          {/* Tabs client / worker */}
           <Tabs
             value={accountType}
             onValueChange={(v) => {
               const value = v as AccountType;
               setAccountType(value);
-
-              // 👉 Si l'utilisateur clique sur l’onglet "Ouvrier Pro",
-              // on l'envoie directement sur la section forfaits
-              if (value === "worker") {
-                navigate("/#subscription");
-              }
+              // ✅ On NE NAVIGUE PLUS ICI (sinon HashRouter => #/#/ bugs)
             }}
             className="mb-4"
           >
@@ -243,14 +200,6 @@ const Register: React.FC = () => {
                 {text.tabWorker}
               </TabsTrigger>
             </TabsList>
-
-            <TabsContent value="client" className="mt-4">
-              {/* Le formulaire est le même, seul le texte/CTA change */}
-            </TabsContent>
-
-            <TabsContent value="worker" className="mt-4">
-              {/* idem */}
-            </TabsContent>
           </Tabs>
 
           {errorMsg && (
@@ -264,15 +213,13 @@ const Register: React.FC = () => {
               <Label htmlFor="fullName" className="mb-1 block">
                 {text.fullName}
               </Label>
-              <div className="relative">
-                <Input
-                  id="fullName"
-                  name="fullName"
-                  value={form.fullName}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
+              <Input
+                id="fullName"
+                name="fullName"
+                value={form.fullName}
+                onChange={handleChange}
+                required
+              />
             </div>
 
             <div>
@@ -313,7 +260,6 @@ const Register: React.FC = () => {
               </div>
             </div>
 
-            {/* Champ métier surtout utile pour l’ouvrier */}
             {isWorker && (
               <div>
                 <Label htmlFor="profession" className="mb-1 block">
@@ -353,6 +299,7 @@ const Register: React.FC = () => {
                   />
                 </div>
               </div>
+
               <div>
                 <Label htmlFor="confirmPassword" className="mb-1 block">
                   {text.confirmPassword}
@@ -388,10 +335,7 @@ const Register: React.FC = () => {
 
           <p className="mt-4 text-xs text-slate-500 text-center">
             {text.alreadyAccount}{" "}
-            <Link
-              to="/login"
-              className="font-medium text-pro-blue hover:underline"
-            >
+            <Link to="/login" className="font-medium text-pro-blue hover:underline">
               {text.login}
             </Link>
           </p>
