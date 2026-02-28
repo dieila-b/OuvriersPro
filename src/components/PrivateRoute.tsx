@@ -1,9 +1,8 @@
 // src/components/PrivateRoute.tsx
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 
-// Rôles acceptés
 type Role = "user" | "client" | "worker" | "admin";
 
 type Props = {
@@ -14,66 +13,108 @@ type Props = {
   showLoader?: boolean;
 };
 
-const normalizeRole = (r: string | null | undefined): Role | null => {
-  if (!r) return null;
-  const v = String(r).toLowerCase().trim();
-  if (v === "customer") return "client";
-  if (v === "provider") return "worker";
-  if (v === "prestataire") return "worker";
-  if (v === "client") return "client";
-  if (v === "user") return "user";
-  if (v === "worker") return "worker";
+const normalizeRole = (r: any): Role => {
+  const v = String(r ?? "")
+    .toLowerCase()
+    .trim();
+
   if (v === "admin") return "admin";
-  return null;
+  if (v === "worker" || v === "ouvrier" || v === "provider" || v === "prestataire") return "worker";
+  if (v === "client" || v === "customer") return "client";
+  if (v === "user" || v === "particulier") return "user";
+
+  // fallback safe
+  return "user";
 };
 
+function isRoleAllowed(effective: Role, allowed: Role[]) {
+  // équivalences client/user
+  if (allowed.includes(effective)) return true;
+  if (effective === "client" && allowed.includes("user")) return true;
+  if (effective === "user" && allowed.includes("client")) return true;
+  return false;
+}
+
 /**
- * ✅ Session hook robuste
- * - récupère getSession()
- * - si une session est annoncée, on la VALIDE via getUser()
- *   -> si getUser() renvoie AuthSessionMissingError (ou autre), on force session=null
+ * ✅ Source de vérité UNIQUE :
+ * - session via getSession() + validation via getUser()
+ * - rôle via table op_users (et fallback metadata si besoin)
  */
-function useSupabaseSessionValidated() {
-  const [loading, setLoading] = React.useState(true);
-  const [session, setSession] = React.useState<any>(null);
+export default function PrivateRoute({
+  children,
+  allowedRoles = ["user", "client", "worker", "admin"],
+  loginPath = "/login",
+  forbiddenRedirectTo = "/",
+  showLoader = true,
+}: Props) {
+  const location = useLocation();
+
+  const [loading, setLoading] = useState(true);
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+  const [effectiveRole, setEffectiveRole] = useState<Role>("user");
 
   useEffect(() => {
     let mounted = true;
 
-    const validate = async (incomingSession: any) => {
+    const validateSession = async (incomingSession: any) => {
       if (!incomingSession?.access_token) return null;
-
       try {
         const { data, error } = await supabase.auth.getUser();
-        if (error || !data?.user) {
-          // session invalide / expirée / introuvable
-          return null;
-        }
+        if (error || !data?.user) return null;
         return incomingSession;
       } catch {
         return null;
       }
     };
 
-    (async () => {
+    const load = async () => {
+      setLoading(true);
+
       try {
         const { data } = await supabase.auth.getSession();
-        const s = data?.session ?? null;
+        const validated = await validateSession(data?.session ?? null);
 
-        const validated = await validate(s);
         if (!mounted) return;
 
-        setSession(validated);
+        const user = validated?.user ?? null;
+        if (!user?.id) {
+          setSessionUserId(null);
+          setEffectiveRole("user");
+          setLoading(false);
+          return;
+        }
+
+        setSessionUserId(user.id);
+
+        // 1) rôle metadata (fallback)
+        const metaRole = normalizeRole(user.user_metadata?.role ?? user.app_metadata?.role ?? null);
+
+        // 2) rôle op_users (source de vérité)
+        const { data: row, error } = await supabase
+          .from("op_users")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (!mounted) return;
+
+        if (error) {
+          // si RLS bloque op_users, on garde metadata
+          console.warn("[PrivateRoute] op_users role fetch error:", error);
+          setEffectiveRole(metaRole);
+        } else {
+          const dbRole = row?.role ?? null;
+          setEffectiveRole(dbRole ? normalizeRole(dbRole) : metaRole);
+        }
       } finally {
         if (mounted) setLoading(false);
       }
-    })();
+    };
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_evt, newSession) => {
-      const validated = await validate(newSession ?? null);
-      if (!mounted) return;
-      setSession(validated);
-      setLoading(false);
+    load();
+
+    const { data: sub } = supabase.auth.onAuthStateChange(async () => {
+      await load();
     });
 
     return () => {
@@ -82,87 +123,7 @@ function useSupabaseSessionValidated() {
     };
   }, []);
 
-  return { loading, session };
-}
-
-/**
- * ✅ Récupération rôle depuis table profiles si metadata absente
- */
-function useProfileRole(userId: string | null) {
-  const [loading, setLoading] = React.useState(false);
-  const [role, setRole] = React.useState<Role | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-
-    if (!userId) {
-      setRole(null);
-      return;
-    }
-
-    (async () => {
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", userId)
-          .maybeSingle();
-
-        if (!mounted) return;
-
-        if (error) {
-          console.warn("[PrivateRoute] profiles role fetch error:", error);
-          setRole(null);
-        } else {
-          setRole(normalizeRole((data as any)?.role) ?? null);
-        }
-      } catch (e) {
-        if (!mounted) return;
-        console.warn("[PrivateRoute] profiles role fetch exception:", e);
-        setRole(null);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, [userId]);
-
-  return { loading, role };
-}
-
-const PrivateRoute: React.FC<Props> = ({
-  children,
-  allowedRoles = ["user", "client", "worker", "admin"],
-  loginPath = "/login",
-  forbiddenRedirectTo = "/",
-  showLoader = true,
-}) => {
-  const location = useLocation();
-  const { loading: sessionLoading, session } = useSupabaseSessionValidated();
-
-  const userId = session?.user?.id ?? null;
-
-  const metaRole = useMemo<Role | null>(() => {
-    const u = session?.user;
-    if (!u) return null;
-    return (
-      normalizeRole(u.user_metadata?.role) ||
-      normalizeRole(u.app_metadata?.role) ||
-      null
-    );
-  }, [session]);
-
-  const { loading: profileLoading, role: profileRole } = useProfileRole(userId);
-
-  // rôle effectif : metadata > profiles > "user"
-  const effectiveRole: Role = (metaRole ?? profileRole ?? "user") as Role;
-
-  // loader tant que tout n’est pas stable
-  const loading = sessionLoading || (session?.user && profileLoading);
+  const allowed = useMemo(() => isRoleAllowed(effectiveRole, allowedRoles), [effectiveRole, allowedRoles]);
 
   if (loading) {
     if (!showLoader) return null;
@@ -173,8 +134,8 @@ const PrivateRoute: React.FC<Props> = ({
     );
   }
 
-  // ✅ pas de user -> go login (c’est ça qui doit arriver chez toi)
-  if (!session?.user) {
+  // pas de session => login
+  if (!sessionUserId) {
     return (
       <Navigate
         to={loginPath}
@@ -184,15 +145,8 @@ const PrivateRoute: React.FC<Props> = ({
     );
   }
 
-  // ✅ règles d’équivalence : "client" et "user" sont acceptés si l’un des deux est autorisé
-  const allowed =
-    allowedRoles.includes(effectiveRole) ||
-    (effectiveRole === "client" && allowedRoles.includes("user")) ||
-    (effectiveRole === "user" && allowedRoles.includes("client"));
-
+  // session ok mais rôle non autorisé
   if (!allowed) return <Navigate to={forbiddenRedirectTo} replace />;
 
   return <>{children}</>;
-};
-
-export default PrivateRoute;
+}
