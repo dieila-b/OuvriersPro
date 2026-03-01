@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Session, User } from "@supabase/supabase-js";
 
@@ -27,57 +27,90 @@ export function useAuthProfile() {
   const [profile, setProfile] = useState<OpUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // évite les courses (plusieurs calls qui reviennent dans le désordre)
+  const seqRef = useRef(0);
+  const mountedRef = useRef(true);
+
   useEffect(() => {
-    let mounted = true;
+    mountedRef.current = true;
 
     const applySession = async (session: Session | null) => {
+      const seq = ++seqRef.current;
+
       const u = session?.user ?? null;
-      if (!mounted) return;
 
-      setUser(u);
+      // Toujours synchroniser l'état auth d'abord
+      if (mountedRef.current) {
+        setUser(u);
+      }
 
+      // Pas connecté => pas une erreur
       if (!u) {
-        setProfile(null);
-        setLoading(false);
+        if (mountedRef.current && seq === seqRef.current) {
+          setProfile(null);
+          setLoading(false);
+        }
         return;
       }
 
       try {
         const p = await fetchProfile(u.id);
-        if (!mounted) return;
+        if (!mountedRef.current || seq !== seqRef.current) return;
         setProfile(p);
       } catch (e) {
-        // non bloquant
+        // Non bloquant: profile peut ne pas exister (ou erreur réseau)
         console.warn("[useAuthProfile] profile fetch error:", e);
-        if (!mounted) return;
+        if (!mountedRef.current || seq !== seqRef.current) return;
         setProfile(null);
       } finally {
-        if (mounted) setLoading(false);
+        if (mountedRef.current && seq === seqRef.current) {
+          setLoading(false);
+        }
       }
     };
 
-    (async () => {
+    const bootstrap = async () => {
       setLoading(true);
 
-      // ✅ getSession ne throw pas AuthSessionMissingError
-      const { data } = await supabase.auth.getSession();
+      // ✅ getSession: ne renvoie pas AuthSessionMissingError
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error) {
+        console.warn("[useAuthProfile] getSession error:", error);
+        // on reste safe: utilisateur anonyme
+        if (mountedRef.current) {
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+        }
+        return;
+      }
+
       await applySession(data.session ?? null);
-    })();
+    };
+
+    bootstrap();
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      // Important: remettre loading true, mais sans casser le thread UI
       setLoading(true);
       await applySession(session ?? null);
     });
 
     return () => {
-      mounted = false;
+      mountedRef.current = false;
       listener.subscription.unsubscribe();
     };
   }, []);
 
-  const isAdmin = profile?.role === "admin";
-  const isWorker = profile?.role === "worker";
-  const isClient = profile?.role === "user";
+  const flags = useMemo(() => {
+    const role = profile?.role;
+    return {
+      isAdmin: role === "admin",
+      isWorker: role === "worker",
+      isClient: role === "user",
+    };
+  }, [profile?.role]);
 
-  return { user, profile, isAdmin, isWorker, isClient, loading };
+  return { user, profile, ...flags, loading };
 }
