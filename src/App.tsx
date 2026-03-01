@@ -4,12 +4,21 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Routes, Route, useLocation, useNavigate, Navigate, HashRouter } from "react-router-dom";
+import {
+  Routes,
+  Route,
+  useLocation,
+  useNavigate,
+  Navigate,
+  HashRouter,
+  BrowserRouter,
+} from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Capacitor } from "@capacitor/core";
 
 import { UiModeProvider, useUiModeCtx } from "@/contexts/UiModeContext";
+
 import TapInspector from "@/components/TapInspector";
 import PrivateRoute from "./components/PrivateRoute";
 import AdminLayout from "@/components/layout/AdminLayout";
@@ -77,21 +86,30 @@ const ClientFavoritesList = lazyRetry(() => import("./pages/ClientFavoritesList"
 const ClientReviews = lazyRetry(() => import("./pages/ClientReviews"));
 const ClientContactForm = lazyRetry(() => import("./pages/ClientContactForm"));
 
+/**
+ * ✅ Détection native robuste
+ */
 const isNativeRuntime = () => {
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
+
   try {
     const p = window.location?.protocol ?? "";
     if (p === "capacitor:" || p === "file:") return true;
   } catch {}
+
   try {
     const gp = (Capacitor as any)?.getPlatform?.();
     if (gp && gp !== "web") return true;
   } catch {}
+
   return false;
 };
 
+/**
+ * ✅ QueryClient optimisé
+ */
 const useAppQueryClient = () =>
   useMemo(
     () =>
@@ -110,28 +128,16 @@ const useAppQueryClient = () =>
     []
   );
 
-/**
- * ✅ Normalise uniquement "#/#/..." -> "#/..."
- * (NE FORCE PAS "#/" automatiquement)
- */
-function HashNormalizer() {
-  useEffect(() => {
-    try {
-      const u = new URL(window.location.href);
-      const h = u.hash || "";
-      if (h.startsWith("#/#/")) {
-        u.hash = h.replace("#/#/", "#/");
-        window.history.replaceState({}, "", u.toString());
-      }
-    } catch {}
-  }, []);
-  return null;
-}
-
 function ScrollManager() {
   const location = useLocation();
 
+  // Sur Web (BrowserRouter): location.hash sert aux ancres
+  // Sur Native (HashRouter): location.hash est géré par le router, donc on évite le scroll-to-anchor automatique.
+  const isNative = isNativeRuntime();
+
   useEffect(() => {
+    if (isNative) return;
+
     const hash = location.hash?.replace("#", "");
     if (!hash) return;
 
@@ -147,152 +153,14 @@ function ScrollManager() {
     }, 50);
 
     return () => window.clearTimeout(t);
-  }, [location.pathname, location.hash]);
+  }, [location.pathname, location.hash, isNative]);
 
   return null;
 }
 
-function NativeTapFix() {
-  const isNative = isNativeRuntime();
-
-  useEffect(() => {
-    if (!isNative) return;
-
-    const hardReset = () => {
-      try {
-        const html = document.documentElement;
-        const body = document.body;
-
-        html.style.pointerEvents = "auto";
-        body.style.pointerEvents = "auto";
-
-        const root = document.getElementById("root") as HTMLElement | null;
-        if (root) root.style.pointerEvents = "auto";
-
-        const vp = document.getElementById("ui-desktop-viewport") as HTMLElement | null;
-        if (vp) {
-          vp.style.pointerEvents = "none";
-          vp.style.display = "none";
-          vp.style.visibility = "hidden";
-          vp.style.transform = "none";
-          vp.style.filter = "none";
-          (vp.style as any).backdropFilter = "none";
-          vp.style.width = "0px";
-          vp.style.maxWidth = "0px";
-        }
-
-        const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
-        if (meta) meta.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
-
-        (body.style as any).zoom = "1";
-      } catch {}
-    };
-
-    hardReset();
-    const t1 = window.setTimeout(hardReset, 200);
-    const t2 = window.setTimeout(hardReset, 900);
-
-    const onResize = () => hardReset();
-    const onFocus = () => hardReset();
-
-    window.addEventListener("resize", onResize);
-    window.addEventListener("orientationchange", onResize);
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onFocus);
-    window.visualViewport?.addEventListener?.("resize", onResize);
-
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("orientationchange", onResize);
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onFocus);
-      window.visualViewport?.removeEventListener?.("resize", onResize);
-    };
-  }, [isNative]);
-
-  return null;
-}
-
-function NativeTapTracer() {
-  useEffect(() => {
-    if (!isNativeRuntime()) return;
-
-    const enabled = (() => {
-      try {
-        const sp = new URLSearchParams(window.location.search || "");
-        if (sp.get("traceTap") === "1") return true;
-        const hash = window.location.hash || "";
-        const q = hash.includes("?") ? hash.split("?")[1] : "";
-        const hp = new URLSearchParams(q);
-        if (hp.get("traceTap") === "1") return true;
-        return localStorage.getItem("traceTap") === "1";
-      } catch {
-        return false;
-      }
-    })();
-
-    if (!enabled) return;
-
-    const marker = document.createElement("div");
-    marker.style.position = "fixed";
-    marker.style.zIndex = "2147483647";
-    marker.style.width = "22px";
-    marker.style.height = "22px";
-    marker.style.borderRadius = "9999px";
-    marker.style.border = "2px solid red";
-    marker.style.background = "rgba(255,0,0,0.15)";
-    marker.style.pointerEvents = "none";
-    marker.style.transform = "translate(-50%, -50%)";
-    marker.style.left = "-9999px";
-    marker.style.top = "-9999px";
-    document.body.appendChild(marker);
-
-    const describeEl = (el: Element | null) => {
-      if (!el) return "null";
-      const h = el as HTMLElement;
-      const id = h.id ? `#${h.id}` : "";
-      const cls =
-        h.className && typeof h.className === "string"
-          ? "." + h.className.trim().split(/\s+/).slice(0, 4).join(".")
-          : "";
-      const tag = el.tagName?.toLowerCase?.() ?? "unknown";
-      return `${tag}${id}${cls}`;
-    };
-
-    const logAt = (x: number, y: number) => {
-      const top = document.elementFromPoint(x, y);
-      const stack = document.elementsFromPoint(x, y).slice(0, 10);
-      marker.style.left = `${x}px`;
-      marker.style.top = `${y}px`;
-      console.log("[traceTap] point", { x, y }, "top=", describeEl(top), "stack=", stack.map(describeEl));
-    };
-
-    const onPointerDown = (e: PointerEvent) => logAt(e.clientX, e.clientY);
-    const onClick = (e: MouseEvent) => logAt(e.clientX, e.clientY);
-    const onTouchStart = (e: TouchEvent) => {
-      const t = e.touches?.[0];
-      if (t) logAt(t.clientX, t.clientY);
-    };
-
-    document.addEventListener("pointerdown", onPointerDown, true);
-    document.addEventListener("click", onClick, true);
-    document.addEventListener("touchstart", onTouchStart, true);
-
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown, true);
-      document.removeEventListener("click", onClick, true);
-      document.removeEventListener("touchstart", onTouchStart, true);
-      try {
-        marker.remove();
-      } catch {}
-    };
-  }, []);
-
-  return null;
-}
-
+/**
+ * ✅ Journal de connexion — non bloquant
+ */
 function AuthAuditLogger() {
   const didInitRef = useRef(false);
 
@@ -304,10 +172,37 @@ function AuthAuditLogger() {
     const LS_KEY = "op_login_journal:last_refresh";
     const isNative = isNativeRuntime();
 
-    const safeInvoke = async (payload: any) => {
+    const getTimeZone = () => {
       try {
-        const { error } = await supabase.functions.invoke("log-login", { body: payload });
+        return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
+      } catch {
+        return null;
+      }
+    };
+
+    const baseMeta = (userId: string | null, reason?: string) => ({
+      note: "client-side",
+      user_id: userId,
+      reason: reason ?? null,
+      user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+      lang: typeof navigator !== "undefined" ? navigator.language : null,
+      tz: getTimeZone(),
+      screen: typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
+      referrer: typeof document !== "undefined" ? document.referrer || null : null,
+      href: typeof window !== "undefined" ? window.location.href : null,
+    });
+
+    const safeInvoke = async (payload: {
+      event: "login" | "logout" | "refresh";
+      success: boolean;
+      email: string | null;
+      source: "web" | "native";
+      meta: any;
+    }) => {
+      try {
+        const { data, error } = await supabase.functions.invoke("log-login", { body: payload });
         if (error) console.error("[AuthAuditLogger] log-login error:", error);
+        else console.log("[AuthAuditLogger] log-login success:", data);
       } catch (e) {
         console.error("[AuthAuditLogger] invoke exception:", e);
       }
@@ -326,22 +221,31 @@ function AuthAuditLogger() {
     };
 
     const log = (event: "login" | "logout" | "refresh", session: any, reason: string) => {
+      const email = session?.user?.email ?? null;
+      const userId = session?.user?.id ?? null;
       if (!session?.user) return;
       if (event === "refresh" && !shouldLogRefresh()) return;
 
       return safeInvoke({
         event,
         success: true,
-        email: session?.user?.email ?? null,
+        email,
         source: isNative ? "native" : "web",
-        meta: { reason, user_id: session?.user?.id ?? null },
+        meta: baseMeta(userId, reason),
       });
     };
 
     const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
       if (evt === "SIGNED_IN") log("login", session, "SIGNED_IN");
-      else if (evt === "SIGNED_OUT") log("logout", session, "SIGNED_OUT");
-      else if (evt === "INITIAL_SESSION") {
+      else if (evt === "SIGNED_OUT") {
+        safeInvoke({
+          event: "logout",
+          success: true,
+          email: session?.user?.email ?? null,
+          source: isNative ? "native" : "web",
+          meta: baseMeta(session?.user?.id ?? null, "SIGNED_OUT"),
+        });
+      } else if (evt === "INITIAL_SESSION") {
         if (session?.user) log("refresh", session, "INITIAL_SESSION");
       }
     });
@@ -352,12 +256,16 @@ function AuthAuditLogger() {
   return null;
 }
 
+/**
+ * ✅ Badge debug (NE PAS afficher sur Desktop web)
+ */
 function UiDebugBadge() {
   const { isMobileUI, debug } = useUiModeCtx();
   if (!debug) return null;
 
   const isNative = isNativeRuntime();
-  const show = isNative && import.meta.env.DEV && new URLSearchParams(window.location.search).has("uiDebug");
+  const show =
+    isNative && import.meta.env.DEV && new URLSearchParams(window.location.search).has("uiDebug");
   if (!show) return null;
 
   return (
@@ -369,11 +277,85 @@ function UiDebugBadge() {
         </span>
         <span className="text-slate-400">|</span>
         <span>native={String(debug.native)}</span>
+        <span className="text-slate-400">|</span>
+        <span>forcedDesktopInApp={String(debug.forcedDesktopInApp)}</span>
+        <span className="text-slate-400">|</span>
+        <span>eff={debug.effWidth}px</span>
+        <span className="text-slate-400">|</span>
+        <span>inner={debug.innerWidth}px</span>
+        <span className="text-slate-400">|</span>
+        <span>doc={debug.docWidth}px</span>
+        <span className="text-slate-400">|</span>
+        <span>vv={debug.vvWidth ?? "—"}px</span>
+        <span>dpr={debug.dpr}</span>
       </div>
     </div>
   );
 }
 
+/**
+ * ✅ Intercepteur global (Natif uniquement)
+ * - Intercepte les <a href="/..."> pour les router en SPA via navigate()
+ * - Evite les reload/404
+ */
+function GlobalLinkInterceptor() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isNativeRuntime()) return;
+
+    const shouldIgnore = (anchor: HTMLAnchorElement, href: string) => {
+      if (anchor.dataset.noNativeIntercept === "1") return true;
+
+      if (
+        href.startsWith("http://") ||
+        href.startsWith("https://") ||
+        href.startsWith("mailto:") ||
+        href.startsWith("tel:") ||
+        href.startsWith("blob:") ||
+        href.startsWith("data:") ||
+        anchor.target === "_blank"
+      )
+        return true;
+
+      if (anchor.hasAttribute("download")) return true;
+      if ((anchor.getAttribute("rel") || "").includes("external")) return true;
+
+      return false;
+    };
+
+    const handleClick = (e: MouseEvent) => {
+      if (e.defaultPrevented) return;
+
+      const target = e.target as HTMLElement | null;
+      const anchor = target?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!anchor) return;
+
+      let href = anchor.getAttribute("href") || "";
+      if (!href) return;
+
+      if (shouldIgnore(anchor, href)) return;
+
+      // ✅ HashRouter côté natif: on ne garde que des paths "/..."
+      // (si quelqu’un met "#/login", on le convertit)
+      if (href.startsWith("#/")) href = href.slice(1);
+
+      if (href.startsWith("/")) {
+        e.preventDefault();
+        requestAnimationFrame(() => navigate(href));
+      }
+    };
+
+    document.addEventListener("click", handleClick, true);
+    return () => document.removeEventListener("click", handleClick, true);
+  }, [navigate]);
+
+  return null;
+}
+
+/**
+ * ✅ TapInspector Gate
+ */
 function TapInspectorGate() {
   const [enabled, setEnabled] = useState(false);
 
@@ -382,16 +364,25 @@ function TapInspectorGate() {
 
     const readTap = () => {
       if (!isNative) return false;
+
       const sp = new URLSearchParams(window.location.search || "");
-      if (sp.get("tap") === "1" || sp.get("forceTap") === "1") return true;
+      const tapSearch = sp.get("tap") === "1" || sp.get("forceTap") === "1";
+
+      const hash = window.location.hash || "";
+      const q = hash.includes("?") ? hash.split("?")[1] : "";
+      const hp = new URLSearchParams(q);
+      const tapHash = hp.get("tap") === "1" || hp.get("forceTap") === "1";
+
+      let tapLS = false;
       try {
-        return localStorage.getItem("tap") === "1";
-      } catch {
-        return false;
-      }
+        tapLS = localStorage.getItem("tap") === "1";
+      } catch {}
+
+      return tapSearch || tapHash || tapLS;
     };
 
     const apply = () => setEnabled(readTap());
+
     apply();
     window.addEventListener("hashchange", apply);
     window.addEventListener("popstate", apply);
@@ -408,14 +399,10 @@ function TapInspectorGate() {
 
 const AppRoutes = () => (
   <>
-    <NativeTapFix />
-    <NativeTapTracer />
-
-    <HashNormalizer />
     <ScrollManager />
     <AuthAuditLogger />
     <UiDebugBadge />
-
+    <GlobalLinkInterceptor />
     <TapInspectorGate />
 
     <Suspense fallback={<div className="p-6 text-gray-600">Chargement…</div>}>
@@ -437,7 +424,6 @@ const AppRoutes = () => (
         <Route path="/confidentialite" element={<Privacy />} />
         <Route path="/cookies" element={<CookiesPolicy />} />
 
-        {/* ✅ Mon compte (protégé) */}
         <Route
           path="/mon-compte"
           element={
@@ -589,8 +575,14 @@ const AppRoutes = () => (
   </>
 );
 
+/**
+ * ✅ Router stable:
+ * - Web: BrowserRouter (URLs propres /login)
+ * - Native (Capacitor): HashRouter (stable en file:// et WebView)
+ */
 function RouterSwitch({ children }: { children: React.ReactNode }) {
-  return <HashRouter>{children}</HashRouter>;
+  const native = isNativeRuntime();
+  return native ? <HashRouter>{children}</HashRouter> : <BrowserRouter>{children}</BrowserRouter>;
 }
 
 const App = () => {
