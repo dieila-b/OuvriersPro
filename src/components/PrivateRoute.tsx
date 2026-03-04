@@ -1,5 +1,4 @@
-// src/components/PrivateRoute.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import type { Session } from "@supabase/supabase-js";
@@ -16,33 +15,20 @@ type Props = {
 
 const normalizeRole = (r: any): Role => {
   const v = String(r ?? "").toLowerCase().trim();
-
   if (v === "admin") return "admin";
   if (v === "worker" || v === "ouvrier" || v === "provider" || v === "prestataire") return "worker";
   if (v === "client" || v === "customer") return "client";
   if (v === "user" || v === "particulier") return "user";
-
-  // fallback safe
   return "user";
 };
 
 function isRoleAllowed(effective: Role, allowed: Role[]) {
   if (allowed.includes(effective)) return true;
-  // équivalences client/user
   if (effective === "client" && allowed.includes("user")) return true;
   if (effective === "user" && allowed.includes("client")) return true;
   return false;
 }
 
-/**
- * ✅ Source de vérité stable (web + mobile + webview):
- * - session via getSession() + onAuthStateChange()
- * - rôle via table op_users (source de vérité) + fallback metadata
- *
- * ⚠️ Ne JAMAIS utiliser supabase.auth.getUser() dans un guard:
- * - peut lever AuthSessionMissingError en environnement sans session (normal)
- * - casse la navigation sur WebView/Android
- */
 export default function PrivateRoute({
   children,
   allowedRoles = ["user", "client", "worker", "admin"],
@@ -56,114 +42,85 @@ export default function PrivateRoute({
   const [sessionUserId, setSessionUserId] = useState<string | null>(null);
   const [effectiveRole, setEffectiveRole] = useState<Role>("user");
 
-  const mountedRef = useRef(false);
-  const seqRef = useRef(0);
-
   useEffect(() => {
-    mountedRef.current = true;
+    let mounted = true;
 
-    const safe = (fn: () => void) => {
-      if (mountedRef.current) fn();
-    };
-
-    const resolveRole = async (session: Session | null) => {
-      const seq = ++seqRef.current;
-
+    const applySession = async (session: Session | null) => {
       const user = session?.user ?? null;
 
-      // Pas connecté => état normal
       if (!user?.id) {
-        if (!mountedRef.current || seq !== seqRef.current) return;
-        safe(() => {
-          setSessionUserId(null);
-          setEffectiveRole("user");
-          setLoading(false);
-        });
+        if (!mounted) return;
+        setSessionUserId(null);
+        setEffectiveRole("user");
         return;
       }
 
-      // user ok
-      const userId = user.id;
+      if (!mounted) return;
+      setSessionUserId(user.id);
+
+      // fallback metadata si op_users indisponible
       const metaRole = normalizeRole(user.user_metadata?.role ?? user.app_metadata?.role ?? null);
 
-      // On met déjà l'ID, et un rôle fallback immédiat
-      safe(() => {
-        setSessionUserId(userId);
-        setEffectiveRole(metaRole);
-      });
-
-      // Puis on tente le rôle DB (source de vérité)
+      // role DB
       const { data: row, error } = await supabase
         .from("op_users")
         .select("role")
-        .eq("id", userId)
+        .eq("id", user.id)
         .maybeSingle();
 
-      if (!mountedRef.current || seq !== seqRef.current) return;
+      if (!mounted) return;
 
       if (error) {
-        // si RLS bloque op_users, on garde metadata
         console.warn("[PrivateRoute] op_users role fetch error:", error);
-        safe(() => setEffectiveRole(metaRole));
+        setEffectiveRole(metaRole);
       } else {
-        const dbRole = row?.role ?? null;
-        safe(() => setEffectiveRole(dbRole ? normalizeRole(dbRole) : metaRole));
+        setEffectiveRole(row?.role ? normalizeRole(row.role) : metaRole);
       }
-
-      safe(() => setLoading(false));
     };
 
     const load = async () => {
-      safe(() => setLoading(true));
-
-      const { data, error } = await supabase.auth.getSession();
-
-      if (!mountedRef.current) return;
-
-      if (error) {
-        console.warn("[PrivateRoute] getSession error:", error);
-        safe(() => {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn("[PrivateRoute] getSession error:", error);
+          if (!mounted) return;
           setSessionUserId(null);
           setEffectiveRole("user");
-          setLoading(false);
-        });
-        return;
+          return;
+        }
+        await applySession(data.session ?? null);
+      } finally {
+        if (mounted) setLoading(false);
       }
-
-      await resolveRole(data.session ?? null);
     };
 
-    // initial
     void load();
 
-    // changements session
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      // ne pas bloquer le thread UI
-      safe(() => setLoading(true));
-      void resolveRole(session ?? null);
+      void (async () => {
+        setLoading(true);
+        try {
+          await applySession(session ?? null);
+        } finally {
+          if (mounted) setLoading(false);
+        }
+      })();
     });
 
     return () => {
-      mountedRef.current = false;
+      mounted = false;
       sub.subscription.unsubscribe();
     };
   }, []);
 
-  const allowed = useMemo(
-    () => isRoleAllowed(effectiveRole, allowedRoles),
-    [effectiveRole, allowedRoles]
-  );
+  const allowed = useMemo(() => isRoleAllowed(effectiveRole, allowedRoles), [effectiveRole, allowedRoles]);
 
   if (loading) {
     if (!showLoader) return null;
-    return (
-      <div className="min-h-[40vh] w-full flex items-center justify-center p-6 text-slate-600">
-        Chargement…
-      </div>
-    );
+    return <div className="min-h-[40vh] w-full flex items-center justify-center p-6 text-slate-600">Chargement…</div>;
   }
 
-  // pas de session => login
   if (!sessionUserId) {
     return (
       <Navigate
@@ -174,7 +131,6 @@ export default function PrivateRoute({
     );
   }
 
-  // session ok mais rôle non autorisé
   if (!allowed) return <Navigate to={forbiddenRedirectTo} replace />;
 
   return <>{children}</>;
