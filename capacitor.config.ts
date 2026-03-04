@@ -3,8 +3,19 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 const DEV_PORT = 5173;
 
-// ✅ Mets ici l’IP LAN de ton PC (celle accessible depuis le téléphone / émulateur)
-const DEV_HOST_IP = "192.168.1.183";
+// Ton IP LAN PC (téléphone sur le même Wi-Fi)
+const DEV_PHONE_HOST = "192.168.1.183";
+
+// Host pour émulateur Android (accès au localhost du PC)
+const DEV_EMULATOR_HOST = "10.0.2.2";
+
+/**
+ * Choix du host:
+ * - CAP_DEV_TARGET=emulator => 10.0.2.2
+ * - sinon => IP LAN (téléphone)
+ */
+const DEV_TARGET = process.env.CAP_DEV_TARGET; // "emulator" | "phone" | undefined
+const DEV_HOST = DEV_TARGET === "emulator" ? DEV_EMULATOR_HOST : DEV_PHONE_HOST;
 
 const config: CapacitorConfig = {
   appId: "com.proxiservices.app",
@@ -16,16 +27,9 @@ const config: CapacitorConfig = {
     allowMixedContent: true,
   },
 
-  /**
-   * ✅ DEV sur téléphone/émulateur :
-   * - server.url doit pointer vers l'IP de ton PC (pas 127.0.0.1)
-   * - NE PAS mettre "/#/" ici
-   *
-   * ✅ PROD :
-   * - commente carrément "server" pour utiliser dist (webDir)
-   */
+  // DEV uniquement: commente ce bloc en PROD
   server: {
-    url: `http://${DEV_HOST_IP}:${DEV_PORT}`,
+    url: `http://${DEV_HOST}:${DEV_PORT}`,
     cleartext: true,
   },
 
