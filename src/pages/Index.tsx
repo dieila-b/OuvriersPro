@@ -26,14 +26,18 @@ function isNativeRuntime(): boolean {
   try {
     const p = window.location?.protocol ?? "";
     if (p === "capacitor:" || p === "file:") return true;
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   try {
     const cap = (window as any)?.Capacitor;
     if (cap?.isNativePlatform?.()) return true;
     const gp = cap?.getPlatform?.();
     if (gp && gp !== "web") return true;
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   return false;
 }
@@ -80,6 +84,10 @@ function useNativeTapToClickFix(enabled: boolean) {
     };
 
     const onTouchEndCapture = (e: TouchEvent) => {
+      // multi-touch / preventDefault => on ne synthétise pas
+      if (e.defaultPrevented) return;
+      if (e.touches && e.touches.length > 0) return; // encore un doigt posé
+
       const now = Date.now();
       if (now - lastSyntheticAt < 350) return;
 
@@ -117,7 +125,7 @@ const Index = () => {
   const isSearchRoute = location.pathname === "/search" || location.pathname === "/rechercher";
   const isHomeRoute = location.pathname === "/";
 
-  // ✅ Tap->click: seulement vrai natif
+  // ✅ Tap->click: seulement natif (pas sur web)
   useNativeTapToClickFix(true);
 
   // ✅ Pour masquer la section abonnement si ouvrier connecté
@@ -169,10 +177,10 @@ const Index = () => {
       }
     };
 
-    checkWorker();
+    void checkWorker();
 
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      checkWorker();
+      void checkWorker();
     });
 
     return () => {
