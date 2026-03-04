@@ -18,7 +18,7 @@ async function fetchProfile(userId: string): Promise<OpUserProfile | null> {
     .eq("id", userId)
     .maybeSingle();
 
-  // ✅ Non-bloquant : si erreur (RLS/réseau), on log et on retourne null
+  // ✅ Non bloquant : garde l'app utilisable même si RLS/réseau
   if (error) {
     console.warn("[useAuthProfile] fetchProfile error:", error);
     return null;
@@ -32,7 +32,6 @@ export function useAuthProfile() {
   const [profile, setProfile] = useState<OpUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // évite les courses (plusieurs calls qui reviennent dans le désordre)
   const seqRef = useRef(0);
   const mountedRef = useRef(false);
 
@@ -45,10 +44,8 @@ export function useAuthProfile() {
 
     const applySession = async (session: Session | null) => {
       const seq = ++seqRef.current;
-
       const u = session?.user ?? null;
 
-      // ✅ sync user immédiatement
       safe(() => setUser(u));
 
       // ✅ pas connecté => état normal
@@ -61,7 +58,6 @@ export function useAuthProfile() {
         return;
       }
 
-      // ✅ connecté => profile
       const p = await fetchProfile(u.id);
       if (!mountedRef.current || seq !== seqRef.current) return;
 
@@ -74,7 +70,7 @@ export function useAuthProfile() {
     const bootstrap = async () => {
       safe(() => setLoading(true));
 
-      // ✅ getSession est stable et ne déclenche pas AuthSessionMissingError
+      // ✅ Stable partout (web + android webview)
       const { data, error } = await supabase.auth.getSession();
 
       if (!mountedRef.current) return;
@@ -92,10 +88,9 @@ export function useAuthProfile() {
       await applySession(data.session ?? null);
     };
 
-    bootstrap();
+    void bootstrap();
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      // ⚠️ Ne pas await ici (sinon blocages). On lance en async.
       safe(() => setLoading(true));
       void applySession(session ?? null);
     });
