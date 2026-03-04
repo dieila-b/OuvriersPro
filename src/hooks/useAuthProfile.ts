@@ -1,3 +1,4 @@
+// src/hooks/useAuthProfile.ts
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Session, User } from "@supabase/supabase-js";
@@ -18,7 +19,15 @@ async function fetchProfile(userId: string): Promise<OpUserProfile | null> {
     .eq("id", userId)
     .maybeSingle();
 
-  if (error) throw error;
+  // ✅ Pas de throw dur: on log et on retourne null
+  // (en mobile/webview, on préfère que l'app reste navigable)
+  if (error) {
+    // Si la ligne n'existe pas encore, Supabase renvoie data=null sans erreur.
+    // Ici error = vrai souci (RLS, réseau, etc.)
+    console.warn("[useAuthProfile] fetchProfile error:", error);
+    return null;
+  }
+
   return (data as OpUserProfile) ?? null;
 }
 
@@ -29,60 +38,51 @@ export function useAuthProfile() {
 
   // évite les courses (plusieurs calls qui reviennent dans le désordre)
   const seqRef = useRef(0);
-  const mountedRef = useRef(true);
+  const mountedRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
 
+    const safeSet = <T,>(setter: (v: T) => void, value: T) => {
+      if (mountedRef.current) setter(value);
+    };
+
     const applySession = async (session: Session | null) => {
       const seq = ++seqRef.current;
-
       const u = session?.user ?? null;
 
-      // Toujours synchroniser l'état auth d'abord
-      if (mountedRef.current) {
-        setUser(u);
-      }
+      // ✅ Toujours synchroniser l'état auth d'abord
+      safeSet(setUser, u);
 
-      // Pas connecté => pas une erreur
+      // ✅ Pas connecté => état normal (pas une erreur)
       if (!u) {
-        if (mountedRef.current && seq === seqRef.current) {
-          setProfile(null);
-          setLoading(false);
-        }
+        if (!mountedRef.current || seq !== seqRef.current) return;
+        safeSet(setProfile, null);
+        safeSet(setLoading, false);
         return;
       }
 
-      try {
-        const p = await fetchProfile(u.id);
-        if (!mountedRef.current || seq !== seqRef.current) return;
-        setProfile(p);
-      } catch (e) {
-        // Non bloquant: profile peut ne pas exister (ou erreur réseau)
-        console.warn("[useAuthProfile] profile fetch error:", e);
-        if (!mountedRef.current || seq !== seqRef.current) return;
-        setProfile(null);
-      } finally {
-        if (mountedRef.current && seq === seqRef.current) {
-          setLoading(false);
-        }
-      }
+      // ✅ Connecté => charge le profil (non bloquant)
+      const p = await fetchProfile(u.id);
+
+      if (!mountedRef.current || seq !== seqRef.current) return;
+      safeSet(setProfile, p);
+      safeSet(setLoading, false);
     };
 
     const bootstrap = async () => {
-      setLoading(true);
+      safeSet(setLoading, true);
 
-      // ✅ getSession: ne renvoie pas AuthSessionMissingError
+      // ✅ getSession est la méthode la plus stable (évite AuthSessionMissingError)
       const { data, error } = await supabase.auth.getSession();
+
+      if (!mountedRef.current) return;
 
       if (error) {
         console.warn("[useAuthProfile] getSession error:", error);
-        // on reste safe: utilisateur anonyme
-        if (mountedRef.current) {
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
-        }
+        safeSet(setUser, null);
+        safeSet(setProfile, null);
+        safeSet(setLoading, false);
         return;
       }
 
@@ -91,10 +91,10 @@ export function useAuthProfile() {
 
     bootstrap();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      // Important: remettre loading true, mais sans casser le thread UI
-      setLoading(true);
-      await applySession(session ?? null);
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      // ✅ on bascule loading sans bloquer et on applique
+      if (mountedRef.current) setLoading(true);
+      void applySession(session ?? null);
     });
 
     return () => {
