@@ -4,23 +4,26 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 5173 --strictPort",
-    "dev:web": "vite --host localhost --port 5173 --strictPort",
+    "dev": "vite",
     "dev:emulator": "vite --host 0.0.0.0 --port 5173 --strictPort",
     "dev:5173": "vite --host 0.0.0.0 --port 5173 --strictPort",
     "dev:8080": "vite --host 0.0.0.0 --port 8080 --strictPort",
-
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "preview": "vite preview --host 0.0.0.0 --port 4173",
-
     "lint": "eslint .",
-
+    "preview": "vite preview --host 0.0.0.0 --port 4173",
     "netlify:dev": "netlify dev",
 
     "cap:sync": "npx cap sync",
+    "cap:copy": "npx cap copy",
     "cap:open:android": "npx cap open android",
-    "android": "npx cap run android"
+    "cap:open:ios": "npx cap open ios",
+    "cap:run:android": "npx cap run android",
+    "cap:run:ios": "npx cap run ios",
+
+    "android:dev": "npm run dev:emulator",
+    "android:sync": "npm run build && npm run cap:sync",
+    "android:open": "npm run cap:open:android"
   },
   "dependencies": {
     "@capacitor/camera": "^8.0.0",
@@ -77,6 +80,8 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/cli": "^8.0.0",
     "@eslint/js": "^9.9.0",
     "@tailwindcss/typography": "^0.5.15",
     "@types/node": "^22.5.5",
