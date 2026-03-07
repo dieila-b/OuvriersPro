@@ -4,10 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 0.0.0.0 --port 5173 --strictPort",
+    "dev:web": "vite --host localhost --port 5173 --strictPort",
     "dev:emulator": "vite --host 0.0.0.0 --port 5173 --strictPort",
     "dev:5173": "vite --host 0.0.0.0 --port 5173 --strictPort",
     "dev:8080": "vite --host 0.0.0.0 --port 8080 --strictPort",
+
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
@@ -21,9 +23,20 @@
     "cap:run:android": "npx cap run android",
     "cap:run:ios": "npx cap run ios",
 
+    "cap:run:android:emulator": "npx cap run android --target emulator-5554",
+    "cap:run:android:phone": "npx cap run android --target RZCX11JTKLH",
+
     "android:dev": "npm run dev:emulator",
     "android:sync": "npm run build && npm run cap:sync",
-    "android:open": "npm run cap:open:android"
+    "android:open": "npm run cap:open:android",
+
+    "android:emulator": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$env:CAP_DEV_TARGET='emulator'; $env:CAP_DEV_SERVER='true'; npx cap sync android; npx cap run android --target emulator-5554\"",
+    "android:phone": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$env:CAP_DEV_TARGET='phone'; $env:CAP_DEV_SERVER='true'; npx cap sync android; npx cap run android --target RZCX11JTKLH\"",
+
+    "android:prod": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Remove-Item Env:CAP_DEV_TARGET -ErrorAction SilentlyContinue; Remove-Item Env:CAP_DEV_SERVER -ErrorAction SilentlyContinue; npm run build; npx cap sync android; npx cap run android\"",
+
+    "android:reverse": "adb -s RZCX11JTKLH reverse tcp:5173 tcp:5173",
+    "android:devices": "adb devices"
   },
   "dependencies": {
     "@capacitor/camera": "^8.0.0",
