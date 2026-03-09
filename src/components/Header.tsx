@@ -1,6 +1,5 @@
 // src/components/Header.tsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { createPortal } from "react-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Languages, User, Menu, X } from "lucide-react";
