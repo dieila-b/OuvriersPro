@@ -793,7 +793,7 @@ const WorkerSearchSection: React.FC = () => {
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div ref={topAnchorRef} />
 
-        <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-5 sm:mb-7 border-b border-gray-200 pb-3 min-w-0">
+        <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-5 sm:mb-7 border-b border-border/50 pb-3 min-w-0">
           <div className="min-w-0">
             <h2 className="mt-0 text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">{title}</h2>
             <p className="text-gray-600 mt-1.5 sm:mt-2 text-sm sm:text-base max-w-4xl">{subtitle}</p>
