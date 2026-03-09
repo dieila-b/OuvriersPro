@@ -222,17 +222,18 @@ const Header = () => {
     canPortal && mobileOpen
       ? createPortal(
           <div
-            className="md:hidden fixed inset-0 z-[9999]"
-            style={{ WebkitTapHighlightColor: "transparent" }}
+            className="md:hidden fixed inset-0 z-[2147483646]"
+            style={{ WebkitTapHighlightColor: "transparent", pointerEvents: "auto" }}
           >
             {/* Backdrop */}
             <div
               className="absolute inset-0 z-0 bg-black/35"
+              style={{ pointerEvents: "auto" }}
               onClick={() => setMobileOpen(false)}
             />
 
             {/* Menu panel */}
-            <div className="absolute top-0 left-0 right-0 z-10 w-full bg-white border-b border-gray-200 shadow-lg">
+            <div className="absolute top-0 left-0 right-0 z-10 w-full bg-white border-b border-gray-200 shadow-lg" style={{ pointerEvents: "auto" }}>
               <div className="w-full px-4 sm:px-6 py-3">
                 <div className="flex items-center justify-between gap-3 min-w-0">
                   <span className="text-sm font-semibold text-pro-gray">
