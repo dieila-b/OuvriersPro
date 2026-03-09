@@ -789,11 +789,11 @@ const WorkerSearchSection: React.FC = () => {
   }, [filteredWorkers.length, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <section ref={sectionRef} id="worker-search" className="w-full pt-0 pb-10 sm:pb-14 lg:pb-16 bg-transparent">
+    <section ref={sectionRef} id="worker-search" className="w-full pt-0 pb-10 sm:pb-14 lg:pb-16 bg-white">
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div ref={topAnchorRef} />
 
-        <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-5 sm:mb-7 border-b border-border/50 pb-3 min-w-0">
+        <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-5 sm:mb-7 border-b border-gray-200 pb-3 min-w-0">
           <div className="min-w-0">
             <h2 className="mt-0 text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">{title}</h2>
             <p className="text-gray-600 mt-1.5 sm:mt-2 text-sm sm:text-base max-w-4xl">{subtitle}</p>
@@ -825,7 +825,7 @@ const WorkerSearchSection: React.FC = () => {
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <span className="text-[10px] sm:text-[11px] text-gray-500 uppercase tracking-wide">{viewModeLabel}</span>
-            <div className="flex border border-border/60 rounded-lg bg-card/70 backdrop-blur-sm overflow-hidden">
+            <div className="flex border border-gray-300 rounded-lg bg-white overflow-hidden">
               <button
                 type="button"
                 onClick={() => updateDraft({ view: "list" }, { immediate: true })}
@@ -847,7 +847,7 @@ const WorkerSearchSection: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-6 lg:gap-8 items-start min-w-0">
-          <aside className="min-w-0 bg-card/60 backdrop-blur-sm rounded-2xl p-4 sm:p-5 border border-border/50">
+          <aside className="min-w-0 bg-gray-50 rounded-2xl p-4 sm:p-5 border border-gray-200">
             <div className="flex items-start justify-between gap-3 mb-4">
               <h3 className="text-base font-semibold text-pro-gray">{filtersTitle}</h3>
 
@@ -884,7 +884,7 @@ const WorkerSearchSection: React.FC = () => {
               {geoError && <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{geoError}</div>}
 
               {draft.near && draft.lat != null && draft.lng != null && (
-                <div className="mt-3 rounded-xl border border-border/50 bg-card/70 backdrop-blur-sm p-3">
+                <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
                   <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                     <span>{radiusLabel}</span>
                     <span className="text-[11px] text-gray-500">
@@ -897,11 +897,11 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-4">
-              <label className="block text-xs font-medium text-muted-foreground mb-1">{jobLabel}</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{jobLabel}</label>
               <select
                 value={draft.job}
                 onChange={(e) => updateDraft({ job: e.target.value })}
-                className="w-full rounded-md border border-border/60 bg-card/80 backdrop-blur-sm px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="all">{jobAll}</option>
                 {jobs.map((job) => (
@@ -913,14 +913,14 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-3">
-              <label className="block text-xs font-medium text-muted-foreground mb-1">{regionLabel}</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{regionLabel}</label>
               <select
                 value={draft.region}
                 onChange={(e) => {
                   const region = e.target.value;
                   updateDraft({ region, city: "", commune: "", district: "" });
                 }}
-                className="w-full rounded-md border border-border/60 bg-card/80 backdrop-blur-sm px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="">{regionAll}</option>
                 {regions.map((r) => (
@@ -932,14 +932,14 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-3">
-              <label className="block text-xs font-medium text-muted-foreground mb-1">{cityLabel}</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{cityLabel}</label>
               <select
                 value={draft.city}
                 onChange={(e) => {
                   const city = e.target.value;
                   updateDraft({ city, commune: "", district: "" });
                 }}
-                className="w-full rounded-md border border-border/60 bg-card/80 backdrop-blur-sm px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="">{cityAll}</option>
                 {cities.map((c) => (
@@ -951,14 +951,14 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-3">
-              <label className="block text-xs font-medium text-muted-foreground mb-1">{communeLabel}</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{communeLabel}</label>
               <select
                 value={draft.commune}
                 onChange={(e) => {
                   const commune = e.target.value;
                   updateDraft({ commune, district: "" });
                 }}
-                className="w-full rounded-md border border-border/60 bg-card/80 backdrop-blur-sm px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="">{communeAll}</option>
                 {communes.map((c) => (
@@ -970,11 +970,11 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-6">
-              <label className="block text-xs font-medium text-muted-foreground mb-1">{districtLabel}</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{districtLabel}</label>
               <select
                 value={draft.district}
                 onChange={(e) => updateDraft({ district: e.target.value })}
-                className="w-full rounded-md border border-border/60 bg-card/80 backdrop-blur-sm px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
               >
                 <option value="">{districtAll}</option>
                 {districts.map((d) => (
@@ -1030,7 +1030,7 @@ const WorkerSearchSection: React.FC = () => {
                     .join("");
 
                   return (
-                    <div key={w.id} className="min-w-0 rounded-2xl border border-border/50 bg-card/70 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                    <div key={w.id} className="min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
                       <div className="flex-shrink-0">
                         <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">{initials || "OP"}</div>
                       </div>
@@ -1092,7 +1092,7 @@ const WorkerSearchSection: React.FC = () => {
                     .join("");
 
                   return (
-                    <div key={w.id} className="min-w-0 rounded-2xl border border-border/50 bg-card/70 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-3">
+                    <div key={w.id} className="min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-10 h-10 rounded-full bg-pro-blue text-white flex items-center justify-center text-sm font-semibold shrink-0">{initials || "OP"}</div>
                         <div className="min-w-0">

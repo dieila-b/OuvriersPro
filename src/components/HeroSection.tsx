@@ -195,18 +195,14 @@ const HeroSection = () => {
   };
 
   return (
-    <section className="relative w-full overflow-hidden">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_520px_at_50%_-120px,_hsl(var(--background-gradient-start)/0.90),_transparent_65%),radial-gradient(700px_420px_at_90%_0%,_hsl(var(--background-gradient-mid)/0.70),_transparent_60%),radial-gradient(900px_520px_at_10%_10%,_hsl(var(--background-gradient-end)/0.60),_transparent_60%)]"
-      />
+    <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden">
       <div className="relative z-10 w-full px-4 sm:px-6 lg:px-10 py-8 sm:py-10">
         <div className="w-full max-w-5xl mx-auto text-center">
-          <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words text-foreground">
+          <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
             {cms("home.hero.title", "Trouvez des prestataires fiables près de chez vous", "Find trusted providers near you")}
           </h1>
 
-          <p className="mt-3 sm:mt-4 text-sm sm:text-base md:text-xl text-muted-foreground break-words">
+          <p className="mt-3 sm:mt-4 text-sm sm:text-base md:text-xl text-blue-100 break-words">
             {cms("home.hero.subtitle", "Comparez, contactez et réservez en toute confiance.", "Compare, contact and book with confidence.")}
           </p>
         </div>
@@ -217,12 +213,12 @@ const HeroSection = () => {
               e.preventDefault();
               handleSearch();
             }}
-            className="w-full rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl relative z-20 border border-border/50 bg-card/80 text-foreground backdrop-blur-md"
+            className="w-full bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl text-gray-900 relative z-20"
           >
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-3 items-stretch min-w-0">
               {/* Job */}
               <div ref={jobsBoxRef} className="relative min-w-0 text-left lg:col-span-6">
-                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground opacity-70 w-5 h-5" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
                   placeholder={cms("home.search.placeholder_keyword", "Ex : plombier, électricien…", "e.g., plumber, electrician…")}
                   value={searchTerm}
@@ -231,14 +227,14 @@ const HeroSection = () => {
                     setSearchTerm(e.target.value);
                     setOpenJobs(true);
                   }}
-                  className="w-full min-w-0 h-11 sm:h-12 pl-10 pr-9 text-sm sm:text-base"
+                  className="w-full min-w-0 h-11 sm:h-12 pl-10 pr-9 text-sm sm:text-base text-gray-900"
                 />
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground opacity-70 w-4 h-4" />
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
 
                 {openJobs && (filteredJobs.length > 0 || loadingOptions) && (
-                  <div className="absolute z-50 mt-1 w-full min-w-0 bg-popover/85 border border-border/60 rounded-xl shadow-lg overflow-hidden backdrop-blur-md">
+                  <div className="absolute z-50 mt-1 w-full min-w-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
                     {loadingOptions && (
-                      <div className="px-3 py-2 text-xs text-muted-foreground">
+                      <div className="px-3 py-2 text-xs text-gray-500">
                         {cms("common.loading", "Chargement...", "Loading...")}
                       </div>
                     )}
@@ -251,7 +247,7 @@ const HeroSection = () => {
                             setSearchTerm(j);
                             setOpenJobs(false);
                           }}
-                          className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-accent/60"
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         >
                           {j}
                         </button>
@@ -262,7 +258,7 @@ const HeroSection = () => {
 
               {/* District */}
               <div ref={districtsBoxRef} className="relative min-w-0 text-left lg:col-span-6">
-                <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground opacity-70 w-5 h-5" />
+                <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
                   placeholder={cms("home.search.placeholder_district", "Quartier / commune", "District / area")}
                   value={district}
@@ -272,13 +268,13 @@ const HeroSection = () => {
                     setGeo(null);
                     setOpenDistricts(true);
                   }}
-                  className="w-full min-w-0 h-11 sm:h-12 pl-10 pr-14 text-sm sm:text-base text-foreground"
+                  className="w-full min-w-0 h-11 sm:h-12 pl-10 pr-14 text-sm sm:text-base text-gray-900"
                 />
 
                 <button
                   type="button"
                   onClick={handleGeoLocate}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center rounded-md border border-border/60 bg-popover/75 backdrop-blur-md px-2 py-1 text-muted-foreground hover:bg-accent/60"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center rounded-md border border-gray-200 bg-white px-2 py-1 text-gray-600 hover:bg-gray-50"
                   aria-label={cms("home.search.geo.cta", "Utiliser ma position", "Use my location")}
                   title={cms("home.search.geo.cta", "Utiliser ma position", "Use my location")}
                 >
@@ -286,9 +282,9 @@ const HeroSection = () => {
                 </button>
 
                 {openDistricts && (filteredDistricts.length > 0 || loadingOptions) && (
-                  <div className="absolute z-50 mt-1 w-full min-w-0 bg-popover/85 border border-border/60 rounded-xl shadow-lg overflow-hidden backdrop-blur-md">
+                  <div className="absolute z-50 mt-1 w-full min-w-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
                     {loadingOptions && (
-                      <div className="px-3 py-2 text-xs text-muted-foreground">
+                      <div className="px-3 py-2 text-xs text-gray-500">
                         {cms("common.loading", "Chargement...", "Loading...")}
                       </div>
                     )}
@@ -302,7 +298,7 @@ const HeroSection = () => {
                             setGeo(null);
                             setOpenDistricts(false);
                           }}
-                          className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-accent/60"
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         >
                           {d}
                         </button>
@@ -311,15 +307,20 @@ const HeroSection = () => {
                 )}
               </div>
 
-              {geoError && <div className="lg:col-span-12 text-xs text-destructive text-left px-1">{geoError}</div>}
+              {geoError && (
+                <div className="lg:col-span-12 text-xs text-red-600 text-left px-1">{geoError}</div>
+              )}
 
-              <Button type="submit" className="lg:col-span-12 w-full h-11 sm:h-12 bg-pro-blue hover:bg-pro-blue/90 text-sm sm:text-base">
+              <Button
+                type="submit"
+                className="lg:col-span-12 w-full h-11 sm:h-12 bg-pro-blue hover:bg-blue-700 text-sm sm:text-base"
+              >
                 {cms("home.search.btn_search", "Rechercher", "Search")}
               </Button>
             </div>
 
             {geo && (
-              <div className="mt-2 text-left text-[11px] sm:text-xs text-muted-foreground px-1">
+              <div className="mt-2 text-left text-[11px] sm:text-xs text-gray-500 px-1">
                 {cms(
                   "home.search.geo.enabled",
                   "Position détectée : le tri par distance sera activé.",

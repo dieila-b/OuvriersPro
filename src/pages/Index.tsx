@@ -331,7 +331,7 @@ const Index = () => {
 
   return (
     <div
-      className="min-h-dvh w-full min-w-0 overflow-x-hidden bg-transparent text-foreground flex flex-col"
+      className="min-h-dvh w-full min-w-0 overflow-x-hidden bg-white flex flex-col"
       style={{ WebkitTapHighlightColor: "transparent" }}
     >
       <Header />

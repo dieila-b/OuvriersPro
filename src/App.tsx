@@ -596,11 +596,7 @@ const App = () => {
             <Toaster />
             <Sonner />
             <RouterSwitch>
-              <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-transparent text-foreground relative isolate">
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(1200px_700px_at_50%_-120px,_hsl(var(--background-gradient-start)/0.55),_transparent_65%),radial-gradient(900px_520px_at_90%_0%,_hsl(var(--background-gradient-mid)/0.35),_transparent_60%),radial-gradient(1100px_650px_at_10%_10%,_hsl(var(--background-gradient-end)/0.30),_transparent_60%)]"
-                />
+              <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
                 <AppRoutes />
               </div>
             </RouterSwitch>

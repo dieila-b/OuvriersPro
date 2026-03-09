@@ -70,7 +70,7 @@ const FeaturesSection = () => {
   ];
 
   return (
-    <section className="w-full bg-transparent py-8 sm:py-10 lg:py-12">
+    <section className="w-full bg-pro-light py-8 sm:py-10 lg:py-12">
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div className="text-center mb-6 sm:mb-8">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
@@ -90,11 +90,11 @@ const FeaturesSection = () => {
           {features.map((f, index) => (
             <div
               key={index}
-              className="min-w-0 rounded-2xl p-5 sm:p-6 lg:p-8 shadow-sm hover:shadow-md transition-shadow animate-fade-in border border-border/50 bg-card/70 backdrop-blur-sm"
+              className="min-w-0 bg-white rounded-2xl p-5 sm:p-6 lg:p-8 shadow-sm hover:shadow-md transition-shadow animate-fade-in"
               style={{ animationDelay: `${index * 0.12}s` }}
             >
               <div className="flex flex-col items-center text-center">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-background/40 border border-border/50 flex items-center justify-center mb-3">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gray-100 flex items-center justify-center mb-3">
                   <f.icon className={`w-7 h-7 sm:w-8 sm:h-8 ${f.color}`} />
                 </div>
 
