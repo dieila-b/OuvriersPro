@@ -262,7 +262,7 @@ const HeroSection = () => {
 
               {/* District */}
               <div ref={districtsBoxRef} className="relative min-w-0 text-left lg:col-span-6">
-                <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground opacity-70 w-5 h-5" />
                 <Input
                   placeholder={cms("home.search.placeholder_district", "Quartier / commune", "District / area")}
                   value={district}
@@ -272,13 +272,13 @@ const HeroSection = () => {
                     setGeo(null);
                     setOpenDistricts(true);
                   }}
-                  className="w-full min-w-0 h-11 sm:h-12 pl-10 pr-14 text-sm sm:text-base text-gray-900"
+                  className="w-full min-w-0 h-11 sm:h-12 pl-10 pr-14 text-sm sm:text-base text-foreground"
                 />
 
                 <button
                   type="button"
                   onClick={handleGeoLocate}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center rounded-md border border-gray-200 bg-white px-2 py-1 text-gray-600 hover:bg-gray-50"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center rounded-md border border-border/60 bg-popover/75 backdrop-blur-md px-2 py-1 text-muted-foreground hover:bg-accent/60"
                   aria-label={cms("home.search.geo.cta", "Utiliser ma position", "Use my location")}
                   title={cms("home.search.geo.cta", "Utiliser ma position", "Use my location")}
                 >
@@ -286,9 +286,9 @@ const HeroSection = () => {
                 </button>
 
                 {openDistricts && (filteredDistricts.length > 0 || loadingOptions) && (
-                  <div className="absolute z-50 mt-1 w-full min-w-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                  <div className="absolute z-50 mt-1 w-full min-w-0 bg-popover/85 border border-border/60 rounded-xl shadow-lg overflow-hidden backdrop-blur-md">
                     {loadingOptions && (
-                      <div className="px-3 py-2 text-xs text-gray-500">
+                      <div className="px-3 py-2 text-xs text-muted-foreground">
                         {cms("common.loading", "Chargement...", "Loading...")}
                       </div>
                     )}
@@ -302,7 +302,7 @@ const HeroSection = () => {
                             setGeo(null);
                             setOpenDistricts(false);
                           }}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-accent/60"
                         >
                           {d}
                         </button>
@@ -311,20 +311,15 @@ const HeroSection = () => {
                 )}
               </div>
 
-              {geoError && (
-                <div className="lg:col-span-12 text-xs text-red-600 text-left px-1">{geoError}</div>
-              )}
+              {geoError && <div className="lg:col-span-12 text-xs text-destructive text-left px-1">{geoError}</div>}
 
-              <Button
-                type="submit"
-                className="lg:col-span-12 w-full h-11 sm:h-12 bg-pro-blue hover:bg-blue-700 text-sm sm:text-base"
-              >
+              <Button type="submit" className="lg:col-span-12 w-full h-11 sm:h-12 bg-pro-blue hover:bg-pro-blue/90 text-sm sm:text-base">
                 {cms("home.search.btn_search", "Rechercher", "Search")}
               </Button>
             </div>
 
             {geo && (
-              <div className="mt-2 text-left text-[11px] sm:text-xs text-gray-500 px-1">
+              <div className="mt-2 text-left text-[11px] sm:text-xs text-muted-foreground px-1">
                 {cms(
                   "home.search.geo.enabled",
                   "Position détectée : le tri par distance sera activé.",
