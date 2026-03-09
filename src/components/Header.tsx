@@ -100,6 +100,17 @@ const Header = () => {
     };
   }, []);
 
+  // Debug build marker (temp)
+  useEffect(() => {
+    try {
+      console.log("[Header][build]", {
+        build: BUILD_TAG,
+        href: window.location.href,
+        nativeAttr: document.documentElement?.getAttribute("data-ui-native"),
+      });
+    } catch {}
+  }, []);
+
   // Ferme le menu à chaque changement de route
   useEffect(() => {
     setMobileOpen(false);
