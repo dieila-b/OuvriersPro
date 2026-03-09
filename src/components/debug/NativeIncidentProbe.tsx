@@ -142,75 +142,45 @@ export default function NativeIncidentProbe() {
 
   return (
     <div
-      style={{
-        position: "fixed",
-        zIndex: 2147483646,
-        left: 8,
-        right: 8,
-        bottom: 8,
-        pointerEvents: "auto",
-        transform: "translateZ(0)",
-      }}
+      className="fixed inset-x-2 bottom-2 z-[2147483646] pointer-events-auto"
+      style={{ transform: "translateZ(0)" }}
     >
-      <div
-        style={{
-          background: "rgba(0,0,0,.85)",
-          color: "white",
-          borderRadius: 14,
-          padding: 12,
-          fontSize: 12,
-          lineHeight: 1.25,
-          boxShadow: "0 10px 30px rgba(0,0,0,.35)",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
-          <div style={{ fontWeight: 900 }}>ANDROID INCIDENT PROBE</div>
-          <div style={{ opacity: 0.8 }}>stamp: {BUILD_STAMP}</div>
+      <div className="rounded-2xl bg-foreground/90 text-background shadow-lg ring-1 ring-background/15 px-3 py-3 text-xs leading-snug">
+        <div className="flex items-baseline justify-between gap-2">
+          <div className="font-black tracking-wide">ANDROID INCIDENT PROBE</div>
+          <div className="opacity-80">stamp: {BUILD_STAMP}</div>
         </div>
 
-        <div style={{ marginTop: 6, opacity: 0.92 }}>
+        <div className="mt-2 opacity-90 break-words">
           native={String(native)} | href={typeof window !== "undefined" ? window.location.href : "—"}
         </div>
-        <div style={{ marginTop: 4, opacity: 0.92 }}>
+        <div className="mt-1 opacity-90 break-words">
           path={location.pathname} | hash={typeof window !== "undefined" ? window.location.hash : "—"}
         </div>
 
-        <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div className="mt-3 grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={() => hardGo("/login")}
-            style={{
-              borderRadius: 12,
-              padding: "10px 12px",
-              background: "rgba(255,255,255,.18)",
-              color: "white",
-              border: "1px solid rgba(255,255,255,.22)",
-              fontWeight: 900,
-            }}
+            className="rounded-xl border border-background/20 bg-background/10 px-3 py-2 font-extrabold"
           >
             TEST: LOGIN
           </button>
           <button
             type="button"
             onClick={() => hardGo("/inscription-ouvrier")}
-            style={{
-              borderRadius: 12,
-              padding: "10px 12px",
-              background: "rgba(255,255,255,.18)",
-              color: "white",
-              border: "1px solid rgba(255,255,255,.22)",
-              fontWeight: 900,
-            }}
+            className="rounded-xl border border-background/20 bg-background/10 px-3 py-2 font-extrabold"
           >
             TEST: PRESTATAIRE
           </button>
         </div>
 
-        <div style={{ marginTop: 8, opacity: 0.85 }}>
-          lastAction: {lastAction ?? "—"}
-        </div>
-        <div style={{ marginTop: 4, opacity: 0.85 }}>
-          lastEvt: {lastEvt ? `${lastEvt.type} @ (${lastEvt.x},${lastEvt.y}) hit=${lastEvt.hit} pe=${lastEvt.pe} z=${lastEvt.z} pos=${lastEvt.pos}` : "—"}
+        <div className="mt-3 opacity-85">lastAction: {lastAction ?? "—"}</div>
+        <div className="mt-1 opacity-85 break-words">
+          lastEvt:{" "}
+          {lastEvt
+            ? `${lastEvt.type} @ (${lastEvt.x},${lastEvt.y}) hit=${lastEvt.hit} pe=${lastEvt.pe} z=${lastEvt.z} pos=${lastEvt.pos}`
+            : "—"}
         </div>
       </div>
     </div>
