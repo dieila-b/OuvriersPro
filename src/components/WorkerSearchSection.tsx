@@ -1092,7 +1092,7 @@ const WorkerSearchSection: React.FC = () => {
                     .join("");
 
                   return (
-                    <div key={w.id} className="min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-3">
+                    <div key={w.id} className="min-w-0 rounded-2xl border border-border/50 bg-card/70 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-10 h-10 rounded-full bg-pro-blue text-white flex items-center justify-center text-sm font-semibold shrink-0">{initials || "OP"}</div>
                         <div className="min-w-0">
