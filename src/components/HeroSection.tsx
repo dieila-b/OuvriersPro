@@ -217,7 +217,7 @@ const HeroSection = () => {
               e.preventDefault();
               handleSearch();
             }}
-            className="w-full bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl text-gray-900 relative z-20"
+            className="w-full rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl relative z-20 border border-border/50 bg-card/80 text-foreground backdrop-blur-md"
           >
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-3 items-stretch min-w-0">
               {/* Job */}
