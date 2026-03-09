@@ -164,7 +164,7 @@ const Header = () => {
             />
 
             <div
-              className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg"
+              className="absolute top-0 left-0 right-0 w-full bg-card/85 border-b border-border/50 shadow-lg backdrop-blur-md"
               style={{ pointerEvents: mobileOpen ? "auto" : "none" }}
             >
               <div className="w-full px-4 sm:px-6 py-3">
@@ -217,7 +217,7 @@ const Header = () => {
   return (
     <>
       <header className="sticky top-0 z-40 w-full max-w-full">
-        <div className="bg-white border-b border-gray-200 overflow-hidden">
+        <div className="bg-card/80 border-b border-border/50 overflow-hidden backdrop-blur-md">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-16 sm:h-[72px] min-w-0 flex items-center justify-between gap-3">
               <button
@@ -284,7 +284,7 @@ const Header = () => {
                       <span className="uppercase">{language}</span>
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-white">
+                  <DropdownMenuContent align="end" className="bg-card border border-border/50">
                     <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
                       {cms("header.lang.fr", "Français", "French")}
                     </DropdownMenuItem>
@@ -310,7 +310,7 @@ const Header = () => {
                       <span className="uppercase">{language}</span>
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-white">
+                  <DropdownMenuContent align="end" className="bg-card border border-border/50">
                     <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
                       {cms("header.lang.fr", "Français", "French")}
                     </DropdownMenuItem>
@@ -335,7 +335,7 @@ const Header = () => {
             </div>
           </div>
 
-          <div className="h-1 w-full bg-gradient-to-r from-pro-blue/90 via-blue-600/90 to-pro-blue/90" />
+          <div className="h-px w-full bg-border/60" />
         </div>
       </header>
 

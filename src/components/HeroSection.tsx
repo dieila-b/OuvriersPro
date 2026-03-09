@@ -195,14 +195,18 @@ const HeroSection = () => {
   };
 
   return (
-    <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden">
+    <section className="relative w-full overflow-hidden">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_520px_at_50%_-120px,_hsl(var(--background-gradient-start)/0.90),_transparent_65%),radial-gradient(700px_420px_at_90%_0%,_hsl(var(--background-gradient-mid)/0.70),_transparent_60%),radial-gradient(900px_520px_at_10%_10%,_hsl(var(--background-gradient-end)/0.60),_transparent_60%)]"
+      />
       <div className="relative z-10 w-full px-4 sm:px-6 lg:px-10 py-8 sm:py-10">
         <div className="w-full max-w-5xl mx-auto text-center">
-          <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
+          <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words text-foreground">
             {cms("home.hero.title", "Trouvez des prestataires fiables près de chez vous", "Find trusted providers near you")}
           </h1>
 
-          <p className="mt-3 sm:mt-4 text-sm sm:text-base md:text-xl text-blue-100 break-words">
+          <p className="mt-3 sm:mt-4 text-sm sm:text-base md:text-xl text-muted-foreground break-words">
             {cms("home.hero.subtitle", "Comparez, contactez et réservez en toute confiance.", "Compare, contact and book with confidence.")}
           </p>
         </div>
@@ -213,7 +217,7 @@ const HeroSection = () => {
               e.preventDefault();
               handleSearch();
             }}
-            className="w-full bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl text-gray-900 relative z-20"
+            className="w-full rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl relative z-20 border border-border/50 bg-card/80 text-foreground backdrop-blur-md"
           >
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-3 items-stretch min-w-0">
               {/* Job */}
@@ -227,7 +231,7 @@ const HeroSection = () => {
                     setSearchTerm(e.target.value);
                     setOpenJobs(true);
                   }}
-                  className="w-full min-w-0 h-11 sm:h-12 pl-10 pr-9 text-sm sm:text-base text-gray-900"
+                  className="w-full min-w-0 h-11 sm:h-12 pl-10 pr-9 text-sm sm:text-base"
                 />
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
 
