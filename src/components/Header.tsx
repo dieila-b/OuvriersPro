@@ -248,26 +248,100 @@ const Header = () => {
                 </div>
 
                 <div className="mt-3 flex flex-col gap-3 min-w-0">
-                  <button
-                    type="button"
+                  <a
+                    href={(() => {
+                      const isNative =
+                        typeof document !== "undefined" &&
+                        document.documentElement?.getAttribute("data-ui-native") === "true";
+                      return isNative ? "#/inscription-ouvrier" : "/inscription-ouvrier";
+                    })()}
                     data-clickable
                     className="w-full text-left py-2 font-medium text-pro-gray hover:text-pro-blue"
                     style={{ touchAction: "manipulation" as any }}
-                    onClick={() => safeGo("/inscription-ouvrier", "become_provider")}
+                    onPointerDownCapture={() => {
+                      try {
+                        console.log("tap provider detected");
+                      } catch {}
+                    }}
+                    onTouchStartCapture={() => {
+                      try {
+                        console.log("tap provider detected");
+                      } catch {}
+                    }}
+                    onClick={(e) => {
+                      try {
+                        console.log("tap provider detected");
+                        console.log("navigate provider start");
+                      } catch {}
+
+                      const isNative =
+                        typeof document !== "undefined" &&
+                        document.documentElement?.getAttribute("data-ui-native") === "true";
+
+                      // ✅ Web: keep SPA navigation (no reload)
+                      if (!isNative) {
+                        try {
+                          e.preventDefault();
+                        } catch {}
+                        safeGo("/inscription-ouvrier", "become_provider");
+                        return;
+                      }
+
+                      // ✅ Native: DO NOT preventDefault => href "#/..." is the guaranteed fallback
+                      setMobileOpen(false);
+                    }}
                   >
                     {becomeProviderLabel}
-                  </button>
+                  </a>
 
-                  <button
-                    type="button"
+                  <a
+                    href={(() => {
+                      const isNative =
+                        typeof document !== "undefined" &&
+                        document.documentElement?.getAttribute("data-ui-native") === "true";
+                      return isNative ? `#${accountPath}` : accountPath;
+                    })()}
                     data-clickable
                     className="w-full rounded-full bg-pro-blue text-white py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
                     style={{ touchAction: "manipulation" as any }}
-                    onClick={() => safeGo(accountPath, "account")}
+                    onPointerDownCapture={() => {
+                      try {
+                        console.log("tap login detected");
+                      } catch {}
+                    }}
+                    onTouchStartCapture={() => {
+                      try {
+                        console.log("tap login detected");
+                      } catch {}
+                    }}
+                    onClick={(e) => {
+                      try {
+                        console.log("tap login detected");
+                        console.log("navigate login start");
+                      } catch {}
+
+                      const isNative =
+                        typeof document !== "undefined" &&
+                        document.documentElement?.getAttribute("data-ui-native") === "true";
+
+                      // ✅ Web: keep SPA navigation
+                      if (!isNative) {
+                        try {
+                          e.preventDefault();
+                        } catch {}
+                        safeGo(accountPath, "account");
+                        return;
+                      }
+
+                      // ✅ Native: DO NOT preventDefault => href "#/..." is the guaranteed fallback
+                      setMobileOpen(false);
+                    }}
                   >
                     <User className="w-4 h-4" />
                     {accountLabel}
-                  </button>
+                  </a>
+
+
 
                   <div className="h-1" />
                 </div>
