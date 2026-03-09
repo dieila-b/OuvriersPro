@@ -195,7 +195,11 @@ const HeroSection = () => {
   };
 
   return (
-    <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden">
+    <section className="relative w-full overflow-hidden">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_520px_at_50%_-120px,_hsl(var(--background-gradient-start)/0.90),_transparent_65%),radial-gradient(700px_420px_at_90%_0%,_hsl(var(--background-gradient-mid)/0.70),_transparent_60%),radial-gradient(900px_520px_at_10%_10%,_hsl(var(--background-gradient-end)/0.60),_transparent_60%)]"
+      />
       <div className="relative z-10 w-full px-4 sm:px-6 lg:px-10 py-8 sm:py-10">
         <div className="w-full max-w-5xl mx-auto text-center">
           <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
