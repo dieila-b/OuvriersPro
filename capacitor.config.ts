@@ -9,7 +9,7 @@ const config: CapacitorConfig = {
   // ✅ Live-reload: l'app mobile charge le code depuis le serveur preview
   // Supprimez ce bloc pour les builds de production (APK final)
   server: {
-    url: "https://0513bd25-b532-4ad1-87bd-d54c9a943029.lovableproject.com?forceHideBadge=true&mobileBuild=2026-03-09-v2",
+    url: "https://0513bd25-b532-4ad1-87bd-d54c9a943029.lovableproject.com?forceHideBadge=true&mobileBuild=header-mobile-fix-2026-03-09-v3",
     cleartext: true,
   },
 
