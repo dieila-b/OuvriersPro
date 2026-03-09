@@ -7,9 +7,11 @@ const BUILD_TAG =
   // @ts-ignore
   (import.meta as any).env?.VITE_BUILD_TAG || BUILD_STAMP;
 
+function detectNative(): boolean {
   try {
     const sp = new URLSearchParams(window.location.search || "");
     if (sp.get("forceNative") === "1") return true;
+  } catch {}
   } catch {}
 
   try {
