@@ -232,6 +232,7 @@ const HeroSection = () => {
                     setOpenJobs(true);
                   }}
                   className="w-full min-w-0 h-11 sm:h-12 pl-10 pr-9 text-sm sm:text-base"
+                />
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
 
                 {openJobs && (filteredJobs.length > 0 || loadingOptions) && (
