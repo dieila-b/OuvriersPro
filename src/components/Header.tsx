@@ -323,7 +323,7 @@ const Header = () => {
                   type="button"
                   size="sm"
                   className="rounded-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center gap-2 whitespace-nowrap shadow-sm"
-                  onClick={() => go(accountPath)}
+                  onClick={() => safeGo(accountPath, "account_desktop")}
                   style={{ touchAction: "manipulation" as any }}
                 >
                   <User className="w-4 h-4" />
