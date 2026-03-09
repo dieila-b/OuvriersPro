@@ -329,6 +329,7 @@ const Index = () => {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, [isHomeRoute, location.hash]);
 
+  return (
     <div
       className="min-h-dvh w-full min-w-0 overflow-x-hidden bg-transparent text-foreground flex flex-col"
       style={{ WebkitTapHighlightColor: "transparent" }}
