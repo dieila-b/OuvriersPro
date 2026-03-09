@@ -337,10 +337,13 @@ const Index = () => {
     >
       <Header />
 
-      {/* ✅ DEBUG NATIF: smoke-test navigation hors menu mobile */}
+      {/* ✅ DEBUG NATIF: smoke-test navigation hors menu mobile (active seulement avec ?navTest=1) */}
       {(() => {
         try {
           const sp = new URLSearchParams(window.location.search || "");
+          const navTest = sp.get("navTest") === "1";
+          if (!navTest) return false;
+
           const forced = sp.get("forceNative") === "1";
           const attr = document.documentElement?.getAttribute("data-ui-native") === "true";
           return forced || attr;
@@ -348,7 +351,7 @@ const Index = () => {
           return false;
         }
       })() && (
-        <div className="md:hidden fixed left-3 right-3 bottom-3 z-[10000]">
+        <div className="md:hidden fixed left-3 right-3 bottom-3" style={{ zIndex: 2147483647 }}>
           <div className="rounded-xl border border-border bg-background/95 backdrop-blur px-3 py-2 shadow-sm">
             <div className="text-[11px] font-semibold text-foreground/80">NAV SMOKE TEST (native)</div>
             <div className="mt-2 grid grid-cols-2 gap-2">
@@ -368,7 +371,6 @@ const Index = () => {
                   try {
                     navigate("/login");
                   } catch {}
-                  // fallback hash (HashRouter natif)
                   window.setTimeout(() => {
                     try {
                       if (!window.location.hash.startsWith("#/login")) window.location.hash = "#/login";
