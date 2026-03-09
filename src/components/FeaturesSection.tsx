@@ -70,7 +70,7 @@ const FeaturesSection = () => {
   ];
 
   return (
-    <section className="w-full bg-pro-light py-8 sm:py-10 lg:py-12">
+    <section className="w-full bg-transparent py-8 sm:py-10 lg:py-12">
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div className="text-center mb-6 sm:mb-8">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
