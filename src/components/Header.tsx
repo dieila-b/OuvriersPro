@@ -388,7 +388,7 @@ const Header = () => {
                   variant="outline"
                   size="sm"
                   type="button"
-                  onClick={() => setMobileOpen((v) => !v)}
+                  onClick={toggleMobileMenu}
                   aria-label={cms("header.mobile_menu.aria", "Menu mobile", "Mobile menu")}
                   className="rounded-full px-3 whitespace-nowrap"
                   style={{ touchAction: "manipulation" as any }}
