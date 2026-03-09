@@ -137,7 +137,7 @@
     opacity: 0.9;
   }
   
-  /* Couche 2: Texture subtile et grain moderne */
+  /* Couche 2: Subtle cloud texture overlay */
   body::after {
     content: "";
     position: fixed;
@@ -148,9 +148,10 @@
     pointer-events: none;
     z-index: 0;
     background-image: 
-      repeating-linear-gradient(0deg, transparent, transparent 2px, hsla(210, 50%, 90%, 0.03) 2px, hsla(210, 50%, 90%, 0.03) 4px),
-      repeating-linear-gradient(90deg, transparent, transparent 2px, hsla(220, 50%, 92%, 0.03) 2px, hsla(220, 50%, 92%, 0.03) 4px);
-    opacity: 0.5;
+      radial-gradient(ellipse 600px 200px at 30% 40%, hsla(0, 0%, 100%, 0.15) 0%, transparent 70%),
+      radial-gradient(ellipse 500px 180px at 70% 65%, hsla(210, 40%, 98%, 0.12) 0%, transparent 65%),
+      radial-gradient(ellipse 450px 150px at 15% 70%, hsla(0, 0%, 100%, 0.1) 0%, transparent 60%);
+    opacity: 0.7;
   }
 
   #root {
