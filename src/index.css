@@ -4,12 +4,19 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    /* Premium blue gradient background colors */
+    --background: 210 100% 98%;
+    --background-gradient-start: 210 100% 98%;
+    --background-gradient-end: 220 60% 96%;
     --foreground: 222.2 84% 4.9%;
+    
+    /* Card avec fond blanc pour contraste sur fond bleu */
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
+    
+    /* Primary blue pour cohérence avec le fond */
     --primary: 222.2 47.4% 11.2%;
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
