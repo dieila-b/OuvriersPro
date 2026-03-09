@@ -164,9 +164,31 @@ const Header = () => {
       if (now - lastNavAtRef.current < 450) return;
       lastNavAtRef.current = now;
 
-      const isNative =
-        typeof document !== "undefined" &&
-        document.documentElement?.getAttribute("data-ui-native") === "true";
+      const isNative = (() => {
+        try {
+          const sp = new URLSearchParams(window.location.search || "");
+          if (sp.get("forceNative") === "1") return true;
+        } catch {}
+
+        try {
+          if (Capacitor?.isNativePlatform?.()) return true;
+        } catch {}
+
+        try {
+          const wCap = (window as any)?.Capacitor;
+          if (wCap?.isNativePlatform?.()) return true;
+        } catch {}
+
+        try {
+          const p = window.location?.protocol ?? "";
+          if (p === "capacitor:" || p === "file:") return true;
+        } catch {}
+
+        return (
+          typeof document !== "undefined" &&
+          document.documentElement?.getAttribute("data-ui-native") === "true"
+        );
+      })();
 
       try {
         console.log("[Header][nav] tap", {
