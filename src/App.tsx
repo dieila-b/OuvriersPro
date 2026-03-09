@@ -90,6 +90,12 @@ const ClientContactForm = lazyRetry(() => import("./pages/ClientContactForm"));
  * ✅ Détection native robuste
  */
 const isNativeRuntime = () => {
+  // ✅ Debug helper (web only): allow simulating native routing/CSS
+  try {
+    const sp = new URLSearchParams(window.location.search || "");
+    if (sp.get("forceNative") === "1") return true;
+  } catch {}
+
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
