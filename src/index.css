@@ -4,11 +4,11 @@
 
 @layer base {
   :root {
-    /* Sky blue cloud-inspired background */
-    --background: 210 60% 95%;
-    --background-gradient-start: 205 70% 92%;
-    --background-gradient-mid: 210 55% 88%;
-    --background-gradient-end: 215 65% 85%;
+    /* Soft cloudy sky background - exact match */
+    --background: 210 45% 94%;
+    --background-gradient-start: 210 50% 95%;
+    --background-gradient-mid: 212 48% 93%;
+    --background-gradient-end: 215 45% 91%;
     --foreground: 222.2 84% 4.9%;
     
     /* Premium card avec effet glassmorphism */
@@ -107,18 +107,18 @@
     color: hsl(var(--foreground));
     position: relative;
     
-    /* Sky blue cloudy background inspired by reference */
+    /* Soft cloudy sky - exact match to reference */
     background: 
       linear-gradient(180deg, 
-        hsl(205, 70%, 92%) 0%, 
-        hsl(210, 60%, 90%) 30%, 
-        hsl(210, 55%, 88%) 60%, 
-        hsl(215, 60%, 86%) 100%
+        hsl(210, 50%, 95%) 0%, 
+        hsl(212, 48%, 94%) 25%, 
+        hsl(213, 47%, 93%) 50%, 
+        hsl(215, 45%, 92%) 100%
       );
     background-attachment: fixed;
   }
   
-  /* Couche 1: Soft cloud-like shapes */
+  /* Couche 1: Realistic fluffy white clouds */
   body::before {
     content: "";
     position: fixed;
@@ -129,15 +129,15 @@
     pointer-events: none;
     z-index: 0;
     background: 
-      radial-gradient(ellipse 1200px 400px at 20% 15%, hsla(0, 0%, 100%, 0.7) 0%, transparent 50%),
-      radial-gradient(ellipse 900px 350px at 75% 25%, hsla(210, 50%, 97%, 0.6) 0%, transparent 55%),
-      radial-gradient(ellipse 1000px 450px at 50% 60%, hsla(0, 0%, 100%, 0.5) 0%, transparent 60%),
-      radial-gradient(ellipse 800px 300px at 85% 75%, hsla(205, 60%, 95%, 0.6) 0%, transparent 50%),
-      radial-gradient(ellipse 700px 250px at 10% 80%, hsla(0, 0%, 100%, 0.65) 0%, transparent 55%);
-    opacity: 0.9;
+      radial-gradient(ellipse 1400px 450px at 15% 20%, hsla(0, 0%, 100%, 0.85) 0%, hsla(0, 0%, 100%, 0.4) 40%, transparent 65%),
+      radial-gradient(ellipse 1100px 380px at 70% 15%, hsla(0, 0%, 100%, 0.75) 0%, hsla(0, 0%, 100%, 0.35) 45%, transparent 70%),
+      radial-gradient(ellipse 1300px 500px at 50% 55%, hsla(0, 0%, 100%, 0.65) 0%, hsla(0, 0%, 100%, 0.3) 50%, transparent 75%),
+      radial-gradient(ellipse 900px 350px at 85% 70%, hsla(0, 0%, 100%, 0.7) 0%, hsla(0, 0%, 100%, 0.3) 45%, transparent 68%),
+      radial-gradient(ellipse 800px 320px at 10% 85%, hsla(0, 0%, 100%, 0.8) 0%, hsla(0, 0%, 100%, 0.38) 48%, transparent 72%);
+    opacity: 1;
   }
   
-  /* Couche 2: Subtle cloud texture overlay */
+  /* Couche 2: Additional soft cloud details */
   body::after {
     content: "";
     position: fixed;
@@ -148,10 +148,10 @@
     pointer-events: none;
     z-index: 0;
     background-image: 
-      radial-gradient(ellipse 600px 200px at 30% 40%, hsla(0, 0%, 100%, 0.15) 0%, transparent 70%),
-      radial-gradient(ellipse 500px 180px at 70% 65%, hsla(210, 40%, 98%, 0.12) 0%, transparent 65%),
-      radial-gradient(ellipse 450px 150px at 15% 70%, hsla(0, 0%, 100%, 0.1) 0%, transparent 60%);
-    opacity: 0.7;
+      radial-gradient(ellipse 750px 280px at 40% 35%, hsla(0, 0%, 100%, 0.25) 0%, hsla(0, 0%, 100%, 0.08) 55%, transparent 80%),
+      radial-gradient(ellipse 650px 240px at 75% 60%, hsla(0, 0%, 100%, 0.22) 0%, hsla(0, 0%, 100%, 0.07) 50%, transparent 75%),
+      radial-gradient(ellipse 550px 200px at 20% 75%, hsla(0, 0%, 100%, 0.2) 0%, hsla(0, 0%, 100%, 0.06) 52%, transparent 78%);
+    opacity: 0.85;
   }
 
   #root {
