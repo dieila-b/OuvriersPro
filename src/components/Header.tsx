@@ -273,10 +273,22 @@ const Header = () => {
                         console.log("tap provider detected");
                         console.log("navigate provider start");
                       } catch {}
-                      try {
-                        e.preventDefault();
-                      } catch {}
-                      safeGo("/inscription-ouvrier", "become_provider");
+
+                      const isNative =
+                        typeof document !== "undefined" &&
+                        document.documentElement?.getAttribute("data-ui-native") === "true";
+
+                      // ✅ Web: keep SPA navigation (no reload)
+                      if (!isNative) {
+                        try {
+                          e.preventDefault();
+                        } catch {}
+                        safeGo("/inscription-ouvrier", "become_provider");
+                        return;
+                      }
+
+                      // ✅ Native: DO NOT preventDefault => href "#/..." is the guaranteed fallback
+                      setMobileOpen(false);
                     }}
                   >
                     {becomeProviderLabel}
@@ -307,10 +319,22 @@ const Header = () => {
                         console.log("tap login detected");
                         console.log("navigate login start");
                       } catch {}
-                      try {
-                        e.preventDefault();
-                      } catch {}
-                      safeGo(accountPath, "account");
+
+                      const isNative =
+                        typeof document !== "undefined" &&
+                        document.documentElement?.getAttribute("data-ui-native") === "true";
+
+                      // ✅ Web: keep SPA navigation
+                      if (!isNative) {
+                        try {
+                          e.preventDefault();
+                        } catch {}
+                        safeGo(accountPath, "account");
+                        return;
+                      }
+
+                      // ✅ Native: DO NOT preventDefault => href "#/..." is the guaranteed fallback
+                      setMobileOpen(false);
                     }}
                   >
                     <User className="w-4 h-4" />
