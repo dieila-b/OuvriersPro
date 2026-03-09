@@ -202,8 +202,8 @@ const Header = () => {
                     data-clickable
                     className="w-full text-left py-2 font-medium text-pro-gray hover:text-pro-blue"
                     style={{ touchAction: "manipulation" as any }}
-                    onClick={() => safeGo("/forfaits", "become_provider")}
-                    onTouchEnd={() => safeGo("/forfaits", "become_provider_touch")}
+                    onClick={() => safeGo("/inscription-ouvrier", "become_provider")}
+                    onTouchEnd={() => safeGo("/inscription-ouvrier", "become_provider_touch")}
                   >
                     {becomeProviderLabel}
                   </button>
