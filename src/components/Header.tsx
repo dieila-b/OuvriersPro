@@ -248,51 +248,19 @@ const Header = () => {
                 </div>
 
                 <div className="mt-3 flex flex-col gap-3 min-w-0">
-                  <a
-                    href={(() => {
-                      const isNative =
-                        typeof document !== "undefined" &&
-                        document.documentElement?.getAttribute("data-ui-native") === "true";
-                      return isNative ? "#/inscription-ouvrier" : "/inscription-ouvrier";
-                    })()}
-                    data-clickable
+                  <button
+                    type="button"
                     className="w-full text-left py-2 font-medium text-pro-gray hover:text-pro-blue"
                     style={{ touchAction: "manipulation" as any }}
-                    onPointerDownCapture={() => {
-                      try {
-                        console.log("tap provider detected");
-                      } catch {}
-                    }}
-                    onTouchStartCapture={() => {
-                      try {
-                        console.log("tap provider detected");
-                      } catch {}
-                    }}
-                    onClick={(e) => {
-                      try {
-                        console.log("tap provider detected");
-                        console.log("navigate provider start");
-                      } catch {}
-
-                      const isNative =
-                        typeof document !== "undefined" &&
-                        document.documentElement?.getAttribute("data-ui-native") === "true";
-
-                      // ✅ Web: keep SPA navigation (no reload)
-                      if (!isNative) {
-                        try {
-                          e.preventDefault();
-                        } catch {}
-                        safeGo("/inscription-ouvrier", "become_provider");
-                        return;
-                      }
-
-                      // ✅ Native: DO NOT preventDefault => href "#/..." is the guaranteed fallback
-                      setMobileOpen(false);
+                    onClick={() => {
+                      console.log("[Header] tap provider -> navigate /inscription-ouvrier");
+                      navigate("/inscription-ouvrier");
+                      // Delay menu close so navigate() completes before portal unmounts
+                      setTimeout(() => setMobileOpen(false), 60);
                     }}
                   >
                     {becomeProviderLabel}
-                  </a>
+                  </button>
 
                   <a
                     href={(() => {
