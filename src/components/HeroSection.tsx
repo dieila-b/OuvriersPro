@@ -206,7 +206,7 @@ const HeroSection = () => {
             {cms("home.hero.title", "Trouvez des prestataires fiables près de chez vous", "Find trusted providers near you")}
           </h1>
 
-          <p className="mt-3 sm:mt-4 text-sm sm:text-base md:text-xl text-blue-100 break-words">
+          <p className="mt-3 sm:mt-4 text-sm sm:text-base md:text-xl text-muted-foreground break-words">
             {cms("home.hero.subtitle", "Comparez, contactez et réservez en toute confiance.", "Compare, contact and book with confidence.")}
           </p>
         </div>
