@@ -12,7 +12,7 @@ function detectNative(): boolean {
     const sp = new URLSearchParams(window.location.search || "");
     if (sp.get("forceNative") === "1") return true;
   } catch {}
-  } catch {}
+
 
   try {
     const wCap = (window as any)?.Capacitor;
