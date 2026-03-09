@@ -107,13 +107,13 @@
     color: hsl(var(--foreground));
     position: relative;
     
-    /* Sky blue cloudy background inspired by reference */
+    /* Soft cloudy sky - exact match to reference */
     background: 
       linear-gradient(180deg, 
-        hsl(205, 70%, 92%) 0%, 
-        hsl(210, 60%, 90%) 30%, 
-        hsl(210, 55%, 88%) 60%, 
-        hsl(215, 60%, 86%) 100%
+        hsl(210, 50%, 95%) 0%, 
+        hsl(212, 48%, 94%) 25%, 
+        hsl(213, 47%, 93%) 50%, 
+        hsl(215, 45%, 92%) 100%
       );
     background-attachment: fixed;
   }
