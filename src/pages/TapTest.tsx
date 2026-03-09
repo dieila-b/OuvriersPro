@@ -1,12 +1,12 @@
 // src/pages/TapTest.tsx
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { BUILD_STAMP } from "@/lib/buildStamp";
 
 const BUILD_TAG =
   // @ts-ignore
-  (import.meta as any).env?.VITE_BUILD_TAG || "tap-test-2026-03-09";
+  (import.meta as any).env?.VITE_BUILD_TAG || BUILD_STAMP;
 
-function detectNative(): boolean {
   try {
     const sp = new URLSearchParams(window.location.search || "");
     if (sp.get("forceNative") === "1") return true;

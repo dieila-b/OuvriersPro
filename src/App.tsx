@@ -407,11 +407,13 @@ function TapInspectorGate() {
 
 const AppRoutes = () => (
   <>
+    <NativeIncidentProbe />
     <ScrollManager />
     <AuthAuditLogger />
     <UiDebugBadge />
     <GlobalLinkInterceptor />
     <TapInspectorGate />
+
 
     <Suspense fallback={<div className="p-6 text-gray-600">Chargement…</div>}>
       <Routes>
