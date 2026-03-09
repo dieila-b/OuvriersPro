@@ -897,11 +897,11 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-600 mb-1">{jobLabel}</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">{jobLabel}</label>
               <select
                 value={draft.job}
                 onChange={(e) => updateDraft({ job: e.target.value })}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                className="w-full rounded-md border border-border/60 bg-card/80 backdrop-blur-sm px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
               >
                 <option value="all">{jobAll}</option>
                 {jobs.map((job) => (
@@ -913,14 +913,14 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">{regionLabel}</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">{regionLabel}</label>
               <select
                 value={draft.region}
                 onChange={(e) => {
                   const region = e.target.value;
                   updateDraft({ region, city: "", commune: "", district: "" });
                 }}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                className="w-full rounded-md border border-border/60 bg-card/80 backdrop-blur-sm px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
               >
                 <option value="">{regionAll}</option>
                 {regions.map((r) => (
@@ -932,14 +932,14 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">{cityLabel}</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">{cityLabel}</label>
               <select
                 value={draft.city}
                 onChange={(e) => {
                   const city = e.target.value;
                   updateDraft({ city, commune: "", district: "" });
                 }}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                className="w-full rounded-md border border-border/60 bg-card/80 backdrop-blur-sm px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
               >
                 <option value="">{cityAll}</option>
                 {cities.map((c) => (
@@ -951,14 +951,14 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">{communeLabel}</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">{communeLabel}</label>
               <select
                 value={draft.commune}
                 onChange={(e) => {
                   const commune = e.target.value;
                   updateDraft({ commune, district: "" });
                 }}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                className="w-full rounded-md border border-border/60 bg-card/80 backdrop-blur-sm px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
               >
                 <option value="">{communeAll}</option>
                 {communes.map((c) => (
@@ -970,11 +970,11 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-6">
-              <label className="block text-xs font-medium text-gray-600 mb-1">{districtLabel}</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">{districtLabel}</label>
               <select
                 value={draft.district}
                 onChange={(e) => updateDraft({ district: e.target.value })}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
+                className="w-full rounded-md border border-border/60 bg-card/80 backdrop-blur-sm px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
               >
                 <option value="">{districtAll}</option>
                 {districts.map((d) => (
