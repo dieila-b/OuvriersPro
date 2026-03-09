@@ -125,10 +125,11 @@ const Index = () => {
   const isSearchRoute = location.pathname === "/search" || location.pathname === "/rechercher";
   const isHomeRoute = location.pathname === "/";
 
-  // ✅ Tap->click: seulement natif (pas sur web)
-  useNativeTapToClickFix(true);
+  // ✅ IMPORTANT (Android WebView): le hack touchend→click peut provoquer un double déclenchement
+  // (touchend synthétique + click natif) => toggle annulé / navigation “fantôme”.
+  // On le désactive pour fiabiliser les taps.
+  useNativeTapToClickFix(false);
 
-  // ✅ Pour masquer la section abonnement si ouvrier connecté
   const [workerCheckLoading, setWorkerCheckLoading] = useState(true);
   const [isWorker, setIsWorker] = useState(false);
 
