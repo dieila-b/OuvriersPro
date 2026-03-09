@@ -191,7 +191,7 @@ const SubscriptionSection = () => {
   const currency = cms("pricing.currency", "FG", "GNF");
 
   return (
-    <section id="subscription" className="w-full py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-gray-50 to-gray-100">
+    <section id="subscription" className="w-full py-12 sm:py-16 lg:py-20 bg-transparent">
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div className="text-center mb-10 sm:mb-12 lg:mb-16">
           <div className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-sm shadow-sm">
