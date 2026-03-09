@@ -34,6 +34,12 @@ function safeGetWindowCapacitor(): any | null {
 function isNativeRuntime(): boolean {
   const wCap = safeGetWindowCapacitor();
 
+  // ✅ Debug helper (web only): allow simulating native behavior
+  try {
+    const sp = new URLSearchParams(window.location.search || "");
+    if (sp.get("forceNative") === "1") return true;
+  } catch {}
+
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}

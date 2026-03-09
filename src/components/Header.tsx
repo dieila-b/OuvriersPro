@@ -172,12 +172,12 @@ const Header = () => {
           >
             {/* Backdrop */}
             <div
-              className="absolute inset-0 bg-black/35"
+              className="absolute inset-0 z-0 bg-black/35"
               onClick={() => setMobileOpen(false)}
             />
 
             {/* Menu panel */}
-            <div className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg">
+            <div className="absolute top-0 left-0 right-0 z-10 w-full bg-white border-b border-gray-200 shadow-lg">
               <div className="w-full px-4 sm:px-6 py-3">
                 <div className="flex items-center justify-between gap-3 min-w-0">
                   <span className="text-sm font-semibold text-pro-gray">
@@ -199,18 +199,22 @@ const Header = () => {
                 <div className="mt-3 flex flex-col gap-3 min-w-0">
                   <button
                     type="button"
+                    data-clickable
                     className="w-full text-left py-2 font-medium text-pro-gray hover:text-pro-blue"
                     style={{ touchAction: "manipulation" as any }}
-                    onClick={() => go("/forfaits")}
+                    onClick={() => safeGo("/forfaits", "become_provider")}
+                    onTouchEnd={() => safeGo("/forfaits", "become_provider_touch")}
                   >
                     {becomeProviderLabel}
                   </button>
 
                   <button
                     type="button"
+                    data-clickable
                     className="w-full rounded-full bg-pro-blue text-white py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
                     style={{ touchAction: "manipulation" as any }}
-                    onClick={() => go(accountPath)}
+                    onClick={() => safeGo(accountPath, "account")}
+                    onTouchEnd={() => safeGo(accountPath, "account_touch")}
                   >
                     <User className="w-4 h-4" />
                     {accountLabel}
