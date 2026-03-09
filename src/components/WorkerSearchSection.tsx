@@ -847,7 +847,7 @@ const WorkerSearchSection: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-6 lg:gap-8 items-start min-w-0">
-          <aside className="min-w-0 bg-gray-50 rounded-2xl p-4 sm:p-5 border border-gray-200">
+          <aside className="min-w-0 bg-card/60 backdrop-blur-sm rounded-2xl p-4 sm:p-5 border border-border/50">
             <div className="flex items-start justify-between gap-3 mb-4">
               <h3 className="text-base font-semibold text-pro-gray">{filtersTitle}</h3>
 
