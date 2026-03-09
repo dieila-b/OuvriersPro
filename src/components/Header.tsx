@@ -249,7 +249,12 @@ const Header = () => {
 
                 <div className="mt-3 flex flex-col gap-3 min-w-0">
                   <a
-                    href="/inscription-ouvrier"
+                    href={(() => {
+                      const isNative =
+                        typeof document !== "undefined" &&
+                        document.documentElement?.getAttribute("data-ui-native") === "true";
+                      return isNative ? "#/inscription-ouvrier" : "/inscription-ouvrier";
+                    })()}
                     data-clickable
                     className="w-full text-left py-2 font-medium text-pro-gray hover:text-pro-blue"
                     style={{ touchAction: "manipulation" as any }}
@@ -278,7 +283,12 @@ const Header = () => {
                   </a>
 
                   <a
-                    href={accountPath}
+                    href={(() => {
+                      const isNative =
+                        typeof document !== "undefined" &&
+                        document.documentElement?.getAttribute("data-ui-native") === "true";
+                      return isNative ? `#${accountPath}` : accountPath;
+                    })()}
                     data-clickable
                     className="w-full rounded-full bg-pro-blue text-white py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
                     style={{ touchAction: "manipulation" as any }}
@@ -306,6 +316,7 @@ const Header = () => {
                     <User className="w-4 h-4" />
                     {accountLabel}
                   </a>
+
 
 
                   <div className="h-1" />
