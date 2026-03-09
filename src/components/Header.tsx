@@ -141,17 +141,14 @@ const Header = () => {
 
   const go = useCallback(
     (to: string) => {
-      setMobileOpen(false);
       navigate(to);
     },
     [navigate]
   );
 
-  // ✅ Debug + fallback mobile (Android WebView):
-  // - évite le double déclenchement (touch + click)
-  // - force une navigation via location.hash si navigate() est ignoré
+  // ✅ Debug + fallback mobile (Android WebView)
   const safeGo = useCallback(
-    (to: string, label?: string) => {
+    (to: string, label?: string, fromMobileMenu = false) => {
       const now = Date.now();
       if (now - lastNavAtRef.current < 450) return;
       lastNavAtRef.current = now;
@@ -165,8 +162,10 @@ const Header = () => {
           label,
           to,
           isNative,
+          fromMobileMenu,
           href: window.location.href,
           hash: window.location.hash,
+          build: BUILD_TAG,
         });
       } catch {}
 
@@ -179,7 +178,14 @@ const Header = () => {
         } catch {}
       }
 
-      // 2) fallback garanti (uniquement si la route n’a pas bougé)
+      // 2) fermeture menu mobile (après le départ de la nav)
+      if (fromMobileMenu) {
+        window.setTimeout(() => {
+          setMobileOpen(false);
+        }, 60);
+      }
+
+      // 3) fallback garanti
       window.setTimeout(() => {
         try {
           if (isNative) {
@@ -188,14 +194,12 @@ const Header = () => {
               console.warn("[Header][nav] fallback hash", { wantHash });
               window.location.hash = wantHash;
             }
-          } else {
-            if (window.location.pathname !== to) {
-              console.warn("[Header][nav] fallback hard nav", { to });
-              window.location.assign(to);
-            }
+          } else if (window.location.pathname !== to) {
+            console.warn("[Header][nav] fallback hard nav", { to });
+            window.location.assign(to);
           }
         } catch {}
-      }, 140);
+      }, 160);
     },
     [go]
   );
