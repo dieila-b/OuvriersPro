@@ -225,95 +225,73 @@ const Header = () => {
   }, [mobileOpen]);
 
 
-  const canPortal = typeof document !== "undefined" && !!document.body;
+  const MobileMenuPanel = mobileOpen ? (
+    <div className="md:hidden w-full border-t border-border bg-background shadow-sm" style={{ pointerEvents: "auto" }}>
+      <div className="w-full px-4 sm:px-6 py-3">
+        <div className="flex items-center justify-between gap-3 min-w-0">
+          <span className="text-sm font-semibold text-foreground">
+            {cms("header.mobile_menu.title", "Menu", "Menu")}
+          </span>
 
-  // ✅ Portal only mounted when open — prevents invisible overlay from blocking taps
-  const MobileOverlay =
-    canPortal && mobileOpen
-      ? createPortal(
-          <div
-            className="md:hidden fixed inset-0 z-[2147483646]"
-            style={{ WebkitTapHighlightColor: "transparent", pointerEvents: "auto" }}
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            className="rounded-full"
+            onClick={() => setMobileOpen(false)}
+            style={{ touchAction: "manipulation" as any }}
           >
-            {/* Backdrop */}
-            <div
-              className="absolute inset-0 z-0 bg-black/35"
-              style={{ pointerEvents: "auto" }}
-              onClick={() => setMobileOpen(false)}
-            />
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
 
-            {/* Menu panel */}
-            <div className="absolute top-0 left-0 right-0 z-10 w-full bg-white border-b border-gray-200 shadow-lg" style={{ pointerEvents: "auto" }}>
-              <div className="w-full px-4 sm:px-6 py-3">
-                <div className="flex items-center justify-between gap-3 min-w-0">
-                  <span className="text-sm font-semibold text-pro-gray">
-                    {cms("header.mobile_menu.title", "Menu", "Menu")}
-                  </span>
+        <div className="mt-3 flex flex-col gap-3 min-w-0">
+          <button
+            type="button"
+            className="w-full text-left py-2 font-medium text-foreground hover:text-primary"
+            style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
+            onPointerDownCapture={() => {
+              try {
+                console.log("tap provider detected");
+              } catch {}
+            }}
+            onClick={() => {
+              try {
+                console.log("tap provider detected");
+                console.log("navigate provider start");
+              } catch {}
+              safeGo("/devenir-prestataire", "become_provider_mobile", true);
+            }}
+          >
+            {becomeProviderLabel}
+          </button>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    type="button"
-                    className="rounded-full"
-                    onClick={() => setMobileOpen(false)}
-                    style={{ touchAction: "manipulation" as any }}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
+          <button
+            type="button"
+            className="w-full rounded-full bg-primary text-primary-foreground py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
+            style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
+            onPointerDownCapture={() => {
+              try {
+                console.log("tap login detected");
+              } catch {}
+            }}
+            onClick={() => {
+              try {
+                console.log("tap login detected");
+                console.log("navigate login start");
+              } catch {}
+              safeGo(accountPath, "account_mobile", true);
+            }}
+          >
+            <User className="w-4 h-4" />
+            {accountLabel}
+          </button>
 
-                <div className="mt-3 flex flex-col gap-3 min-w-0">
-                  <button
-                    type="button"
-                    className="w-full text-left py-2 font-medium text-pro-gray hover:text-pro-blue"
-                    style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
-                    onPointerDownCapture={() => {
-                      try {
-                        console.log("tap provider detected");
-                      } catch {}
-                    }}
-                    onClick={() => {
-                      try {
-                        console.log("tap provider detected");
-                        console.log("navigate provider start");
-                      } catch {}
-                      safeGo("/devenir-prestataire", "become_provider_mobile", true);
-                    }}
-                  >
-                    {becomeProviderLabel}
-                  </button>
-
-                  <button
-                    type="button"
-                    className="w-full rounded-full bg-pro-blue text-white py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
-                    style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
-                    onPointerDownCapture={() => {
-                      try {
-                        console.log("tap login detected");
-                      } catch {}
-                    }}
-                    onClick={() => {
-                      try {
-                        console.log("tap login detected");
-                        console.log("navigate login start");
-                      } catch {}
-                      safeGo(accountPath, "account_mobile", true);
-                    }}
-                  >
-                    <User className="w-4 h-4" />
-                    {accountLabel}
-                  </button>
-
-
-
-                  <div className="h-1" />
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )
-      : null;
+          <div className="h-1" />
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <>
