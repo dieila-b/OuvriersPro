@@ -19,7 +19,7 @@ type Role = "user" | "client" | "worker" | "admin";
 
 const BUILD_TAG =
   // @ts-ignore
-  (import.meta as any).env?.VITE_BUILD_TAG || String(Date.now());
+  (import.meta as any).env?.VITE_BUILD_TAG || "header-mobile-fix-2026-03-09-v2";
 
 const normalizeRole = (r: any): Role => {
   const v = String(r ?? "").toLowerCase().trim();
@@ -100,6 +100,17 @@ const Header = () => {
     };
   }, []);
 
+  // Debug build marker (temp)
+  useEffect(() => {
+    try {
+      console.log("[Header][build]", {
+        build: BUILD_TAG,
+        href: window.location.href,
+        nativeAttr: document.documentElement?.getAttribute("data-ui-native"),
+      });
+    } catch {}
+  }, []);
+
   // Ferme le menu à chaque changement de route
   useEffect(() => {
     setMobileOpen(false);
@@ -141,17 +152,14 @@ const Header = () => {
 
   const go = useCallback(
     (to: string) => {
-      setMobileOpen(false);
       navigate(to);
     },
     [navigate]
   );
 
-  // ✅ Debug + fallback mobile (Android WebView):
-  // - évite le double déclenchement (touch + click)
-  // - force une navigation via location.hash si navigate() est ignoré
+  // ✅ Debug + fallback mobile (Android WebView)
   const safeGo = useCallback(
-    (to: string, label?: string) => {
+    (to: string, label?: string, fromMobileMenu = false) => {
       const now = Date.now();
       if (now - lastNavAtRef.current < 450) return;
       lastNavAtRef.current = now;
@@ -165,8 +173,10 @@ const Header = () => {
           label,
           to,
           isNative,
+          fromMobileMenu,
           href: window.location.href,
           hash: window.location.hash,
+          build: BUILD_TAG,
         });
       } catch {}
 
@@ -179,7 +189,14 @@ const Header = () => {
         } catch {}
       }
 
-      // 2) fallback garanti (uniquement si la route n’a pas bougé)
+      // 2) fermeture menu mobile (après le départ de la nav)
+      if (fromMobileMenu) {
+        window.setTimeout(() => {
+          setMobileOpen(false);
+        }, 60);
+      }
+
+      // 3) fallback garanti
       window.setTimeout(() => {
         try {
           if (isNative) {
@@ -188,14 +205,12 @@ const Header = () => {
               console.warn("[Header][nav] fallback hash", { wantHash });
               window.location.hash = wantHash;
             }
-          } else {
-            if (window.location.pathname !== to) {
-              console.warn("[Header][nav] fallback hard nav", { to });
-              window.location.assign(to);
-            }
+          } else if (window.location.pathname !== to) {
+            console.warn("[Header][nav] fallback hard nav", { to });
+            window.location.assign(to);
           }
         } catch {}
-      }, 140);
+      }, 160);
     },
     [go]
   );
@@ -218,17 +233,18 @@ const Header = () => {
     canPortal && mobileOpen
       ? createPortal(
           <div
-            className="md:hidden fixed inset-0 z-[9999]"
-            style={{ WebkitTapHighlightColor: "transparent" }}
+            className="md:hidden fixed inset-0 z-[2147483646]"
+            style={{ WebkitTapHighlightColor: "transparent", pointerEvents: "auto" }}
           >
             {/* Backdrop */}
             <div
               className="absolute inset-0 z-0 bg-black/35"
+              style={{ pointerEvents: "auto" }}
               onClick={() => setMobileOpen(false)}
             />
 
             {/* Menu panel */}
-            <div className="absolute top-0 left-0 right-0 z-10 w-full bg-white border-b border-gray-200 shadow-lg">
+            <div className="absolute top-0 left-0 right-0 z-10 w-full bg-white border-b border-gray-200 shadow-lg" style={{ pointerEvents: "auto" }}>
               <div className="w-full px-4 sm:px-6 py-3">
                 <div className="flex items-center justify-between gap-3 min-w-0">
                   <span className="text-sm font-semibold text-pro-gray">
@@ -251,12 +267,18 @@ const Header = () => {
                   <button
                     type="button"
                     className="w-full text-left py-2 font-medium text-pro-gray hover:text-pro-blue"
-                    style={{ touchAction: "manipulation" as any }}
+                    style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
+                    onPointerDownCapture={() => {
+                      try {
+                        console.log("tap provider detected");
+                      } catch {}
+                    }}
                     onClick={() => {
-                      console.log("[Header] tap provider -> navigate /inscription-ouvrier");
-                      navigate("/inscription-ouvrier");
-                      // Delay menu close so navigate() completes before portal unmounts
-                      setTimeout(() => setMobileOpen(false), 60);
+                      try {
+                        console.log("tap provider detected");
+                        console.log("navigate provider start");
+                      } catch {}
+                      safeGo("/devenir-prestataire", "become_provider_mobile", true);
                     }}
                   >
                     {becomeProviderLabel}
@@ -265,11 +287,18 @@ const Header = () => {
                   <button
                     type="button"
                     className="w-full rounded-full bg-pro-blue text-white py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
-                    style={{ touchAction: "manipulation" as any }}
+                    style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
+                    onPointerDownCapture={() => {
+                      try {
+                        console.log("tap login detected");
+                      } catch {}
+                    }}
                     onClick={() => {
-                      console.log("[Header] tap login -> navigate", accountPath);
-                      navigate(accountPath);
-                      setTimeout(() => setMobileOpen(false), 60);
+                      try {
+                        console.log("tap login detected");
+                        console.log("navigate login start");
+                      } catch {}
+                      safeGo(accountPath, "account_mobile", true);
                     }}
                   >
                     <User className="w-4 h-4" />
@@ -289,7 +318,7 @@ const Header = () => {
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full max-w-full">
+      <header className="sticky top-0 z-40 w-full max-w-full" data-build-tag={BUILD_TAG}>
         <div className="bg-white border-b border-gray-200 overflow-hidden">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-16 sm:h-[72px] min-w-0 flex items-center justify-between gap-3">
