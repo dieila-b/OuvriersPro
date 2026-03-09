@@ -223,7 +223,7 @@ const Header = () => {
         try {
           if (isNative) {
             const wantHash = `#${to.startsWith("/") ? to : `/${to}`}`;
-            if (!window.location.hash.startsWith(wantHash)) {
+            if (window.location.hash !== wantHash) {
               console.warn("[Header][nav] fallback hash", { wantHash });
               window.location.hash = wantHash;
             }
@@ -232,7 +232,7 @@ const Header = () => {
             window.location.assign(to);
           }
         } catch {}
-      }, 160);
+      }, 0);
     },
     [go]
   );
