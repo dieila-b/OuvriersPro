@@ -90,7 +90,7 @@ const FeaturesSection = () => {
           {features.map((f, index) => (
             <div
               key={index}
-              className="min-w-0 bg-white rounded-2xl p-5 sm:p-6 lg:p-8 shadow-sm hover:shadow-md transition-shadow animate-fade-in"
+              className="min-w-0 rounded-2xl p-5 sm:p-6 lg:p-8 shadow-sm hover:shadow-md transition-shadow animate-fade-in border border-border/50 bg-card/70 backdrop-blur-sm"
               style={{ animationDelay: `${index * 0.12}s` }}
             >
               <div className="flex flex-col items-center text-center">
