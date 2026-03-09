@@ -825,7 +825,7 @@ const WorkerSearchSection: React.FC = () => {
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <span className="text-[10px] sm:text-[11px] text-gray-500 uppercase tracking-wide">{viewModeLabel}</span>
-            <div className="flex border border-gray-300 rounded-lg bg-white overflow-hidden">
+            <div className="flex border border-border/60 rounded-lg bg-card/70 backdrop-blur-sm overflow-hidden">
               <button
                 type="button"
                 onClick={() => updateDraft({ view: "list" }, { immediate: true })}
