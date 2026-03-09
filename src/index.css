@@ -188,10 +188,7 @@ html[data-ui-native="true"] #ui-desktop-viewport {
   zoom: 1 !important;
 }
 
-/* ✅ Si une lib met pointer-events:none en inline, on neutralise en natif */
-html[data-ui-native="true"] [style*="pointer-events: none"] {
-  pointer-events: auto !important;
-}
+/* ⚠️ Removed: was too broad and intercepted taps through invisible overlays */
 
 /* ✅ Protection anti transform global */
 html[data-ui-native="true"] * {
