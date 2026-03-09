@@ -79,6 +79,19 @@ export default function NativeIncidentProbe() {
 
   useEffect(() => {
     if (!enabled) return;
+    try {
+      console.log("[NativeIncidentProbe][boot]", {
+        stamp: BUILD_STAMP,
+        native,
+        href: window.location.href,
+        hash: window.location.hash,
+      });
+    } catch {}
+  }, [enabled, native]);
+
+  useEffect(() => {
+    if (!enabled) return;
+
 
     const onAny = (type: string, x: number, y: number) => {
       const el = document.elementFromPoint(x, y);
