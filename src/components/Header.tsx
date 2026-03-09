@@ -335,7 +335,7 @@ const Header = () => {
             </div>
           </div>
 
-          <div className="h-1 w-full bg-gradient-to-r from-pro-blue/90 via-blue-600/90 to-pro-blue/90" />
+          <div className="h-px w-full bg-border/60" />
         </div>
       </header>
 
