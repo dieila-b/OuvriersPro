@@ -137,6 +137,7 @@ const Header = () => {
   const logoSrc = useMemo(() => `${ProxiLogo}?v=${encodeURIComponent(BUILD_TAG)}`, []);
 
   const lastNavAtRef = useRef(0);
+  const lastToggleAtRef = useRef(0);
 
   const go = useCallback(
     (to: string) => {
@@ -146,19 +147,69 @@ const Header = () => {
     [navigate]
   );
 
-  // ✅ Debug + fallback mobile: handle touch/click double-fire and ensure navigation runs
+  // ✅ Debug + fallback mobile (Android WebView):
+  // - évite le double déclenchement (touch + click)
+  // - force une navigation via location.hash si navigate() est ignoré
   const safeGo = useCallback(
     (to: string, label?: string) => {
       const now = Date.now();
       if (now - lastNavAtRef.current < 450) return;
       lastNavAtRef.current = now;
+
+      const isNative =
+        typeof document !== "undefined" &&
+        document.documentElement?.getAttribute("data-ui-native") === "true";
+
       try {
-        console.log("[Header][safeGo]", { to, label, href: window.location.href });
+        console.log("[Header][nav] tap", {
+          label,
+          to,
+          isNative,
+          href: window.location.href,
+          hash: window.location.hash,
+        });
       } catch {}
-      go(to);
+
+      // 1) tentative SPA
+      try {
+        go(to);
+      } catch (e) {
+        try {
+          console.warn("[Header][nav] navigate() threw", e);
+        } catch {}
+      }
+
+      // 2) fallback garanti (uniquement si la route n’a pas bougé)
+      window.setTimeout(() => {
+        try {
+          if (isNative) {
+            const wantHash = `#${to.startsWith("/") ? to : `/${to}`}`;
+            if (!window.location.hash.startsWith(wantHash)) {
+              console.warn("[Header][nav] fallback hash", { wantHash });
+              window.location.hash = wantHash;
+            }
+          } else {
+            if (window.location.pathname !== to) {
+              console.warn("[Header][nav] fallback hard nav", { to });
+              window.location.assign(to);
+            }
+          }
+        } catch {}
+      }, 140);
     },
     [go]
   );
+
+  const toggleMobileMenu = useCallback(() => {
+    const now = Date.now();
+    if (now - lastToggleAtRef.current < 450) return;
+    lastToggleAtRef.current = now;
+    try {
+      console.log("[Header][menu] toggle", { open: !mobileOpen });
+    } catch {}
+    setMobileOpen((v) => !v);
+  }, [mobileOpen]);
+
 
   const canPortal = typeof document !== "undefined" && !!document.body;
 
