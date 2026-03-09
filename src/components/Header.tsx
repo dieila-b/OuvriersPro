@@ -164,7 +164,7 @@ const Header = () => {
             />
 
             <div
-              className="absolute top-0 left-0 right-0 w-full bg-white border-b border-gray-200 shadow-lg"
+              className="absolute top-0 left-0 right-0 w-full bg-card/85 border-b border-border/50 shadow-lg backdrop-blur-md"
               style={{ pointerEvents: mobileOpen ? "auto" : "none" }}
             >
               <div className="w-full px-4 sm:px-6 py-3">
