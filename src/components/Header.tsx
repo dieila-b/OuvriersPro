@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Languages, User, Menu, X } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -163,9 +164,31 @@ const Header = () => {
       if (now - lastNavAtRef.current < 450) return;
       lastNavAtRef.current = now;
 
-      const isNative =
-        typeof document !== "undefined" &&
-        document.documentElement?.getAttribute("data-ui-native") === "true";
+      const isNative = (() => {
+        try {
+          const sp = new URLSearchParams(window.location.search || "");
+          if (sp.get("forceNative") === "1") return true;
+        } catch {}
+
+        try {
+          if (Capacitor?.isNativePlatform?.()) return true;
+        } catch {}
+
+        try {
+          const wCap = (window as any)?.Capacitor;
+          if (wCap?.isNativePlatform?.()) return true;
+        } catch {}
+
+        try {
+          const p = window.location?.protocol ?? "";
+          if (p === "capacitor:" || p === "file:") return true;
+        } catch {}
+
+        return (
+          typeof document !== "undefined" &&
+          document.documentElement?.getAttribute("data-ui-native") === "true"
+        );
+      })();
 
       try {
         console.log("[Header][nav] tap", {
@@ -200,7 +223,7 @@ const Header = () => {
         try {
           if (isNative) {
             const wantHash = `#${to.startsWith("/") ? to : `/${to}`}`;
-            if (!window.location.hash.startsWith(wantHash)) {
+            if (window.location.hash !== wantHash) {
               console.warn("[Header][nav] fallback hash", { wantHash });
               window.location.hash = wantHash;
             }
@@ -209,7 +232,7 @@ const Header = () => {
             window.location.assign(to);
           }
         } catch {}
-      }, 160);
+      }, 0);
     },
     [go]
   );
@@ -226,7 +249,10 @@ const Header = () => {
 
 
   const MobileMenuPanel = mobileOpen ? (
-    <div className="md:hidden w-full border-t border-border bg-background shadow-sm" style={{ pointerEvents: "auto" }}>
+    <div
+      className="md:hidden fixed inset-x-0 top-16 sm:top-[72px] z-50 w-full border-t border-border bg-background shadow-sm"
+      style={{ pointerEvents: "auto" }}
+    >
       <div className="w-full px-4 sm:px-6 py-3">
         <div className="flex items-center justify-between gap-3 min-w-0">
           <span className="text-sm font-semibold text-foreground">
@@ -246,30 +272,34 @@ const Header = () => {
         </div>
 
         <div className="mt-3 flex flex-col gap-3 min-w-0">
-          <a
-            href="/inscription-ouvrier"
+          <button
+            type="button"
             className="w-full text-left py-2 font-medium text-foreground hover:text-primary"
             style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
-            onClick={(e) => {
-              e.preventDefault();
+            onClick={() => {
+              try {
+                console.log("[Header][mobile] become provider tap");
+              } catch {}
               safeGo("/inscription-ouvrier", "become_provider_mobile", true);
             }}
           >
             {becomeProviderLabel}
-          </a>
+          </button>
 
-          <a
-            href={accountPath}
+          <button
+            type="button"
             className="w-full rounded-full bg-primary text-primary-foreground py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
             style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
-            onClick={(e) => {
-              e.preventDefault();
+            onClick={() => {
+              try {
+                console.log("[Header][mobile] account/login tap", { accountPath });
+              } catch {}
               safeGo(accountPath, "account_mobile", true);
             }}
           >
             <User className="w-4 h-4" />
             {accountLabel}
-          </a>
+          </button>
 
           <div className="h-1" />
         </div>

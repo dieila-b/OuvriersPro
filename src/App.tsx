@@ -52,6 +52,7 @@ const WorkerDetail = lazyRetry(() => import("./pages/WorkerDetail"));
 const Login = lazyRetry(() => import("./pages/Login"));
 const Register = lazyRetry(() => import("./pages/Register"));
 const MonCompte = lazyRetry(() => import("./pages/MonCompte"));
+const TapTest = lazyRetry(() => import("./pages/TapTest"));
 
 const Forfaits = lazyRetry(() => import("./pages/Forfaits"));
 const Faq = lazyRetry(() => import("./pages/Faq"));
@@ -441,6 +442,7 @@ const AppRoutes = () => (
 
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/__tap-test" element={<TapTest />} />
 
         {/* Aliases */}
         <Route path="/inscription" element={<Navigate to="/register" replace />} />
