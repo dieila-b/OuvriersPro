@@ -884,7 +884,7 @@ const WorkerSearchSection: React.FC = () => {
               {geoError && <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{geoError}</div>}
 
               {draft.near && draft.lat != null && draft.lng != null && (
-                <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
+                <div className="mt-3 rounded-xl border border-border/50 bg-card/70 backdrop-blur-sm p-3">
                   <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                     <span>{radiusLabel}</span>
                     <span className="text-[11px] text-gray-500">
