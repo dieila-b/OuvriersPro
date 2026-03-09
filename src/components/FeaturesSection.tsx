@@ -94,7 +94,7 @@ const FeaturesSection = () => {
               style={{ animationDelay: `${index * 0.12}s` }}
             >
               <div className="flex flex-col items-center text-center">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-background/40 border border-border/50 flex items-center justify-center mb-3">
                   <f.icon className={`w-7 h-7 sm:w-8 sm:h-8 ${f.color}`} />
                 </div>
 
