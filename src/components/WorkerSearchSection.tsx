@@ -789,7 +789,7 @@ const WorkerSearchSection: React.FC = () => {
   }, [filteredWorkers.length, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <section ref={sectionRef} id="worker-search" className="w-full pt-0 pb-10 sm:pb-14 lg:pb-16 bg-white">
+    <section ref={sectionRef} id="worker-search" className="w-full pt-0 pb-10 sm:pb-14 lg:pb-16 bg-transparent">
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div ref={topAnchorRef} />
 
