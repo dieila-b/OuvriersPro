@@ -118,7 +118,7 @@
     background-attachment: fixed;
   }
   
-  /* Couche 1: Effets de lumière radiaux sophistiqués */
+  /* Couche 1: Soft cloud-like shapes */
   body::before {
     content: "";
     position: fixed;
@@ -129,10 +129,12 @@
     pointer-events: none;
     z-index: 0;
     background: 
-      radial-gradient(ellipse 800px 600px at 15% 10%, hsla(210, 100%, 96%, 0.6) 0%, transparent 55%),
-      radial-gradient(ellipse 700px 500px at 85% 90%, hsla(220, 90%, 97%, 0.5) 0%, transparent 60%),
-      radial-gradient(circle 900px at 50% 50%, hsla(200, 100%, 98%, 0.3) 0%, transparent 65%);
-    opacity: 0.8;
+      radial-gradient(ellipse 1200px 400px at 20% 15%, hsla(0, 0%, 100%, 0.7) 0%, transparent 50%),
+      radial-gradient(ellipse 900px 350px at 75% 25%, hsla(210, 50%, 97%, 0.6) 0%, transparent 55%),
+      radial-gradient(ellipse 1000px 450px at 50% 60%, hsla(0, 0%, 100%, 0.5) 0%, transparent 60%),
+      radial-gradient(ellipse 800px 300px at 85% 75%, hsla(205, 60%, 95%, 0.6) 0%, transparent 50%),
+      radial-gradient(ellipse 700px 250px at 10% 80%, hsla(0, 0%, 100%, 0.65) 0%, transparent 55%);
+    opacity: 0.9;
   }
   
   /* Couche 2: Texture subtile et grain moderne */
