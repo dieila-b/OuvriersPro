@@ -202,7 +202,7 @@ const HeroSection = () => {
       />
       <div className="relative z-10 w-full px-4 sm:px-6 lg:px-10 py-8 sm:py-10">
         <div className="w-full max-w-5xl mx-auto text-center">
-          <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
+          <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words text-foreground">
             {cms("home.hero.title", "Trouvez des prestataires fiables près de chez vous", "Find trusted providers near you")}
           </h1>
 
