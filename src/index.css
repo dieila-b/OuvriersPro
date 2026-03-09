@@ -4,19 +4,21 @@
 
 @layer base {
   :root {
-    /* Premium blue gradient background colors */
-    --background: 210 100% 98%;
-    --background-gradient-start: 210 100% 98%;
-    --background-gradient-end: 220 60% 96%;
+    /* Ultra-premium gradient colors */
+    --background: 210 100% 99%;
+    --background-gradient-start: 215 100% 98%;
+    --background-gradient-mid: 210 90% 96%;
+    --background-gradient-end: 220 70% 97%;
     --foreground: 222.2 84% 4.9%;
     
-    /* Card avec fond blanc pour contraste sur fond bleu */
+    /* Premium card avec effet glassmorphism */
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
+    --card-border: 210 40% 92%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
     
-    /* Primary blue pour cohérence avec le fond */
+    /* Primary blue cohérent avec identité */
     --primary: 222.2 47.4% 11.2%;
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
@@ -32,7 +34,7 @@
     --ring: 222.2 84% 4.9%;
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 98%;
+    --sidebar-background: 0 0% 99%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 240 5.9% 10%;
     --sidebar-primary-foreground: 0 0% 98%;
@@ -102,20 +104,19 @@
     text-rendering: optimizeLegibility;
     overflow-x: hidden;
     -webkit-tap-highlight-color: transparent;
-    
-    /* Premium blue gradient background */
-    background: linear-gradient(
-      135deg,
-      hsl(var(--background-gradient-start)) 0%,
-      hsl(var(--background-gradient-end)) 50%,
-      hsl(var(--background)) 100%
-    );
-    background-attachment: fixed;
     color: hsl(var(--foreground));
     position: relative;
+    
+    /* Ultra-premium mesh gradient background */
+    background: 
+      linear-gradient(125deg, hsl(var(--background-gradient-start)) 0%, transparent 40%),
+      linear-gradient(225deg, hsl(var(--background-gradient-end)) 0%, transparent 50%),
+      linear-gradient(315deg, hsl(var(--background-gradient-mid)) 20%, transparent 60%),
+      hsl(var(--background));
+    background-attachment: fixed;
   }
   
-  /* Effet de texture légère et lumière douce */
+  /* Couche 1: Effets de lumière radiaux sophistiqués */
   body::before {
     content: "";
     position: fixed;
@@ -126,9 +127,26 @@
     pointer-events: none;
     z-index: 0;
     background: 
-      radial-gradient(ellipse at 20% 20%, hsla(210, 100%, 95%, 0.4) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 80%, hsla(220, 80%, 96%, 0.3) 0%, transparent 50%),
-      radial-gradient(circle at 50% 50%, hsla(200, 90%, 97%, 0.2) 0%, transparent 70%);
+      radial-gradient(ellipse 800px 600px at 15% 10%, hsla(210, 100%, 96%, 0.6) 0%, transparent 55%),
+      radial-gradient(ellipse 700px 500px at 85% 90%, hsla(220, 90%, 97%, 0.5) 0%, transparent 60%),
+      radial-gradient(circle 900px at 50% 50%, hsla(200, 100%, 98%, 0.3) 0%, transparent 65%);
+    opacity: 0.8;
+  }
+  
+  /* Couche 2: Texture subtile et grain moderne */
+  body::after {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    background-image: 
+      repeating-linear-gradient(0deg, transparent, transparent 2px, hsla(210, 50%, 90%, 0.03) 2px, hsla(210, 50%, 90%, 0.03) 4px),
+      repeating-linear-gradient(90deg, transparent, transparent 2px, hsla(220, 50%, 92%, 0.03) 2px, hsla(220, 50%, 92%, 0.03) 4px);
+    opacity: 0.5;
   }
 
   #root {
