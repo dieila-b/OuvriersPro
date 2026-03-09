@@ -442,6 +442,7 @@ const AppRoutes = () => (
 
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/__tap-test" element={<TapTest />} />
 
         {/* Aliases */}
         <Route path="/inscription" element={<Navigate to="/register" replace />} />

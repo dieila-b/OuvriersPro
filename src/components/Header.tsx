@@ -249,7 +249,10 @@ const Header = () => {
 
 
   const MobileMenuPanel = mobileOpen ? (
-    <div className="md:hidden w-full border-t border-border bg-background shadow-sm" style={{ pointerEvents: "auto" }}>
+    <div
+      className="md:hidden fixed inset-x-0 top-16 sm:top-[72px] z-50 w-full border-t border-border bg-background shadow-sm"
+      style={{ pointerEvents: "auto" }}
+    >
       <div className="w-full px-4 sm:px-6 py-3">
         <div className="flex items-center justify-between gap-3 min-w-0">
           <span className="text-sm font-semibold text-foreground">
@@ -269,30 +272,34 @@ const Header = () => {
         </div>
 
         <div className="mt-3 flex flex-col gap-3 min-w-0">
-          <a
-            href="/inscription-ouvrier"
+          <button
+            type="button"
             className="w-full text-left py-2 font-medium text-foreground hover:text-primary"
             style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
-            onClick={(e) => {
-              e.preventDefault();
+            onClick={() => {
+              try {
+                console.log("[Header][mobile] become provider tap");
+              } catch {}
               safeGo("/inscription-ouvrier", "become_provider_mobile", true);
             }}
           >
             {becomeProviderLabel}
-          </a>
+          </button>
 
-          <a
-            href={accountPath}
+          <button
+            type="button"
             className="w-full rounded-full bg-primary text-primary-foreground py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
             style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
-            onClick={(e) => {
-              e.preventDefault();
+            onClick={() => {
+              try {
+                console.log("[Header][mobile] account/login tap", { accountPath });
+              } catch {}
               safeGo(accountPath, "account_mobile", true);
             }}
           >
             <User className="w-4 h-4" />
             {accountLabel}
-          </a>
+          </button>
 
           <div className="h-1" />
         </div>
