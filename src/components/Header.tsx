@@ -310,7 +310,7 @@ const Header = () => {
                       <span className="uppercase">{language}</span>
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-white">
+                  <DropdownMenuContent align="end" className="bg-card border border-border/50">
                     <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
                       {cms("header.lang.fr", "Français", "French")}
                     </DropdownMenuItem>
