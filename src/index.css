@@ -107,12 +107,14 @@
     color: hsl(var(--foreground));
     position: relative;
     
-    /* Ultra-premium mesh gradient background */
+    /* Sky blue cloudy background inspired by reference */
     background: 
-      linear-gradient(125deg, hsl(var(--background-gradient-start)) 0%, transparent 40%),
-      linear-gradient(225deg, hsl(var(--background-gradient-end)) 0%, transparent 50%),
-      linear-gradient(315deg, hsl(var(--background-gradient-mid)) 20%, transparent 60%),
-      hsl(var(--background));
+      linear-gradient(180deg, 
+        hsl(205, 70%, 92%) 0%, 
+        hsl(210, 60%, 90%) 30%, 
+        hsl(210, 55%, 88%) 60%, 
+        hsl(215, 60%, 86%) 100%
+      );
     background-attachment: fixed;
   }
   
