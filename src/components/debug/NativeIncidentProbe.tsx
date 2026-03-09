@@ -61,21 +61,37 @@ export default function NativeIncidentProbe() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const native = useMemo(() => isNativeRuntime(), []);
+
+  // ✅ Incident mode: in real native (Capacitor), always show the probe (no query-string dependency)
   const enabled = useMemo(() => {
+    if (native) return true;
     try {
       const sp = new URLSearchParams(window.location.search || "");
       return sp.get("incident") === "1" || sp.get("uiDebug") === "1";
     } catch {
       return false;
     }
-  }, []);
+  }, [native]);
 
-  const native = useMemo(() => isNativeRuntime(), []);
   const [lastEvt, setLastEvt] = useState<LastEvt | null>(null);
   const [lastAction, setLastAction] = useState<string | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
+    try {
+      console.log("[NativeIncidentProbe][boot]", {
+        stamp: BUILD_STAMP,
+        native,
+        href: window.location.href,
+        hash: window.location.hash,
+      });
+    } catch {}
+  }, [enabled, native]);
+
+  useEffect(() => {
+    if (!enabled) return;
+
 
     const onAny = (type: string, x: number, y: number) => {
       const el = document.elementFromPoint(x, y);
