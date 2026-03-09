@@ -136,12 +136,28 @@ const Header = () => {
 
   const logoSrc = useMemo(() => `${ProxiLogo}?v=${encodeURIComponent(BUILD_TAG)}`, []);
 
+  const lastNavAtRef = useRef(0);
+
   const go = useCallback(
     (to: string) => {
       setMobileOpen(false);
       navigate(to);
     },
     [navigate]
+  );
+
+  // ✅ Debug + fallback mobile: handle touch/click double-fire and ensure navigation runs
+  const safeGo = useCallback(
+    (to: string, label?: string) => {
+      const now = Date.now();
+      if (now - lastNavAtRef.current < 450) return;
+      lastNavAtRef.current = now;
+      try {
+        console.log("[Header][safeGo]", { to, label, href: window.location.href });
+      } catch {}
+      go(to);
+    },
+    [go]
   );
 
   const canPortal = typeof document !== "undefined" && !!document.body;
