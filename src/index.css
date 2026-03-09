@@ -4,11 +4,11 @@
 
 @layer base {
   :root {
-    /* Ultra-premium gradient colors */
-    --background: 210 100% 99%;
-    --background-gradient-start: 215 100% 98%;
-    --background-gradient-mid: 210 90% 96%;
-    --background-gradient-end: 220 70% 97%;
+    /* Sky blue cloud-inspired background */
+    --background: 210 60% 95%;
+    --background-gradient-start: 205 70% 92%;
+    --background-gradient-mid: 210 55% 88%;
+    --background-gradient-end: 215 65% 85%;
     --foreground: 222.2 84% 4.9%;
     
     /* Premium card avec effet glassmorphism */
