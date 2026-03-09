@@ -217,7 +217,7 @@ const Header = () => {
   return (
     <>
       <header className="sticky top-0 z-40 w-full max-w-full">
-        <div className="bg-white border-b border-gray-200 overflow-hidden">
+        <div className="bg-card/80 border-b border-border/50 overflow-hidden backdrop-blur-md">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-16 sm:h-[72px] min-w-0 flex items-center justify-between gap-3">
               <button
