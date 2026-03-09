@@ -18,7 +18,7 @@ type Role = "user" | "client" | "worker" | "admin";
 
 const BUILD_TAG =
   // @ts-ignore
-  (import.meta as any).env?.VITE_BUILD_TAG || "header-mobile-fix-2026-03-09-v2";
+  (import.meta as any).env?.VITE_BUILD_TAG || "header-mobile-fix-2026-03-09-v3";
 
 const normalizeRole = (r: any): Role => {
   const v = String(r ?? "").toLowerCase().trim();
@@ -246,46 +246,30 @@ const Header = () => {
         </div>
 
         <div className="mt-3 flex flex-col gap-3 min-w-0">
-          <button
-            type="button"
+          <a
+            href="/inscription-ouvrier"
             className="w-full text-left py-2 font-medium text-foreground hover:text-primary"
             style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
-            onPointerDownCapture={() => {
-              try {
-                console.log("tap provider detected");
-              } catch {}
-            }}
-            onClick={() => {
-              try {
-                console.log("tap provider detected");
-                console.log("navigate provider start");
-              } catch {}
-              safeGo("/devenir-prestataire", "become_provider_mobile", true);
+            onClick={(e) => {
+              e.preventDefault();
+              safeGo("/inscription-ouvrier", "become_provider_mobile", true);
             }}
           >
             {becomeProviderLabel}
-          </button>
+          </a>
 
-          <button
-            type="button"
+          <a
+            href={accountPath}
             className="w-full rounded-full bg-primary text-primary-foreground py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
             style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
-            onPointerDownCapture={() => {
-              try {
-                console.log("tap login detected");
-              } catch {}
-            }}
-            onClick={() => {
-              try {
-                console.log("tap login detected");
-                console.log("navigate login start");
-              } catch {}
+            onClick={(e) => {
+              e.preventDefault();
               safeGo(accountPath, "account_mobile", true);
             }}
           >
             <User className="w-4 h-4" />
             {accountLabel}
-          </button>
+          </a>
 
           <div className="h-1" />
         </div>
@@ -339,7 +323,7 @@ const Header = () => {
                   type="button"
                   size="sm"
                   className="rounded-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center gap-2 whitespace-nowrap shadow-sm"
-                  onClick={() => go(accountPath)}
+                  onClick={() => safeGo(accountPath, "account_desktop")}
                   style={{ touchAction: "manipulation" as any }}
                 >
                   <User className="w-4 h-4" />
