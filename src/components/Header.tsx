@@ -134,7 +134,7 @@ const Header = () => {
     return cms("header.btn_become_provider", "Devenir Prestataire", "Become a Provider");
   }, [language]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const logoSrc = ProxiLogo;
+  const logoSrc = useMemo(() => `${ProxiLogo}?v=${encodeURIComponent(BUILD_TAG)}`, []);
 
   const go = useCallback(
     (to: string) => {
