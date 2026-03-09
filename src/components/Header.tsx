@@ -254,7 +254,6 @@ const Header = () => {
                     className="w-full text-left py-2 font-medium text-pro-gray hover:text-pro-blue"
                     style={{ touchAction: "manipulation" as any }}
                     onClick={() => safeGo("/inscription-ouvrier", "become_provider")}
-                    onTouchEnd={() => safeGo("/inscription-ouvrier", "become_provider_touch")}
                   >
                     {becomeProviderLabel}
                   </button>
@@ -265,7 +264,6 @@ const Header = () => {
                     className="w-full rounded-full bg-pro-blue text-white py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
                     style={{ touchAction: "manipulation" as any }}
                     onClick={() => safeGo(accountPath, "account")}
-                    onTouchEnd={() => safeGo(accountPath, "account_touch")}
                   >
                     <User className="w-4 h-4" />
                     {accountLabel}
