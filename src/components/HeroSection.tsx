@@ -222,7 +222,7 @@ const HeroSection = () => {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-3 items-stretch min-w-0">
               {/* Job */}
               <div ref={jobsBoxRef} className="relative min-w-0 text-left lg:col-span-6">
-                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground opacity-70 w-5 h-5" />
                 <Input
                   placeholder={cms("home.search.placeholder_keyword", "Ex : plombier, électricien…", "e.g., plumber, electrician…")}
                   value={searchTerm}
@@ -233,12 +233,12 @@ const HeroSection = () => {
                   }}
                   className="w-full min-w-0 h-11 sm:h-12 pl-10 pr-9 text-sm sm:text-base"
                 />
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground opacity-70 w-4 h-4" />
 
                 {openJobs && (filteredJobs.length > 0 || loadingOptions) && (
-                  <div className="absolute z-50 mt-1 w-full min-w-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                  <div className="absolute z-50 mt-1 w-full min-w-0 bg-popover/85 border border-border/60 rounded-xl shadow-lg overflow-hidden backdrop-blur-md">
                     {loadingOptions && (
-                      <div className="px-3 py-2 text-xs text-gray-500">
+                      <div className="px-3 py-2 text-xs text-muted-foreground">
                         {cms("common.loading", "Chargement...", "Loading...")}
                       </div>
                     )}
@@ -251,7 +251,7 @@ const HeroSection = () => {
                             setSearchTerm(j);
                             setOpenJobs(false);
                           }}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-accent/60"
                         >
                           {j}
                         </button>
