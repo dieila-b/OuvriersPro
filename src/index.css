@@ -4,11 +4,11 @@
 
 @layer base {
   :root {
-    /* Soft cloudy sky background - exact match */
-    --background: 210 45% 94%;
-    --background-gradient-start: 210 50% 95%;
-    --background-gradient-mid: 212 48% 93%;
-    --background-gradient-end: 215 45% 91%;
+    /* Premium light blue gradient - reference inspired */
+    --background: 210 60% 96%;
+    --background-gradient-start: 210 70% 97%;
+    --background-gradient-mid: 215 65% 96%;
+    --background-gradient-end: 220 60% 95%;
     --foreground: 222.2 84% 4.9%;
     
     /* Premium card avec effet glassmorphism */
