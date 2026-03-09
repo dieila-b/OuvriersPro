@@ -116,7 +116,7 @@ const Footer = () => {
             </button>
           </div>
 
-          {/* Entreprise + Ressources */}
+          {/* Entreprise */}
           <div>
             <h3 className="text-sm font-semibold tracking-wide text-white/90">
               {cms("footer.company.title", "Entreprise", "Company")}
@@ -135,27 +135,6 @@ const Footer = () => {
               <li>
                 <Link to="/partenaires" className="hover:text-white transition-colors">
                   {cms("footer.links.partners", "Partenaires", "Partners")}
-                </Link>
-              </li>
-            </ul>
-
-            <h3 className="mt-8 text-sm font-semibold tracking-wide text-white/90">
-              {cms("footer.resources.title", "Ressources", "Resources")}
-            </h3>
-            <ul className="mt-4 space-y-2 text-sm text-white/70">
-              <li>
-                <Link to="/conditions" className="hover:text-white transition-colors">
-                  {cms("legal.terms.title", "Conditions d’utilisation", "Terms & Conditions")}
-                </Link>
-              </li>
-              <li>
-                <Link to="/confidentialite" className="hover:text-white transition-colors">
-                  {cms("legal.privacy.title", "Politique de confidentialité", "Privacy Notice")}
-                </Link>
-              </li>
-              <li>
-                <Link to="/cookies" className="hover:text-white transition-colors">
-                  {cms("legal.cookies.title", "Cookies", "Cookie Policy")}
                 </Link>
               </li>
             </ul>
@@ -239,7 +218,7 @@ const Footer = () => {
 
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-white/60">
             <Link to="/conditions" className="hover:text-white transition-colors">
-              {cms("legal.terms.title", "Conditions d’utilisation", "Terms & Conditions")}
+              {cms("legal.terms.title", "Conditions d'utilisation", "Terms & Conditions")}
             </Link>
             <Link to="/confidentialite" className="hover:text-white transition-colors">
               {cms("legal.privacy.title", "Politique de confidentialité", "Privacy Notice")}
