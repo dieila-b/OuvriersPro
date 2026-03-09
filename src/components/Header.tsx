@@ -265,7 +265,7 @@ const Header = () => {
                   variant="outline"
                   size="sm"
                   className="rounded-full whitespace-nowrap"
-                  onClick={() => go("/forfaits")}
+                  onClick={() => safeGo("/inscription-ouvrier", "become_provider_desktop")}
                   style={{ touchAction: "manipulation" as any }}
                 >
                   {becomeProviderLabel}
