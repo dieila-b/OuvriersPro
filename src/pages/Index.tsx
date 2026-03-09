@@ -338,7 +338,16 @@ const Index = () => {
       <Header />
 
       {/* ✅ DEBUG NATIF: smoke-test navigation hors menu mobile */}
-      {isNativeRuntime() && (
+      {(() => {
+        try {
+          const sp = new URLSearchParams(window.location.search || "");
+          const forced = sp.get("forceNative") === "1";
+          const attr = document.documentElement?.getAttribute("data-ui-native") === "true";
+          return forced || attr;
+        } catch {
+          return false;
+        }
+      })() && (
         <div className="md:hidden fixed left-3 right-3 bottom-3 z-[10000]">
           <div className="rounded-xl border border-border bg-background/95 backdrop-blur px-3 py-2 shadow-sm">
             <div className="text-[11px] font-semibold text-foreground/80">NAV SMOKE TEST (native)</div>
