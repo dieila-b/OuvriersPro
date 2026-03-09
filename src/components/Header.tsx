@@ -230,17 +230,15 @@ const Header = () => {
                 }}
                 aria-label={cms("brand.name", "ProxiServices", "ProxiServices")}
               >
-                <div className="inline-flex items-center rounded-xl bg-white ring-1 ring-black/5 shadow-sm px-2 py-1">
-                  <img
-                    src={logoSrc}
-                    alt={cms("brand.name", "ProxiServices", "ProxiServices")}
-                    className="h-12 sm:h-14 w-auto max-w-[280px] sm:max-w-[340px] md:max-w-[420px] object-contain select-none"
-                    loading="eager"
-                    decoding="async"
-                    // @ts-ignore
-                    fetchpriority="high"
-                  />
-                </div>
+                <img
+                  src={logoSrc}
+                  alt={cms("brand.name", "ProxiServices", "ProxiServices")}
+                  className="h-12 sm:h-14 w-auto max-w-[280px] sm:max-w-[340px] md:max-w-[420px] object-contain select-none"
+                  loading="eager"
+                  decoding="async"
+                  // @ts-ignore
+                  fetchpriority="high"
+                />
               </button>
 
               <nav className="hidden md:flex" aria-hidden="true" />
