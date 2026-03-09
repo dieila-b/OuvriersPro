@@ -418,7 +418,7 @@ const Header = () => {
         </div>
       </header>
 
-      {MobileOverlay}
+      {MobileMenuPanel}
 
       <ContactModal open={contactOpen} onOpenChange={setContactOpen} cooldownSeconds={30} />
     </>
