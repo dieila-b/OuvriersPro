@@ -255,12 +255,18 @@ const Header = () => {
                   <button
                     type="button"
                     className="w-full text-left py-2 font-medium text-pro-gray hover:text-pro-blue"
-                    style={{ touchAction: "manipulation" as any }}
+                    style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
+                    onPointerDownCapture={() => {
+                      try {
+                        console.log("tap provider detected");
+                      } catch {}
+                    }}
                     onClick={() => {
-                      console.log("[Header] tap provider -> navigate /inscription-ouvrier");
-                      navigate("/inscription-ouvrier");
-                      // Delay menu close so navigate() completes before portal unmounts
-                      setTimeout(() => setMobileOpen(false), 60);
+                      try {
+                        console.log("tap provider detected");
+                        console.log("navigate provider start");
+                      } catch {}
+                      safeGo("/devenir-prestataire", "become_provider_mobile", true);
                     }}
                   >
                     {becomeProviderLabel}
@@ -269,11 +275,18 @@ const Header = () => {
                   <button
                     type="button"
                     className="w-full rounded-full bg-pro-blue text-white py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
-                    style={{ touchAction: "manipulation" as any }}
+                    style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
+                    onPointerDownCapture={() => {
+                      try {
+                        console.log("tap login detected");
+                      } catch {}
+                    }}
                     onClick={() => {
-                      console.log("[Header] tap login -> navigate", accountPath);
-                      navigate(accountPath);
-                      setTimeout(() => setMobileOpen(false), 60);
+                      try {
+                        console.log("tap login detected");
+                        console.log("navigate login start");
+                      } catch {}
+                      safeGo(accountPath, "account_mobile", true);
                     }}
                   >
                     <User className="w-4 h-4" />
