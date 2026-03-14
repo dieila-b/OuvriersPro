@@ -2,14 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-/* Definition of the design system. */
-
->>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
-=======
->>>>>>> f10399b (debug mobile login/provider buttons + sync android)
 @layer base {
   :root {
     /* Premium light blue gradient - reference inspired */
@@ -18,14 +10,14 @@
     --background-gradient-mid: 215 65% 96%;
     --background-gradient-end: 220 60% 95%;
     --foreground: 222.2 84% 4.9%;
-    
+
     /* Premium card avec effet glassmorphism */
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
     --card-border: 210 40% 92%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    
+
     /* Primary blue cohérent avec identité */
     --primary: 222.2 47.4% 11.2%;
     --primary-foreground: 210 40% 98%;
@@ -51,18 +43,8 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-<<<<<<< HEAD
-<<<<<<< HEAD
     /* neutralisé (évite largeur desktop fixe) */
     --ui-desktop-width: 100%;
-=======
-    /* gardées mais plus utilisées pour scaler l'app */
-    --ui-desktop-width: 1200px;
->>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
-=======
-    /* neutralisé (évite largeur desktop fixe) */
-    --ui-desktop-width: 100%;
->>>>>>> f10399b (debug mobile login/provider buttons + sync android)
     --ui-scale: 1;
   }
 
@@ -97,13 +79,6 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-@layer base {
->>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
-=======
->>>>>>> f10399b (debug mobile login/provider buttons + sync android)
   *,
   *::before,
   *::after {
@@ -131,10 +106,10 @@
     -webkit-tap-highlight-color: transparent;
     color: hsl(var(--foreground));
     position: relative;
-    
+
     /* Premium background texture */
     background: url('/images/bg-texture.png') center / cover no-repeat fixed;
-    background-color: hsl(210, 70%, 97%);
+    background-color: hsl(210 70% 97%);
   }
 
   #root {
@@ -154,6 +129,7 @@
     height: auto;
     display: block;
   }
+
   svg {
     max-width: 100%;
     height: auto;
@@ -178,15 +154,9 @@
 }
 
 /* =========================================================
-<<<<<<< HEAD
-<<<<<<< HEAD
    ✅ FIX DEFINITIF NATIF (CAPACITOR) :
    - Pas de viewport desktop transformé
    - Pas d’overlay “fantôme” qui capture les taps
-=======
-   ✅ FIX DEFINITIF "AFFICHAGE MINUSCULE" EN CAPACITOR
-   Objectif: aucune transform/scale/viewport desktop en natif
->>>>>>> f10399b (debug mobile login/provider buttons + sync android)
 ========================================================= */
 
 html[data-ui-native="true"],
@@ -194,34 +164,17 @@ html[data-ui-native="true"] body {
   width: 100%;
   max-width: 100%;
   overflow-x: hidden;
-<<<<<<< HEAD
-=======
-   ✅ CAPACITOR (NATIVE) : INTERDICTION DE SCALE / DESKTOP VIEWPORT
-   - empêche l'effet "tout devient minuscule après 2s"
-   - supprime le blanc en bas causé par min-height / scale
-========================================================= */
-
-html[data-ui-native="true"] {
->>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
-=======
->>>>>>> f10399b (debug mobile login/provider buttons + sync android)
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 /* ✅ Le wrapper ne doit JAMAIS fixer une largeur ni transformer en natif */
-=======
-/* Le wrapper ne doit JAMAIS fixer une largeur type 1200px en natif */
->>>>>>> f10399b (debug mobile login/provider buttons + sync android)
 html[data-ui-native="true"] #ui-desktop-viewport {
   width: 100% !important;
   max-width: 100% !important;
   min-height: 100dvh !important;
   transform: none !important;
   transform-origin: initial !important;
-<<<<<<< HEAD
   filter: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
@@ -236,26 +189,11 @@ html[data-ui-native="true"] #ui-desktop-viewport {
   zoom: 1 !important;
 }
 
-/* ⚠️ Removed: was too broad and intercepted taps through invisible overlays */
-
 /* ✅ Protection anti transform global */
-=======
-}
-
-/* Anti “zoom-out” / anti scale caché */
-html[data-ui-native="true"] #root,
-html[data-ui-native="true"] body,
-html[data-ui-native="true"] #ui-desktop-viewport {
-  zoom: 1 !important;
-}
-
-/* Protection anti transform global */
->>>>>>> f10399b (debug mobile login/provider buttons + sync android)
 html[data-ui-native="true"] * {
   -webkit-text-size-adjust: 100%;
 }
 
-<<<<<<< HEAD
 /* ✅ En natif, backdrop-filter peut casser les taps (WebView) */
 html[data-ui-native="true"] .backdrop-blur,
 html[data-ui-native="true"] [style*="backdrop-filter"],
@@ -264,25 +202,10 @@ html[data-ui-native="true"] [style*="BackDropFilter"] {
   -webkit-backdrop-filter: none !important;
 }
 
-=======
-/* neutralise toute règle "desktop" en natif */
-html[data-ui-native="true"][data-ui-mode="desktop"] #ui-desktop-viewport,
-html[data-ui-native="true"] #ui-desktop-viewport {
-  width: 100% !important;
-  max-width: 100% !important;
-  transform: none !important;
-  transform-origin: initial !important;
-  min-height: 100dvh !important;
-}
-
->>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
-=======
->>>>>>> f10399b (debug mobile login/provider buttons + sync android)
 /* safe-area */
 html[data-ui-native="true"] .safe-area-bottom,
 body[data-ui-native="true"] .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0);
-<<<<<<< HEAD
 }
 
 /* ✅ FIX: Toast/Sonner/Radix overlays ne doivent JAMAIS capturer les taps en natif */
@@ -294,6 +217,7 @@ html[data-ui-native="true"] [data-radix-focus-guard],
 html[data-ui-native="true"] [data-radix-portal] {
   pointer-events: none !important;
 }
+
 html[data-ui-native="true"] [data-sonner-toaster] > *,
 html[data-ui-native="true"] [data-radix-toast-viewport] > *,
 html[data-ui-native="true"] [data-radix-popper-content-wrapper] > *,
@@ -305,8 +229,6 @@ html[data-ui-native="true"] [data-radix-dismissable-layer] > * {
 /* ✅ Focus guards Radix : éléments 0×0 qui captent le focus/tap */
 html[data-ui-native="true"] [data-radix-focus-guard] {
   display: none !important;
-=======
->>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
 }
 
 /* ---------------------------
@@ -317,12 +239,15 @@ html[data-ui-native="true"] [data-radix-focus-guard] {
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.65) transparent;
 }
+
 .admin-scrollbar::-webkit-scrollbar {
   height: 8px;
 }
+
 .admin-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
+
 .admin-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(148, 163, 184, 0.55);
   border-radius: 999px;

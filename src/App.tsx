@@ -590,17 +590,9 @@ const AppRoutes = () => (
 );
 
 /**
-<<<<<<< HEAD
  * ✅ Router stable:
  * - Web: BrowserRouter (URLs propres /login)
  * - Native (Capacitor): HashRouter (stable en file:// et WebView)
- */
-function RouterSwitch({ children }: { children: React.ReactNode }) {
-  const native = isNativeRuntime();
-  return native ? <HashRouter>{children}</HashRouter> : <BrowserRouter>{children}</BrowserRouter>;
-=======
- * ✅ Router natif vs web (fix 404 Capacitor)
- * + ✅ force MOBILE en natif (évite le zoom-out / mode desktop)
  */
 function RouterSwitch({ children }: { children: React.ReactNode }) {
   const isNative = isNativeRuntime();
@@ -610,22 +602,14 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
     html.setAttribute("data-ui-native", isNative ? "true" : "false");
 
     if (isNative) {
-      // 🔒 verrouille mobile en app (même si UiModeContext veut mettre desktop)
       html.setAttribute("data-ui-mode", "mobile");
       html.style.setProperty("--ui-scale", "1");
       html.style.setProperty("--ui-desktop-width", "100%");
     }
   }, [isNative]);
 
-  if (import.meta.env.DEV) {
-    console.info(
-      `[RouterSwitch] isNative=${isNative}, protocol=${window.location?.protocol}, hostname=${window.location?.hostname}`
-    );
-  }
-
   const Router = isNative ? HashRouter : BrowserRouter;
   return <Router>{children}</Router>;
->>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
 }
 
 const App = () => {
