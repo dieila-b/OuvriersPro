@@ -1,10 +1,4 @@
-<<<<<<< HEAD
-// src/components/TapInspector.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
-=======
-﻿// src/components/TapInspector.tsx
 import React, { useEffect, useRef, useState } from "react";
->>>>>>> f10399b (debug mobile login/provider buttons + sync android)
 
 type Hit = {
   tag: string;
@@ -21,10 +15,6 @@ function describe(el: Element | null): Hit | null {
   const h = el as HTMLElement;
   const cs = window.getComputedStyle(h);
   const r = h.getBoundingClientRect();
-<<<<<<< HEAD
-
-=======
->>>>>>> f10399b (debug mobile login/provider buttons + sync android)
   return {
     tag: h.tagName.toLowerCase(),
     id: h.id || undefined,
@@ -32,137 +22,10 @@ function describe(el: Element | null): Hit | null {
     z: cs.zIndex || undefined,
     pos: cs.position || undefined,
     pe: cs.pointerEvents || undefined,
-    rect: {
-      x: Math.round(r.left),
-      y: Math.round(r.top),
-      w: Math.round(r.width),
-      h: Math.round(r.height),
-    },
+    rect: { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) },
   };
 }
 
-<<<<<<< HEAD
-function fmtShort(h: Hit | null) {
-  if (!h) return 'TapInspector actif — touche/clique sur “Connexion”';
-  const id = h.id ? `#${h.id}` : "";
-  return `Hit=${h.tag}${id} | pos=${h.pos ?? "?"} | z=${h.z ?? "?"} | pe=${h.pe ?? "?"}`;
-}
-
-async function copyText(text: string) {
-  // Clipboard API (si dispo)
-  try {
-    if (navigator?.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {}
-
-  // Fallback execCommand
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.setAttribute("readonly", "true");
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    ta.style.top = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand("copy");
-    document.body.removeChild(ta);
-    return ok;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * ✅ TapInspector
- * - Capture touch/pointer/mouse (capture=true) pour voir ce qui "mange" les taps
- * - HUD en haut avec bouton COPIER
- * - Outline rouge sur l’élément hit
- *
- * ⚠️ Important:
- * - Le HUD doit rester cliquable => pointerEvents: "auto"
- * - On stopPropagation sur le HUD pour éviter que "COPIER" devienne le hit
- */
-export default function TapInspector() {
-  const [hit, setHit] = useState<Hit | null>(null);
-  const [count, setCount] = useState(0);
-  const [copied, setCopied] = useState<null | "ok" | "fail">(null);
-
-  const boxRef = useRef<HTMLDivElement | null>(null);
-
-  const shortText = useMemo(() => fmtShort(hit), [hit]);
-
-  useEffect(() => {
-    const paintBox = (info: Hit | null) => {
-      if (!boxRef.current || !info?.rect) return;
-      boxRef.current.style.left = info.rect.x + "px";
-      boxRef.current.style.top = info.rect.y + "px";
-      boxRef.current.style.width = info.rect.w + "px";
-      boxRef.current.style.height = info.rect.h + "px";
-      boxRef.current.style.display = "block";
-    };
-
-    const handleAt = (x: number, y: number) => {
-      const el = document.elementFromPoint(x, y);
-      const info = describe(el);
-      setHit(info);
-      setCount((c) => c + 1);
-      paintBox(info);
-
-      // Log court + détail
-      try {
-        console.log("[TapInspector]", fmtShort(info));
-        console.log("[TapInspector][detail]", info);
-      } catch {}
-    };
-
-    const onTouch = (e: TouchEvent) => {
-      const t = e.touches?.[0] || e.changedTouches?.[0];
-      if (!t) return;
-      handleAt(t.clientX, t.clientY);
-    };
-
-    const onPointer = (e: PointerEvent) => {
-      handleAt(e.clientX, e.clientY);
-    };
-
-    const onMouse = (e: MouseEvent) => {
-      handleAt(e.clientX, e.clientY);
-    };
-
-    // capture=true pour passer avant les handlers qui “mangent” l’event
-    const opts: AddEventListenerOptions = { capture: true, passive: true };
-
-    window.addEventListener("touchstart", onTouch, opts);
-    window.addEventListener("pointerdown", onPointer, opts);
-    window.addEventListener("mousedown", onMouse, opts);
-
-    return () => {
-      // Important: retirer avec capture:true
-      window.removeEventListener("touchstart", onTouch as any, true);
-      window.removeEventListener("pointerdown", onPointer as any, true);
-      window.removeEventListener("mousedown", onMouse as any, true);
-    };
-  }, []);
-
-  const doCopy = async () => {
-    const ok = await copyText(shortText);
-    setCopied(ok ? "ok" : "fail");
-    window.setTimeout(() => setCopied(null), 900);
-  };
-
-  const stop = (e: any) => {
-    try {
-      e.stopPropagation();
-    } catch {}
-  };
-
-  return (
-    <>
-      {/* Outline de l’élément touché */}
-=======
 export default function TapInspector() {
   const [hit, setHit] = useState<Hit | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
@@ -190,95 +53,11 @@ export default function TapInspector() {
 
   return (
     <>
->>>>>>> f10399b (debug mobile login/provider buttons + sync android)
       <div
         ref={boxRef}
         style={{
           position: "fixed",
           zIndex: 2147483647,
-<<<<<<< HEAD
-          border: "2px solid #ff2d2d",
-          pointerEvents: "none",
-          display: "none",
-          // rend plus stable sur WebView
-          transform: "translateZ(0)",
-          willChange: "left, top, width, height",
-        }}
-      />
-
-      {/* HUD toujours visible + bouton copier */}
-      <div
-        style={{
-          position: "fixed",
-          zIndex: 2147483647,
-          left: 8,
-          right: 8,
-          top: 8,
-          transform: "translateZ(0)",
-          pointerEvents: "auto", // pour cliquer COPIER
-        }}
-        onPointerDown={stop}
-        onPointerUp={stop}
-        onMouseDown={stop}
-        onMouseUp={stop}
-        onTouchStart={stop}
-        onTouchEnd={stop}
-      >
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            alignItems: "center",
-            justifyContent: "space-between",
-            background: "rgba(0,0,0,.82)",
-            color: "white",
-            padding: "10px 12px",
-            borderRadius: 12,
-            fontSize: 12,
-            lineHeight: 1.25,
-            boxShadow: "0 8px 28px rgba(0,0,0,.35)",
-          }}
-        >
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 800 }}>
-              TapInspector ON <span style={{ opacity: 0.7 }}>({count})</span>
-            </div>
-            <div
-              style={{
-                opacity: 0.95,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {shortText}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={(e) => {
-              stop(e);
-              void doCopy();
-            }}
-            style={{
-              flex: "0 0 auto",
-              border: "1px solid rgba(255,255,255,.28)",
-              background: "rgba(255,255,255,.14)",
-              color: "white",
-              padding: "8px 10px",
-              borderRadius: 10,
-              fontSize: 12,
-              fontWeight: 800,
-            }}
-          >
-            {copied === "ok" ? "COPIÉ" : copied === "fail" ? "ÉCHEC" : "COPIER"}
-          </button>
-        </div>
-      </div>
-
-      {/* Panneau détail en bas (facultatif) */}
-=======
           border: "2px solid red",
           pointerEvents: "none",
           display: hit?.rect ? "block" : "none",
@@ -289,7 +68,6 @@ export default function TapInspector() {
         }}
       />
 
->>>>>>> f10399b (debug mobile login/provider buttons + sync android)
       <div
         style={{
           position: "fixed",
@@ -297,16 +75,6 @@ export default function TapInspector() {
           left: 8,
           bottom: 8,
           right: 8,
-<<<<<<< HEAD
-          background: "rgba(0,0,0,.72)",
-          color: "white",
-          padding: "8px 10px",
-          borderRadius: 12,
-          fontSize: 12,
-          pointerEvents: "none",
-          lineHeight: 1.25,
-          transform: "translateZ(0)",
-=======
           background: "rgba(0,0,0,.75)",
           color: "white",
           padding: "8px 10px",
@@ -314,17 +82,11 @@ export default function TapInspector() {
           fontSize: 12,
           pointerEvents: "none",
           lineHeight: 1.25,
->>>>>>> f10399b (debug mobile login/provider buttons + sync android)
         }}
       >
         {!hit ? (
           <div>
-<<<<<<< HEAD
-            <b>Conseil:</b> touche “Connexion”, puis envoie-moi la ligne{" "}
-            <b>Hit/pos/z/pe</b> (bouton COPIER).
-=======
-            <b>TapInspector actif</b>  touche Connexion sur mobile
->>>>>>> f10399b (debug mobile login/provider buttons + sync android)
+            <b>TapInspector actif</b> touche Connexion sur mobile
           </div>
         ) : (
           <>
@@ -333,12 +95,7 @@ export default function TapInspector() {
               {hit.id ? `#${hit.id}` : ""}
             </div>
             <div>
-<<<<<<< HEAD
-              <b>pos:</b> {hit.pos} &nbsp; <b>z:</b> {hit.z} &nbsp;{" "}
-              <b>pe:</b> {hit.pe}
-=======
               <b>pos:</b> {hit.pos} &nbsp; <b>z:</b> {hit.z} &nbsp; <b>pe:</b> {hit.pe}
->>>>>>> f10399b (debug mobile login/provider buttons + sync android)
             </div>
             {hit.cls ? (
               <div>
