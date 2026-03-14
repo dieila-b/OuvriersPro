@@ -1,7 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import { componentTagger } from "lovable-tagger";
 
 /**
  * Dev Capacitor:
@@ -12,7 +11,7 @@ import { componentTagger } from "lovable-tagger";
  * - CAP_DEV_TARGET=emulator | phone
  * - CAP_DEV_HOST=192.168.1.183   (IP LAN de ton PC)
  */
-export default defineConfig(({ mode }) => {
+export default defineConfig(() => {
   const DEV_PORT = 5173;
 
   const devTarget = process.env.CAP_DEV_TARGET; // "emulator" | "phone"
@@ -20,20 +19,12 @@ export default defineConfig(({ mode }) => {
   const hmrHost = devTarget === "emulator" ? "10.0.2.2" : lanHost;
 
   return {
-    // ✅ safe pour build Capacitor (assets relatifs)
     base: "./",
 
     server: {
-      // ✅ indispensable: écoute sur le réseau (LAN + AVD)
       host: "0.0.0.0",
       port: DEV_PORT,
       strictPort: true,
-
-      /**
-       * ✅ IMPORTANT:
-       * Sur WebView (Capacitor), le client HMR peut se tromper d'host (localhost)
-       * => on force origin + HMR host
-       */
       origin: `http://${hmrHost}:${DEV_PORT}`,
       hmr: {
         host: hmrHost,
@@ -43,7 +34,7 @@ export default defineConfig(({ mode }) => {
       },
     },
 
-    plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+    plugins: [react()],
 
     resolve: {
       alias: {
