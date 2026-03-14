@@ -331,7 +331,6 @@ function GlobalLinkInterceptor() {
       )
         return true;
 
-<<<<<<< HEAD
       if (anchor.hasAttribute("download")) return true;
       if ((anchor.getAttribute("rel") || "").includes("external")) return true;
 
@@ -350,8 +349,6 @@ function GlobalLinkInterceptor() {
 
       if (shouldIgnore(anchor, href)) return;
 
-      // ✅ HashRouter côté natif: on ne garde que des paths "/..."
-      // (si quelqu’un met "#/login", on le convertit)
       if (href.startsWith("#/")) href = href.slice(1);
 
       if (href.startsWith("/")) {
@@ -362,17 +359,6 @@ function GlobalLinkInterceptor() {
 
     document.addEventListener("click", handleClick, true);
     return () => document.removeEventListener("click", handleClick, true);
-=======
-      if (href.startsWith("/") || href.startsWith("#")) {
-        e.preventDefault();
-        e.stopPropagation();
-        navigate(href);
-      }
-    };
-
-    document.addEventListener("click", handler, true);
-    return () => document.removeEventListener("click", handler, true);
->>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
   }, [navigate]);
 
   return null;
