@@ -4,17 +4,13 @@ import path from "path";
 
 /**
  * Dev Capacitor:
- * - Emulator Android: http://10.0.2.2:5173  (10.0.2.2 = localhost du PC)
+ * - Emulator Android: http://10.0.2.2:5173
  * - Téléphone (même Wi-Fi): http://<IP_LAN_PC>:5173
- *
- * Variables utiles:
- * - CAP_DEV_TARGET=emulator | phone
- * - CAP_DEV_HOST=192.168.1.183   (IP LAN de ton PC)
  */
 export default defineConfig(() => {
   const DEV_PORT = 5173;
 
-  const devTarget = process.env.CAP_DEV_TARGET; // "emulator" | "phone"
+  const devTarget = process.env.CAP_DEV_TARGET;
   const lanHost = process.env.CAP_DEV_HOST || "192.168.1.183";
   const hmrHost = devTarget === "emulator" ? "10.0.2.2" : lanHost;
 
