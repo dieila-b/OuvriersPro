@@ -6,6 +6,7 @@ const config: CapacitorConfig = {
   webDir: "dist",
   bundledWebRuntime: false,
 
+<<<<<<< HEAD
   // ✅ Live-reload: l'app mobile charge le code depuis le serveur preview
   // Supprimez ce bloc pour les builds de production (APK final)
   // INCIDENT DIAG: forceNative + start on TapTest to validate taps + version.
@@ -14,6 +15,8 @@ const config: CapacitorConfig = {
     cleartext: true,
   },
 
+=======
+>>>>>>> f10399b (debug mobile login/provider buttons + sync android)
   android: {
     allowMixedContent: true,
     webContentsDebuggingEnabled: true,

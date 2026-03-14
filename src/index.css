@@ -3,10 +3,13 @@
 @tailwind utilities;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 /* Definition of the design system. */
 
 >>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
+=======
+>>>>>>> f10399b (debug mobile login/provider buttons + sync android)
 @layer base {
   :root {
     /* Premium light blue gradient - reference inspired */
@@ -49,12 +52,17 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     /* neutralisé (évite largeur desktop fixe) */
     --ui-desktop-width: 100%;
 =======
     /* gardées mais plus utilisées pour scaler l'app */
     --ui-desktop-width: 1200px;
 >>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
+=======
+    /* neutralisé (évite largeur desktop fixe) */
+    --ui-desktop-width: 100%;
+>>>>>>> f10399b (debug mobile login/provider buttons + sync android)
     --ui-scale: 1;
   }
 
@@ -78,6 +86,7 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
+
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -89,9 +98,12 @@
   }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 @layer base {
 >>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
+=======
+>>>>>>> f10399b (debug mobile login/provider buttons + sync android)
   *,
   *::before,
   *::after {
@@ -167,9 +179,14 @@
 
 /* =========================================================
 <<<<<<< HEAD
+<<<<<<< HEAD
    ✅ FIX DEFINITIF NATIF (CAPACITOR) :
    - Pas de viewport desktop transformé
    - Pas d’overlay “fantôme” qui capture les taps
+=======
+   ✅ FIX DEFINITIF "AFFICHAGE MINUSCULE" EN CAPACITOR
+   Objectif: aucune transform/scale/viewport desktop en natif
+>>>>>>> f10399b (debug mobile login/provider buttons + sync android)
 ========================================================= */
 
 html[data-ui-native="true"],
@@ -177,6 +194,7 @@ html[data-ui-native="true"] body {
   width: 100%;
   max-width: 100%;
   overflow-x: hidden;
+<<<<<<< HEAD
 =======
    ✅ CAPACITOR (NATIVE) : INTERDICTION DE SCALE / DESKTOP VIEWPORT
    - empêche l'effet "tout devient minuscule après 2s"
@@ -185,18 +203,25 @@ html[data-ui-native="true"] body {
 
 html[data-ui-native="true"] {
 >>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
+=======
+>>>>>>> f10399b (debug mobile login/provider buttons + sync android)
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 /* ✅ Le wrapper ne doit JAMAIS fixer une largeur ni transformer en natif */
+=======
+/* Le wrapper ne doit JAMAIS fixer une largeur type 1200px en natif */
+>>>>>>> f10399b (debug mobile login/provider buttons + sync android)
 html[data-ui-native="true"] #ui-desktop-viewport {
   width: 100% !important;
   max-width: 100% !important;
   min-height: 100dvh !important;
   transform: none !important;
   transform-origin: initial !important;
+<<<<<<< HEAD
   filter: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
@@ -214,10 +239,23 @@ html[data-ui-native="true"] #ui-desktop-viewport {
 /* ⚠️ Removed: was too broad and intercepted taps through invisible overlays */
 
 /* ✅ Protection anti transform global */
+=======
+}
+
+/* Anti “zoom-out” / anti scale caché */
+html[data-ui-native="true"] #root,
+html[data-ui-native="true"] body,
+html[data-ui-native="true"] #ui-desktop-viewport {
+  zoom: 1 !important;
+}
+
+/* Protection anti transform global */
+>>>>>>> f10399b (debug mobile login/provider buttons + sync android)
 html[data-ui-native="true"] * {
   -webkit-text-size-adjust: 100%;
 }
 
+<<<<<<< HEAD
 /* ✅ En natif, backdrop-filter peut casser les taps (WebView) */
 html[data-ui-native="true"] .backdrop-blur,
 html[data-ui-native="true"] [style*="backdrop-filter"],
@@ -238,6 +276,8 @@ html[data-ui-native="true"] #ui-desktop-viewport {
 }
 
 >>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
+=======
+>>>>>>> f10399b (debug mobile login/provider buttons + sync android)
 /* safe-area */
 html[data-ui-native="true"] .safe-area-bottom,
 body[data-ui-native="true"] .safe-area-bottom {
@@ -272,6 +312,7 @@ html[data-ui-native="true"] [data-radix-focus-guard] {
 /* ---------------------------
    ADMIN responsive hardening
 ---------------------------- */
+
 .admin-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.65) transparent;

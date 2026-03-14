@@ -1,5 +1,10 @@
+<<<<<<< HEAD
 // src/components/TapInspector.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+=======
+﻿// src/components/TapInspector.tsx
+import React, { useEffect, useRef, useState } from "react";
+>>>>>>> f10399b (debug mobile login/provider buttons + sync android)
 
 type Hit = {
   tag: string;
@@ -16,7 +21,10 @@ function describe(el: Element | null): Hit | null {
   const h = el as HTMLElement;
   const cs = window.getComputedStyle(h);
   const r = h.getBoundingClientRect();
+<<<<<<< HEAD
 
+=======
+>>>>>>> f10399b (debug mobile login/provider buttons + sync android)
   return {
     tag: h.tagName.toLowerCase(),
     id: h.id || undefined,
@@ -33,6 +41,7 @@ function describe(el: Element | null): Hit | null {
   };
 }
 
+<<<<<<< HEAD
 function fmtShort(h: Hit | null) {
   if (!h) return 'TapInspector actif — touche/clique sur “Connexion”';
   const id = h.id ? `#${h.id}` : "";
@@ -153,11 +162,41 @@ export default function TapInspector() {
   return (
     <>
       {/* Outline de l’élément touché */}
+=======
+export default function TapInspector() {
+  const [hit, setHit] = useState<Hit | null>(null);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const onTouch = (e: TouchEvent) => {
+      const t = e.touches?.[0];
+      if (!t) return;
+      const el = document.elementFromPoint(t.clientX, t.clientY);
+      const info = describe(el);
+      setHit(info);
+
+      if (boxRef.current && info?.rect) {
+        boxRef.current.style.left = info.rect.x + "px";
+        boxRef.current.style.top = info.rect.y + "px";
+        boxRef.current.style.width = info.rect.w + "px";
+        boxRef.current.style.height = info.rect.h + "px";
+        boxRef.current.style.display = "block";
+      }
+    };
+
+    window.addEventListener("touchstart", onTouch, { capture: true, passive: true });
+    return () => window.removeEventListener("touchstart", onTouch as any, true);
+  }, []);
+
+  return (
+    <>
+>>>>>>> f10399b (debug mobile login/provider buttons + sync android)
       <div
         ref={boxRef}
         style={{
           position: "fixed",
           zIndex: 2147483647,
+<<<<<<< HEAD
           border: "2px solid #ff2d2d",
           pointerEvents: "none",
           display: "none",
@@ -239,6 +278,18 @@ export default function TapInspector() {
       </div>
 
       {/* Panneau détail en bas (facultatif) */}
+=======
+          border: "2px solid red",
+          pointerEvents: "none",
+          display: hit?.rect ? "block" : "none",
+          left: 0,
+          top: 0,
+          width: 0,
+          height: 0,
+        }}
+      />
+
+>>>>>>> f10399b (debug mobile login/provider buttons + sync android)
       <div
         style={{
           position: "fixed",
@@ -246,6 +297,7 @@ export default function TapInspector() {
           left: 8,
           bottom: 8,
           right: 8,
+<<<<<<< HEAD
           background: "rgba(0,0,0,.72)",
           color: "white",
           padding: "8px 10px",
@@ -254,12 +306,25 @@ export default function TapInspector() {
           pointerEvents: "none",
           lineHeight: 1.25,
           transform: "translateZ(0)",
+=======
+          background: "rgba(0,0,0,.75)",
+          color: "white",
+          padding: "8px 10px",
+          borderRadius: 10,
+          fontSize: 12,
+          pointerEvents: "none",
+          lineHeight: 1.25,
+>>>>>>> f10399b (debug mobile login/provider buttons + sync android)
         }}
       >
         {!hit ? (
           <div>
+<<<<<<< HEAD
             <b>Conseil:</b> touche “Connexion”, puis envoie-moi la ligne{" "}
             <b>Hit/pos/z/pe</b> (bouton COPIER).
+=======
+            <b>TapInspector actif</b>  touche Connexion sur mobile
+>>>>>>> f10399b (debug mobile login/provider buttons + sync android)
           </div>
         ) : (
           <>
@@ -268,8 +333,12 @@ export default function TapInspector() {
               {hit.id ? `#${hit.id}` : ""}
             </div>
             <div>
+<<<<<<< HEAD
               <b>pos:</b> {hit.pos} &nbsp; <b>z:</b> {hit.z} &nbsp;{" "}
               <b>pe:</b> {hit.pe}
+=======
+              <b>pos:</b> {hit.pos} &nbsp; <b>z:</b> {hit.z} &nbsp; <b>pe:</b> {hit.pe}
+>>>>>>> f10399b (debug mobile login/provider buttons + sync android)
             </div>
             {hit.cls ? (
               <div>
