@@ -89,21 +89,14 @@ const ClientReviews = lazyRetry(() => import("./pages/ClientReviews"));
 const ClientContactForm = lazyRetry(() => import("./pages/ClientContactForm"));
 
 /**
-<<<<<<< HEAD
- * ✅ Détection native robuste
+ * ✅ Détection native robuste (Capacitor / WebView)
  */
 const isNativeRuntime = () => {
-  // ✅ Debug helper (web only): allow simulating native routing/CSS
   try {
     const sp = new URLSearchParams(window.location.search || "");
     if (sp.get("forceNative") === "1") return true;
   } catch {}
 
-=======
- * ✅ Détection native robuste (Capacitor / WebView)
- */
-const isNativeRuntime = () => {
->>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
@@ -111,13 +104,10 @@ const isNativeRuntime = () => {
   try {
     const p = window.location?.protocol ?? "";
     if (p === "capacitor:" || p === "file:") return true;
-  } catch {}
 
-<<<<<<< HEAD
-  try {
     const gp = (Capacitor as any)?.getPlatform?.();
     if (gp && gp !== "web") return true;
-=======
+
     const host = window.location?.hostname ?? "";
     if (host === "localhost") return true;
 
@@ -125,7 +115,6 @@ const isNativeRuntime = () => {
     if (ua.includes("wv") || ua.includes("Capacitor")) return true;
 
     if (p === "https:" && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) return true;
->>>>>>> 7bd77d7 (Fix Capacitor mobile UI scaling (remove desktop viewport scale))
   } catch {}
 
   return false;
