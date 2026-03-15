@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useEffect, useMemo, useRef, Suspense, lazy, useState } from "react";
+import React, { useEffect, useMemo, useRef, Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -17,7 +17,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Capacitor } from "@capacitor/core";
 
-import { UiModeProvider, useUiModeCtx } from "@/contexts/UiModeContext";
+import { UiModeProvider } from "@/contexts/UiModeContext";
 
 import PrivateRoute from "./components/PrivateRoute";
 import AdminLayout from "@/components/layout/AdminLayout";
@@ -91,10 +91,6 @@ const ClientContactForm = lazyRetry(() => import("./pages/ClientContactForm"));
  * Détection native robuste (Capacitor / WebView)
  */
 const isNativeRuntime = () => {
-  try {
-    const sp = new URLSearchParams(window.location.search || "");
-    if (sp.get("forceNative") === "1") return true;
-  } catch {}
 
   try {
     if (Capacitor?.isNativePlatform?.()) return true;

@@ -17,9 +17,6 @@ import ProxiLogo from "@/assets/logo-proxiservices.png";
 
 type Role = "user" | "client" | "worker" | "admin";
 
-const BUILD_TAG =
-  // @ts-ignore
-  (import.meta as any).env?.VITE_BUILD_TAG || "header-mobile-fix-2026-03-09-v3";
 
 const normalizeRole = (r: any): Role => {
   const v = String(r ?? "").toLowerCase().trim();
@@ -100,16 +97,6 @@ const Header = () => {
     };
   }, []);
 
-  // Debug build marker (temp)
-  useEffect(() => {
-    try {
-      console.log("[Header][build]", {
-        build: BUILD_TAG,
-        href: window.location.href,
-        nativeAttr: document.documentElement?.getAttribute("data-ui-native"),
-      });
-    } catch {}
-  }, []);
 
   // Ferme le menu à chaque changement de route
   useEffect(() => {
@@ -145,7 +132,7 @@ const Header = () => {
     return cms("header.btn_become_provider", "Devenir Prestataire", "Become a Provider");
   }, [language]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const logoSrc = useMemo(() => `${ProxiLogo}?v=${encodeURIComponent(BUILD_TAG)}`, []);
+  const logoSrc = useMemo(() => ProxiLogo, []);
 
   const lastNavAtRef = useRef(0);
   const lastToggleAtRef = useRef(0);
@@ -165,10 +152,6 @@ const Header = () => {
       lastNavAtRef.current = now;
 
       const isNative = (() => {
-        try {
-          const sp = new URLSearchParams(window.location.search || "");
-          if (sp.get("forceNative") === "1") return true;
-        } catch {}
 
         try {
           if (Capacitor?.isNativePlatform?.()) return true;
@@ -190,26 +173,11 @@ const Header = () => {
         );
       })();
 
-      try {
-        console.log("[Header][nav] tap", {
-          label,
-          to,
-          isNative,
-          fromMobileMenu,
-          href: window.location.href,
-          hash: window.location.hash,
-          build: BUILD_TAG,
-        });
-      } catch {}
 
       // 1) tentative SPA
       try {
         go(to);
-      } catch (e) {
-        try {
-          console.warn("[Header][nav] navigate() threw", e);
-        } catch {}
-      }
+      } catch {}
 
       // 2) fermeture menu mobile (après le départ de la nav)
       if (fromMobileMenu) {
@@ -224,11 +192,9 @@ const Header = () => {
           if (isNative) {
             const wantHash = `#${to.startsWith("/") ? to : `/${to}`}`;
             if (window.location.hash !== wantHash) {
-              console.warn("[Header][nav] fallback hash", { wantHash });
               window.location.hash = wantHash;
             }
           } else if (window.location.pathname !== to) {
-            console.warn("[Header][nav] fallback hard nav", { to });
             window.location.assign(to);
           }
         } catch {}
@@ -241,9 +207,6 @@ const Header = () => {
     const now = Date.now();
     if (now - lastToggleAtRef.current < 450) return;
     lastToggleAtRef.current = now;
-    try {
-      console.log("[Header][menu] toggle", { open: !mobileOpen });
-    } catch {}
     setMobileOpen((v) => !v);
   }, [mobileOpen]);
 
@@ -277,9 +240,6 @@ const Header = () => {
             className="w-full text-left py-2 font-medium text-foreground hover:text-primary"
             style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
             onClick={() => {
-              try {
-                console.log("[Header][mobile] become provider tap");
-              } catch {}
               safeGo("/inscription-ouvrier", "become_provider_mobile", true);
             }}
           >
@@ -291,9 +251,6 @@ const Header = () => {
             className="w-full rounded-full bg-primary text-primary-foreground py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
             style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
             onClick={() => {
-              try {
-                console.log("[Header][mobile] account/login tap", { accountPath });
-              } catch {}
               safeGo(accountPath, "account_mobile", true);
             }}
           >
@@ -309,7 +266,7 @@ const Header = () => {
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full max-w-full" data-build-tag={BUILD_TAG}>
+      <header className="sticky top-0 z-40 w-full max-w-full">
         <div className="bg-white border-b border-gray-200 overflow-hidden">
           <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="h-16 sm:h-[72px] min-w-0 flex items-center justify-between gap-3">
