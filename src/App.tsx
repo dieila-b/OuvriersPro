@@ -91,10 +91,6 @@ const ClientContactForm = lazyRetry(() => import("./pages/ClientContactForm"));
  * Détection native robuste (Capacitor / WebView)
  */
 const isNativeRuntime = () => {
-  try {
-    const sp = new URLSearchParams(window.location.search || "");
-    if (sp.get("forceNative") === "1") return true;
-  } catch {}
 
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
