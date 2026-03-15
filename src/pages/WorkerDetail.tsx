@@ -710,22 +710,6 @@ const WorkerDetail: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="max-w-6xl mx-auto px-4">
-        {debug && (
-          <div className="mb-3">
-            <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600">
-              <span className="font-semibold">UI:</span>
-              <span className={isMobileUI ? "text-emerald-700" : "text-indigo-700"}>{isMobileUI ? "MOBILE" : "DESKTOP"}</span>
-              <span className="text-slate-400">|</span>
-              <span>native={String(debug.native)}</span>
-              <span className="text-slate-400">|</span>
-              <span>forcedDesktopInApp={String(debug.forcedDesktopInApp)}</span>
-              <span className="text-slate-400">|</span>
-              <span>eff={debug.effWidth}px</span>
-              <span className="text-slate-400">|</span>
-              <span>inner={debug.innerWidth}px</span>
-            </div>
-          </div>
-        )}
 
         <button
           type="button"

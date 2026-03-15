@@ -1,6 +1,6 @@
 // src/contexts/UiModeContext.tsx
 import React, { createContext, useContext, ReactNode } from "react";
-import { useUiMode, UiDebug, UiMode } from "@/hooks/useUiMode";
+import { useUiMode, UiMode } from "@/hooks/useUiMode";
 
 // ✅ Détection native locale (évite import circulaire avec App.tsx)
 const isNativeRuntime = () => {
@@ -29,7 +29,6 @@ type UiModeContextValue = {
   mode: UiMode;
   isMobileUI: boolean;
   isDesktopUI: boolean;
-  debug: UiDebug | null;
 };
 
 const UiModeContext = createContext<UiModeContextValue | null>(null);

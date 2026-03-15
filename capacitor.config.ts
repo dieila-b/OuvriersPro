@@ -7,7 +7,7 @@ const config: CapacitorConfig = {
   bundledWebRuntime: false,
 
   server: {
-    url: "https://0513bd25-b532-4ad1-87bd-d54c9a943029.lovableproject.com?forceHideBadge=true&mobileBuild=clean-20260315",
+    url: "https://0513bd25-b532-4ad1-87bd-d54c9a943029.lovableproject.com",
     cleartext: true,
   },
 

@@ -4,18 +4,6 @@ import { Capacitor } from "@capacitor/core";
 
 export type UiMode = "desktop" | "mobile";
 
-export type UiDebug = {
-  native: boolean;
-  effWidth: number;
-  innerWidth: number;
-  docWidth: number;
-  vvWidth: number | null;
-  dpr: number;
-  forcedDesktopInApp: boolean;
-  protocol: string;
-  host: string;
-};
-
 function safeGetWindowCapacitor(): any | null {
   try {
     return (window as any)?.Capacitor ?? null;
@@ -33,12 +21,6 @@ function safeGetWindowCapacitor(): any | null {
  */
 function isNativeRuntime(): boolean {
   const wCap = safeGetWindowCapacitor();
-
-  // ✅ Debug helper (web only): allow simulating native behavior
-  try {
-    const sp = new URLSearchParams(window.location.search || "");
-    if (sp.get("forceNative") === "1") return true;
-  } catch {}
 
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
@@ -98,50 +80,15 @@ export function useUiMode(options?: {
     return eff < desktopMinWidth ? "mobile" : "desktop";
   });
 
-  const [debug, setDebug] = useState<UiDebug | null>(null);
-
   useEffect(() => {
     const compute = () => {
       const native = isNativeRuntime();
-
       const effWidth = getEffectiveCssWidth();
-      const innerWidth = Math.floor(window.innerWidth || 0);
-      const docWidth = Math.floor(document.documentElement?.clientWidth || 0);
-      const vvWidth = window.visualViewport ? Math.floor(window.visualViewport.width) : null;
-      const dpr = window.devicePixelRatio || 1;
 
       const nextMode: UiMode =
         native && forceDesktopInApp ? "desktop" : effWidth < desktopMinWidth ? "mobile" : "desktop";
 
       setMode(nextMode);
-
-      const protocol = (() => {
-        try {
-          return window.location?.protocol ?? "";
-        } catch {
-          return "";
-        }
-      })();
-
-      const host = (() => {
-        try {
-          return window.location?.host ?? "";
-        } catch {
-          return "";
-        }
-      })();
-
-      setDebug({
-        native,
-        effWidth,
-        innerWidth,
-        docWidth,
-        vvWidth,
-        dpr,
-        forcedDesktopInApp: forceDesktopInApp,
-        protocol,
-        host,
-      });
     };
 
     compute();
@@ -191,8 +138,7 @@ export function useUiMode(options?: {
       mode,
       isMobileUI,
       isDesktopUI,
-      debug,
     }),
-    [mode, isMobileUI, isDesktopUI, debug]
+    [mode, isMobileUI, isDesktopUI]
   );
 }
