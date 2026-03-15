@@ -240,9 +240,6 @@ const Header = () => {
             className="w-full text-left py-2 font-medium text-foreground hover:text-primary"
             style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
             onClick={() => {
-              try {
-                console.log("[Header][mobile] become provider tap");
-              } catch {}
               safeGo("/inscription-ouvrier", "become_provider_mobile", true);
             }}
           >
