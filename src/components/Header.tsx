@@ -251,9 +251,6 @@ const Header = () => {
             className="w-full rounded-full bg-primary text-primary-foreground py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
             style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
             onClick={() => {
-              try {
-                console.log("[Header][mobile] account/login tap", { accountPath });
-              } catch {}
               safeGo(accountPath, "account_mobile", true);
             }}
           >
