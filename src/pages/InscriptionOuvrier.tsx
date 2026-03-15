@@ -1239,12 +1239,6 @@ const InscriptionOuvrier: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Debug discret si besoin */}
-                  {isNative && (
-                    <div className="mt-4 text-[11px] text-slate-400">
-                      native=1 • path={location.pathname} • search={location.search}
-                    </div>
-                  )}
                 </form>
               )}
             </CardContent>
