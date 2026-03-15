@@ -49,9 +49,9 @@ const Footer = () => {
   const locationValue = cms("footer.location.value", "Conakry (et environs)", "Conakry (and nearby)");
 
   return (
-    <footer className="bg-pro-gray text-white">
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid gap-8 md:grid-cols-4">
+    <footer className="bg-pro-gray text-white overflow-hidden">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-8 min-w-0">
+        <div className="grid gap-8 md:grid-cols-4 min-w-0">
           {/* Brand */}
           <div className="min-w-0">
             <div className="flex items-center gap-3">
@@ -154,44 +154,44 @@ const Footer = () => {
               )}
             </p>
 
-            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="space-y-3">
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 min-w-0 overflow-hidden">
+              <div className="space-y-3 min-w-0">
                 <a
                   href={`mailto:${emailValue}`}
-                  className="flex items-center justify-between gap-4 text-sm hover:text-white transition-colors"
+                  className="flex items-center justify-between gap-2 text-sm hover:text-white transition-colors min-w-0"
                 >
-                  <span className="inline-flex items-center gap-2 text-white/70">
-                    <Mail className="h-4 w-4" />
+                  <span className="inline-flex items-center gap-2 text-white/70 shrink-0">
+                    <Mail className="h-4 w-4 shrink-0" />
                     {cms("footer.contact.label_email", "Email", "Email")}
                   </span>
-                  <span className="font-medium text-white/90 truncate">{emailValue}</span>
+                  <span className="font-medium text-white/90 truncate text-right">{emailValue}</span>
                 </a>
 
                 <a
                   href={`tel:${phoneTel}`}
-                  className="flex items-center justify-between gap-4 text-sm hover:text-white transition-colors"
+                  className="flex items-center justify-between gap-2 text-sm hover:text-white transition-colors min-w-0"
                 >
-                  <span className="inline-flex items-center gap-2 text-white/70">
-                    <Phone className="h-4 w-4" />
+                  <span className="inline-flex items-center gap-2 text-white/70 shrink-0">
+                    <Phone className="h-4 w-4 shrink-0" />
                     {cms("footer.contact.label_phone", "Téléphone", "Phone")}
                   </span>
-                  <span className="font-medium text-white/90">{phoneValue}</span>
+                  <span className="font-medium text-white/90 truncate text-right">{phoneValue}</span>
                 </a>
 
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="inline-flex items-center gap-2 text-white/70">
-                    <Clock className="h-4 w-4" />
+                <div className="flex items-center justify-between gap-2 text-sm min-w-0">
+                  <span className="inline-flex items-center gap-2 text-white/70 shrink-0">
+                    <Clock className="h-4 w-4 shrink-0" />
                     {cms("footer.contact.label_hours", "Horaires", "Hours")}
                   </span>
-                  <span className="text-white/85">{hoursValue}</span>
+                  <span className="text-white/85 truncate text-right">{hoursValue}</span>
                 </div>
 
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="inline-flex items-center gap-2 text-white/70">
-                    <MapPin className="h-4 w-4" />
+                <div className="flex items-center justify-between gap-2 text-sm min-w-0">
+                  <span className="inline-flex items-center gap-2 text-white/70 shrink-0">
+                    <MapPin className="h-4 w-4 shrink-0" />
                     {cms("footer.contact.label_zone", "Zone", "Service area")}
                   </span>
-                  <span className="text-white/85">{locationValue}</span>
+                  <span className="text-white/85 truncate text-right">{locationValue}</span>
                 </div>
               </div>
 
@@ -207,7 +207,7 @@ const Footer = () => {
           </div>
         </div>
 
-        <div className="mt-8 border-t border-white/10 pt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="mt-8 border-t border-white/10 pt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between min-w-0">
           <p className="text-xs text-white/55">
             {cms(
               "footer.bottom.rights",

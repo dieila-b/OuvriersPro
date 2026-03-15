@@ -195,8 +195,8 @@ const HeroSection = () => {
   };
 
   return (
-    <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden">
-      <div className="relative z-10 w-full px-4 sm:px-6 lg:px-10 py-8 sm:py-10">
+    <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden min-w-0">
+      <div className="relative z-10 w-full max-w-full px-4 sm:px-6 lg:px-10 py-8 sm:py-10 min-w-0">
         <div className="w-full max-w-5xl mx-auto text-center">
           <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
             {cms("home.hero.title", "Trouvez des prestataires fiables près de chez vous", "Find trusted providers near you")}
@@ -213,9 +213,9 @@ const HeroSection = () => {
               e.preventDefault();
               handleSearch();
             }}
-            className="w-full bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl text-gray-900 relative z-20"
+            className="w-full max-w-full bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl text-gray-900 relative z-20 min-w-0 overflow-hidden"
           >
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-3 items-stretch min-w-0">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-3 items-stretch min-w-0 max-w-full">
               {/* Job */}
               <div ref={jobsBoxRef} className="relative min-w-0 text-left lg:col-span-6">
                 <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
