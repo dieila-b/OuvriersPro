@@ -17,9 +17,6 @@ import ProxiLogo from "@/assets/logo-proxiservices.png";
 
 type Role = "user" | "client" | "worker" | "admin";
 
-const BUILD_TAG =
-  // @ts-ignore
-  (import.meta as any).env?.VITE_BUILD_TAG || "header-mobile-fix-2026-03-09-v3";
 
 const normalizeRole = (r: any): Role => {
   const v = String(r ?? "").toLowerCase().trim();
