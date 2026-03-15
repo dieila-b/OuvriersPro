@@ -192,11 +192,9 @@ const Header = () => {
           if (isNative) {
             const wantHash = `#${to.startsWith("/") ? to : `/${to}`}`;
             if (window.location.hash !== wantHash) {
-              console.warn("[Header][nav] fallback hash", { wantHash });
               window.location.hash = wantHash;
             }
           } else if (window.location.pathname !== to) {
-            console.warn("[Header][nav] fallback hard nav", { to });
             window.location.assign(to);
           }
         } catch {}
