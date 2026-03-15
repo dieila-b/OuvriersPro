@@ -798,27 +798,27 @@ const WorkerSearchSection: React.FC = () => {
             <h2 className="mt-0 text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">{title}</h2>
             <p className="text-gray-600 mt-1.5 sm:mt-2 text-sm sm:text-base max-w-4xl">{subtitle}</p>
 
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] sm:text-xs text-gray-500">
-              <span className="inline-flex items-center gap-1">
-                <Search className="w-3 h-3" />
-                {loading ? <span>{loadingShort}</span> : <span>{resultCountLabel}</span>}
+            <div className="mt-2 flex flex-wrap items-start gap-2 text-[11px] sm:text-xs text-gray-500 min-w-0">
+              <span className="inline-flex items-center gap-1 max-w-full">
+                <Search className="w-3 h-3 shrink-0" />
+                {loading ? <span className="break-words">{loadingShort}</span> : <span className="break-words">{resultCountLabel}</span>}
               </span>
 
-              <span className="inline-flex items-center gap-1">
-                <Info className="w-3 h-3" />
-                <span>{geoHint}</span>
+              <span className="flex items-start gap-1 min-w-0 basis-full sm:basis-auto sm:max-w-[32rem]">
+                <Info className="w-3 h-3 shrink-0 mt-[1px]" />
+                <span className="min-w-0 break-words leading-relaxed">{geoHint}</span>
               </span>
 
-              <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 border-emerald-200 bg-emerald-50 text-emerald-700">
-                <Check className="w-3 h-3" />
-                {cms("search.badge.applied", "Filtres appliqués", "Applied filters")}
+              <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 border-emerald-200 bg-emerald-50 text-emerald-700 max-w-full">
+                <Check className="w-3 h-3 shrink-0" />
+                <span className="break-words">{cms("search.badge.applied", "Filtres appliqués", "Applied filters")}</span>
               </span>
             </div>
 
             {applied.near && appliedHasCoords && !hasAnyGeoWorkers && (
-              <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-flex items-center gap-2">
-                <Info className="w-4 h-4" />
-                {cms("search.geo.no_workers_coords", "Certains profils n'ont pas encore de position GPS.", "Some profiles do not have GPS coordinates yet.")}
+              <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-flex items-center gap-2 max-w-full">
+                <Info className="w-4 h-4 shrink-0" />
+                <span className="break-words">{cms("search.geo.no_workers_coords", "Certains profils n'ont pas encore de position GPS.", "Some profiles do not have GPS coordinates yet.")}</span>
               </div>
             )}
           </div>

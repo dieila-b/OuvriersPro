@@ -548,7 +548,7 @@ const App = () => {
             <Toaster />
             <Sonner />
             <RouterSwitch>
-              <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-white">
+              <div className="min-h-dvh w-full min-w-0 overflow-x-hidden bg-white">
                 <AppRoutes />
               </div>
             </RouterSwitch>

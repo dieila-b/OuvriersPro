@@ -266,14 +266,14 @@ const Header = () => {
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full max-w-full">
+      <header className="sticky top-0 z-40 w-full max-w-full overflow-x-hidden">
         <div className="bg-white border-b border-gray-200 overflow-hidden">
-          <div className="w-full px-4 sm:px-6 lg:px-10">
-            <div className="h-16 sm:h-[72px] min-w-0 flex items-center justify-between gap-3">
+          <div className="w-full px-4 sm:px-6 lg:px-10 min-w-0">
+            <div className="h-16 sm:h-[72px] min-w-0 flex items-center justify-between gap-2 sm:gap-3 overflow-hidden">
               <button
                 type="button"
                 onClick={() => go("/")}
-                className="min-w-0 flex items-center shrink-0 text-left"
+                className="min-w-0 flex-1 max-w-[58%] sm:max-w-none flex items-center text-left"
                 style={{
                   WebkitTapHighlightColor: "transparent",
                   touchAction: "manipulation" as any,
@@ -283,7 +283,7 @@ const Header = () => {
                 <img
                   src={logoSrc}
                   alt={cms("brand.name", "ProxiServices", "ProxiServices")}
-                  className="h-12 sm:h-14 w-auto max-w-[280px] sm:max-w-[340px] md:max-w-[420px] object-contain select-none"
+                  className="h-10 sm:h-14 w-auto max-w-[52vw] sm:max-w-[340px] md:max-w-[420px] object-contain select-none"
                   loading="eager"
                   decoding="async"
                   // @ts-ignore
@@ -346,13 +346,13 @@ const Header = () => {
               </div>
 
               {/* MOBILE */}
-              <div className="md:hidden min-w-0 flex items-center gap-2">
+              <div className="md:hidden min-w-0 shrink-0 flex items-center gap-1.5 sm:gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="rounded-full flex items-center gap-1 whitespace-nowrap"
+                      className="rounded-full px-2.5 sm:px-3 flex items-center gap-1 whitespace-nowrap"
                       type="button"
                       style={{ touchAction: "manipulation" as any }}
                     >
@@ -376,7 +376,7 @@ const Header = () => {
                   type="button"
                   onClick={toggleMobileMenu}
                   aria-label={cms("header.mobile_menu.aria", "Menu mobile", "Mobile menu")}
-                  className="rounded-full px-3 whitespace-nowrap"
+                  className="rounded-full px-2.5 sm:px-3 whitespace-nowrap"
                   style={{ touchAction: "manipulation" as any }}
                 >
                   {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}

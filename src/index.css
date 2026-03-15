@@ -261,5 +261,5 @@ html[data-ui-native="true"] [data-radix-focus-guard] {
 [data-admin] header,
 [data-admin] main {
   max-width: 100%;
-  overflow-x: clip;
+  overflow-x: hidden;
 }
