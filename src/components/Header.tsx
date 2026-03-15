@@ -177,11 +177,7 @@ const Header = () => {
       // 1) tentative SPA
       try {
         go(to);
-      } catch (e) {
-        try {
-          console.warn("[Header][nav] navigate() threw", e);
-        } catch {}
-      }
+      } catch {}
 
       // 2) fermeture menu mobile (après le départ de la nav)
       if (fromMobileMenu) {
