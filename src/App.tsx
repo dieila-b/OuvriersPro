@@ -338,6 +338,8 @@ const AppRoutes = () => (
     <Suspense fallback={<div className="p-6 text-gray-600">Chargement…</div>}>
       <Routes>
         <Route path="/" element={<Index />} />
+        <Route path="/index" element={<Navigate to="/" replace />} />
+        <Route path="/index.html" element={<Navigate to="/" replace />} />
         <Route path="/search" element={<Index />} />
         <Route path="/rechercher" element={<Index />} />
 
