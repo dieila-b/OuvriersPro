@@ -117,7 +117,7 @@
     width: 100%;
     max-width: 100%;
     min-height: 100dvh;
-    overflow-x: clip;
+    overflow-x: hidden;
     pointer-events: auto;
     position: relative;
     z-index: 1;
