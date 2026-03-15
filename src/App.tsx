@@ -19,8 +19,6 @@ import { Capacitor } from "@capacitor/core";
 
 import { UiModeProvider, useUiModeCtx } from "@/contexts/UiModeContext";
 
-import NativeIncidentProbe from "@/components/debug/NativeIncidentProbe";
-import TapInspector from "@/components/TapInspector";
 import PrivateRoute from "./components/PrivateRoute";
 import AdminLayout from "@/components/layout/AdminLayout";
 
@@ -275,42 +273,6 @@ function AuthAuditLogger() {
   return null;
 }
 
-/**
- * Badge debug (NE PAS afficher sur Desktop web)
- */
-function UiDebugBadge() {
-  const { isMobileUI, debug } = useUiModeCtx();
-  if (!debug) return null;
-
-  const isNative = isNativeRuntime();
-  const show =
-    isNative && import.meta.env.DEV && new URLSearchParams(window.location.search).has("uiDebug");
-  if (!show) return null;
-
-  return (
-    <div className="fixed top-2 left-2 z-[9999]">
-      <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600 shadow-sm">
-        <span className="font-semibold">UI:</span>
-        <span className={isMobileUI ? "text-emerald-700" : "text-indigo-700"}>
-          {isMobileUI ? "MOBILE" : "DESKTOP"}
-        </span>
-        <span className="text-slate-400">|</span>
-        <span>native={String(debug.native)}</span>
-        <span className="text-slate-400">|</span>
-        <span>forcedDesktopInApp={String(debug.forcedDesktopInApp)}</span>
-        <span className="text-slate-400">|</span>
-        <span>eff={debug.effWidth}px</span>
-        <span className="text-slate-400">|</span>
-        <span>inner={debug.innerWidth}px</span>
-        <span className="text-slate-400">|</span>
-        <span>doc={debug.docWidth}px</span>
-        <span className="text-slate-400">|</span>
-        <span>vv={debug.vvWidth ?? "—"}px</span>
-        <span>dpr={debug.dpr}</span>
-      </div>
-    </div>
-  );
-}
 
 /**
  * Intercepteur global (Natif uniquement)
@@ -371,58 +333,12 @@ function GlobalLinkInterceptor() {
   return null;
 }
 
-/**
- * TapInspector Gate
- */
-function TapInspectorGate() {
-  const [enabled, setEnabled] = useState(false);
-
-  useEffect(() => {
-    const isNative = isNativeRuntime();
-
-    const readTap = () => {
-      if (!isNative) return false;
-
-      const sp = new URLSearchParams(window.location.search || "");
-      const tapSearch = sp.get("tap") === "1" || sp.get("forceTap") === "1";
-
-      const hash = window.location.hash || "";
-      const q = hash.includes("?") ? hash.split("?")[1] : "";
-      const hp = new URLSearchParams(q);
-      const tapHash = hp.get("tap") === "1" || hp.get("forceTap") === "1";
-
-      let tapLS = false;
-      try {
-        tapLS = localStorage.getItem("tap") === "1";
-      } catch {}
-
-      return tapSearch || tapHash || tapLS;
-    };
-
-    const apply = () => setEnabled(readTap());
-
-    apply();
-    window.addEventListener("hashchange", apply);
-    window.addEventListener("popstate", apply);
-
-    return () => {
-      window.removeEventListener("hashchange", apply);
-      window.removeEventListener("popstate", apply);
-    };
-  }, []);
-
-  if (!enabled) return null;
-  return <TapInspector />;
-}
 
 const AppRoutes = () => (
   <>
-    <NativeIncidentProbe />
     <ScrollManager />
     <AuthAuditLogger />
-    <UiDebugBadge />
     <GlobalLinkInterceptor />
-    <TapInspectorGate />
 
     <Suspense fallback={<div className="p-6 text-gray-600">Chargement…</div>}>
       <Routes>
