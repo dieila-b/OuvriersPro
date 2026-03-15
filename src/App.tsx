@@ -368,7 +368,6 @@ const AppRoutes = () => (
 
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/__tap-test" element={<TapTest />} />
 
         <Route path="/inscription" element={<Navigate to="/register" replace />} />
         <Route path="/signup" element={<Navigate to="/register" replace />} />
