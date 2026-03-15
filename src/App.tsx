@@ -19,8 +19,6 @@ import { Capacitor } from "@capacitor/core";
 
 import { UiModeProvider, useUiModeCtx } from "@/contexts/UiModeContext";
 
-import NativeIncidentProbe from "@/components/debug/NativeIncidentProbe";
-import TapInspector from "@/components/TapInspector";
 import PrivateRoute from "./components/PrivateRoute";
 import AdminLayout from "@/components/layout/AdminLayout";
 
