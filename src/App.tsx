@@ -25,7 +25,7 @@ import PrivateRoute from "./components/PrivateRoute";
 import AdminLayout from "@/components/layout/AdminLayout";
 
 /**
- * ✅ Retry wrapper for lazy imports — handles stale chunk errors
+ * Retry wrapper for lazy imports — handles stale chunk errors
  */
 const lazyRetry = (factory: () => Promise<any>, retries = 2): ReturnType<typeof lazy> =>
   lazy(async () => {
@@ -74,7 +74,9 @@ const AdminDashboard = lazyRetry(() => import("./pages/AdminDashboard"));
 const AdminAds = lazyRetry(() => import("./pages/AdminAds"));
 
 const AdminLoginJournalPage = lazyRetry(() => import("./pages/admin/AdminLoginJournalPage"));
-const AdminReviewsModerationPage = lazyRetry(() => import("./pages/admin/AdminReviewsModerationPage"));
+const AdminReviewsModerationPage = lazyRetry(
+  () => import("./pages/admin/AdminReviewsModerationPage")
+);
 
 const WorkerDashboard = lazyRetry(() => import("./pages/WorkerDashboard"));
 const WorkerMessagesPage = lazyRetry(() => import("./pages/WorkerMessagesPage"));
@@ -89,7 +91,7 @@ const ClientReviews = lazyRetry(() => import("./pages/ClientReviews"));
 const ClientContactForm = lazyRetry(() => import("./pages/ClientContactForm"));
 
 /**
- * ✅ Détection native robuste (Capacitor / WebView)
+ * Détection native robuste (Capacitor / WebView)
  */
 const isNativeRuntime = () => {
   try {
@@ -104,24 +106,30 @@ const isNativeRuntime = () => {
   try {
     const p = window.location?.protocol ?? "";
     if (p === "capacitor:" || p === "file:") return true;
+  } catch {}
 
+  try {
     const gp = (Capacitor as any)?.getPlatform?.();
     if (gp && gp !== "web") return true;
+  } catch {}
 
+  try {
     const host = window.location?.hostname ?? "";
     if (host === "localhost") return true;
 
     const ua = navigator?.userAgent ?? "";
     if (ua.includes("wv") || ua.includes("Capacitor")) return true;
 
-    if (p === "https:" && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) return true;
+    if (window.location?.protocol === "https:" && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) {
+      return true;
+    }
   } catch {}
 
   return false;
 };
 
 /**
- * ✅ QueryClient optimisé
+ * QueryClient optimisé
  */
 const useAppQueryClient = () =>
   useMemo(
@@ -143,9 +151,6 @@ const useAppQueryClient = () =>
 
 function ScrollManager() {
   const location = useLocation();
-
-  // Sur Web (BrowserRouter): location.hash sert aux ancres
-  // Sur Native (HashRouter): location.hash est géré par le router, donc on évite le scroll-to-anchor automatique.
   const isNative = isNativeRuntime();
 
   useEffect(() => {
@@ -172,7 +177,7 @@ function ScrollManager() {
 }
 
 /**
- * ✅ Journal de connexion — non bloquant
+ * Journal de connexion — non bloquant
  */
 function AuthAuditLogger() {
   const didInitRef = useRef(false);
@@ -200,7 +205,8 @@ function AuthAuditLogger() {
       user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
       lang: typeof navigator !== "undefined" ? navigator.language : null,
       tz: getTimeZone(),
-      screen: typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
+      screen:
+        typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
       referrer: typeof document !== "undefined" ? document.referrer || null : null,
       href: typeof window !== "undefined" ? window.location.href : null,
     });
@@ -270,7 +276,7 @@ function AuthAuditLogger() {
 }
 
 /**
- * ✅ Badge debug (NE PAS afficher sur Desktop web)
+ * Badge debug (NE PAS afficher sur Desktop web)
  */
 function UiDebugBadge() {
   const { isMobileUI, debug } = useUiModeCtx();
@@ -307,7 +313,7 @@ function UiDebugBadge() {
 }
 
 /**
- * ✅ Intercepteur global (Natif uniquement)
+ * Intercepteur global (Natif uniquement)
  * - Intercepte les <a href="/..."> pour les router en SPA via navigate()
  * - Evite les reload/404
  */
@@ -328,8 +334,9 @@ function GlobalLinkInterceptor() {
         href.startsWith("blob:") ||
         href.startsWith("data:") ||
         anchor.target === "_blank"
-      )
+      ) {
         return true;
+      }
 
       if (anchor.hasAttribute("download")) return true;
       if ((anchor.getAttribute("rel") || "").includes("external")) return true;
@@ -365,7 +372,7 @@ function GlobalLinkInterceptor() {
 }
 
 /**
- * ✅ TapInspector Gate
+ * TapInspector Gate
  */
 function TapInspectorGate() {
   const [enabled, setEnabled] = useState(false);
@@ -417,10 +424,8 @@ const AppRoutes = () => (
     <GlobalLinkInterceptor />
     <TapInspectorGate />
 
-
     <Suspense fallback={<div className="p-6 text-gray-600">Chargement…</div>}>
       <Routes>
-        {/* Public */}
         <Route path="/" element={<Index />} />
         <Route path="/search" element={<Index />} />
         <Route path="/rechercher" element={<Index />} />
@@ -450,7 +455,6 @@ const AppRoutes = () => (
         <Route path="/register" element={<Register />} />
         <Route path="/__tap-test" element={<TapTest />} />
 
-        {/* Aliases */}
         <Route path="/inscription" element={<Navigate to="/register" replace />} />
         <Route path="/signup" element={<Navigate to="/register" replace />} />
         <Route path="/sign-up" element={<Navigate to="/register" replace />} />
@@ -458,15 +462,30 @@ const AppRoutes = () => (
         <Route path="/creation-profil" element={<Navigate to="/register" replace />} />
         <Route path="/creer-mon-profil" element={<Navigate to="/register" replace />} />
 
-        <Route path="/forfaits/inscription-ouvrier" element={<Navigate to="/inscription-ouvrier" replace />} />
-        <Route path="/forfaits/inscription-ouvrier/*" element={<Navigate to="/inscription-ouvrier" replace />} />
+        <Route
+          path="/forfaits/inscription-ouvrier"
+          element={<Navigate to="/inscription-ouvrier" replace />}
+        />
+        <Route
+          path="/forfaits/inscription-ouvrier/*"
+          element={<Navigate to="/inscription-ouvrier" replace />}
+        />
 
         <Route path="/devenir-prestataire" element={<InscriptionOuvrier />} />
-        <Route path="/devenir-prestataire/*" element={<Navigate to="/inscription-ouvrier" replace />} />
-        <Route path="/forfaits/devenir-prestataire" element={<Navigate to="/inscription-ouvrier" replace />} />
+        <Route
+          path="/devenir-prestataire/*"
+          element={<Navigate to="/inscription-ouvrier" replace />}
+        />
+        <Route
+          path="/forfaits/devenir-prestataire"
+          element={<Navigate to="/inscription-ouvrier" replace />}
+        />
 
         <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
-        <Route path="/inscription-ouvrier/*" element={<Navigate to="/inscription-ouvrier" replace />} />
+        <Route
+          path="/inscription-ouvrier/*"
+          element={<Navigate to="/inscription-ouvrier" replace />}
+        />
 
         <Route
           path="/ouvrier/:id"
@@ -477,7 +496,6 @@ const AppRoutes = () => (
           }
         />
 
-        {/* Client */}
         <Route
           path="/espace-client"
           element={
@@ -527,7 +545,6 @@ const AppRoutes = () => (
           }
         />
 
-        {/* Worker */}
         <Route
           path="/espace-ouvrier"
           element={
@@ -561,7 +578,6 @@ const AppRoutes = () => (
           }
         />
 
-        {/* Admin */}
         <Route
           path="/admin"
           element={
@@ -582,7 +598,6 @@ const AppRoutes = () => (
           <Route path="moderation-avis" element={<AdminReviewsModerationPage />} />
         </Route>
 
-        {/* 404 */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>
@@ -590,9 +605,9 @@ const AppRoutes = () => (
 );
 
 /**
- * ✅ Router stable:
- * - Web: BrowserRouter (URLs propres /login)
- * - Native (Capacitor): HashRouter (stable en file:// et WebView)
+ * Router stable:
+ * - Web: BrowserRouter
+ * - Native (Capacitor): HashRouter
  */
 function RouterSwitch({ children }: { children: React.ReactNode }) {
   const isNative = isNativeRuntime();
