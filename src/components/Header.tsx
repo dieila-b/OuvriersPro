@@ -207,9 +207,6 @@ const Header = () => {
     const now = Date.now();
     if (now - lastToggleAtRef.current < 450) return;
     lastToggleAtRef.current = now;
-    try {
-      console.log("[Header][menu] toggle", { open: !mobileOpen });
-    } catch {}
     setMobileOpen((v) => !v);
   }, [mobileOpen]);
 
