@@ -63,7 +63,7 @@ const WorkerDetail: React.FC = () => {
   const workerId = (params.workerId as string) || (params.id as string);
 
   // ✅ UI global
-  const { isMobileUI, debug } = useUiMode();
+  const { isMobileUI } = useUiMode();
 
   const [worker, setWorker] = useState<WorkerProfile | null>(null);
   const [loadingWorker, setLoadingWorker] = useState(true);
