@@ -17,7 +17,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Capacitor } from "@capacitor/core";
 
-import { UiModeProvider, useUiModeCtx } from "@/contexts/UiModeContext";
+import { UiModeProvider } from "@/contexts/UiModeContext";
 
 import PrivateRoute from "./components/PrivateRoute";
 import AdminLayout from "@/components/layout/AdminLayout";
