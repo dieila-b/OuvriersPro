@@ -49,9 +49,9 @@ const Footer = () => {
   const locationValue = cms("footer.location.value", "Conakry (et environs)", "Conakry (and nearby)");
 
   return (
-    <footer className="bg-pro-gray text-white">
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid gap-8 md:grid-cols-4">
+    <footer className="bg-pro-gray text-white overflow-hidden">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-8 min-w-0">
+        <div className="grid gap-8 md:grid-cols-4 min-w-0">
           {/* Brand */}
           <div className="min-w-0">
             <div className="flex items-center gap-3">
