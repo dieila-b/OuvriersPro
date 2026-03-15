@@ -173,17 +173,6 @@ const Header = () => {
         );
       })();
 
-      try {
-        console.log("[Header][nav] tap", {
-          label,
-          to,
-          isNative,
-          fromMobileMenu,
-          href: window.location.href,
-          hash: window.location.hash,
-          build: BUILD_TAG,
-        });
-      } catch {}
 
       // 1) tentative SPA
       try {
