@@ -333,49 +333,6 @@ function GlobalLinkInterceptor() {
   return null;
 }
 
-/**
- * TapInspector Gate
- */
-function TapInspectorGate() {
-  const [enabled, setEnabled] = useState(false);
-
-  useEffect(() => {
-    const isNative = isNativeRuntime();
-
-    const readTap = () => {
-      if (!isNative) return false;
-
-      const sp = new URLSearchParams(window.location.search || "");
-      const tapSearch = sp.get("tap") === "1" || sp.get("forceTap") === "1";
-
-      const hash = window.location.hash || "";
-      const q = hash.includes("?") ? hash.split("?")[1] : "";
-      const hp = new URLSearchParams(q);
-      const tapHash = hp.get("tap") === "1" || hp.get("forceTap") === "1";
-
-      let tapLS = false;
-      try {
-        tapLS = localStorage.getItem("tap") === "1";
-      } catch {}
-
-      return tapSearch || tapHash || tapLS;
-    };
-
-    const apply = () => setEnabled(readTap());
-
-    apply();
-    window.addEventListener("hashchange", apply);
-    window.addEventListener("popstate", apply);
-
-    return () => {
-      window.removeEventListener("hashchange", apply);
-      window.removeEventListener("popstate", apply);
-    };
-  }, []);
-
-  if (!enabled) return null;
-  return <TapInspector />;
-}
 
 const AppRoutes = () => (
   <>
