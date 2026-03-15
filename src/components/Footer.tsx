@@ -207,7 +207,7 @@ const Footer = () => {
           </div>
         </div>
 
-        <div className="mt-8 border-t border-white/10 pt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="mt-8 border-t border-white/10 pt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between min-w-0">
           <p className="text-xs text-white/55">
             {cms(
               "footer.bottom.rights",
