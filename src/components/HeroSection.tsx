@@ -195,8 +195,8 @@ const HeroSection = () => {
   };
 
   return (
-    <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden">
-      <div className="relative z-10 w-full px-4 sm:px-6 lg:px-10 py-8 sm:py-10">
+    <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden min-w-0">
+      <div className="relative z-10 w-full max-w-full px-4 sm:px-6 lg:px-10 py-8 sm:py-10 min-w-0">
         <div className="w-full max-w-5xl mx-auto text-center">
           <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
             {cms("home.hero.title", "Trouvez des prestataires fiables près de chez vous", "Find trusted providers near you")}
