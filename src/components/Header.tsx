@@ -137,7 +137,7 @@ const Header = () => {
   );
 
   const safeGo = useCallback(
-    (to: string, label?: string, fromMobileMenu = false) => {
+    (to: string, _label?: string, fromMobileMenu = false) => {
       const now = Date.now();
       if (now - lastNavAtRef.current < 450) return;
       lastNavAtRef.current = now;
@@ -198,7 +198,7 @@ const Header = () => {
 
   const MobileMenuPanel = mobileOpen ? (
     <div
-      className="md:hidden fixed inset-x-0 top-[68px] sm:top-[76px] z-50 w-full border-t border-border bg-background shadow-sm"
+      className="md:hidden fixed inset-x-0 top-[84px] sm:top-[92px] z-50 w-full border-t border-border bg-background shadow-sm"
       style={{ pointerEvents: "auto" }}
     >
       <div className="w-full px-4 sm:px-6 py-3">
@@ -251,10 +251,13 @@ const Header = () => {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-40 w-full max-w-full overflow-x-hidden bg-white">
-        <div className="bg-white border-b border-gray-200 overflow-hidden">
+      <header
+        className="fixed top-0 left-0 right-0 z-40 w-full max-w-full overflow-x-hidden bg-white shadow-sm"
+        style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+      >
+        <div className="w-full bg-white border-b border-gray-200 overflow-hidden">
           <div className="w-full px-4 sm:px-6 lg:px-10 min-w-0">
-            <div className="h-16 sm:h-[72px] min-w-0 flex items-center justify-between gap-2 sm:gap-3 overflow-hidden">
+            <div className="h-20 sm:h-[88px] min-w-0 flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => go("/")}
@@ -268,7 +271,7 @@ const Header = () => {
                 <img
                   src={logoSrc}
                   alt={cms("brand.name", "ProxiServices", "ProxiServices")}
-                  className="h-10 sm:h-14 w-auto max-w-[52vw] sm:max-w-[340px] md:max-w-[420px] object-contain select-none"
+                  className="h-11 sm:h-14 w-auto max-w-[50vw] sm:max-w-[340px] md:max-w-[420px] object-contain select-none"
                   loading="eager"
                   decoding="async"
                   // @ts-ignore
@@ -329,18 +332,18 @@ const Header = () => {
                 </DropdownMenu>
               </div>
 
-              <div className="md:hidden min-w-0 shrink-0 flex items-center gap-1.5 sm:gap-2">
+              <div className="md:hidden min-w-0 shrink-0 flex items-center gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="rounded-full px-2.5 sm:px-3 flex items-center gap-1 whitespace-nowrap"
+                      className="h-9 rounded-full px-3 flex items-center gap-1 whitespace-nowrap bg-white"
                       type="button"
                       style={{ touchAction: "manipulation" as any }}
                     >
                       <Languages className="w-4 h-4" />
-                      <span className="uppercase">{language}</span>
+                      <span className="uppercase text-xs">{language}</span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="bg-white">
@@ -359,7 +362,7 @@ const Header = () => {
                   type="button"
                   onClick={toggleMobileMenu}
                   aria-label={cms("header.mobile_menu.aria", "Menu mobile", "Mobile menu")}
-                  className="rounded-full px-2.5 sm:px-3 whitespace-nowrap"
+                  className="h-9 rounded-full px-3 whitespace-nowrap bg-white"
                   style={{ touchAction: "manipulation" as any }}
                 >
                   {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
@@ -368,11 +371,15 @@ const Header = () => {
             </div>
           </div>
 
-          <div className="h-1 w-full bg-gradient-to-r from-pro-blue/90 via-blue-600/90 to-pro-blue/90" />
+          <div className="h-1.5 w-full bg-gradient-to-r from-pro-blue via-blue-600 to-pro-blue" />
         </div>
       </header>
 
-      <div aria-hidden className="h-[68px] sm:h-[76px] w-full shrink-0" />
+      <div
+        aria-hidden
+        className="w-full shrink-0"
+        style={{ height: "calc(env(safe-area-inset-top, 0px) + 86px)" }}
+      />
 
       {MobileMenuPanel}
 
