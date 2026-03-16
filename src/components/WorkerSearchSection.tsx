@@ -32,7 +32,7 @@ type DbWorker = {
   latitude?: number | null;
   longitude?: number | null;
 
-  is_visible?: boolean | null;
+  is_visible?: number | null;
   is_suspended?: boolean | null;
   deleted_at?: string | null;
 };
@@ -86,7 +86,22 @@ type SearchPayload = {
 const DEFAULT_MAX_PRICE = 300000;
 const DEFAULT_RADIUS_KM = 10;
 
-const DEFAULT_FILTERS: Filters = {
+const getDeviceDefaultView = (): ViewMode => {
+  try {
+    const isNative = document.documentElement?.getAttribute("data-ui-native") === "true";
+    if (isNative) return "grid";
+  } catch {}
+
+  try {
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
+      return "grid";
+    }
+  } catch {}
+
+  return "list";
+};
+
+const createDefaultFilters = (): Filters => ({
   keyword: "",
   job: "all",
   region: "",
@@ -95,12 +110,12 @@ const DEFAULT_FILTERS: Filters = {
   district: "",
   maxPrice: DEFAULT_MAX_PRICE,
   minRating: 0,
-  view: "list",
+  view: getDeviceDefaultView(),
   near: false,
   radiusKm: DEFAULT_RADIUS_KM,
   lat: null,
   lng: null,
-};
+});
 
 const toRad = (deg: number) => (deg * Math.PI) / 180;
 
@@ -133,6 +148,7 @@ function safeParseJson<T>(value: string | null): T | null {
 
 function filtersToParams(f: Filters) {
   const next: Record<string, string> = {};
+  const defaultView = getDeviceDefaultView();
 
   if (f.keyword) next.keyword = f.keyword;
   if (f.district) next.district = f.district;
@@ -144,7 +160,7 @@ function filtersToParams(f: Filters) {
 
   if (f.maxPrice !== DEFAULT_MAX_PRICE) next.maxPrice = String(f.maxPrice);
   if (f.minRating !== 0) next.minRating = String(f.minRating);
-  if (f.view !== "list") next.view = f.view;
+  if (f.view !== defaultView) next.view = f.view;
 
   if (f.near) next.near = "1";
   if (f.near && f.radiusKm !== DEFAULT_RADIUS_KM) next.radiusKm = String(f.radiusKm);
@@ -157,6 +173,8 @@ function filtersToParams(f: Filters) {
 }
 
 function paramsToFilters(searchParams: URLSearchParams): Filters {
+  const defaultView = getDeviceDefaultView();
+
   const spKeyword = (searchParams.get("keyword") ?? "").trim();
   const spJob = (searchParams.get("job") ?? "all").trim() || "all";
   const spRegion = (searchParams.get("region") ?? "").trim();
@@ -165,7 +183,7 @@ function paramsToFilters(searchParams: URLSearchParams): Filters {
   const spDistrict = (searchParams.get("district") ?? "").trim();
   const spMaxPrice = Number(searchParams.get("maxPrice") ?? String(DEFAULT_MAX_PRICE));
   const spMinRating = Number(searchParams.get("minRating") ?? "0");
-  const spView = ((searchParams.get("view") as ViewMode) ?? "list") as ViewMode;
+  const spViewRaw = searchParams.get("view");
 
   const spNear = searchParams.get("near") === "1";
   const spRadius = Number(searchParams.get("radiusKm") ?? String(DEFAULT_RADIUS_KM));
@@ -174,6 +192,9 @@ function paramsToFilters(searchParams: URLSearchParams): Filters {
 
   const latNum = spLat != null ? Number(spLat) : null;
   const lngNum = spLng != null ? Number(spLng) : null;
+
+  const resolvedView: ViewMode =
+    spViewRaw === "grid" ? "grid" : spViewRaw === "list" ? "list" : defaultView;
 
   return {
     keyword: spKeyword,
@@ -184,7 +205,7 @@ function paramsToFilters(searchParams: URLSearchParams): Filters {
     district: spDistrict,
     maxPrice: Number.isFinite(spMaxPrice) ? spMaxPrice : DEFAULT_MAX_PRICE,
     minRating: Number.isFinite(spMinRating) ? spMinRating : 0,
-    view: spView === "grid" ? "grid" : "list",
+    view: resolvedView,
     near: spNear,
     radiusKm: Number.isFinite(spRadius) ? spRadius : DEFAULT_RADIUS_KM,
     lat: Number.isFinite(latNum as number) ? (latNum as number) : null,
@@ -330,8 +351,8 @@ const WorkerSearchSection: React.FC = () => {
   const [geoLocating, setGeoLocating] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
 
-  const [applied, setApplied] = useState<Filters>(DEFAULT_FILTERS);
-  const [draft, setDraft] = useState<Filters>(DEFAULT_FILTERS);
+  const [applied, setApplied] = useState<Filters>(() => createDefaultFilters());
+  const [draft, setDraft] = useState<Filters>(() => createDefaultFilters());
 
   const applyTimerRef = useRef<number | null>(null);
 
@@ -512,7 +533,8 @@ const WorkerSearchSection: React.FC = () => {
       return;
     }
 
-    applyExternalFilters(DEFAULT_FILTERS);
+    const defaults = createDefaultFilters();
+    applyExternalFilters(defaults);
     initializedRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -685,9 +707,10 @@ const WorkerSearchSection: React.FC = () => {
   }, [workers, applied]);
 
   const resetAll = () => {
+    const defaults = createDefaultFilters();
     applyingExternalRef.current = true;
-    setDraft(DEFAULT_FILTERS);
-    setApplied(DEFAULT_FILTERS);
+    setDraft(defaults);
+    setApplied(defaults);
     setSearchParams({}, { replace: true });
     setGeoError(null);
     window.setTimeout(() => (applyingExternalRef.current = false), 0);
