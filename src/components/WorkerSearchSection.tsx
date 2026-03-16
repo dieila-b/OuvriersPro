@@ -457,7 +457,6 @@ const WorkerSearchSection: React.FC = () => {
       const selectStr = [...baseFields, ...ratingFields].join(",");
 
       const q = supabase.from(source).select(selectStr).eq("status", "approved");
-
       const res = await q;
       return res;
     };
@@ -854,6 +853,7 @@ const WorkerSearchSection: React.FC = () => {
   const districtAll = cms("search.filters.district.all", "Tous les quartiers", "All districts");
 
   const resetLabel = cms("search.filters.btn_reset", "Réinitialiser", "Reset");
+  const showFiltersLabel = cms("search.filters.show", "Afficher les filtres", "Show filters");
   const hideFiltersLabel = cms("search.filters.hide", "Masquer les filtres", "Hide filters");
   const activeFiltersLabel = cms("search.filters.active_count", "filtres actifs", "active filters");
 
@@ -941,6 +941,35 @@ const WorkerSearchSection: React.FC = () => {
   }, [filteredWorkers.length, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const compactMobile = isCompactMobile();
+
+  const getInitials = (name: string) =>
+    name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((n) => n[0]?.toUpperCase())
+      .join("") || "OP";
+
+  const getWorkerSubtitle = (w: WorkerCard) => {
+    const primary = w.job?.trim();
+    const location = [w.city, w.commune, w.district].filter(Boolean).join(" • ");
+    return primary || location || cms("search.card.subtitle", "Prestataire qualifié", "Qualified provider");
+  };
+
+  const getWorkerMetaLine = (w: WorkerCard) =>
+    [w.region, w.city, w.commune, w.district].filter(Boolean).join(" • ");
+
+  const renderStars = (rating: number) => {
+    const full = Math.max(0, Math.min(5, Math.round(rating)));
+    return [...Array(5)].map((_, i) => (
+      <Star
+        key={i}
+        className={`h-3.5 w-3.5 ${
+          i < full ? "fill-amber-400 text-amber-400" : "fill-slate-200 text-slate-200"
+        }`}
+      />
+    ));
+  };
 
   return (
     <section
@@ -1101,7 +1130,9 @@ const WorkerSearchSection: React.FC = () => {
           {(!compactMobile || mobileFiltersOpen) && (
             <aside
               className={`min-w-0 bg-gray-50 border border-gray-200 shadow-sm ${
-                compactMobile ? "rounded-2xl p-3 mb-1" : "rounded-2xl p-4 sm:p-5"
+                compactMobile
+                  ? "rounded-2xl p-3 mb-1"
+                  : "rounded-2xl p-4 sm:p-5"
               }`}
             >
               <div className={`flex items-start justify-between gap-3 ${compactMobile ? "mb-3" : "mb-4"}`}>
@@ -1378,190 +1409,169 @@ const WorkerSearchSection: React.FC = () => {
             )}
 
             {applied.view === "list" && filteredWorkers.length > 0 && (
-              <div className="space-y-3 sm:space-y-4 min-w-0">
-                {filteredWorkers.map((w) => {
-                  const initials = w.name
-                    .split(" ")
-                    .filter(Boolean)
-                    .slice(0, 2)
-                    .map((n) => n[0]?.toUpperCase())
-                    .join("");
-
-                  return (
-                    <div
-                      key={w.id}
-                      className="min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4"
-                    >
-                      <div className="flex-shrink-0">
-                        <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">
-                          {initials || "OP"}
+              <div className="space-y-4 min-w-0">
+                {filteredWorkers.map((w) => (
+                  <div
+                    key={w.id}
+                    className="min-w-0 rounded-[28px] border border-[#dbe8ff] bg-[linear-gradient(180deg,#f8fbff_0%,#eef5ff_100%)] px-4 py-4 sm:px-5 sm:py-5 shadow-[0_16px_36px_rgba(44,90,160,0.10)]"
+                  >
+                    <div className="flex items-start gap-3 sm:gap-4">
+                      <div className="relative shrink-0">
+                        <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-full bg-[radial-gradient(circle_at_30%_30%,#cbe0ff_0%,#8db7ff_38%,#4f88f7_68%,#2b63db_100%)] p-[3px] shadow-[0_10px_22px_rgba(59,130,246,0.22)]">
+                          <div className="flex h-full w-full items-center justify-center rounded-full bg-[linear-gradient(180deg,#edf5ff_0%,#dcecff_100%)] text-pro-blue font-bold text-sm sm:text-lg">
+                            {getInitials(w.name)}
+                          </div>
                         </div>
                       </div>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 min-w-0">
-                          <h3 className="font-semibold text-pro-gray text-base sm:text-lg truncate min-w-0">
-                            {w.name}
-                          </h3>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="truncate text-[20px] sm:text-[28px] leading-none font-bold tracking-[-0.02em] text-[#243b63]">
+                              {w.name}
+                            </h3>
 
-                          {w.job && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-pro-blue border border-blue-100">
-                              {w.job}
-                            </span>
-                          )}
+                            <div className="mt-2 text-[13px] sm:text-[18px] leading-tight text-[#66738f] truncate">
+                              {getWorkerSubtitle(w)}
+                            </div>
+                          </div>
+
+                          <div className="shrink-0 text-right">
+                            <div className="text-[20px] sm:text-[28px] leading-none font-semibold tracking-[-0.02em] text-[#243b63]">
+                              {formatCurrency(w.hourlyRate, w.currency)}
+                            </div>
+                            <div className="mt-1 text-[11px] sm:text-[13px] text-[#7f8ca8]">
+                              {perHourLabel}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:text-[13px] text-[#66738f]">
+                          <span className="inline-flex items-center gap-1.5 min-w-0">
+                            <MapPin className="h-3.5 w-3.5 shrink-0 text-[#7a8db1]" />
+                            <span className="truncate max-w-[340px]">{getWorkerMetaLine(w)}</span>
+                          </span>
 
                           {applied.near && appliedHasCoords && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/70 px-2 py-0.5 text-[#4b5c7d] border border-[#dbe7fb]">
                               {distanceLabel}:{" "}
-                              <span className="font-semibold ml-1">
+                              <span className="font-semibold">
                                 {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
                               </span>
                             </span>
                           )}
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-3 mt-1 text-xs sm:text-sm text-gray-600 min-w-0">
-                          <span className="flex items-center gap-1 min-w-0">
-                            <MapPin className="w-3 h-3 shrink-0" />
-                            <span className="truncate">
-                              {[w.region, w.city, w.commune, w.district].filter(Boolean).join(" • ")}
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+                            <div className="flex items-center gap-0.5">
+                              {renderStars(w.rating)}
+                            </div>
+
+                            <span className="inline-flex items-center gap-1 text-[12px] sm:text-[14px] text-[#6f7d98]">
+                              <Star className="h-3.5 w-3.5 text-[#8ea0bf]" />
+                              <span className="font-medium">
+                                {w.rating.toFixed(1)} ({w.ratingCount})
+                              </span>
                             </span>
-                          </span>
 
-                          <span className="flex items-center gap-1">
-                            <Star className="w-3 h-3 text-yellow-400" />
-                            {w.rating.toFixed(1)} ({w.ratingCount})
-                          </span>
+                            <span className="text-[12px] sm:text-[14px] text-[#6f7d98]">
+                              {w.experienceYears} {yearsSuffix}
+                            </span>
+                          </div>
 
-                          <span>
-                            {w.experienceYears} {yearsSuffix}
-                          </span>
+                          <Button
+                            size="sm"
+                            className="h-10 rounded-xl bg-[#3b6df6] px-5 text-xs sm:text-sm font-semibold shadow-[0_8px_18px_rgba(59,109,246,0.28)] hover:bg-[#2f61eb]"
+                            onClick={() => goToWorkerProfile(w.id)}
+                          >
+                            {contactLabel}
+                          </Button>
                         </div>
-                      </div>
-
-                      <div className="w-full sm:w-auto flex sm:flex-col items-start sm:items-end justify-between sm:justify-start gap-2 min-w-0">
-                        <div className="text-pro-blue font-bold text-base sm:text-lg">
-                          {formatCurrency(w.hourlyRate, w.currency)}
-                          <span className="text-xs sm:text-sm text-gray-600 ml-1">
-                            {perHourLabel}
-                          </span>
-                        </div>
-
-                        <Button
-                          size="sm"
-                          className="w-full sm:w-auto bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm"
-                          onClick={() => goToWorkerProfile(w.id)}
-                        >
-                          {contactLabel}
-                        </Button>
                       </div>
                     </div>
-                  );
-                })}
+
+                    <div className="mt-4 h-[3px] w-full rounded-full bg-[linear-gradient(90deg,#b9d1ff_0%,#dfeaff_55%,#b9d1ff_100%)]" />
+                  </div>
+                ))}
               </div>
             )}
 
             {applied.view === "grid" && filteredWorkers.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4 min-w-0">
-                {filteredWorkers.map((w) => {
-                  const initials = w.name
-                    .split(" ")
-                    .filter(Boolean)
-                    .slice(0, 2)
-                    .map((n) => n[0]?.toUpperCase())
-                    .join("");
-
-                  return (
-                    <div
-                      key={w.id}
-                      className="min-w-0 rounded-[24px] border border-[#d9e6ff] bg-[linear-gradient(180deg,#f9fbff_0%,#f3f7ff_100%)] shadow-[0_10px_28px_rgba(68,104,180,0.10)] hover:shadow-[0_14px_34px_rgba(68,104,180,0.16)] transition-all duration-200 px-4 py-4"
-                    >
-                      <div className="flex items-start justify-between gap-3 min-w-0">
-                        <div className="flex items-start gap-3 min-w-0 flex-1">
-                          <div className="w-[52px] h-[52px] rounded-full bg-[linear-gradient(180deg,#f1f6ff_0%,#e8f0ff_100%)] border-2 border-[#6ea0ff] text-[#2f63eb] flex items-center justify-center text-[13px] font-semibold shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-                            {initials || "OP"}
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-3 sm:gap-4 min-w-0">
+                {filteredWorkers.map((w) => (
+                  <div
+                    key={w.id}
+                    className="min-w-0 rounded-[24px] border border-[#dbe8ff] bg-[linear-gradient(180deg,#f8fbff_0%,#eef5ff_100%)] px-3.5 py-3.5 sm:px-4 sm:py-4 shadow-[0_14px_32px_rgba(44,90,160,0.10)] hover:shadow-[0_18px_36px_rgba(44,90,160,0.14)] transition-all duration-200"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="relative shrink-0">
+                        <div className="h-14 w-14 rounded-full bg-[radial-gradient(circle_at_30%_30%,#cbe0ff_0%,#8db7ff_38%,#4f88f7_68%,#2b63db_100%)] p-[2.5px] shadow-[0_10px_20px_rgba(59,130,246,0.20)]">
+                          <div className="flex h-full w-full items-center justify-center rounded-full bg-[linear-gradient(180deg,#edf5ff_0%,#dcecff_100%)] text-pro-blue font-bold text-sm">
+                            {getInitials(w.name)}
                           </div>
+                        </div>
+                      </div>
 
-                          <div className="min-w-0 pt-0.5">
-                            <h3 className="text-[19px] leading-[1.05] font-extrabold tracking-[-0.02em] text-[#23345d] truncate">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="truncate text-[16px] sm:text-[18px] leading-tight font-bold tracking-[-0.02em] text-[#243b63]">
                               {w.name}
                             </h3>
+                            <div className="mt-1 truncate text-[11px] sm:text-[12px] text-[#6f7d98]">
+                              {getWorkerSubtitle(w)}
+                            </div>
+                          </div>
 
-                            <div className="mt-1 text-[11px] font-medium text-[#7a8cab] truncate">
-                              {w.job || cms("search.worker.trade_unknown", "Métier non renseigné", "Trade not specified")}
+                          <div className="shrink-0 text-right">
+                            <div className="text-[16px] sm:text-[18px] leading-none font-semibold tracking-[-0.02em] text-[#243b63]">
+                              {formatCurrency(w.hourlyRate, w.currency)}
                             </div>
                           </div>
                         </div>
 
-                        <div className="shrink-0 text-right pt-0.5">
-                          <div className="text-[15px] sm:text-[16px] font-extrabold tracking-[-0.02em] text-[#23345d] whitespace-nowrap">
-                            {formatCurrency(w.hourlyRate, w.currency)}
+                        <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] sm:text-[11px] text-[#6f7d98]">
+                          <span className="inline-flex items-center gap-1 min-w-0">
+                            <MapPin className="h-3 w-3 shrink-0 text-[#7a8db1]" />
+                            <span className="truncate max-w-[200px]">{getWorkerMetaLine(w)}</span>
+                          </span>
+                        </div>
+
+                        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-0.5">
+                              {renderStars(w.rating)}
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] sm:text-[11px] text-[#6f7d98]">
+                              <span className="font-medium">
+                                {w.rating.toFixed(1)} ({w.ratingCount})
+                              </span>
+                              <span>
+                                {w.experienceYears} {yearsSuffix}
+                              </span>
+                              {applied.near && appliedHasCoords && (
+                                <span className="text-[#4b5c7d]">
+                                  {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
+                                </span>
+                              )}
+                            </div>
                           </div>
+
+                          <Button
+                            size="sm"
+                            className="h-8 rounded-xl bg-[#3b6df6] px-3 text-[11px] font-semibold shadow-[0_8px_18px_rgba(59,109,246,0.22)] hover:bg-[#2f61eb]"
+                            onClick={() => goToWorkerProfile(w.id)}
+                          >
+                            {contactLabel}
+                          </Button>
                         </div>
-                      </div>
-
-                      <div className="mt-3 flex items-center gap-1.5 min-w-0 text-[10px] text-[#6c7c97]">
-                        <MapPin className="w-3 h-3 shrink-0 text-[#6c7c97]" />
-                        <span className="truncate">
-                          {[w.region, w.city, w.commune, w.district].filter(Boolean).join(" • ")}
-                        </span>
-                      </div>
-
-                      <div className="mt-2 flex items-center justify-between gap-3">
-                        <div className="min-w-0 flex items-center gap-2 text-[10px] text-[#7a869a]">
-                          <span className="inline-flex items-center gap-0.5 shrink-0">
-                            {[1, 2, 3, 4, 5].map((value) => (
-                              <Star
-                                key={value}
-                                className={`w-3 h-3 ${
-                                  value <= Math.round(w.rating)
-                                    ? "fill-[#f2c14e] text-[#f2c14e]"
-                                    : "fill-[#d9dee8] text-[#d9dee8]"
-                                }`}
-                              />
-                            ))}
-                          </span>
-
-                          <span className="truncate">
-                            {w.rating.toFixed(1)} ({w.ratingCount})
-                          </span>
-                        </div>
-
-                        <div className="text-[10px] text-[#7a869a] whitespace-nowrap">
-                          {w.experienceYears} {yearsSuffix}
-                        </div>
-                      </div>
-
-                      {applied.near && appliedHasCoords && (
-                        <div className="mt-1.5 text-[10px] text-[#6f7f98]">
-                          {distanceLabel}:{" "}
-                          <span className="font-semibold text-[#465a7d]">
-                            {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
-                          </span>
-                        </div>
-                      )}
-
-                      <div className="mt-4 h-px w-full bg-[linear-gradient(90deg,rgba(120,153,230,0.0)_0%,rgba(120,153,230,0.38)_18%,rgba(120,153,230,0.38)_82%,rgba(120,153,230,0.0)_100%)]" />
-
-                      <div className="mt-3 flex items-end justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-[18px] leading-none font-extrabold tracking-[-0.02em] text-[#2f63eb]">
-                            {formatCurrency(w.hourlyRate, w.currency)}
-                          </div>
-                          <div className="mt-1 text-[10px] text-[#7d8ba5]">{perHourLabel}</div>
-                        </div>
-
-                        <Button
-                          size="sm"
-                          className="h-9 rounded-[12px] px-4 bg-[linear-gradient(180deg,#4e7cff_0%,#2f63eb_100%)] hover:brightness-105 text-white text-[11px] font-semibold shadow-[0_8px_18px_rgba(47,99,235,0.25)]"
-                          onClick={() => goToWorkerProfile(w.id)}
-                        >
-                          {contactLabel}
-                        </Button>
                       </div>
                     </div>
-                  );
-                })}
+
+                    <div className="mt-3 h-[2px] w-full rounded-full bg-[linear-gradient(90deg,#b9d1ff_0%,#dfeaff_55%,#b9d1ff_100%)]" />
+                  </div>
+                ))}
               </div>
             )}
           </div>
