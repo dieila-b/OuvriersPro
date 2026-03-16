@@ -1,472 +1,406 @@
-import React, { useState } from "react";
-import { jsPDF } from "jspdf";
-import {
-  Download,
-  FileBadge2,
-  FileSignature,
-  FileText,
-  Loader2,
-} from "lucide-react";
-
-import { supabase } from "@/integrations/supabase/client";
+// src/components/Header.tsx
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { Languages, User, Menu, X } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useLocation, useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
+import ContactModal from "@/components/contact/ContactModal";
+import ProxiLogo from "@/assets/logo-proxiservices.png";
 
-type PdfKind = "exit_letter" | "certificate" | "solde";
+type Role = "user" | "client" | "worker" | "admin";
 
-type CommonPayload = {
-  success?: boolean;
-  document_type?: string;
-  template?: string;
-  sortie_rupture_id?: string;
+const normalizeRole = (r: any): Role => {
+  const v = String(r ?? "").toLowerCase().trim();
+  if (v === "admin") return "admin";
+  if (v === "worker" || v === "ouvrier" || v === "provider" || v === "prestataire") return "worker";
+  if (v === "client" || v === "customer") return "client";
+  return "user";
 };
 
-type ExitLetterPayload = CommonPayload & {
-  organization?: {
-    name?: string;
+const HEADER_LIGHT_BLUE = "#EEF5FF";
+const HEADER_BORDER_BLUE = "#D9E7FF";
+
+const Header = () => {
+  const { t, language, setLanguage } = useLanguage();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const [hasSession, setHasSession] = useState(false);
+  const [role, setRole] = useState<Role>("user");
+
+  const cms = (key: string, fallbackFr: string, fallbackEn: string) => {
+    const v = t(key);
+    if (!v || v === key) return language === "fr" ? fallbackFr : fallbackEn;
+    return v;
   };
-  employee?: {
-    code?: string;
-    full_name?: string;
-    position?: string;
-  };
-  exit?: {
-    date_sortie?: string;
-    type?: string;
-    motif?: string;
-    commentaire?: string;
-  };
-  document?: {
-    title?: string;
-    subject?: string;
-    body?: string;
-  };
-};
 
-type CertificatePayload = CommonPayload & {
-  organization?: {
-    name?: string;
-  };
-  employee?: {
-    code?: string;
-    full_name?: string;
-    position?: string;
-    hire_date?: string;
-  };
-  exit?: {
-    date_sortie?: string;
-    type?: string;
-  };
-  document?: {
-    title?: string;
-    body?: string;
-  };
-};
+  useEffect(() => {
+    let mounted = true;
 
-type SoldePayload = CommonPayload & {
-  employee?: {
-    code?: string;
-    full_name?: string;
-  };
-  exit?: {
-    date_sortie?: string;
-    type?: string;
-    motif?: string;
-  };
-  currency?: string;
-  lines?: Array<{
-    code?: string;
-    label?: string;
-    amount?: number;
-  }>;
-  totals?: {
-    salaire_mensuel?: number;
-    brut_total?: number;
-    total_retenues?: number;
-    net_a_payer?: number;
-  };
-};
+    const refresh = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const u = data?.session?.user ?? null;
+        if (!mounted) return;
 
-type Props = {
-  sortieRuptureId: string;
-  className?: string;
-  variant?: "default" | "outline";
-  size?: "default" | "sm" | "lg" | "icon";
-  onDone?: () => void | Promise<void>;
-};
+        setHasSession(!!u?.id);
 
-function formatDateFR(value?: string | null) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString("fr-FR");
-}
+        if (!u?.id) {
+          setRole("user");
+          return;
+        }
 
-function formatMoney(value?: number | null, currency = "GNF") {
-  const n = Number(value ?? 0);
-  if (!Number.isFinite(n)) return `0 ${currency}`;
-  return `${n.toLocaleString("fr-FR")} ${currency}`;
-}
+        const metaRole = normalizeRole(u.user_metadata?.role ?? u.app_metadata?.role ?? null);
 
-function sanitizeFileName(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\w.-]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
+        const { data: row, error } = await supabase
+          .from("op_users")
+          .select("role")
+          .eq("id", u.id)
+          .maybeSingle();
 
-function addWrappedText(
-  doc: jsPDF,
-  text: string,
-  x: number,
-  y: number,
-  maxWidth: number,
-  lineHeight = 7
-) {
-  const lines = doc.splitTextToSize(text || "", maxWidth);
-  doc.text(lines, x, y);
-  return y + lines.length * lineHeight;
-}
+        if (!mounted) return;
 
-function drawHeader(
-  doc: jsPDF,
-  title: string,
-  subtitle?: string
-) {
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text(title, 20, 22);
+        if (error) {
+          console.warn("[Header] op_users role fetch error:", error);
+          setRole(metaRole);
+        } else {
+          setRole(normalizeRole(row?.role ?? metaRole));
+        }
+      } catch {
+        if (!mounted) return;
+        setHasSession(false);
+        setRole("user");
+      }
+    };
 
-  if (subtitle) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(90, 90, 90);
-    doc.text(subtitle, 20, 29);
-    doc.setTextColor(0, 0, 0);
-  }
+    refresh();
 
-  doc.setDrawColor(220, 220, 220);
-  doc.line(20, 34, 190, 34);
-}
-
-function drawFooter(doc: jsPDF) {
-  const pageCount = doc.getNumberOfPages();
-
-  for (let i = 1; i <= pageCount; i += 1) {
-    doc.setPage(i);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(110, 110, 110);
-    doc.text(`Page ${i} / ${pageCount}`, 170, 290);
-  }
-
-  doc.setTextColor(0, 0, 0);
-}
-
-function generateExitLetterPdf(payload: ExitLetterPayload) {
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-
-  const org = payload.organization?.name ?? "Entreprise";
-  const employee = payload.employee?.full_name ?? "Employé";
-  const code = payload.employee?.code ?? "—";
-  const position = payload.employee?.position ?? "—";
-  const dateSortie = formatDateFR(payload.exit?.date_sortie);
-  const typeSortie = payload.exit?.type ?? "—";
-  const motif = payload.exit?.motif ?? "—";
-  const subject = payload.document?.subject ?? "Notification de sortie";
-  const body = payload.document?.body ?? "";
-
-  drawHeader(doc, payload.document?.title ?? "Lettre de sortie", org);
-
-  let y = 46;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text(`Date : ${dateSortie}`, 20, y);
-  y += 10;
-
-  doc.setFont("helvetica", "bold");
-  doc.text(`Objet : ${subject}`, 20, y);
-  y += 12;
-
-  doc.setFont("helvetica", "normal");
-  doc.text(`Employé : ${employee}`, 20, y);
-  y += 7;
-  doc.text(`Matricule : ${code}`, 20, y);
-  y += 7;
-  doc.text(`Poste : ${position}`, 20, y);
-  y += 7;
-  doc.text(`Type de sortie : ${typeSortie}`, 20, y);
-  y += 7;
-  doc.text(`Motif : ${motif}`, 20, y);
-  y += 12;
-
-  y = addWrappedText(doc, body, 20, y, 170, 7);
-  y += 16;
-
-  doc.text("Signature RH :", 20, y);
-  doc.line(20, y + 16, 80, y + 16);
-
-  drawFooter(doc);
-
-  const fileName = sanitizeFileName(
-    `lettre_sortie_${employee}_${payload.sortie_rupture_id ?? "document"}.pdf`
-  );
-  doc.save(fileName);
-}
-
-function generateCertificatePdf(payload: CertificatePayload) {
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-
-  const org = payload.organization?.name ?? "Entreprise";
-  const employee = payload.employee?.full_name ?? "Employé";
-  const code = payload.employee?.code ?? "—";
-  const position = payload.employee?.position ?? "—";
-  const hireDate = formatDateFR(payload.employee?.hire_date);
-  const exitDate = formatDateFR(payload.exit?.date_sortie);
-  const body = payload.document?.body ?? "";
-
-  drawHeader(doc, payload.document?.title ?? "Certificat de travail", org);
-
-  let y = 48;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text(`Employé : ${employee}`, 20, y);
-  y += 7;
-  doc.text(`Matricule : ${code}`, 20, y);
-  y += 7;
-  doc.text(`Poste : ${position}`, 20, y);
-  y += 7;
-  doc.text(`Période : du ${hireDate} au ${exitDate}`, 20, y);
-  y += 14;
-
-  y = addWrappedText(doc, body, 20, y, 170, 7);
-  y += 18;
-
-  doc.text("Fait pour servir et valoir ce que de droit.", 20, y);
-  y += 22;
-  doc.text("Signature et cachet :", 20, y);
-  doc.line(20, y + 18, 90, y + 18);
-
-  drawFooter(doc);
-
-  const fileName = sanitizeFileName(
-    `certificat_travail_${employee}_${payload.sortie_rupture_id ?? "document"}.pdf`
-  );
-  doc.save(fileName);
-}
-
-function generateSoldePdf(payload: SoldePayload) {
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-
-  const employee = payload.employee?.full_name ?? "Employé";
-  const code = payload.employee?.code ?? "—";
-  const dateSortie = formatDateFR(payload.exit?.date_sortie);
-  const currency = payload.currency ?? "GNF";
-  const lines = payload.lines ?? [];
-  const totals = payload.totals ?? {};
-
-  drawHeader(
-    doc,
-    "Solde de tout compte",
-    `${employee} • ${code}`
-  );
-
-  let y = 44;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text(`Date de sortie : ${dateSortie}`, 20, y);
-  y += 8;
-  doc.text(`Type : ${payload.exit?.type ?? "—"}`, 20, y);
-  y += 8;
-  doc.text(`Motif : ${payload.exit?.motif ?? "—"}`, 20, y);
-  y += 12;
-
-  doc.setFont("helvetica", "bold");
-  doc.text("Détail du calcul", 20, y);
-  y += 8;
-
-  doc.setDrawColor(220, 220, 220);
-  doc.rect(20, y, 170, 10);
-  doc.text("Libellé", 24, y + 6.5);
-  doc.text("Montant", 160, y + 6.5, { align: "right" });
-  y += 10;
-
-  doc.setFont("helvetica", "normal");
-
-  lines.forEach((line) => {
-    if (y > 265) {
-      doc.addPage();
-      y = 24;
-    }
-
-    doc.rect(20, y, 170, 9);
-    doc.text(line.label ?? "Ligne", 24, y + 6);
-    doc.text(formatMoney(line.amount ?? 0, currency), 160, y + 6, {
-      align: "right",
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      refresh();
     });
-    y += 9;
-  });
 
-  y += 8;
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
 
-  doc.setFont("helvetica", "bold");
-  doc.text(`Brut total : ${formatMoney(totals.brut_total, currency)}`, 20, y);
-  y += 8;
-  doc.text(
-    `Total retenues : ${formatMoney(totals.total_retenues, currency)}`,
-    20,
-    y
-  );
-  y += 10;
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname, location.search, location.hash]);
 
-  doc.setFillColor(240, 248, 255);
-  doc.rect(20, y - 5, 170, 12, "F");
-  doc.text(`Net à payer : ${formatMoney(totals.net_a_payer, currency)}`, 24, y + 2);
-
-  drawFooter(doc);
-
-  const fileName = sanitizeFileName(
-    `solde_tout_compte_${employee}_${payload.sortie_rupture_id ?? "document"}.pdf`
-  );
-  doc.save(fileName);
-}
-
-async function callRpc(sortieRuptureId: string, kind: PdfKind) {
-  if (kind === "exit_letter") {
-    const { data, error } = await supabase.rpc(
-      "rh_generate_exit_letter_pdf_payload" as any,
-      { p_sortie_rupture_id: sortieRuptureId }
-    );
-    if (error) throw error;
-    return data as ExitLetterPayload;
-  }
-
-  if (kind === "certificate") {
-    const { data, error } = await supabase.rpc(
-      "rh_generate_exit_certificate_pdf_payload" as any,
-      { p_sortie_rupture_id: sortieRuptureId }
-    );
-    if (error) throw error;
-    return data as CertificatePayload;
-  }
-
-  const { data, error } = await supabase.rpc(
-    "rh_generate_solde_pdf_payload" as any,
-    { p_sortie_rupture_id: sortieRuptureId }
-  );
-  if (error) throw error;
-  return data as SoldePayload;
-}
-
-export function ExitPdfGenerator({
-  sortieRuptureId,
-  className,
-  variant = "outline",
-  size = "sm",
-  onDone,
-}: Props) {
-  const [loadingKind, setLoadingKind] = useState<PdfKind | null>(null);
-
-  const generate = async (kind: PdfKind) => {
-    try {
-      setLoadingKind(kind);
-
-      const payload = await callRpc(sortieRuptureId, kind);
-
-      if (!payload?.success) {
-        throw new Error("Le payload PDF retourné est invalide.");
-      }
-
-      if (kind === "exit_letter") {
-        generateExitLetterPdf(payload as ExitLetterPayload);
-      } else if (kind === "certificate") {
-        generateCertificatePdf(payload as CertificatePayload);
-      } else {
-        generateSoldePdf(payload as SoldePayload);
-      }
-
-      toast({
-        title: "PDF généré",
-        description:
-          kind === "exit_letter"
-            ? "Lettre de sortie générée."
-            : kind === "certificate"
-              ? "Certificat de travail généré."
-              : "Solde tout compte généré.",
-      });
-
-      await onDone?.();
-    } catch (e: any) {
-      console.error("[ExitPdfGenerator]", e);
-      toast({
-        title: "Erreur PDF",
-        description: e?.message ?? "Impossible de générer le PDF.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoadingKind(null);
+  useEffect(() => {
+    if (!mobileOpen) {
+      document.body.style.overflow = "";
+      return;
     }
-  };
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
 
-  const isBusy = loadingKind !== null;
+  const accountLabel = useMemo(() => {
+    if (hasSession) return cms("header.btn_account", "Mon compte", "My account");
+    return cms("header.btn_login", "Se connecter", "Sign in");
+  }, [hasSession, language]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const accountPath = useMemo(() => {
+    if (!hasSession) return "/login";
+    if (role === "admin") return "/admin";
+    if (role === "worker") return "/espace-ouvrier";
+    return "/espace-client";
+  }, [hasSession, role]);
+
+  const becomeProviderLabel = useMemo(() => {
+    return cms("header.btn_become_provider", "Devenir Prestataire", "Become a Provider");
+  }, [language]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const logoSrc = useMemo(() => ProxiLogo, []);
+
+  const lastNavAtRef = useRef(0);
+  const lastToggleAtRef = useRef(0);
+
+  const go = useCallback(
+    (to: string) => {
+      navigate(to);
+    },
+    [navigate]
+  );
+
+  const safeGo = useCallback(
+    (to: string, _label?: string, fromMobileMenu = false) => {
+      const now = Date.now();
+      if (now - lastNavAtRef.current < 450) return;
+      lastNavAtRef.current = now;
+
+      const isNative = (() => {
+        try {
+          if (Capacitor?.isNativePlatform?.()) return true;
+        } catch {}
+
+        try {
+          const wCap = (window as any)?.Capacitor;
+          if (wCap?.isNativePlatform?.()) return true;
+        } catch {}
+
+        try {
+          const p = window.location?.protocol ?? "";
+          if (p === "capacitor:" || p === "file:") return true;
+        } catch {}
+
+        return (
+          typeof document !== "undefined" &&
+          document.documentElement?.getAttribute("data-ui-native") === "true"
+        );
+      })();
+
+      try {
+        go(to);
+      } catch {}
+
+      if (fromMobileMenu) {
+        window.setTimeout(() => {
+          setMobileOpen(false);
+        }, 60);
+      }
+
+      window.setTimeout(() => {
+        try {
+          if (isNative) {
+            const wantHash = `#${to.startsWith("/") ? to : `/${to}`}`;
+            if (window.location.hash !== wantHash) {
+              window.location.hash = wantHash;
+            }
+          } else if (window.location.pathname !== to) {
+            window.location.assign(to);
+          }
+        } catch {}
+      }, 0);
+    },
+    [go]
+  );
+
+  const toggleMobileMenu = useCallback(() => {
+    const now = Date.now();
+    if (now - lastToggleAtRef.current < 450) return;
+    lastToggleAtRef.current = now;
+    setMobileOpen((v) => !v);
+  }, []);
+
+  const MobileMenuPanel = mobileOpen ? (
+    <div
+      className="md:hidden min-w-0 shrink-0 flex items-center gap-2 rounded-2xl px-2 py-1 border shadow-sm"
+      style={{ pointerEvents: "auto", backgroundColor: HEADER_LIGHT_BLUE, borderColor: HEADER_BORDER_BLUE }}
+    >
+      <div className="w-full px-4 sm:px-6 py-3">
+        <div className="flex items-center justify-between gap-3 min-w-0">
+          <span className="text-sm font-semibold text-foreground">
+            {cms("header.mobile_menu.title", "Menu", "Menu")}
+          </span>
+
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            className="rounded-full bg-white"
+            onClick={() => setMobileOpen(false)}
+            style={{ touchAction: "manipulation" as any }}
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+
+        <div className="mt-3 flex flex-col gap-3 min-w-0">
+          <button
+            type="button"
+            className="w-full text-left py-2 font-medium text-foreground hover:text-primary"
+            style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
+            onClick={() => {
+              safeGo("/inscription-ouvrier", "become_provider_mobile", true);
+            }}
+          >
+            {becomeProviderLabel}
+          </button>
+
+          <button
+            type="button"
+            className="w-full rounded-full bg-primary text-primary-foreground py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
+            style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
+            onClick={() => {
+              safeGo(accountPath, "account_mobile", true);
+            }}
+          >
+            <User className="w-4 h-4" />
+            {accountLabel}
+          </button>
+
+          <div className="h-1" />
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-2", className)}>
-      <Button
-        variant={variant}
-        size={size}
-        disabled={isBusy}
-        onClick={() => generate("exit_letter")}
+    <>
+      <header
+        className="fixed top-0 left-0 right-0 z-40 w-full max-w-full overflow-x-hidden shadow-sm"
+        style={{
+          paddingTop: "env(safe-area-inset-top, 0px)",
+          backgroundColor: HEADER_LIGHT_BLUE,
+        }}
       >
-        {loadingKind === "exit_letter" ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        ) : (
-          <FileText className="mr-2 h-4 w-4" />
-        )}
-        Lettre PDF
-      </Button>
+        <div
+          className="w-full overflow-hidden"
+          style={{
+            backgroundColor: HEADER_LIGHT_BLUE,
+            borderBottom: `1px solid ${HEADER_BORDER_BLUE}`,
+          }}
+        >
+          <div className="w-full px-4 sm:px-6 lg:px-10 min-w-0">
+            <div className="h-20 sm:h-[88px] min-w-0 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => go("/")}
+                className="min-w-0 flex-1 max-w-[58%] sm:max-w-none flex items-center text-left"
+                style={{
+                  WebkitTapHighlightColor: "transparent",
+                  touchAction: "manipulation" as any,
+                }}
+                aria-label={cms("brand.name", "ProxiServices", "ProxiServices")}
+              >
+                <img
+                  src={logoSrc}
+                  alt={cms("brand.name", "ProxiServices", "ProxiServices")}
+                  className="h-11 sm:h-14 w-auto max-w-[50vw] sm:max-w-[340px] md:max-w-[420px] object-contain select-none"
+                  loading="eager"
+                  decoding="async"
+                  // @ts-ignore
+                  fetchpriority="high"
+                />
+              </button>
 
-      <Button
-        variant={variant}
-        size={size}
-        disabled={isBusy}
-        onClick={() => generate("certificate")}
-      >
-        {loadingKind === "certificate" ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        ) : (
-          <FileBadge2 className="mr-2 h-4 w-4" />
-        )}
-        Certificat PDF
-      </Button>
+              <nav className="hidden md:flex" aria-hidden="true" />
 
-      <Button
-        variant={variant}
-        size={size}
-        disabled={isBusy}
-        onClick={() => generate("solde")}
-      >
-        {loadingKind === "solde" ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        ) : (
-          <FileSignature className="mr-2 h-4 w-4" />
-        )}
-        Solde PDF
-      </Button>
+              <div className="hidden md:flex min-w-0 items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full whitespace-nowrap bg-white"
+                  onClick={() => safeGo("/inscription-ouvrier", "become_provider_desktop")}
+                  style={{ touchAction: "manipulation" as any }}
+                >
+                  {becomeProviderLabel}
+                </Button>
 
-      {isBusy ? (
-        <span className="inline-flex items-center text-xs text-muted-foreground">
-          <Download className="mr-1 h-3.5 w-3.5" />
-          Génération…
-        </span>
-      ) : null}
-    </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="rounded-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center gap-2 whitespace-nowrap shadow-sm"
+                  onClick={() => safeGo(accountPath, "account_desktop")}
+                  style={{ touchAction: "manipulation" as any }}
+                >
+                  <User className="w-4 h-4" />
+                  <span className="hidden lg:inline">{accountLabel}</span>
+                  <span className="lg:hidden">
+                    {cms("header.btn_account_short", "Compte", "Account")}
+                  </span>
+                </Button>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full flex items-center gap-1 whitespace-nowrap bg-white"
+                      aria-label={cms("header.lang.aria", "Changer de langue", "Change language")}
+                      type="button"
+                      style={{ touchAction: "manipulation" as any }}
+                    >
+                      <Languages className="w-4 h-4" />
+                      <span className="uppercase">{language}</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="bg-white">
+                    <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
+                      {cms("header.lang.fr", "Français", "French")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
+                      {cms("header.lang.en", "English", "English")}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              <div
+                className="md:hidden min-w-0 shrink-0 flex items-center gap-2"
+                style={{ backgroundColor: HEADER_LIGHT_BLUE }}
+              >
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 rounded-full px-3 flex items-center gap-1 whitespace-nowrap bg-white"
+                      type="button"
+                      style={{ touchAction: "manipulation" as any }}
+                    >
+                      <Languages className="w-4 h-4" />
+                      <span className="uppercase text-xs">{language}</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="bg-white">
+                    <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
+                      {cms("header.lang.fr", "Français", "French")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
+                      {cms("header.lang.en", "English", "English")}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={toggleMobileMenu}
+                  aria-label={cms("header.mobile_menu.aria", "Menu mobile", "Mobile menu")}
+                  className="h-9 rounded-full px-3 whitespace-nowrap bg-white"
+                  style={{ touchAction: "manipulation" as any }}
+                >
+                  {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="h-1.5 w-full bg-gradient-to-r from-pro-blue via-blue-600 to-pro-blue" />
+        </div>
+      </header>
+
+      <div
+        aria-hidden
+        className="w-full shrink-0"
+        style={{ height: "calc(env(safe-area-inset-top, 0px) + 32px)" }}
+      />
+
+      {MobileMenuPanel}
+
+      <ContactModal open={contactOpen} onOpenChange={setContactOpen} cooldownSeconds={30} />
+    </>
   );
-}
+};
 
-export default ExitPdfGenerator;
+export default Header;
