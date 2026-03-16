@@ -393,7 +393,7 @@ const Header = () => {
       <div
         aria-hidden
         className="w-full shrink-0"
-        style={{ height: "calc(env(safe-area-inset-top, 0px) + 86px)" }}
+        style={{ height: "calc(env(safe-area-inset-top, 0px) + 52px)" }}
       />
 
       {MobileMenuPanel}
