@@ -170,7 +170,7 @@ html[data-ui-native="true"] body {
 /* En natif, toute l'app reste sous la status bar */
 html[data-ui-native="true"] #root {
   min-height: 100dvh;
-  padding-top: max(env(safe-area-inset-top), 28px);
+  padding-top: 0;
   padding-bottom: env(safe-area-inset-bottom, 0px);
   box-sizing: border-box;
   background-color: hsl(var(--background));
