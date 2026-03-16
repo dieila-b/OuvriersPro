@@ -198,7 +198,7 @@ const Header = () => {
 
   const MobileMenuPanel = mobileOpen ? (
     <div
-      className="md:hidden fixed inset-x-0 top-[84px] sm:top-[92px] z-50 w-full border-t border-border bg-background shadow-sm"
+      className="md:hidden min-w-0 shrink-0 flex items-center gap-2 rounded-2xl bg-gradient-to-b from-slate-50 to-white px-2 py-1 border border-slate-200/80 shadow-sm"
       style={{ pointerEvents: "auto" }}
     >
       <div className="w-full px-4 sm:px-6 py-3">
