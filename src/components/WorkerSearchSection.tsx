@@ -17,6 +17,9 @@ import {
   Info,
   RotateCcw,
   Check,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 type DbWorker = {
@@ -32,16 +35,13 @@ type DbWorker = {
   hourly_rate: number | null;
   currency: string | null;
   years_experience: number | null;
-
   average_rating?: number | null;
   rating_count?: number | null;
   computed_average_rating?: number | null;
   computed_rating_count?: number | null;
-
   status: string | null;
   latitude?: number | null;
   longitude?: number | null;
-
   is_visible?: number | null;
   is_suspended?: boolean | null;
   deleted_at?: string | null;
@@ -253,6 +253,33 @@ const WorkerSearchSection: React.FC = () => {
 
     return false;
   };
+
+  const isCompactMobile = () => {
+    try {
+      const isNative = document.documentElement?.getAttribute("data-ui-native") === "true";
+      if (isNative) return true;
+    } catch {}
+
+    try {
+      return window.innerWidth < 768;
+    } catch {}
+
+    return false;
+  };
+
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(() => !isCompactMobile());
+
+  useEffect(() => {
+    const syncMobileFiltersState = () => {
+      if (!isCompactMobile()) {
+        setMobileFiltersOpen(true);
+      }
+    };
+
+    syncMobileFiltersState();
+    window.addEventListener("resize", syncMobileFiltersState);
+    return () => window.removeEventListener("resize", syncMobileFiltersState);
+  }, []);
 
   const getTopOverlayOffset = () => {
     const samplesX = [20, Math.floor(window.innerWidth / 2), window.innerWidth - 20];
@@ -827,6 +854,9 @@ const WorkerSearchSection: React.FC = () => {
   const districtAll = cms("search.filters.district.all", "Tous les quartiers", "All districts");
 
   const resetLabel = cms("search.filters.btn_reset", "Réinitialiser", "Reset");
+  const showFiltersLabel = cms("search.filters.show", "Afficher les filtres", "Show filters");
+  const hideFiltersLabel = cms("search.filters.hide", "Masquer les filtres", "Hide filters");
+  const activeFiltersLabel = cms("search.filters.active_count", "filtres actifs", "active filters");
 
   const viewModeLabel = cms("search.view.label", "Affichage", "View");
   const viewListLabel = cms("search.view.list", "Liste", "List");
@@ -878,6 +908,21 @@ const WorkerSearchSection: React.FC = () => {
   );
   const appliedHasCoords = applied.lat != null && applied.lng != null;
 
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (draft.keyword.trim()) count += 1;
+    if (draft.job !== "all") count += 1;
+    if (draft.region) count += 1;
+    if (draft.city) count += 1;
+    if (draft.commune) count += 1;
+    if (draft.district) count += 1;
+    if (draft.maxPrice !== DEFAULT_MAX_PRICE) count += 1;
+    if (draft.minRating !== 0) count += 1;
+    if (draft.near) count += 1;
+    if (draft.radiusKm !== DEFAULT_RADIUS_KM && draft.near) count += 1;
+    return count;
+  }, [draft]);
+
   const resultCountLabel = useMemo(() => {
     const count = filteredWorkers.length;
     if (language === "fr") {
@@ -895,6 +940,8 @@ const WorkerSearchSection: React.FC = () => {
       `${count} result${count > 1 ? "s" : ""} found`
     );
   }, [filteredWorkers.length, language]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const compactMobile = isCompactMobile();
 
   return (
     <section
@@ -984,209 +1031,327 @@ const WorkerSearchSection: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-6 lg:gap-8 items-start min-w-0">
-          <aside className="min-w-0 bg-gray-50 rounded-2xl p-4 sm:p-5 border border-gray-200">
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <h3 className="text-base font-semibold text-pro-gray">{filtersTitle}</h3>
-
-              <Button
-                className="border-gray-300 text-sm"
-                variant="outline"
+        {compactMobile && (
+          <div className="mb-4">
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] overflow-hidden">
+              <button
                 type="button"
-                onClick={resetAll}
+                onClick={() => setMobileFiltersOpen((v) => !v)}
+                className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
               >
-                <RotateCcw className="w-4 h-4 mr-2" />
-                {resetLabel}
-              </Button>
-            </div>
+                <div className="min-w-0 flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl bg-blue-50 text-pro-blue flex items-center justify-center shrink-0">
+                    <SlidersHorizontal className="w-4 h-4" />
+                  </div>
 
-            <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {keywordLabel}
-              </label>
-              <Input
-                value={draft.keyword}
-                onChange={(e) => updateDraft({ keyword: e.target.value })}
-                placeholder={keywordPlaceholder}
-                className="text-sm"
-              />
-            </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-pro-gray">{filtersTitle}</div>
+                    <div className="text-[11px] text-gray-500 truncate">
+                      {activeFiltersCount > 0
+                        ? `${activeFiltersCount} ${activeFiltersLabel}`
+                        : cms(
+                            "search.filters.compact_hint",
+                            "Ajustez rapidement vos critères",
+                            "Quickly adjust your criteria"
+                          )}
+                    </div>
+                  </div>
+                </div>
 
-            <div className="mb-5">
-              <Button
-                type="button"
-                size="sm"
-                className="w-full bg-pro-blue hover:bg-blue-700"
-                onClick={() => {
-                  if (draft.near || (draft.lat != null && draft.lng != null)) {
-                    updateDraft({ near: false, lat: null, lng: null }, { immediate: true });
-                    setGeoError(null);
-                    return;
-                  }
-                  requestMyPosition();
-                }}
-                disabled={geoLocating}
-              >
-                <LocateFixed className="w-4 h-4 mr-2" />
-                {geoLocating
-                  ? cms("search.geo.locating", "Localisation...", "Locating...")
-                  : useMyPos}
-              </Button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {activeFiltersCount > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-6 h-6 px-2 rounded-full bg-pro-blue text-white text-[10px] font-semibold">
+                      {activeFiltersCount}
+                    </span>
+                  )}
+                  {mobileFiltersOpen ? (
+                    <ChevronUp className="w-4 h-4 text-gray-500" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-gray-500" />
+                  )}
+                </div>
+              </button>
 
-              {geoError && (
-                <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                  {geoError}
+              {mobileFiltersOpen && (
+                <div className="border-t border-slate-100 px-3 pb-3 pt-3 bg-gradient-to-b from-white to-slate-50/60">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Button
+                      className="flex-1 h-9 text-xs bg-pro-blue hover:bg-blue-700"
+                      type="button"
+                      onClick={() => setMobileFiltersOpen(false)}
+                    >
+                      {hideFiltersLabel}
+                    </Button>
+                    <Button
+                      className="h-9 px-3 border-gray-300 text-xs"
+                      variant="outline"
+                      type="button"
+                      onClick={resetAll}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                      {resetLabel}
+                    </Button>
+                  </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
 
-              {draft.near && draft.lat != null && draft.lng != null && (
-                <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-4 lg:gap-8 items-start min-w-0">
+          {(!compactMobile || mobileFiltersOpen) && (
+            <aside
+              className={`min-w-0 bg-gray-50 border border-gray-200 shadow-sm ${
+                compactMobile
+                  ? "rounded-2xl p-3 mb-1"
+                  : "rounded-2xl p-4 sm:p-5"
+              }`}
+            >
+              <div className={`flex items-start justify-between gap-3 ${compactMobile ? "mb-3" : "mb-4"}`}>
+                <h3 className={`${compactMobile ? "text-sm" : "text-base"} font-semibold text-pro-gray`}>
+                  {filtersTitle}
+                </h3>
+
+                {!compactMobile && (
+                  <Button
+                    className="border-gray-300 text-sm"
+                    variant="outline"
+                    type="button"
+                    onClick={resetAll}
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    {resetLabel}
+                  </Button>
+                )}
+              </div>
+
+              <div className={compactMobile ? "grid grid-cols-1 gap-3" : ""}>
+                <div className={compactMobile ? "" : "mb-4"}>
+                  <label className="block text-[11px] sm:text-xs font-medium text-gray-600 mb-1">
+                    {keywordLabel}
+                  </label>
+                  <Input
+                    value={draft.keyword}
+                    onChange={(e) => updateDraft({ keyword: e.target.value })}
+                    placeholder={keywordPlaceholder}
+                    className={compactMobile ? "h-9 text-xs" : "text-sm"}
+                  />
+                </div>
+
+                <div className={compactMobile ? "" : "mb-5"}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className={`w-full bg-pro-blue hover:bg-blue-700 ${compactMobile ? "h-9 text-xs" : ""}`}
+                    onClick={() => {
+                      if (draft.near || (draft.lat != null && draft.lng != null)) {
+                        updateDraft({ near: false, lat: null, lng: null }, { immediate: true });
+                        setGeoError(null);
+                        return;
+                      }
+                      requestMyPosition();
+                    }}
+                    disabled={geoLocating}
+                  >
+                    <LocateFixed className={`${compactMobile ? "w-3.5 h-3.5 mr-1.5" : "w-4 h-4 mr-2"}`} />
+                    {geoLocating
+                      ? cms("search.geo.locating", "Localisation...", "Locating...")
+                      : useMyPos}
+                  </Button>
+
+                  {geoError && (
+                    <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                      {geoError}
+                    </div>
+                  )}
+
+                  {draft.near && draft.lat != null && draft.lng != null && (
+                    <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
+                      <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
+                        <span>{radiusLabel}</span>
+                        <span className="text-[11px] text-gray-500">
+                          {draft.radiusKm} {kmLabel}
+                        </span>
+                      </div>
+                      <Slider
+                        defaultValue={[draft.radiusKm]}
+                        min={1}
+                        max={100}
+                        step={1}
+                        onValueChange={(v) => updateDraft({ radiusKm: v[0] })}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className={compactMobile ? "grid grid-cols-1 gap-3" : ""}>
+                  <div className={compactMobile ? "" : "mb-4"}>
+                    <label className="block text-[11px] sm:text-xs font-medium text-gray-600 mb-1">
+                      {jobLabel}
+                    </label>
+                    <select
+                      value={draft.job}
+                      onChange={(e) => updateDraft({ job: e.target.value })}
+                      className={`w-full rounded-md border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue ${
+                        compactMobile ? "px-3 py-2 text-xs h-9" : "px-3 py-2 text-sm"
+                      }`}
+                    >
+                      <option value="all">{jobAll}</option>
+                      {jobs.map((job) => (
+                        <option key={job} value={job}>
+                          {job}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className={compactMobile ? "" : "mb-3"}>
+                    <label className="block text-[11px] sm:text-xs font-medium text-gray-600 mb-1">
+                      {regionLabel}
+                    </label>
+                    <select
+                      value={draft.region}
+                      onChange={(e) => {
+                        const region = e.target.value;
+                        updateDraft({ region, city: "", commune: "", district: "" });
+                      }}
+                      className={`w-full rounded-md border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue ${
+                        compactMobile ? "px-3 py-2 text-xs h-9" : "px-3 py-2 text-sm"
+                      }`}
+                    >
+                      <option value="">{regionAll}</option>
+                      {regions.map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className={compactMobile ? "" : "mb-3"}>
+                    <label className="block text-[11px] sm:text-xs font-medium text-gray-600 mb-1">
+                      {cityLabel}
+                    </label>
+                    <select
+                      value={draft.city}
+                      onChange={(e) => {
+                        const city = e.target.value;
+                        updateDraft({ city, commune: "", district: "" });
+                      }}
+                      className={`w-full rounded-md border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue ${
+                        compactMobile ? "px-3 py-2 text-xs h-9" : "px-3 py-2 text-sm"
+                      }`}
+                    >
+                      <option value="">{cityAll}</option>
+                      {cities.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className={compactMobile ? "" : "mb-3"}>
+                    <label className="block text-[11px] sm:text-xs font-medium text-gray-600 mb-1">
+                      {communeLabel}
+                    </label>
+                    <select
+                      value={draft.commune}
+                      onChange={(e) => {
+                        const commune = e.target.value;
+                        updateDraft({ commune, district: "" });
+                      }}
+                      className={`w-full rounded-md border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue ${
+                        compactMobile ? "px-3 py-2 text-xs h-9" : "px-3 py-2 text-sm"
+                      }`}
+                    >
+                      <option value="">{communeAll}</option>
+                      {communes.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className={compactMobile ? "" : "mb-6"}>
+                    <label className="block text-[11px] sm:text-xs font-medium text-gray-600 mb-1">
+                      {districtLabel}
+                    </label>
+                    <select
+                      value={draft.district}
+                      onChange={(e) => updateDraft({ district: e.target.value })}
+                      className={`w-full rounded-md border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue ${
+                        compactMobile ? "px-3 py-2 text-xs h-9" : "px-3 py-2 text-sm"
+                      }`}
+                    >
+                      <option value="">{districtAll}</option>
+                      {districts.map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className={compactMobile ? "pt-1" : "mb-6"}>
                   <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
-                    <span>{radiusLabel}</span>
+                    <span>{priceLabel}</span>
                     <span className="text-[11px] text-gray-500">
-                      {draft.radiusKm} {kmLabel}
+                      {draft.maxPrice >= DEFAULT_MAX_PRICE
+                        ? priceNoLimit
+                        : `${draft.maxPrice.toLocaleString("fr-FR")} GNF`}
                     </span>
                   </div>
                   <Slider
-                    defaultValue={[draft.radiusKm]}
-                    min={1}
-                    max={100}
-                    step={1}
-                    onValueChange={(v) => updateDraft({ radiusKm: v[0] })}
+                    defaultValue={[draft.maxPrice]}
+                    min={50000}
+                    max={DEFAULT_MAX_PRICE}
+                    step={10000}
+                    onValueChange={(v) => updateDraft({ maxPrice: v[0] })}
                   />
                 </div>
-              )}
-            </div>
 
-            <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-600 mb-1">{jobLabel}</label>
-              <select
-                value={draft.job}
-                onChange={(e) => updateDraft({ job: e.target.value })}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
-              >
-                <option value="all">{jobAll}</option>
-                {jobs.map((job) => (
-                  <option key={job} value={job}>
-                    {job}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <div className={compactMobile ? "pt-1" : "mb-2"}>
+                  <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
+                    <span>{ratingLabel}</span>
+                    <span className="text-[11px] text-gray-500">
+                      {draft.minRating === 0 ? ratingAny : draft.minRating.toFixed(1)}
+                    </span>
+                  </div>
+                  <Slider
+                    defaultValue={[draft.minRating]}
+                    min={0}
+                    max={5}
+                    step={0.5}
+                    onValueChange={(v) => updateDraft({ minRating: v[0] })}
+                  />
+                </div>
 
-            <div className="mb-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {regionLabel}
-              </label>
-              <select
-                value={draft.region}
-                onChange={(e) => {
-                  const region = e.target.value;
-                  updateDraft({ region, city: "", commune: "", district: "" });
-                }}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
-              >
-                <option value="">{regionAll}</option>
-                {regions.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mb-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">{cityLabel}</label>
-              <select
-                value={draft.city}
-                onChange={(e) => {
-                  const city = e.target.value;
-                  updateDraft({ city, commune: "", district: "" });
-                }}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
-              >
-                <option value="">{cityAll}</option>
-                {cities.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mb-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {communeLabel}
-              </label>
-              <select
-                value={draft.commune}
-                onChange={(e) => {
-                  const commune = e.target.value;
-                  updateDraft({ commune, district: "" });
-                }}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
-              >
-                <option value="">{communeAll}</option>
-                {communes.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {districtLabel}
-              </label>
-              <select
-                value={draft.district}
-                onChange={(e) => updateDraft({ district: e.target.value })}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue"
-              >
-                <option value="">{districtAll}</option>
-                {districts.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mb-6">
-              <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
-                <span>{priceLabel}</span>
-                <span className="text-[11px] text-gray-500">
-                  {draft.maxPrice >= DEFAULT_MAX_PRICE
-                    ? priceNoLimit
-                    : `${draft.maxPrice.toLocaleString("fr-FR")} GNF`}
-                </span>
+                {compactMobile && (
+                  <div className="pt-2 flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1 h-9 text-xs border-gray-300"
+                      onClick={resetAll}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                      {resetLabel}
+                    </Button>
+                    <Button
+                      type="button"
+                      className="flex-1 h-9 text-xs bg-pro-blue hover:bg-blue-700"
+                      onClick={() => setMobileFiltersOpen(false)}
+                    >
+                      {hideFiltersLabel}
+                    </Button>
+                  </div>
+                )}
               </div>
-              <Slider
-                defaultValue={[draft.maxPrice]}
-                min={50000}
-                max={DEFAULT_MAX_PRICE}
-                step={10000}
-                onValueChange={(v) => updateDraft({ maxPrice: v[0] })}
-              />
-            </div>
-
-            <div className="mb-2">
-              <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
-                <span>{ratingLabel}</span>
-                <span className="text-[11px] text-gray-500">
-                  {draft.minRating === 0 ? ratingAny : draft.minRating.toFixed(1)}
-                </span>
-              </div>
-              <Slider
-                defaultValue={[draft.minRating]}
-                min={0}
-                max={5}
-                step={0.5}
-                onValueChange={(v) => updateDraft({ minRating: v[0] })}
-              />
-            </div>
-          </aside>
+            </aside>
+          )}
 
           <div className="min-w-0">
             <div ref={resultsAnchorRef} />
