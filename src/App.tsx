@@ -1,11 +1,13 @@
-<<<<<<< Updated upstream
 // src/App.tsx
+<<<<<<< HEAD
 <<<<<<< HEAD
 import React, { useEffect, useMemo, useRef, Suspense, lazy, useState } from "react";
 =======
 =======
 ﻿// src/App.tsx
 >>>>>>> Stashed changes
+=======
+>>>>>>> 096e902 (Resolve merge conflicts)
 import React, { useEffect, useMemo, useRef, Suspense, lazy } from "react";
 >>>>>>> 45fb39d (Sauvegarde locale avant synchronisation)
 import { Toaster } from "@/components/ui/toaster";
@@ -25,10 +27,13 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Capacitor } from "@capacitor/core";
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { Loader2 } from "lucide-react";
 =======
 <<<<<<< Updated upstream
 >>>>>>> 45fb39d (Sauvegarde locale avant synchronisation)
+=======
+>>>>>>> 096e902 (Resolve merge conflicts)
 
 import { UiModeProvider } from "@/contexts/UiModeContext";
 import { networkService } from "@/services/networkService";
@@ -40,12 +45,6 @@ import AdminLayout from "@/components/layout/AdminLayout";
 /**
  * Retry wrapper for lazy imports — handles stale chunk errors
  */
-=======
-import { UiModeProvider } from "@/contexts/UiModeContext";
-import PrivateRoute from "./components/PrivateRoute";
-import AdminLayout from "@/components/layout/AdminLayout";
-
->>>>>>> Stashed changes
 const lazyRetry = (factory: () => Promise<any>, retries = 2): ReturnType<typeof lazy> =>
   lazy(async () => {
     for (let i = 0; i <= retries; i++) {
@@ -108,7 +107,6 @@ const ClientFavoritesList = lazyRetry(() => import("./pages/ClientFavoritesList"
 const ClientReviews = lazyRetry(() => import("./pages/ClientReviews"));
 const ClientContactForm = lazyRetry(() => import("./pages/ClientContactForm"));
 
-<<<<<<< Updated upstream
 /**
  * Détection native robuste (Capacitor / WebView)
  */
@@ -116,10 +114,13 @@ const isNativeRuntime = () => {
 <<<<<<< HEAD
 =======
 
+<<<<<<< HEAD
 =======
 const isNativeRuntime = () => {
 >>>>>>> Stashed changes
 >>>>>>> 45fb39d (Sauvegarde locale avant synchronisation)
+=======
+>>>>>>> 096e902 (Resolve merge conflicts)
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
@@ -142,6 +143,7 @@ const isNativeRuntime = () => {
     if (ua.includes("wv") || ua.includes("Capacitor")) return true;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 <<<<<<< Updated upstream
     if (window.location?.protocol === "https:" && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) {
@@ -155,6 +157,9 @@ const isNativeRuntime = () => {
 =======
 >>>>>>> Stashed changes
 >>>>>>> 45fb39d (Sauvegarde locale avant synchronisation)
+=======
+    if (window.location?.protocol === "https:" && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) {
+>>>>>>> 096e902 (Resolve merge conflicts)
       return true;
     }
   } catch {}
@@ -162,12 +167,9 @@ const isNativeRuntime = () => {
   return false;
 };
 
-<<<<<<< Updated upstream
 /**
  * QueryClient optimisé
  */
-=======
->>>>>>> Stashed changes
 const useAppQueryClient = () =>
   useMemo(
     () =>
@@ -213,12 +215,9 @@ function ScrollManager() {
   return null;
 }
 
-<<<<<<< Updated upstream
 /**
  * Journal de connexion — non bloquant
  */
-=======
->>>>>>> Stashed changes
 function AuthAuditLogger() {
   const didInitRef = useRef(false);
 
@@ -316,8 +315,11 @@ function AuthAuditLogger() {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 <<<<<<< Updated upstream
+=======
+>>>>>>> 096e902 (Resolve merge conflicts)
 
 >>>>>>> 45fb39d (Sauvegarde locale avant synchronisation)
 /**
@@ -325,8 +327,6 @@ function AuthAuditLogger() {
  * - Intercepte les <a href="/..."> pour les router en SPA via navigate()
  * - Evite les reload/404
  */
-=======
->>>>>>> Stashed changes
 function GlobalLinkInterceptor() {
   const navigate = useNavigate();
 
@@ -382,12 +382,16 @@ function GlobalLinkInterceptor() {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 <<<<<<< Updated upstream
 
 =======
 >>>>>>> Stashed changes
 >>>>>>> 45fb39d (Sauvegarde locale avant synchronisation)
+=======
+
+>>>>>>> 096e902 (Resolve merge conflicts)
 const AppRoutes = () => (
   <>
     <ScrollManager />
@@ -575,14 +579,11 @@ const AppRoutes = () => (
   </>
 );
 
-<<<<<<< Updated upstream
 /**
  * Router stable:
  * - Web: BrowserRouter
  * - Native (Capacitor): HashRouter
  */
-=======
->>>>>>> Stashed changes
 function RouterSwitch({ children }: { children: React.ReactNode }) {
   const isNative = isNativeRuntime();
 

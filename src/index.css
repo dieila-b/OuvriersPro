@@ -16,15 +16,9 @@
     --card-foreground: 222.2 84% 4.9%;
     --card-border: 210 40% 92%;
     --popover: 0 0% 100%;
-<<<<<<< Updated upstream
     --popover-foreground: 222.2 84.9% 4.9%;
 
     /* Primary blue cohérent avec identité */
-=======
-    --popover-foreground: 222.2 84% 4.9%;
-
-    /* Primary blue cohÃƒÂ©rent avec identitÃƒÂ© */
->>>>>>> Stashed changes
     --primary: 222.2 47.4% 11.2%;
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
@@ -49,11 +43,7 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-<<<<<<< Updated upstream
     /* neutralisé */
-=======
-    /* neutralisÃƒÂ© (ÃƒÂ©vite largeur desktop fixe) */
->>>>>>> Stashed changes
     --ui-desktop-width: 100%;
     --ui-scale: 1;
   }
@@ -99,11 +89,7 @@
   html {
     width: 100%;
     max-width: 100vw;
-<<<<<<< Updated upstream
     min-height: 100%;
-=======
-    height: 100%;
->>>>>>> Stashed changes
     overflow-x: hidden;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -182,7 +168,6 @@ html[data-ui-native="true"] body {
   padding-top: env(safe-area-inset-top, 0px);
 }
 
-<<<<<<< Updated upstream
 /* En natif, toute l'app reste sous la status bar */
 html[data-ui-native="true"] #root {
   min-height: 100dvh;
@@ -193,15 +178,6 @@ html[data-ui-native="true"] #root {
 }
 
 /* Le wrapper ne doit jamais fixer une largeur desktop ni transformer en natif */
-=======
-/* DÃƒÂ©cale toute l'app sous la status bar Android */
-html[data-ui-native="true"] #root {
-  min-height: 100dvh;
-  box-sizing: border-box;
-}
-
-/* Le wrapper ne doit jamais fixer une largeur desktop en natif */
->>>>>>> Stashed changes
 html[data-ui-native="true"] #ui-desktop-viewport {
   width: 100% !important;
   max-width: 100% !important;
@@ -214,11 +190,7 @@ html[data-ui-native="true"] #ui-desktop-viewport {
   pointer-events: auto !important;
 }
 
-<<<<<<< Updated upstream
 /* Empêche un parent de manger les events */
-=======
-/* EmpÃƒÂªche un parent de manger les events */
->>>>>>> Stashed changes
 html[data-ui-native="true"] body,
 html[data-ui-native="true"] #root,
 html[data-ui-native="true"] #ui-desktop-viewport {
@@ -226,20 +198,12 @@ html[data-ui-native="true"] #ui-desktop-viewport {
   zoom: 1 !important;
 }
 
-<<<<<<< Updated upstream
 /* Protection anti transform global */
-=======
-/* SÃƒÂ©curitÃƒÂ© responsive mobile */
->>>>>>> Stashed changes
 html[data-ui-native="true"] * {
   -webkit-text-size-adjust: 100%;
-  box-sizing: border-box;
 }
 
-<<<<<<< Updated upstream
 /* Sécurité responsive mobile */
-=======
->>>>>>> Stashed changes
 html[data-ui-native="true"] img,
 html[data-ui-native="true"] svg,
 html[data-ui-native="true"] video,
@@ -265,7 +229,6 @@ html[data-ui-native="true"] [style*="BackDropFilter"] {
   -webkit-backdrop-filter: none !important;
 }
 
-<<<<<<< Updated upstream
 /* Safe area utilitaire */
 html[data-ui-native="true"] .safe-area-bottom,
 body[data-ui-native="true"] .safe-area-bottom {
@@ -273,15 +236,6 @@ body[data-ui-native="true"] .safe-area-bottom {
 }
 
 /* Fix overlays Sonner / Radix */
-=======
-/* safe-area */
-html[data-ui-native="true"] .safe-area-bottom,
-body[data-ui-native="true"] .safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0);
-}
-
-/* Toast/Sonner/Radix overlays */
->>>>>>> Stashed changes
 html[data-ui-native="true"] [data-sonner-toaster],
 html[data-ui-native="true"] [data-radix-toast-viewport],
 html[data-ui-native="true"] [data-radix-popper-content-wrapper],
@@ -334,4 +288,3 @@ html[data-ui-native="true"] [data-radix-focus-guard] {
   max-width: 100%;
   overflow-x: hidden;
 }
-
