@@ -7,7 +7,17 @@ import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { Star, MapPin, Search, LayoutList, LayoutGrid, LocateFixed, Info, RotateCcw, Check } from "lucide-react";
+import {
+  Star,
+  MapPin,
+  Search,
+  LayoutList,
+  LayoutGrid,
+  LocateFixed,
+  Info,
+  RotateCcw,
+  Check,
+} from "lucide-react";
 
 type DbWorker = {
   id: string;
@@ -68,7 +78,6 @@ type Filters = {
   maxPrice: number;
   minRating: number;
   view: ViewMode;
-
   near: boolean;
   radiusKm: number;
   lat: number | null;
@@ -331,10 +340,17 @@ const WorkerSearchSection: React.FC = () => {
     if (!session) {
       toast({
         title: cms("auth.login_required.title", "Connexion requise", "Login required"),
-        description: cms("auth.login_required.desc", "Connectez-vous pour voir le profil.", "Sign in to view the profile."),
+        description: cms(
+          "auth.login_required.desc",
+          "Connectez-vous pour voir le profil.",
+          "Sign in to view the profile."
+        ),
       });
 
-      window.setTimeout(() => navigate(`/login?redirect=${encodeURIComponent(target)}`, { replace: false }), 650);
+      window.setTimeout(
+        () => navigate(`/login?redirect=${encodeURIComponent(target)}`, { replace: false }),
+        650
+      );
       return;
     }
 
@@ -413,10 +429,7 @@ const WorkerSearchSection: React.FC = () => {
 
       const selectStr = [...baseFields, ...ratingFields].join(",");
 
-      const q = supabase
-        .from(source)
-        .select(selectStr)
-        .eq("status", "approved");
+      const q = supabase.from(source).select(selectStr).eq("status", "approved");
 
       const res = await q;
       return res;
@@ -439,10 +452,8 @@ const WorkerSearchSection: React.FC = () => {
         const rows = (res.data ?? []) as unknown as DbWorker[];
 
         const mapped: WorkerCard[] = rows.map((w) => {
-          const effectiveRating =
-            (w.computed_average_rating ?? w.average_rating ?? 0) as number;
-          const effectiveCount =
-            (w.computed_rating_count ?? w.rating_count ?? 0) as number;
+          const effectiveRating = (w.computed_average_rating ?? w.average_rating ?? 0) as number;
+          const effectiveCount = (w.computed_rating_count ?? w.rating_count ?? 0) as number;
 
           const lat = typeof w.latitude === "number" ? w.latitude : null;
           const lng = typeof w.longitude === "number" ? w.longitude : null;
@@ -604,7 +615,8 @@ const WorkerSearchSection: React.FC = () => {
   );
 
   const regions = useMemo(
-    () => Array.from(new Set(workers.map((w) => w.region).filter((r) => r && r.trim().length > 0))),
+    () =>
+      Array.from(new Set(workers.map((w) => w.region).filter((r) => r && r.trim().length > 0))),
     [workers]
   );
 
@@ -626,7 +638,11 @@ const WorkerSearchSection: React.FC = () => {
       Array.from(
         new Set(
           workers
-            .filter((w) => (!draft.region || w.region === draft.region) && (!draft.city || w.city === draft.city))
+            .filter(
+              (w) =>
+                (!draft.region || w.region === draft.region) &&
+                (!draft.city || w.city === draft.city)
+            )
             .map((w) => w.commune)
             .filter((c) => c && c.trim().length > 0)
         )
@@ -671,7 +687,8 @@ const WorkerSearchSection: React.FC = () => {
       .map((w) => ({ ...w, distanceKm: computeDistance(w, f) }))
       .filter((w) => {
         const kw = f.keyword.trim().toLowerCase();
-        const matchKeyword = !kw || w.name.toLowerCase().includes(kw) || w.job.toLowerCase().includes(kw);
+        const matchKeyword =
+          !kw || w.name.toLowerCase().includes(kw) || w.job.toLowerCase().includes(kw);
 
         const matchJob = f.job === "all" || w.job === f.job;
         const matchPrice = w.hourlyRate <= f.maxPrice;
@@ -687,9 +704,24 @@ const WorkerSearchSection: React.FC = () => {
         const matchCommune = !f.commune || communeNorm === f.commune.trim().toLowerCase();
         const matchDistrict = !f.district || districtNorm === f.district.trim().toLowerCase();
 
-        const matchRadius = !f.near || f.lat == null || f.lng == null || w.distanceKm == null || w.distanceKm <= f.radiusKm;
+        const matchRadius =
+          !f.near ||
+          f.lat == null ||
+          f.lng == null ||
+          w.distanceKm == null ||
+          w.distanceKm <= f.radiusKm;
 
-        return matchKeyword && matchJob && matchPrice && matchRating && matchRegion && matchCity && matchCommune && matchDistrict && matchRadius;
+        return (
+          matchKeyword &&
+          matchJob &&
+          matchPrice &&
+          matchRating &&
+          matchRegion &&
+          matchCity &&
+          matchCommune &&
+          matchDistrict &&
+          matchRadius
+        );
       });
 
     if (f.near && f.lat != null && f.lng != null) {
@@ -736,7 +768,10 @@ const WorkerSearchSection: React.FC = () => {
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        updateDraft({ near: true, lat: pos.coords.latitude, lng: pos.coords.longitude }, { immediate: true });
+        updateDraft(
+          { near: true, lat: pos.coords.latitude, lng: pos.coords.longitude },
+          { immediate: true }
+        );
         setGeoLocating(false);
       },
       (err) => {
@@ -756,11 +791,19 @@ const WorkerSearchSection: React.FC = () => {
   };
 
   const title = cms("search.page.title", "Trouvez votre professionnel", "Find your professional");
-  const subtitle = cms("search.page.subtitle", "Modifiez vos filtres pour lancer la recherche automatiquement.", "Adjust filters to automatically update results.");
+  const subtitle = cms(
+    "search.page.subtitle",
+    "Modifiez vos filtres pour lancer la recherche automatiquement.",
+    "Adjust filters to automatically update results."
+  );
 
   const filtersTitle = cms("search.filters.title", "Filtres", "Filters");
   const keywordLabel = cms("search.filters.keyword.label", "Métier ou nom", "Trade or name");
-  const keywordPlaceholder = cms("search.filters.keyword.placeholder", "Plombier, électricien, Mamadou...", "Plumber, electrician, John...");
+  const keywordPlaceholder = cms(
+    "search.filters.keyword.placeholder",
+    "Plombier, électricien, Mamadou...",
+    "Plumber, electrician, John..."
+  );
 
   const jobLabel = cms("search.filters.job.label", "Métier", "Job");
   const jobAll = cms("search.filters.job.all", "Tous les métiers", "All trades");
@@ -791,21 +834,48 @@ const WorkerSearchSection: React.FC = () => {
 
   const contactLabel = cms("search.card.btn_contact", "Contacter", "Contact");
   const perHourLabel = cms("search.card.per_hour", "/h", "/h");
-  const yearsSuffix = cms("search.card.years_suffix", "ans d'expérience", "years of experience");
+  const yearsSuffix = cms(
+    "search.card.years_suffix",
+    "ans d'expérience",
+    "years of experience"
+  );
   const distanceLabel = cms("search.card.distance_label", "Distance", "Distance");
 
-  const geoHint = cms("search.geo.hint", "Activez la localisation pour trier et filtrer par distance.", "Enable location to sort/filter by distance.");
-  const useMyPos = cms("search.filters.btn_geolocate", "Utiliser ma position", "Use my location");
+  const geoHint = cms(
+    "search.geo.hint",
+    "Activez la localisation pour trier et filtrer par distance.",
+    "Enable location to sort/filter by distance."
+  );
+  const useMyPos = cms(
+    "search.filters.btn_geolocate",
+    "Utiliser ma position",
+    "Use my location"
+  );
   const radiusLabel = cms("search.filters.radius.label", "Rayon", "Radius");
   const kmLabel = cms("search.filters.radius.unit", "km", "km");
 
-  const noResults = cms("search.results.none", "Aucun professionnel ne correspond à ces critères pour le moment.", "No professional matches your criteria yet.");
-  const noData = cms("search.results.nodata", "Aucun professionnel n’est encore disponible.", "No professionals are available yet.");
+  const noResults = cms(
+    "search.results.none",
+    "Aucun professionnel ne correspond à ces critères pour le moment.",
+    "No professional matches your criteria yet."
+  );
+  const noData = cms(
+    "search.results.nodata",
+    "Aucun professionnel n’est encore disponible.",
+    "No professionals are available yet."
+  );
 
   const loadingShort = cms("common.loading", "Chargement...", "Loading...");
-  const loadingWorkers = cms("search.loading_workers", "Chargement des professionnels...", "Loading professionals...");
+  const loadingWorkers = cms(
+    "search.loading_workers",
+    "Chargement des professionnels...",
+    "Loading professionals..."
+  );
 
-  const hasAnyGeoWorkers = useMemo(() => workers.some((w) => w.latitude != null && w.longitude != null), [workers]);
+  const hasAnyGeoWorkers = useMemo(
+    () => workers.some((w) => w.latitude != null && w.longitude != null),
+    [workers]
+  );
   const appliedHasCoords = applied.lat != null && applied.lng != null;
 
   const resultCountLabel = useMemo(() => {
@@ -813,25 +883,45 @@ const WorkerSearchSection: React.FC = () => {
     if (language === "fr") {
       const s = count > 1 ? "s" : "";
       const e = count > 1 ? "s" : "";
-      return cms("search.results.count", `${count} résultat${s} trouvé${e}`, `${count} result${count > 1 ? "s" : ""} found`);
+      return cms(
+        "search.results.count",
+        `${count} résultat${s} trouvé${e}`,
+        `${count} result${count > 1 ? "s" : ""} found`
+      );
     }
-    return cms("search.results.count", `${count} résultat${count > 1 ? "s" : ""} trouvé${count > 1 ? "s" : ""}`, `${count} result${count > 1 ? "s" : ""} found`);
+    return cms(
+      "search.results.count",
+      `${count} résultat${count > 1 ? "s" : ""} trouvé${count > 1 ? "s" : ""}`,
+      `${count} result${count > 1 ? "s" : ""} found`
+    );
   }, [filteredWorkers.length, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <section ref={sectionRef} id="worker-search" className="w-full pt-0 pb-10 sm:pb-14 lg:pb-16 bg-white">
+    <section
+      ref={sectionRef}
+      id="worker-search"
+      className="w-full pt-0 pb-10 sm:pb-14 lg:pb-16 bg-white"
+    >
       <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
         <div ref={topAnchorRef} />
 
         <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-5 sm:mb-7 border-b border-gray-200 pb-3 min-w-0">
           <div className="min-w-0">
-            <h2 className="mt-0 text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">{title}</h2>
-            <p className="text-gray-600 mt-1.5 sm:mt-2 text-sm sm:text-base max-w-4xl">{subtitle}</p>
+            <h2 className="mt-0 text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
+              {title}
+            </h2>
+            <p className="text-gray-600 mt-1.5 sm:mt-2 text-sm sm:text-base max-w-4xl">
+              {subtitle}
+            </p>
 
             <div className="mt-2 flex flex-wrap items-start gap-2 text-[11px] sm:text-xs text-gray-500 min-w-0">
               <span className="inline-flex items-center gap-1 max-w-full">
                 <Search className="w-3 h-3 shrink-0" />
-                {loading ? <span className="break-words">{loadingShort}</span> : <span className="break-words">{resultCountLabel}</span>}
+                {loading ? (
+                  <span className="break-words">{loadingShort}</span>
+                ) : (
+                  <span className="break-words">{resultCountLabel}</span>
+                )}
               </span>
 
               <span className="flex items-start gap-1 min-w-0 basis-full sm:basis-auto sm:max-w-[32rem]">
@@ -841,25 +931,39 @@ const WorkerSearchSection: React.FC = () => {
 
               <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 border-emerald-200 bg-emerald-50 text-emerald-700 max-w-full">
                 <Check className="w-3 h-3 shrink-0" />
-                <span className="break-words">{cms("search.badge.applied", "Filtres appliqués", "Applied filters")}</span>
+                <span className="break-words">
+                  {cms("search.badge.applied", "Filtres appliqués", "Applied filters")}
+                </span>
               </span>
             </div>
 
             {applied.near && appliedHasCoords && !hasAnyGeoWorkers && (
               <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-flex items-center gap-2 max-w-full">
                 <Info className="w-4 h-4 shrink-0" />
-                <span className="break-words">{cms("search.geo.no_workers_coords", "Certains profils n'ont pas encore de position GPS.", "Some profiles do not have GPS coordinates yet.")}</span>
+                <span className="break-words">
+                  {cms(
+                    "search.geo.no_workers_coords",
+                    "Certains profils n'ont pas encore de position GPS.",
+                    "Some profiles do not have GPS coordinates yet."
+                  )}
+                </span>
               </div>
             )}
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <span className="text-[10px] sm:text-[11px] text-gray-500 uppercase tracking-wide">{viewModeLabel}</span>
+            <span className="text-[10px] sm:text-[11px] text-gray-500 uppercase tracking-wide">
+              {viewModeLabel}
+            </span>
             <div className="flex border border-gray-300 rounded-lg bg-white overflow-hidden">
               <button
                 type="button"
                 onClick={() => updateDraft({ view: "list" }, { immediate: true })}
-                className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${draft.view === "list" ? "bg-pro-blue text-white" : "text-gray-600 hover:bg-gray-100"}`}
+                className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
+                  draft.view === "list"
+                    ? "bg-pro-blue text-white"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
               >
                 <LayoutList className="w-3 h-3" />
                 {viewListLabel}
@@ -867,7 +971,11 @@ const WorkerSearchSection: React.FC = () => {
               <button
                 type="button"
                 onClick={() => updateDraft({ view: "grid" }, { immediate: true })}
-                className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${draft.view === "grid" ? "bg-pro-blue text-white" : "text-gray-600 hover:bg-gray-100"}`}
+                className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
+                  draft.view === "grid"
+                    ? "bg-pro-blue text-white"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
               >
                 <LayoutGrid className="w-3 h-3" />
                 {viewGridLabel}
@@ -881,15 +989,27 @@ const WorkerSearchSection: React.FC = () => {
             <div className="flex items-start justify-between gap-3 mb-4">
               <h3 className="text-base font-semibold text-pro-gray">{filtersTitle}</h3>
 
-              <Button className="border-gray-300 text-sm" variant="outline" type="button" onClick={resetAll}>
+              <Button
+                className="border-gray-300 text-sm"
+                variant="outline"
+                type="button"
+                onClick={resetAll}
+              >
                 <RotateCcw className="w-4 h-4 mr-2" />
                 {resetLabel}
               </Button>
             </div>
 
             <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-600 mb-1">{keywordLabel}</label>
-              <Input value={draft.keyword} onChange={(e) => updateDraft({ keyword: e.target.value })} placeholder={keywordPlaceholder} className="text-sm" />
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {keywordLabel}
+              </label>
+              <Input
+                value={draft.keyword}
+                onChange={(e) => updateDraft({ keyword: e.target.value })}
+                placeholder={keywordPlaceholder}
+                className="text-sm"
+              />
             </div>
 
             <div className="mb-5">
@@ -908,10 +1028,16 @@ const WorkerSearchSection: React.FC = () => {
                 disabled={geoLocating}
               >
                 <LocateFixed className="w-4 h-4 mr-2" />
-                {geoLocating ? cms("search.geo.locating", "Localisation...", "Locating...") : useMyPos}
+                {geoLocating
+                  ? cms("search.geo.locating", "Localisation...", "Locating...")
+                  : useMyPos}
               </Button>
 
-              {geoError && <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{geoError}</div>}
+              {geoError && (
+                <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                  {geoError}
+                </div>
+              )}
 
               {draft.near && draft.lat != null && draft.lng != null && (
                 <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
@@ -921,7 +1047,13 @@ const WorkerSearchSection: React.FC = () => {
                       {draft.radiusKm} {kmLabel}
                     </span>
                   </div>
-                  <Slider defaultValue={[draft.radiusKm]} min={1} max={100} step={1} onValueChange={(v) => updateDraft({ radiusKm: v[0] })} />
+                  <Slider
+                    defaultValue={[draft.radiusKm]}
+                    min={1}
+                    max={100}
+                    step={1}
+                    onValueChange={(v) => updateDraft({ radiusKm: v[0] })}
+                  />
                 </div>
               )}
             </div>
@@ -943,7 +1075,9 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">{regionLabel}</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {regionLabel}
+              </label>
               <select
                 value={draft.region}
                 onChange={(e) => {
@@ -981,7 +1115,9 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">{communeLabel}</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {communeLabel}
+              </label>
               <select
                 value={draft.commune}
                 onChange={(e) => {
@@ -1000,7 +1136,9 @@ const WorkerSearchSection: React.FC = () => {
             </div>
 
             <div className="mb-6">
-              <label className="block text-xs font-medium text-gray-600 mb-1">{districtLabel}</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {districtLabel}
+              </label>
               <select
                 value={draft.district}
                 onChange={(e) => updateDraft({ district: e.target.value })}
@@ -1019,36 +1157,62 @@ const WorkerSearchSection: React.FC = () => {
               <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                 <span>{priceLabel}</span>
                 <span className="text-[11px] text-gray-500">
-                  {draft.maxPrice >= DEFAULT_MAX_PRICE ? priceNoLimit : `${draft.maxPrice.toLocaleString("fr-FR")} GNF`}
+                  {draft.maxPrice >= DEFAULT_MAX_PRICE
+                    ? priceNoLimit
+                    : `${draft.maxPrice.toLocaleString("fr-FR")} GNF`}
                 </span>
               </div>
-              <Slider defaultValue={[draft.maxPrice]} min={50000} max={DEFAULT_MAX_PRICE} step={10000} onValueChange={(v) => updateDraft({ maxPrice: v[0] })} />
+              <Slider
+                defaultValue={[draft.maxPrice]}
+                min={50000}
+                max={DEFAULT_MAX_PRICE}
+                step={10000}
+                onValueChange={(v) => updateDraft({ maxPrice: v[0] })}
+              />
             </div>
 
             <div className="mb-2">
               <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
                 <span>{ratingLabel}</span>
-                <span className="text-[11px] text-gray-500">{draft.minRating === 0 ? ratingAny : draft.minRating.toFixed(1)}</span>
+                <span className="text-[11px] text-gray-500">
+                  {draft.minRating === 0 ? ratingAny : draft.minRating.toFixed(1)}
+                </span>
               </div>
-              <Slider defaultValue={[draft.minRating]} min={0} max={5} step={0.5} onValueChange={(v) => updateDraft({ minRating: v[0] })} />
+              <Slider
+                defaultValue={[draft.minRating]}
+                min={0}
+                max={5}
+                step={0.5}
+                onValueChange={(v) => updateDraft({ minRating: v[0] })}
+              />
             </div>
           </aside>
 
           <div className="min-w-0">
             <div ref={resultsAnchorRef} />
 
-            {error && <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">{error}</div>}
+            {error && (
+              <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">
+                {error}
+              </div>
+            )}
 
             {!error && !loading && workers.length === 0 && (
-              <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">{noData}</div>
+              <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
+                {noData}
+              </div>
             )}
 
             {!error && !loading && workers.length > 0 && filteredWorkers.length === 0 && (
-              <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">{noResults}</div>
+              <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
+                {noResults}
+              </div>
             )}
 
             {loading && filteredWorkers.length === 0 && (
-              <div className="border border-gray-100 rounded-xl p-6 text-sm text-gray-500">{loadingWorkers}</div>
+              <div className="border border-gray-100 rounded-xl p-6 text-sm text-gray-500">
+                {loadingWorkers}
+              </div>
             )}
 
             {applied.view === "list" && filteredWorkers.length > 0 && (
@@ -1062,20 +1226,34 @@ const WorkerSearchSection: React.FC = () => {
                     .join("");
 
                   return (
-                    <div key={w.id} className="min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                    <div
+                      key={w.id}
+                      className="min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4"
+                    >
                       <div className="flex-shrink-0">
-                        <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">{initials || "OP"}</div>
+                        <div className="w-14 h-14 rounded-full bg-pro-blue text-white flex items-center justify-center text-lg font-semibold">
+                          {initials || "OP"}
+                        </div>
                       </div>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 min-w-0">
-                          <h3 className="font-semibold text-pro-gray text-base sm:text-lg truncate min-w-0">{w.name}</h3>
+                          <h3 className="font-semibold text-pro-gray text-base sm:text-lg truncate min-w-0">
+                            {w.name}
+                          </h3>
 
-                          {w.job && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-pro-blue border border-blue-100">{w.job}</span>}
+                          {w.job && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-pro-blue border border-blue-100">
+                              {w.job}
+                            </span>
+                          )}
 
                           {applied.near && appliedHasCoords && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">
-                              {distanceLabel}: <span className="font-semibold ml-1">{w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}</span>
+                              {distanceLabel}:{" "}
+                              <span className="font-semibold ml-1">
+                                {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
+                              </span>
                             </span>
                           )}
                         </div>
@@ -1083,7 +1261,9 @@ const WorkerSearchSection: React.FC = () => {
                         <div className="flex flex-wrap items-center gap-3 mt-1 text-xs sm:text-sm text-gray-600 min-w-0">
                           <span className="flex items-center gap-1 min-w-0">
                             <MapPin className="w-3 h-3 shrink-0" />
-                            <span className="truncate">{[w.region, w.city, w.commune, w.district].filter(Boolean).join(" • ")}</span>
+                            <span className="truncate">
+                              {[w.region, w.city, w.commune, w.district].filter(Boolean).join(" • ")}
+                            </span>
                           </span>
 
                           <span className="flex items-center gap-1">
@@ -1100,10 +1280,16 @@ const WorkerSearchSection: React.FC = () => {
                       <div className="w-full sm:w-auto flex sm:flex-col items-start sm:items-end justify-between sm:justify-start gap-2 min-w-0">
                         <div className="text-pro-blue font-bold text-base sm:text-lg">
                           {formatCurrency(w.hourlyRate, w.currency)}
-                          <span className="text-xs sm:text-sm text-gray-600 ml-1">{perHourLabel}</span>
+                          <span className="text-xs sm:text-sm text-gray-600 ml-1">
+                            {perHourLabel}
+                          </span>
                         </div>
 
-                        <Button size="sm" className="w-full sm:w-auto bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm" onClick={() => goToWorkerProfile(w.id)}>
+                        <Button
+                          size="sm"
+                          className="w-full sm:w-auto bg-pro-blue hover:bg-blue-700 text-xs sm:text-sm"
+                          onClick={() => goToWorkerProfile(w.id)}
+                        >
                           {contactLabel}
                         </Button>
                       </div>
@@ -1114,7 +1300,7 @@ const WorkerSearchSection: React.FC = () => {
             )}
 
             {applied.view === "grid" && filteredWorkers.length > 0 && (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 min-w-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4 min-w-0">
                 {filteredWorkers.map((w) => {
                   const initials = w.name
                     .split(" ")
@@ -1124,41 +1310,74 @@ const WorkerSearchSection: React.FC = () => {
                     .join("");
 
                   return (
-                    <div key={w.id} className="min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-full bg-pro-blue text-white flex items-center justify-center text-sm font-semibold shrink-0">{initials || "OP"}</div>
-                        <div className="min-w-0">
-                          <h3 className="font-semibold text-sm text-pro-gray truncate">{w.name}</h3>
-                          {w.job && <div className="text-xs text-pro-blue mt-0.5 truncate">{w.job}</div>}
+                    <div
+                      key={w.id}
+                      className="min-w-0 rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] hover:shadow-[0_12px_30px_rgba(37,99,235,0.10)] transition-all duration-200 p-3 sm:p-4 flex flex-col gap-2.5 sm:gap-3"
+                    >
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-pro-blue text-white flex items-center justify-center text-xs sm:text-sm font-semibold shrink-0 shadow-sm">
+                          {initials || "OP"}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-semibold text-[13px] sm:text-sm text-pro-gray truncate leading-tight">
+                            {w.name}
+                          </h3>
+
+                          {w.job && (
+                            <div className="mt-1 inline-flex max-w-full items-center rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-[10px] sm:text-xs font-medium text-pro-blue truncate">
+                              {w.job}
+                            </div>
+                          )}
+
                           {applied.near && appliedHasCoords && (
-                            <div className="text-[11px] text-slate-600 mt-1">
-                              {distanceLabel}: <span className="font-semibold">{w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}</span>
+                            <div className="text-[10px] sm:text-[11px] text-slate-600 mt-1.5 truncate">
+                              {distanceLabel}:{" "}
+                              <span className="font-semibold">
+                                {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
+                              </span>
                             </div>
                           )}
                         </div>
                       </div>
 
-                      <div className="text-xs text-gray-600 space-y-1 min-w-0">
-                        <span className="flex items-center gap-1 min-w-0">
-                          <MapPin className="w-3 h-3 shrink-0" />
-                          <span className="truncate">{[w.region, w.city, w.commune, w.district].filter(Boolean).join(" • ")}</span>
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Star className="w-3 h-3 text-yellow-400" />
-                          {w.rating.toFixed(1)} ({w.ratingCount})
-                        </span>
-                        <span>
-                          {w.experienceYears} {yearsSuffix}
-                        </span>
-                      </div>
-
-                      <div className="mt-2 flex items-center justify-between gap-3">
-                        <div className="text-sm font-bold text-pro-blue">
-                          {formatCurrency(w.hourlyRate, w.currency)}
-                          <span className="ml-1 text-[11px] text-gray-600">{perHourLabel}</span>
+                      <div className="space-y-1.5 text-[11px] sm:text-xs text-gray-600 min-w-0">
+                        <div className="flex items-start gap-1.5 min-w-0">
+                          <MapPin className="w-3 h-3 shrink-0 mt-[1px]" />
+                          <span className="truncate">
+                            {[w.region, w.city, w.commune, w.district].filter(Boolean).join(" • ")}
+                          </span>
                         </div>
 
-                        <Button size="sm" className="bg-pro-blue hover:bg-blue-700 text-[11px]" onClick={() => goToWorkerProfile(w.id)}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="inline-flex items-center gap-1 truncate">
+                            <Star className="w-3 h-3 text-yellow-400 shrink-0" />
+                            <span className="truncate">
+                              {w.rating.toFixed(1)} ({w.ratingCount})
+                            </span>
+                          </span>
+
+                          <span className="truncate text-right">
+                            {w.experienceYears} {yearsSuffix}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-0.5 flex items-end justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-sm sm:text-[15px] font-bold text-pro-blue leading-none">
+                            {formatCurrency(w.hourlyRate, w.currency)}
+                          </div>
+                          <div className="text-[10px] sm:text-[11px] text-gray-500 mt-1">
+                            {perHourLabel}
+                          </div>
+                        </div>
+
+                        <Button
+                          size="sm"
+                          className="h-8 sm:h-9 px-3 sm:px-3.5 rounded-xl bg-pro-blue hover:bg-blue-700 text-[11px] sm:text-xs font-semibold shrink-0 shadow-sm"
+                          onClick={() => goToWorkerProfile(w.id)}
+                        >
                           {contactLabel}
                         </Button>
                       </div>
