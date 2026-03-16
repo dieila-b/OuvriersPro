@@ -25,6 +25,9 @@ const normalizeRole = (r: any): Role => {
   return "user";
 };
 
+const HEADER_LIGHT_BLUE = "#EEF5FF";
+const HEADER_BORDER_BLUE = "#D9E7FF";
+
 const Header = () => {
   const { t, language, setLanguage } = useLanguage();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -198,8 +201,8 @@ const Header = () => {
 
   const MobileMenuPanel = mobileOpen ? (
     <div
-      className="md:hidden min-w-0 shrink-0 flex items-center gap-2 rounded-2xl bg-gradient-to-b from-slate-50 to-white px-2 py-1 border border-slate-200/80 shadow-sm"
-      style={{ pointerEvents: "auto" }}
+      className="md:hidden min-w-0 shrink-0 flex items-center gap-2 rounded-2xl px-2 py-1 border shadow-sm"
+      style={{ pointerEvents: "auto", backgroundColor: HEADER_LIGHT_BLUE, borderColor: HEADER_BORDER_BLUE }}
     >
       <div className="w-full px-4 sm:px-6 py-3">
         <div className="flex items-center justify-between gap-3 min-w-0">
@@ -211,7 +214,7 @@ const Header = () => {
             variant="outline"
             size="sm"
             type="button"
-            className="rounded-full"
+            className="rounded-full bg-white"
             onClick={() => setMobileOpen(false)}
             style={{ touchAction: "manipulation" as any }}
           >
@@ -252,10 +255,19 @@ const Header = () => {
   return (
     <>
       <header
-        className="fixed top-0 left-0 right-0 z-40 w-full max-w-full overflow-x-hidden bg-white shadow-sm"
-        style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+        className="fixed top-0 left-0 right-0 z-40 w-full max-w-full overflow-x-hidden shadow-sm"
+        style={{
+          paddingTop: "env(safe-area-inset-top, 0px)",
+          backgroundColor: HEADER_LIGHT_BLUE,
+        }}
       >
-        <div className="w-full bg-white border-b border-gray-200 overflow-hidden">
+        <div
+          className="w-full overflow-hidden"
+          style={{
+            backgroundColor: HEADER_LIGHT_BLUE,
+            borderBottom: `1px solid ${HEADER_BORDER_BLUE}`,
+          }}
+        >
           <div className="w-full px-4 sm:px-6 lg:px-10 min-w-0">
             <div className="h-20 sm:h-[88px] min-w-0 flex items-center justify-between gap-3">
               <button
@@ -286,7 +298,7 @@ const Header = () => {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="rounded-full whitespace-nowrap"
+                  className="rounded-full whitespace-nowrap bg-white"
                   onClick={() => safeGo("/inscription-ouvrier", "become_provider_desktop")}
                   style={{ touchAction: "manipulation" as any }}
                 >
@@ -312,7 +324,7 @@ const Header = () => {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="rounded-full flex items-center gap-1 whitespace-nowrap"
+                      className="rounded-full flex items-center gap-1 whitespace-nowrap bg-white"
                       aria-label={cms("header.lang.aria", "Changer de langue", "Change language")}
                       type="button"
                       style={{ touchAction: "manipulation" as any }}
@@ -334,7 +346,7 @@ const Header = () => {
 
               <div
                 className="md:hidden min-w-0 shrink-0 flex items-center gap-2"
-                style={{ backgroundColor: "#FFFFFF" }}
+                style={{ backgroundColor: HEADER_LIGHT_BLUE }}
               >
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
