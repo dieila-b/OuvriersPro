@@ -1,6 +1,8 @@
 // src/main.tsx
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { Capacitor } from "@capacitor/core";
+import { StatusBar, Style } from "@capacitor/status-bar";
 import App from "./App";
 import "./index.css";
 
@@ -31,6 +33,20 @@ try {
     );
   }
 } catch {}
+
+/**
+ * ✅ Correctif racine Android natif:
+ * force la WebView à ne JAMAIS overlay la status bar.
+ */
+try {
+  if (Capacitor?.isNativePlatform?.()) {
+    void StatusBar.setOverlaysWebView({ overlay: false });
+    void StatusBar.setBackgroundColor({ color: "#FFFFFFFF" });
+    void StatusBar.setStyle({ style: Style.Light });
+  }
+} catch (e) {
+  console.warn("[StatusBar] native setup skipped:", e);
+}
 
 const rootEl = document.getElementById("root");
 if (!rootEl) throw new Error("Root element #root not found");

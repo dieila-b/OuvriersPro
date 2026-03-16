@@ -165,6 +165,7 @@ html[data-ui-native="true"] body {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   background-color: hsl(var(--background));
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 /* En natif, toute l'app reste sous la status bar */
