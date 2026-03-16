@@ -332,7 +332,10 @@ const Header = () => {
                 </DropdownMenu>
               </div>
 
-              <div className="md:hidden min-w-0 shrink-0 flex items-center gap-2">
+              <div
+                className="md:hidden min-w-0 shrink-0 flex items-center gap-2"
+                style={{ backgroundColor: "#F3F7FF" }}
+              >
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
