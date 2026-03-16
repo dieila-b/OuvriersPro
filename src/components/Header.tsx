@@ -17,7 +17,6 @@ import ProxiLogo from "@/assets/logo-proxiservices.png";
 
 type Role = "user" | "client" | "worker" | "admin";
 
-
 const normalizeRole = (r: any): Role => {
   const v = String(r ?? "").toLowerCase().trim();
   if (v === "admin") return "admin";
@@ -34,7 +33,6 @@ const Header = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // ✅ source de vérité
   const [hasSession, setHasSession] = useState(false);
   const [role, setRole] = useState<Role>("user");
 
@@ -44,7 +42,6 @@ const Header = () => {
     return v;
   };
 
-  // ✅ Sync session + rôle depuis op_users
   useEffect(() => {
     let mounted = true;
 
@@ -61,7 +58,6 @@ const Header = () => {
           return;
         }
 
-        // rôle metadata fallback
         const metaRole = normalizeRole(u.user_metadata?.role ?? u.app_metadata?.role ?? null);
 
         const { data: row, error } = await supabase
@@ -97,13 +93,10 @@ const Header = () => {
     };
   }, []);
 
-
-  // Ferme le menu à chaque changement de route
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname, location.search, location.hash]);
 
-  // Empêche le scroll derrière le menu
   useEffect(() => {
     if (!mobileOpen) {
       document.body.style.overflow = "";
@@ -124,7 +117,6 @@ const Header = () => {
     if (!hasSession) return "/login";
     if (role === "admin") return "/admin";
     if (role === "worker") return "/espace-ouvrier";
-    // client + user
     return "/espace-client";
   }, [hasSession, role]);
 
@@ -144,7 +136,6 @@ const Header = () => {
     [navigate]
   );
 
-  // ✅ Debug + fallback mobile (Android WebView)
   const safeGo = useCallback(
     (to: string, label?: string, fromMobileMenu = false) => {
       const now = Date.now();
@@ -152,7 +143,6 @@ const Header = () => {
       lastNavAtRef.current = now;
 
       const isNative = (() => {
-
         try {
           if (Capacitor?.isNativePlatform?.()) return true;
         } catch {}
@@ -173,20 +163,16 @@ const Header = () => {
         );
       })();
 
-
-      // 1) tentative SPA
       try {
         go(to);
       } catch {}
 
-      // 2) fermeture menu mobile (après le départ de la nav)
       if (fromMobileMenu) {
         window.setTimeout(() => {
           setMobileOpen(false);
         }, 60);
       }
 
-      // 3) fallback garanti
       window.setTimeout(() => {
         try {
           if (isNative) {
@@ -208,12 +194,11 @@ const Header = () => {
     if (now - lastToggleAtRef.current < 450) return;
     lastToggleAtRef.current = now;
     setMobileOpen((v) => !v);
-  }, [mobileOpen]);
-
+  }, []);
 
   const MobileMenuPanel = mobileOpen ? (
     <div
-      className="md:hidden fixed inset-x-0 top-16 sm:top-[72px] z-50 w-full border-t border-border bg-background shadow-sm"
+      className="md:hidden fixed inset-x-0 top-[68px] sm:top-[76px] z-50 w-full border-t border-border bg-background shadow-sm"
       style={{ pointerEvents: "auto" }}
     >
       <div className="w-full px-4 sm:px-6 py-3">
@@ -266,7 +251,7 @@ const Header = () => {
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full max-w-full overflow-x-hidden">
+      <header className="fixed top-0 left-0 right-0 z-40 w-full max-w-full overflow-x-hidden bg-white">
         <div className="bg-white border-b border-gray-200 overflow-hidden">
           <div className="w-full px-4 sm:px-6 lg:px-10 min-w-0">
             <div className="h-16 sm:h-[72px] min-w-0 flex items-center justify-between gap-2 sm:gap-3 overflow-hidden">
@@ -293,7 +278,6 @@ const Header = () => {
 
               <nav className="hidden md:flex" aria-hidden="true" />
 
-              {/* DESKTOP */}
               <div className="hidden md:flex min-w-0 items-center gap-2">
                 <Button
                   type="button"
@@ -345,7 +329,6 @@ const Header = () => {
                 </DropdownMenu>
               </div>
 
-              {/* MOBILE */}
               <div className="md:hidden min-w-0 shrink-0 flex items-center gap-1.5 sm:gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -388,6 +371,8 @@ const Header = () => {
           <div className="h-1 w-full bg-gradient-to-r from-pro-blue/90 via-blue-600/90 to-pro-blue/90" />
         </div>
       </header>
+
+      <div aria-hidden className="h-[68px] sm:h-[76px] w-full shrink-0" />
 
       {MobileMenuPanel}
 
