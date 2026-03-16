@@ -207,8 +207,22 @@ const WorkerSearchSection: React.FC = () => {
 
   const sectionRef = useRef<HTMLElement | null>(null);
   const topAnchorRef = useRef<HTMLDivElement | null>(null);
+  const resultsAnchorRef = useRef<HTMLDivElement | null>(null);
 
   const isSearchRoute = location.pathname === "/search" || location.pathname === "/rechercher";
+
+  const isMobileOrNative = () => {
+    try {
+      const isNative = document.documentElement?.getAttribute("data-ui-native") === "true";
+      if (isNative) return true;
+    } catch {}
+
+    try {
+      return window.innerWidth < 1280;
+    } catch {}
+
+    return false;
+  };
 
   const getTopOverlayOffset = () => {
     const samplesX = [20, Math.floor(window.innerWidth / 2), window.innerWidth - 20];
@@ -242,10 +256,14 @@ const WorkerSearchSection: React.FC = () => {
   };
 
   const scrollToResultsTop = (opts?: { behavior?: ScrollBehavior }) => {
-    const el = topAnchorRef.current ?? sectionRef.current;
+    const mobileLike = isMobileOrNative();
+    const el = mobileLike
+      ? (resultsAnchorRef.current ?? sectionRef.current)
+      : (topAnchorRef.current ?? sectionRef.current);
+
     if (!el) return;
 
-    const desiredGap = 6;
+    const desiredGap = mobileLike ? 10 : 6;
     const behavior = opts?.behavior ?? "auto";
 
     const doAdjust = () => {
@@ -347,9 +365,6 @@ const WorkerSearchSection: React.FC = () => {
 
   useEffect(() => () => clearApplyTimer(), []);
 
-  // ----------------------------
-  // FETCH (robuste): view -> fallback table
-  // ----------------------------
   useEffect(() => {
     const fetchFrom = async (source: "op_ouvriers_with_ratings" | "op_ouvriers") => {
       const baseFields = [
@@ -370,7 +385,6 @@ const WorkerSearchSection: React.FC = () => {
         "longitude",
       ];
 
-      // champs rating présents seulement sur la view
       const ratingFields =
         source === "op_ouvriers_with_ratings"
           ? ["average_rating", "rating_count", "computed_average_rating", "computed_rating_count"]
@@ -392,12 +406,9 @@ const WorkerSearchSection: React.FC = () => {
       setError(null);
 
       try {
-        // 1) Try view
         let res = await fetchFrom("op_ouvriers_with_ratings");
 
-        // 2) Fallback table si la vue est bloquée (GRANT/RLS) ou renvoie erreur
         if (res.error) {
-          // eslint-disable-next-line no-console
           console.warn("[workers] view failed, fallback to table:", res.error);
           res = await fetchFrom("op_ouvriers");
         }
@@ -439,7 +450,6 @@ const WorkerSearchSection: React.FC = () => {
 
         setWorkers(mapped);
       } catch (err: any) {
-        // eslint-disable-next-line no-console
         console.error("WorkerSearchSection fetch error:", err);
 
         setWorkers([]);
@@ -459,9 +469,6 @@ const WorkerSearchSection: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language]);
 
-  // ----------------------------
-  // Init: URL / sessionStorage / event
-  // ----------------------------
   const applyExternalFilters = (f: Filters) => {
     applyingExternalRef.current = true;
     setApplied(f);
@@ -557,7 +564,11 @@ const WorkerSearchSection: React.FC = () => {
 
       if (Object.keys(next).length) {
         setSearchParams(next, { replace: true });
-        if (isSearchRoute) scrollToResultsTop({ behavior: "auto" });
+        if (isSearchRoute) {
+          window.setTimeout(() => {
+            scrollToResultsTop({ behavior: "auto" });
+          }, 50);
+        }
       }
     };
 
@@ -565,7 +576,6 @@ const WorkerSearchSection: React.FC = () => {
     return () => window.removeEventListener("op:search", onSearch as EventListener);
   }, [setSearchParams, isSearchRoute]);
 
-  // Derived options
   const jobs = useMemo(
     () => Array.from(new Set(workers.map((w) => w.job).filter((j) => j && j.trim().length > 0))),
     [workers]
@@ -674,7 +684,6 @@ const WorkerSearchSection: React.FC = () => {
     return list;
   }, [workers, applied]);
 
-  // Actions
   const resetAll = () => {
     applyingExternalRef.current = true;
     setDraft(DEFAULT_FILTERS);
@@ -708,7 +717,6 @@ const WorkerSearchSection: React.FC = () => {
         setGeoLocating(false);
       },
       (err) => {
-        // eslint-disable-next-line no-console
         console.error("geolocation error", err);
         setGeoLocating(false);
         updateDraft({ near: false, lat: null, lng: null }, { immediate: true });
@@ -724,7 +732,6 @@ const WorkerSearchSection: React.FC = () => {
     );
   };
 
-  // Texts
   const title = cms("search.page.title", "Trouvez votre professionnel", "Find your professional");
   const subtitle = cms("search.page.subtitle", "Modifiez vos filtres pour lancer la recherche automatiquement.", "Adjust filters to automatically update results.");
 
@@ -1005,6 +1012,8 @@ const WorkerSearchSection: React.FC = () => {
           </aside>
 
           <div className="min-w-0">
+            <div ref={resultsAnchorRef} />
+
             {error && <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">{error}</div>}
 
             {!error && !loading && workers.length === 0 && (
