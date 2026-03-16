@@ -334,7 +334,7 @@ const Header = () => {
 
               <div
                 className="md:hidden min-w-0 shrink-0 flex items-center gap-2"
-                style={{ backgroundColor: "#F3F7FF" }}
+                style={{ backgroundColor: "#FFFFFF" }}
               >
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
