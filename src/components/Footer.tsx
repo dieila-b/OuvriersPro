@@ -141,121 +141,128 @@ const Footer = () => {
               </button>
             </div>
 
-            {/* Entreprise */}
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold tracking-wide text-white/90">
-                {cms("footer.company.title", "Entreprise", "Company")}
-              </h3>
+            {/* Entreprise + Contact : wrapper harmonisé mobile */}
+            <div className="min-w-0 md:contents">
+              <div className="grid gap-5 md:contents">
+                {/* Entreprise */}
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold tracking-wide text-white/90">
+                    {cms("footer.company.title", "Entreprise", "Company")}
+                  </h3>
 
-              {/* Mobile */}
-              <div className="mt-3 flex items-center gap-6 text-left text-sm text-white/70 md:hidden">
-                <Link to="/faq" className="transition-colors hover:text-white">
-                  {cms("footer.links.faq", "FAQ", "FAQ")}
-                </Link>
-                <Link to="/a-propos" className="transition-colors hover:text-white">
-                  {cms("footer.links.about", "À propos", "About")}
-                </Link>
-                <Link to="/partenaires" className="transition-colors hover:text-white">
-                  {cms("footer.links.partners", "Partenaires", "Partners")}
-                </Link>
-              </div>
-
-              {/* Desktop */}
-              <ul className="mt-4 hidden space-y-2 text-sm text-white/70 md:block">
-                <li>
-                  <Link to="/faq" className="transition-colors hover:text-white">
-                    {cms("footer.links.faq", "FAQ", "FAQ")}
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/a-propos" className="transition-colors hover:text-white">
-                    {cms("footer.links.about", "À propos", "About")}
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/partenaires" className="transition-colors hover:text-white">
-                    {cms("footer.links.partners", "Partenaires", "Partners")}
-                  </Link>
-                </li>
-              </ul>
-            </div>
-
-            {/* Contact */}
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold tracking-wide text-white/90">
-                {cms("footer.contact.title", "Contact", "Contact")}
-              </h3>
-
-              {/* Mobile / Emulator : bouton uniquement */}
-              <div className="mt-3 md:hidden">
-                <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/8 to-white/[0.03] p-3 shadow-[0_10px_35px_rgba(0,0,0,0.18)] backdrop-blur-sm">
-                  <Button
-                    type="button"
-                    className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-pro-blue text-white shadow-[0_10px_30px_rgba(59,130,246,0.30)] transition-all duration-200 hover:bg-pro-blue/90"
-                    onClick={() => setContactOpen(true)}
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                    {cms("footer.contact.button", "Contacter le support", "Contact support")}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Desktop : rendu inchangé avec détails visibles */}
-              <div className="mt-4 hidden min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm md:block">
-                <div className="min-w-0 space-y-3">
-                  <a
-                    href={`mailto:${emailValue}`}
-                    className="flex min-w-0 items-center justify-between gap-2 text-sm transition-colors hover:text-white"
-                  >
-                    <span className="inline-flex shrink-0 items-center gap-2 text-white/70">
-                      <Mail className="h-4 w-4 shrink-0" />
-                      {cms("footer.contact.label_email", "Email", "Email")}
-                    </span>
-                    <span className="truncate text-right font-medium text-white/90">
-                      {emailValue}
-                    </span>
-                  </a>
-
-                  <a
-                    href={`tel:${phoneTel}`}
-                    className="flex min-w-0 items-center justify-between gap-2 text-sm transition-colors hover:text-white"
-                  >
-                    <span className="inline-flex shrink-0 items-center gap-2 text-white/70">
-                      <Phone className="h-4 w-4 shrink-0" />
-                      {cms("footer.contact.label_phone", "Téléphone", "Phone")}
-                    </span>
-                    <span className="truncate text-right font-medium text-white/90">
-                      {phoneValue}
-                    </span>
-                  </a>
-
-                  <div className="flex min-w-0 items-center justify-between gap-2 text-sm">
-                    <span className="inline-flex shrink-0 items-center gap-2 text-white/70">
-                      <Clock className="h-4 w-4 shrink-0" />
-                      {cms("footer.contact.label_hours", "Horaires", "Hours")}
-                    </span>
-                    <span className="truncate text-right text-white/85">{hoursValue}</span>
+                  {/* Mobile */}
+                  <div className="mt-3 md:hidden">
+                    <div className="flex w-full items-center gap-6 text-left text-sm text-white/70">
+                      <Link to="/faq" className="transition-colors hover:text-white">
+                        {cms("footer.links.faq", "FAQ", "FAQ")}
+                      </Link>
+                      <Link to="/a-propos" className="transition-colors hover:text-white">
+                        {cms("footer.links.about", "À propos", "About")}
+                      </Link>
+                      <Link to="/partenaires" className="transition-colors hover:text-white">
+                        {cms("footer.links.partners", "Partenaires", "Partners")}
+                      </Link>
+                    </div>
                   </div>
 
-                  <div className="flex min-w-0 items-center justify-between gap-2 text-sm">
-                    <span className="inline-flex shrink-0 items-center gap-2 text-white/70">
-                      <MapPin className="h-4 w-4 shrink-0" />
-                      {cms("footer.contact.label_zone", "Zone", "Service area")}
-                    </span>
-                    <span className="truncate text-right text-white/85">
-                      {locationValue}
-                    </span>
-                  </div>
+                  {/* Desktop */}
+                  <ul className="mt-4 hidden space-y-2 text-sm text-white/70 md:block">
+                    <li>
+                      <Link to="/faq" className="transition-colors hover:text-white">
+                        {cms("footer.links.faq", "FAQ", "FAQ")}
+                      </Link>
+                    </li>
+                    <li>
+                      <Link to="/a-propos" className="transition-colors hover:text-white">
+                        {cms("footer.links.about", "À propos", "About")}
+                      </Link>
+                    </li>
+                    <li>
+                      <Link to="/partenaires" className="transition-colors hover:text-white">
+                        {cms("footer.links.partners", "Partenaires", "Partners")}
+                      </Link>
+                    </li>
+                  </ul>
                 </div>
 
-                <Button
-                  type="button"
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-pro-blue text-white shadow-[0_10px_30px_rgba(59,130,246,0.25)] transition-all hover:bg-pro-blue/90"
-                  onClick={() => setContactOpen(true)}
-                >
-                  <MessageSquare className="h-4 w-4" />
-                  {cms("footer.contact.button", "Contacter le support", "Contact support")}
-                </Button>
+                {/* Contact */}
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold tracking-wide text-white/90">
+                    {cms("footer.contact.title", "Contact", "Contact")}
+                  </h3>
+
+                  {/* Mobile / Emulator : bouton uniquement */}
+                  <div className="mt-3 md:hidden">
+                    <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/8 to-white/[0.03] p-3 shadow-[0_10px_35px_rgba(0,0,0,0.18)] backdrop-blur-sm">
+                      <Button
+                        type="button"
+                        className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-pro-blue text-white shadow-[0_10px_30px_rgba(59,130,246,0.30)] transition-all duration-200 hover:bg-pro-blue/90"
+                        onClick={() => setContactOpen(true)}
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                        {cms("footer.contact.button", "Contacter le support", "Contact support")}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Desktop : rendu inchangé avec détails visibles */}
+                  <div className="mt-4 hidden min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm md:block">
+                    <div className="min-w-0 space-y-3">
+                      <a
+                        href={`mailto:${emailValue}`}
+                        className="flex min-w-0 items-center justify-between gap-2 text-sm transition-colors hover:text-white"
+                      >
+                        <span className="inline-flex shrink-0 items-center gap-2 text-white/70">
+                          <Mail className="h-4 w-4 shrink-0" />
+                          {cms("footer.contact.label_email", "Email", "Email")}
+                        </span>
+                        <span className="truncate text-right font-medium text-white/90">
+                          {emailValue}
+                        </span>
+                      </a>
+
+                      <a
+                        href={`tel:${phoneTel}`}
+                        className="flex min-w-0 items-center justify-between gap-2 text-sm transition-colors hover:text-white"
+                      >
+                        <span className="inline-flex shrink-0 items-center gap-2 text-white/70">
+                          <Phone className="h-4 w-4 shrink-0" />
+                          {cms("footer.contact.label_phone", "Téléphone", "Phone")}
+                        </span>
+                        <span className="truncate text-right font-medium text-white/90">
+                          {phoneValue}
+                        </span>
+                      </a>
+
+                      <div className="flex min-w-0 items-center justify-between gap-2 text-sm">
+                        <span className="inline-flex shrink-0 items-center gap-2 text-white/70">
+                          <Clock className="h-4 w-4 shrink-0" />
+                          {cms("footer.contact.label_hours", "Horaires", "Hours")}
+                        </span>
+                        <span className="truncate text-right text-white/85">{hoursValue}</span>
+                      </div>
+
+                      <div className="flex min-w-0 items-center justify-between gap-2 text-sm">
+                        <span className="inline-flex shrink-0 items-center gap-2 text-white/70">
+                          <MapPin className="h-4 w-4 shrink-0" />
+                          {cms("footer.contact.label_zone", "Zone", "Service area")}
+                        </span>
+                        <span className="truncate text-right text-white/85">
+                          {locationValue}
+                        </span>
+                      </div>
+                    </div>
+
+                    <Button
+                      type="button"
+                      className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-pro-blue text-white shadow-[0_10px_30px_rgba(59,130,246,0.25)] transition-all hover:bg-pro-blue/90"
+                      onClick={() => setContactOpen(true)}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      {cms("footer.contact.button", "Contacter le support", "Contact support")}
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
