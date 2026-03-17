@@ -19,8 +19,8 @@ import {
   Mail,
   Phone,
   Clock,
-  MapPin,
   Headset,
+  MessageCircle,
 } from "lucide-react";
 
 const LS_KEY = "op:contact:last_sent_at";
@@ -265,10 +265,15 @@ export default function ContactModal({
     "Lun–Ven • 09:00–18:00",
     "Mon–Fri • 09:00–18:00"
   );
-  const supportLocationValue = cms(
-    "footer.location.value",
-    "Conakry (et environs)",
-    "Conakry (and nearby)"
+  const supportWhatsappTel = cms(
+    "footer.contact.whatsapp_tel",
+    supportPhoneTel,
+    supportPhoneTel
+  );
+  const supportWhatsappValue = cms(
+    "footer.contact.whatsapp_value",
+    "+33 1 23 45 67 89",
+    "+33 1 23 45 67 89"
   );
 
   return (
@@ -295,10 +300,11 @@ export default function ContactModal({
 
         {/* Mobile / Émulateur uniquement : carte premium de contact */}
         <div className="md:hidden">
-          <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-50 to-white p-4 shadow-[0_12px_40px_rgba(15,23,42,0.08)]">
+          <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-50 via-white to-slate-100/70 p-4 shadow-[0_14px_44px_rgba(15,23,42,0.10)]">
             <div className="pointer-events-none absolute inset-0">
               <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-blue-100/60 blur-2xl" />
               <div className="absolute -left-6 bottom-0 h-20 w-20 rounded-full bg-slate-100 blur-2xl" />
+              <div className="absolute inset-x-8 top-0 h-10 rounded-full bg-pro-blue/5 blur-2xl" />
             </div>
 
             <div className="relative">
@@ -327,7 +333,7 @@ export default function ContactModal({
               <div className="space-y-2.5">
                 <a
                   href={`mailto:${supportEmail}`}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/80 px-3.5 py-3 shadow-sm transition-colors hover:bg-white"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/85 px-3.5 py-3 shadow-[0_4px_16px_rgba(15,23,42,0.04)] transition-all hover:bg-white"
                 >
                   <span className="inline-flex min-w-0 items-center gap-2.5 text-sm text-slate-600">
                     <Mail className="h-4 w-4 shrink-0 text-slate-500" />
@@ -340,7 +346,7 @@ export default function ContactModal({
 
                 <a
                   href={`tel:${supportPhoneTel}`}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/80 px-3.5 py-3 shadow-sm transition-colors hover:bg-white"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/85 px-3.5 py-3 shadow-[0_4px_16px_rgba(15,23,42,0.04)] transition-all hover:bg-white"
                 >
                   <span className="inline-flex min-w-0 items-center gap-2.5 text-sm text-slate-600">
                     <Phone className="h-4 w-4 shrink-0 text-slate-500" />
@@ -351,7 +357,7 @@ export default function ContactModal({
                   </span>
                 </a>
 
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/80 px-3.5 py-3 shadow-sm">
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/85 px-3.5 py-3 shadow-[0_4px_16px_rgba(15,23,42,0.04)]">
                   <span className="inline-flex min-w-0 items-center gap-2.5 text-sm text-slate-600">
                     <Clock className="h-4 w-4 shrink-0 text-slate-500" />
                     <span>{cms("footer.contact.label_hours", "Horaires", "Hours")}</span>
@@ -361,15 +367,20 @@ export default function ContactModal({
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/80 px-3.5 py-3 shadow-sm">
+                <a
+                  href={`https://wa.me/${supportWhatsappTel.replace(/[^\d]/g, "")}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200/70 bg-gradient-to-r from-emerald-50 to-white px-3.5 py-3 shadow-[0_4px_16px_rgba(16,185,129,0.08)] transition-all hover:from-emerald-50 hover:to-emerald-50/40"
+                >
                   <span className="inline-flex min-w-0 items-center gap-2.5 text-sm text-slate-600">
-                    <MapPin className="h-4 w-4 shrink-0 text-slate-500" />
-                    <span>{cms("footer.contact.label_zone", "Zone", "Service area")}</span>
+                    <MessageCircle className="h-4 w-4 shrink-0 text-emerald-600" />
+                    <span>{cms("footer.contact.label_whatsapp", "WhatsApp", "WhatsApp")}</span>
                   </span>
                   <span className="truncate text-right text-sm font-semibold text-slate-900">
-                    {supportLocationValue}
+                    {supportWhatsappValue}
                   </span>
-                </div>
+                </a>
               </div>
             </div>
           </div>
