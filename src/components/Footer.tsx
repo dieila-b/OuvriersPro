@@ -68,8 +68,8 @@ const Footer = () => {
           <div className="absolute right-0 top-1/3 h-36 w-36 rounded-full bg-pro-blue/5 blur-3xl" />
         </div>
 
-        <div className="relative mx-auto w-full max-w-7xl min-w-0 px-4 py-8 sm:px-6 lg:px-8">
-          <div className="grid min-w-0 grid-cols-1 gap-8 md:grid-cols-4">
+        <div className="relative mx-auto w-full max-w-7xl min-w-0 px-4 py-6 sm:px-6 lg:px-8 md:py-8">
+          <div className="grid min-w-0 grid-cols-1 gap-5 md:grid-cols-4 md:gap-8">
             {/* Brand */}
             <div className="min-w-0">
               <div className="flex items-start gap-3">
@@ -91,7 +91,7 @@ const Footer = () => {
                 </div>
               </div>
 
-              <p className="mt-4 w-full text-sm leading-relaxed text-white/70 md:max-w-sm">
+              <p className="mt-3 w-full text-sm leading-relaxed text-white/70 md:mt-4 md:max-w-sm">
                 {cms(
                   "footer.brand.desc",
                   "Une plateforme de mise en relation entre particuliers/entreprises et prestataires vérifiés : services à domicile, santé, informatique, cours, et plus.",
@@ -100,7 +100,7 @@ const Footer = () => {
               </p>
 
               {social.length > 0 && (
-                <div className="mt-5 flex items-center gap-2">
+                <div className="mt-4 flex items-center gap-2 md:mt-5">
                   {social.map(({ name, href, Icon }) => (
                     <a
                       key={name}
@@ -148,7 +148,7 @@ const Footer = () => {
               </h3>
 
               {/* Mobile */}
-              <div className="mt-4 grid grid-cols-3 items-center gap-2 text-center text-sm text-white/70 md:hidden">
+              <div className="mt-3 flex items-center gap-6 text-left text-sm text-white/70 md:hidden">
                 <Link to="/faq" className="transition-colors hover:text-white">
                   {cms("footer.links.faq", "FAQ", "FAQ")}
                 </Link>
@@ -187,7 +187,7 @@ const Footer = () => {
               </h3>
 
               {/* Mobile / Emulator : bouton uniquement */}
-              <div className="mt-4 md:hidden">
+              <div className="mt-3 md:hidden">
                 <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/8 to-white/[0.03] p-3 shadow-[0_10px_35px_rgba(0,0,0,0.18)] backdrop-blur-sm">
                   <Button
                     type="button"
@@ -260,7 +260,7 @@ const Footer = () => {
             </div>
           </div>
 
-          <div className="mt-8 flex min-w-0 flex-col gap-3 border-t border-white/10 pt-4 md:flex-row md:items-center md:justify-between">
+          <div className="mt-6 flex min-w-0 flex-col gap-3 border-t border-white/10 pt-4 md:mt-8 md:flex-row md:items-center md:justify-between">
             <p className="text-xs text-white/55">
               {cms(
                 "footer.bottom.rights",
