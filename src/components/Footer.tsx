@@ -58,16 +58,8 @@ const Footer = () => {
     "Conakry (et environs)",
     "Conakry (and nearby)"
   );
-  const whatsappTel = cms(
-    "footer.contact.whatsapp_tel",
-    phoneTel,
-    phoneTel
-  );
-  const whatsappValue = cms(
-    "footer.contact.whatsapp_value",
-    phoneValue,
-    phoneValue
-  );
+  const whatsappTel = cms("footer.contact.whatsapp_tel", phoneTel, phoneTel);
+  const whatsappValue = cms("footer.contact.whatsapp_value", phoneValue, phoneValue);
 
   return (
     <>
@@ -122,20 +114,56 @@ const Footer = () => {
               </p>
 
               {social.length > 0 && (
-                <div className="mt-4 flex items-center gap-2 md:mt-5">
-                  {social.map(({ name, href, Icon }) => (
-                    <a
-                      key={name}
-                      href={href}
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-label={name}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-white/60 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/10 hover:text-white"
-                    >
-                      <Icon className="h-4 w-4" />
-                    </a>
-                  ))}
-                </div>
+                <>
+                  {/* Mobile */}
+                  <div className="mt-4 flex items-center gap-2 md:hidden">
+                    {social.map(({ name, href, Icon }) => (
+                      <a
+                        key={name}
+                        href={href}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={name}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-white/60 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/10 hover:text-white"
+                      >
+                        <Icon className="h-4 w-4" />
+                      </a>
+                    ))}
+                  </div>
+
+                  {/* Desktop premium follow block */}
+                  <div className="mt-5 hidden md:block">
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 backdrop-blur-sm">
+                      <p className="text-xs font-medium uppercase tracking-[0.08em] text-white/45">
+                        {cms("footer.social.follow_label", "Suivez-nous", "Follow us")}
+                      </p>
+
+                      <div className="mt-2 flex items-center gap-2.5">
+                        {social.map(({ name, href, Icon }) => (
+                          <a
+                            key={name}
+                            href={href}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={name}
+                            title={name}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-white/60 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/10 hover:text-white"
+                          >
+                            <Icon className="h-4 w-4" />
+                          </a>
+                        ))}
+                      </div>
+
+                      <p className="mt-2 text-xs leading-relaxed text-white/55">
+                        {cms(
+                          "footer.social.follow_text",
+                          "Suivez-nous sur Facebook, Instagram, Twitter, LinkedIn et nos prochains réseaux.",
+                          "Follow us on Facebook, Instagram, Twitter, LinkedIn, and our upcoming channels."
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
 
@@ -256,14 +284,6 @@ const Footer = () => {
                         </span>
                       </a>
 
-                      <div className="flex min-w-0 items-center justify-between gap-2 text-sm">
-                        <span className="inline-flex shrink-0 items-center gap-2 text-white/70">
-                          <Clock className="h-4 w-4 shrink-0" />
-                          {cms("footer.contact.label_hours", "Horaires", "Hours")}
-                        </span>
-                        <span className="truncate text-right text-white/85">{hoursValue}</span>
-                      </div>
-
                       <a
                         href={`https://wa.me/${whatsappTel.replace(/[^\d]/g, "")}`}
                         target="_blank"
@@ -278,6 +298,14 @@ const Footer = () => {
                           {whatsappValue}
                         </span>
                       </a>
+
+                      <div className="flex min-w-0 items-center justify-between gap-2 text-sm">
+                        <span className="inline-flex shrink-0 items-center gap-2 text-white/70">
+                          <Clock className="h-4 w-4 shrink-0" />
+                          {cms("footer.contact.label_hours", "Horaires", "Hours")}
+                        </span>
+                        <span className="truncate text-right text-white/85">{hoursValue}</span>
+                      </div>
                     </div>
 
                     <Button
