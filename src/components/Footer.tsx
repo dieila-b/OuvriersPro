@@ -11,8 +11,6 @@ import {
   Phone,
   Clock,
   MapPin,
-  Headset,
-  ChevronRight,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
@@ -62,45 +60,15 @@ const Footer = () => {
 
   return (
     <>
-      <footer className="relative overflow-visible border-t border-white/10 bg-pro-gray text-white">
+      <footer className="relative overflow-hidden border-t border-white/10 bg-pro-gray text-white">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
           <div className="absolute -top-20 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-pro-blue/10 blur-3xl" />
           <div className="absolute bottom-0 left-0 h-40 w-40 rounded-full bg-white/[0.03] blur-3xl" />
           <div className="absolute right-0 top-1/3 h-36 w-36 rounded-full bg-pro-blue/5 blur-3xl" />
-          <div className="absolute inset-x-10 top-6 h-14 rounded-full bg-pro-blue/10 blur-3xl md:hidden" />
         </div>
 
-        <div className="relative mx-auto w-full max-w-7xl min-w-0 px-4 pb-8 pt-12 sm:px-6 lg:px-8 md:pt-8">
-          {/* Floating mobile support capsule */}
-          <div className="absolute inset-x-0 -top-4 z-20 flex justify-center px-4 md:hidden">
-            <button
-              type="button"
-              onClick={() => setContactOpen(true)}
-              aria-label={cms("footer.contact.button", "Contacter le support", "Contact support")}
-              className="group relative w-full max-w-[280px] overflow-hidden rounded-full border border-white/15 bg-white/[0.08] px-3 py-2.5 shadow-[0_12px_34px_rgba(0,0,0,0.22)] backdrop-blur-2xl transition-all duration-300 active:scale-[0.985]"
-            >
-              <div className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-r from-white/10 via-white/[0.04] to-pro-blue/12" />
-              <div className="pointer-events-none absolute left-10 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-pro-blue/20 blur-xl" />
-
-              <div className="relative flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.08] shadow-[0_6px_18px_rgba(59,130,246,0.16)]">
-                    <Headset className="h-4 w-4 text-white" />
-                  </div>
-
-                  <span className="truncate text-[13px] font-medium tracking-[0.01em] text-white">
-                    {cms("footer.contact.button", "Contacter le support", "Contact support")}
-                  </span>
-                </div>
-
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-white/80 transition-all duration-300 group-hover:bg-white/[0.12] group-hover:text-white group-hover:translate-x-0.5">
-                  <ChevronRight className="h-4 w-4" />
-                </div>
-              </div>
-            </button>
-          </div>
-
+        <div className="relative mx-auto w-full max-w-7xl min-w-0 px-4 py-8 sm:px-6 lg:px-8">
           <div className="grid min-w-0 grid-cols-1 gap-8 md:grid-cols-4">
             {/* Brand */}
             <div className="min-w-0">
@@ -212,10 +180,21 @@ const Footer = () => {
                 )}
               </p>
 
-              {/* Mobile : uniquement la capsule flottante */}
-              <div className="md:hidden" />
+              {/* Mobile / Emulator : bouton uniquement */}
+              <div className="mt-4 md:hidden">
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/8 to-white/[0.03] p-3 shadow-[0_10px_35px_rgba(0,0,0,0.18)] backdrop-blur-sm">
+                  <Button
+                    type="button"
+                    className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-pro-blue text-white shadow-[0_10px_30px_rgba(59,130,246,0.30)] transition-all duration-200 hover:bg-pro-blue/90"
+                    onClick={() => setContactOpen(true)}
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    {cms("footer.contact.button", "Contacter le support", "Contact support")}
+                  </Button>
+                </div>
+              </div>
 
-              {/* Desktop : inchangé */}
+              {/* Desktop : rendu inchangé avec détails visibles */}
               <div className="mt-4 hidden min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm md:block">
                 <div className="space-y-3 min-w-0">
                   <a
