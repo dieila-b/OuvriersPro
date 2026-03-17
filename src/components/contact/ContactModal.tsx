@@ -12,7 +12,16 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Send, CheckCircle2, AlertTriangle } from "lucide-react";
+import {
+  Send,
+  CheckCircle2,
+  AlertTriangle,
+  Mail,
+  Phone,
+  Clock,
+  MapPin,
+  Headset,
+} from "lucide-react";
 
 const LS_KEY = "op:contact:last_sent_at";
 
@@ -59,8 +68,8 @@ function setCooldownNow() {
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  cooldownSeconds?: number; // default 30
-  defaultSubject?: string; // default "Demande de contact"
+  cooldownSeconds?: number;
+  defaultSubject?: string;
 };
 
 export default function ContactModal({
@@ -152,7 +161,10 @@ export default function ContactModal({
   }, [open]);
 
   const canSend =
-    email.trim().length > 0 && message.trim().length > 0 && cooldownRemaining === 0 && !sending;
+    email.trim().length > 0 &&
+    message.trim().length > 0 &&
+    cooldownRemaining === 0 &&
+    !sending;
 
   const handleSend = async () => {
     resetStatus();
@@ -162,7 +174,13 @@ export default function ContactModal({
     const s = subject.trim();
 
     if (!e || !m) {
-      setErr(cms("contact.form.validation.required", "Veuillez renseigner l’email et le message.", "Please provide an email and a message."));
+      setErr(
+        cms(
+          "contact.form.validation.required",
+          "Veuillez renseigner l’email et le message.",
+          "Please provide an email and a message."
+        )
+      );
       return;
     }
 
@@ -227,6 +245,32 @@ export default function ContactModal({
     }
   };
 
+  const supportEmail = cms(
+    "footer.contact.email_value",
+    "contact@proxiservices.com",
+    "contact@proxiservices.com"
+  );
+  const supportPhoneTel = cms(
+    "footer.contact.phone_tel",
+    "+33123456789",
+    "+33123456789"
+  );
+  const supportPhoneValue = cms(
+    "footer.contact.phone_value",
+    "+33 1 23 45 67 89",
+    "+33 1 23 45 67 89"
+  );
+  const supportHoursValue = cms(
+    "footer.contact.hours_value",
+    "Lun–Ven • 09:00–18:00",
+    "Mon–Fri • 09:00–18:00"
+  );
+  const supportLocationValue = cms(
+    "footer.location.value",
+    "Conakry (et environs)",
+    "Conakry (and nearby)"
+  );
+
   return (
     <Dialog
       open={open}
@@ -249,6 +293,88 @@ export default function ContactModal({
           </DialogDescription>
         </DialogHeader>
 
+        {/* Mobile / Émulateur uniquement : carte premium de contact */}
+        <div className="md:hidden">
+          <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-50 to-white p-4 shadow-[0_12px_40px_rgba(15,23,42,0.08)]">
+            <div className="pointer-events-none absolute inset-0">
+              <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-blue-100/60 blur-2xl" />
+              <div className="absolute -left-6 bottom-0 h-20 w-20 rounded-full bg-slate-100 blur-2xl" />
+            </div>
+
+            <div className="relative">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-pro-blue text-white shadow-[0_10px_24px_rgba(59,130,246,0.28)]">
+                  <Headset className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-slate-900">
+                    {cms(
+                      "contact.modal.mobile_support_title",
+                      "Support ProxiServices",
+                      "ProxiServices Support"
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {cms(
+                      "contact.modal.mobile_support_subtitle",
+                      "Informations utiles avant l’envoi de votre message",
+                      "Helpful details before sending your message"
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                <a
+                  href={`mailto:${supportEmail}`}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/80 px-3.5 py-3 shadow-sm transition-colors hover:bg-white"
+                >
+                  <span className="inline-flex min-w-0 items-center gap-2.5 text-sm text-slate-600">
+                    <Mail className="h-4 w-4 shrink-0 text-slate-500" />
+                    <span>{cms("footer.contact.label_email", "Email", "Email")}</span>
+                  </span>
+                  <span className="truncate text-right text-sm font-semibold text-slate-900">
+                    {supportEmail}
+                  </span>
+                </a>
+
+                <a
+                  href={`tel:${supportPhoneTel}`}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/80 px-3.5 py-3 shadow-sm transition-colors hover:bg-white"
+                >
+                  <span className="inline-flex min-w-0 items-center gap-2.5 text-sm text-slate-600">
+                    <Phone className="h-4 w-4 shrink-0 text-slate-500" />
+                    <span>{cms("footer.contact.label_phone", "Téléphone", "Phone")}</span>
+                  </span>
+                  <span className="truncate text-right text-sm font-semibold text-slate-900">
+                    {supportPhoneValue}
+                  </span>
+                </a>
+
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/80 px-3.5 py-3 shadow-sm">
+                  <span className="inline-flex min-w-0 items-center gap-2.5 text-sm text-slate-600">
+                    <Clock className="h-4 w-4 shrink-0 text-slate-500" />
+                    <span>{cms("footer.contact.label_hours", "Horaires", "Hours")}</span>
+                  </span>
+                  <span className="truncate text-right text-sm font-semibold text-slate-900">
+                    {supportHoursValue}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/80 px-3.5 py-3 shadow-sm">
+                  <span className="inline-flex min-w-0 items-center gap-2.5 text-sm text-slate-600">
+                    <MapPin className="h-4 w-4 shrink-0 text-slate-500" />
+                    <span>{cms("footer.contact.label_zone", "Zone", "Service area")}</span>
+                  </span>
+                  <span className="truncate text-right text-sm font-semibold text-slate-900">
+                    {supportLocationValue}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="grid gap-3">
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="grid gap-1.5">
@@ -261,20 +387,29 @@ export default function ContactModal({
               <Input
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder={cms("contact.form.full_name_placeholder", "Ex: Mamadou Diallo", "e.g., Alex Johnson")}
+                placeholder={cms(
+                  "contact.form.full_name_placeholder",
+                  "Ex: Mamadou Diallo",
+                  "e.g., Alex Johnson"
+                )}
                 onFocus={resetStatus}
               />
             </div>
 
             <div className="grid gap-1.5">
               <label className="text-sm font-medium text-pro-gray">
-                {cms("contact.form.email", "Email", "Email")} <span className="text-red-500">*</span>
+                {cms("contact.form.email", "Email", "Email")}{" "}
+                <span className="text-red-500">*</span>
               </label>
               <Input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={cms("contact.form.email_placeholder", "ex: nom@email.com", "e.g., name@email.com")}
+                placeholder={cms(
+                  "contact.form.email_placeholder",
+                  "ex: nom@email.com",
+                  "e.g., name@email.com"
+                )}
                 required
                 onFocus={resetStatus}
               />
@@ -291,19 +426,28 @@ export default function ContactModal({
             <Input
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder={cms("contact.form.subject_placeholder", "Ex: Paiement / Sécurité", "e.g., Billing / Security")}
+              placeholder={cms(
+                "contact.form.subject_placeholder",
+                "Ex: Paiement / Sécurité",
+                "e.g., Billing / Security"
+              )}
               onFocus={resetStatus}
             />
           </div>
 
           <div className="grid gap-1.5">
             <label className="text-sm font-medium text-pro-gray">
-              {cms("contact.form.message", "Message", "Message")} <span className="text-red-500">*</span>
+              {cms("contact.form.message", "Message", "Message")}{" "}
+              <span className="text-red-500">*</span>
             </label>
             <Textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder={cms("contact.form.message_placeholder", "Décrivez votre demande...", "Describe your request...")}
+              placeholder={cms(
+                "contact.form.message_placeholder",
+                "Décrivez votre demande...",
+                "Describe your request..."
+              )}
               rows={5}
               required
               onFocus={resetStatus}
@@ -311,7 +455,7 @@ export default function ContactModal({
           </div>
 
           {cooldownRemaining > 0 && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 text-sm">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               {cms(
                 "contact.form.cooldown.notice_prefix",
                 "Veuillez patienter",
@@ -327,33 +471,40 @@ export default function ContactModal({
           )}
 
           {ok && (
-            <div className="flex items-start gap-2 rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-emerald-800">
-              <CheckCircle2 className="w-5 h-5 mt-0.5" />
+            <div className="flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800">
+              <CheckCircle2 className="mt-0.5 h-5 w-5" />
               <div className="text-sm">{ok}</div>
             </div>
           )}
 
           {err && (
-            <div className="flex items-start gap-2 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-amber-900">
-              <AlertTriangle className="w-5 h-5 mt-0.5" />
+            <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+              <AlertTriangle className="mt-0.5 h-5 w-5" />
               <div className="text-sm">{err}</div>
             </div>
           )}
         </div>
 
         <DialogFooter className="gap-2">
-          <Button type="button" variant="outline" className="rounded-xl" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-xl"
+            onClick={() => onOpenChange(false)}
+          >
             {cms("common.close", "Fermer", "Close")}
           </Button>
 
           <Button
             type="button"
-            className="rounded-xl bg-pro-blue hover:bg-pro-blue/90 flex items-center gap-2"
+            className="flex items-center gap-2 rounded-xl bg-pro-blue hover:bg-pro-blue/90"
             onClick={handleSend}
             disabled={!canSend}
           >
             <Send className="h-4 w-4" />
-            {sending ? cms("common.sending", "Envoi...", "Sending...") : cms("contact.form.btn_send", "Envoyer", "Send")}
+            {sending
+              ? cms("common.sending", "Envoi...", "Sending...")
+              : cms("contact.form.btn_send", "Envoyer", "Send")}
           </Button>
         </DialogFooter>
       </DialogContent>
