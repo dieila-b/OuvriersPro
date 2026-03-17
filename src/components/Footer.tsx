@@ -64,6 +64,8 @@ const Footer = () => {
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
           <div className="absolute -top-20 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-pro-blue/10 blur-3xl" />
+          <div className="absolute bottom-0 left-0 h-40 w-40 rounded-full bg-white/[0.03] blur-3xl" />
+          <div className="absolute right-0 top-1/3 h-36 w-36 rounded-full bg-pro-blue/5 blur-3xl" />
         </div>
 
         <div className="relative mx-auto w-full max-w-7xl min-w-0 px-4 py-8 sm:px-6 lg:px-8">
@@ -71,7 +73,7 @@ const Footer = () => {
             {/* Brand */}
             <div className="min-w-0">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-pro-blue shadow-[0_8px_30px_rgba(59,130,246,0.25)]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-pro-blue shadow-[0_8px_30px_rgba(59,130,246,0.25)] ring-1 ring-white/10">
                   <span className="text-sm font-bold text-white">PS</span>
                 </div>
 
@@ -106,7 +108,7 @@ const Footer = () => {
                       target="_blank"
                       rel="noreferrer"
                       aria-label={name}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-white/60 transition-all duration-200 hover:border-white/20 hover:bg-white/10 hover:text-white"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-white/60 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/10 hover:text-white"
                     >
                       <Icon className="h-4 w-4" />
                     </a>
@@ -178,7 +180,22 @@ const Footer = () => {
                 )}
               </p>
 
-              <div className="mt-4 min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+              {/* Mobile / Emulator : bouton uniquement */}
+              <div className="mt-4 md:hidden">
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/8 to-white/[0.03] p-3 shadow-[0_10px_35px_rgba(0,0,0,0.18)] backdrop-blur-sm">
+                  <Button
+                    type="button"
+                    className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-pro-blue text-white shadow-[0_10px_30px_rgba(59,130,246,0.30)] transition-all duration-200 hover:bg-pro-blue/90"
+                    onClick={() => setContactOpen(true)}
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    {cms("footer.contact.button", "Contacter le support", "Contact support")}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Desktop : rendu inchangé avec détails visibles */}
+              <div className="mt-4 hidden min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm md:block">
                 <div className="space-y-3 min-w-0">
                   <a
                     href={`mailto:${emailValue}`}
