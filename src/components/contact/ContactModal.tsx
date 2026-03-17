@@ -474,7 +474,7 @@ export default function ContactModal({
     >
       <DialogContent className="w-[min(94vw,430px)] max-w-lg overflow-hidden rounded-[26px] border border-slate-200/80 bg-white p-0 shadow-[0_24px_80px_rgba(15,23,42,0.18)] sm:max-w-lg">
         <div className="max-h-[88vh] overflow-y-auto">
-          <div className="px-3.5 pb-4 pt-4 sm:px-6 sm:pb-6 sm:pt-6">
+          <div className="px-3.5 pb-28 pt-4 sm:px-6 sm:pb-6 sm:pt-6">
             {/* Header uniquement desktop */}
             <DialogHeader className="hidden space-y-1 text-left md:block">
               <DialogTitle className="text-lg font-semibold text-slate-900">
@@ -511,13 +511,6 @@ export default function ContactModal({
                               "contact.modal.mobile_support_title",
                               "Support ProxiServices",
                               "ProxiServices Support"
-                            )}
-                          </div>
-                          <div className="text-xs leading-relaxed text-slate-500">
-                            {cms(
-                              "contact.modal.mobile_support_subtitle",
-                              "Informations utiles avant l’envoi de votre message",
-                              "Helpful details before sending your message"
                             )}
                           </div>
                         </div>
@@ -648,22 +641,58 @@ export default function ContactModal({
               )}
 
               {ok && (
-                <div className="flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5" />
-                  <div className="text-sm">{ok}</div>
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
+                    <div className="text-sm">{ok}</div>
+                  </div>
                 </div>
               )}
 
               {err && (
-                <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
-                  <AlertTriangle className="mt-0.5 h-5 w-5" />
-                  <div className="text-sm">{err}</div>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                    <div className="text-sm">{err}</div>
+                  </div>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="border-t border-slate-200/80 px-3.5 py-3 sm:px-6">
+          {/* Footer sticky premium mobile */}
+          <div className="sticky bottom-0 z-20 border-t border-slate-200/80 bg-white/92 backdrop-blur-xl md:hidden">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-10 bg-gradient-to-t from-transparent to-white/55" />
+            <div className="relative px-3.5 pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
+              <div className="rounded-[22px] border border-slate-200/80 bg-slate-50/95 p-2 shadow-[0_-8px_30px_rgba(15,23,42,0.08)]">
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 rounded-2xl border-slate-200 bg-white text-slate-700 shadow-sm"
+                    onClick={() => onOpenChange(false)}
+                  >
+                    {cms("common.close", "Fermer", "Close")}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    className="h-11 rounded-2xl bg-pro-blue text-white shadow-[0_10px_24px_rgba(59,130,246,0.24)] hover:bg-pro-blue/90"
+                    onClick={handleSend}
+                    disabled={!canSend}
+                  >
+                    <Send className="mr-2 h-4 w-4" />
+                    {sending
+                      ? cms("common.sending", "Envoi...", "Sending...")
+                      : cms("contact.form.btn_send", "Envoyer", "Send")}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer desktop inchangé */}
+          <div className="hidden border-t border-slate-200/80 px-3.5 py-3 md:block sm:px-6">
             <DialogFooter className="flex-col gap-2 sm:flex-row">
               <Button
                 type="button"
