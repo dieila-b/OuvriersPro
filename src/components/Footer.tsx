@@ -11,6 +11,7 @@ import {
   Phone,
   Clock,
   MapPin,
+  MessageCircle,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,16 @@ const Footer = () => {
     "Conakry (et environs)",
     "Conakry (and nearby)"
   );
+  const whatsappTel = cms(
+    "footer.contact.whatsapp_tel",
+    phoneTel,
+    phoneTel
+  );
+  const whatsappValue = cms(
+    "footer.contact.whatsapp_value",
+    phoneValue,
+    phoneValue
+  );
 
   return (
     <>
@@ -81,7 +92,18 @@ const Footer = () => {
                   <div className="text-base font-bold text-white">
                     {cms("brand.name", "ProxiServices", "ProxiServices")}
                   </div>
-                  <div className="mt-0.5 break-words text-[11px] leading-relaxed text-white/60 md:truncate">
+
+                  {/* Mobile */}
+                  <div className="mt-0.5 break-words text-[11px] leading-relaxed text-white/60 md:hidden">
+                    {cms(
+                      "footer.brand.tagline",
+                      "Trouvez rapidement des prestataires fiables, près de chez vous.",
+                      "Find trusted providers quickly, near you."
+                    )}
+                  </div>
+
+                  {/* Desktop */}
+                  <div className="mt-0.5 hidden max-w-[320px] text-[11px] leading-relaxed text-white/60 md:block">
                     {cms(
                       "footer.brand.tagline",
                       "Trouvez rapidement des prestataires fiables, près de chez vous.",
@@ -205,7 +227,7 @@ const Footer = () => {
                     </div>
                   </div>
 
-                  {/* Desktop : rendu inchangé avec détails visibles */}
+                  {/* Desktop : rendu mis à jour */}
                   <div className="mt-4 hidden min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm md:block">
                     <div className="min-w-0 space-y-3">
                       <a
@@ -242,15 +264,20 @@ const Footer = () => {
                         <span className="truncate text-right text-white/85">{hoursValue}</span>
                       </div>
 
-                      <div className="flex min-w-0 items-center justify-between gap-2 text-sm">
+                      <a
+                        href={`https://wa.me/${whatsappTel.replace(/[^\d]/g, "")}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex min-w-0 items-center justify-between gap-2 text-sm transition-colors hover:text-white"
+                      >
                         <span className="inline-flex shrink-0 items-center gap-2 text-white/70">
-                          <MapPin className="h-4 w-4 shrink-0" />
-                          {cms("footer.contact.label_zone", "Zone", "Service area")}
+                          <MessageCircle className="h-4 w-4 shrink-0" />
+                          {cms("footer.contact.label_whatsapp", "WhatsApp", "WhatsApp")}
                         </span>
                         <span className="truncate text-right text-white/85">
-                          {locationValue}
+                          {whatsappValue}
                         </span>
-                      </div>
+                      </a>
                     </div>
 
                     <Button
