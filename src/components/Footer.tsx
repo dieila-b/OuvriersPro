@@ -72,30 +72,30 @@ const Footer = () => {
           <div className="grid min-w-0 grid-cols-1 gap-8 md:grid-cols-4">
             {/* Brand */}
             <div className="min-w-0">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-pro-blue shadow-[0_8px_30px_rgba(59,130,246,0.25)] ring-1 ring-white/10">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-pro-blue shadow-[0_8px_30px_rgba(59,130,246,0.25)] ring-1 ring-white/10">
                   <span className="text-sm font-bold text-white">PS</span>
                 </div>
 
                 <div className="min-w-0 leading-tight">
-                  <div className="truncate text-base font-bold text-white">
+                  <div className="text-base font-bold text-white">
                     {cms("brand.name", "ProxiServices", "ProxiServices")}
                   </div>
-                  <div className="truncate text-[11px] text-white/60">
+                  <div className="mt-0.5 break-words text-[11px] leading-relaxed text-white/60 md:truncate">
                     {cms(
                       "footer.brand.tagline",
-                      "Marketplace de services",
-                      "Service marketplace"
+                      "Trouvez rapidement des prestataires fiables, près de chez vous.",
+                      "Find trusted providers quickly, near you."
                     )}
                   </div>
                 </div>
               </div>
 
-              <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/70">
+              <p className="mt-4 w-full text-sm leading-relaxed text-white/70 md:max-w-sm">
                 {cms(
                   "footer.brand.desc",
-                  "Trouvez des prestataires fiables près de chez vous, en quelques minutes.",
-                  "Connect with trusted professionals near you in minutes."
+                  "Une plateforme de mise en relation entre particuliers/entreprises et prestataires vérifiés : services à domicile, santé, informatique, cours, et plus.",
+                  "A platform connecting individuals/businesses with verified providers: home services, healthcare, IT, tutoring, and more."
                 )}
               </p>
 
@@ -147,7 +147,21 @@ const Footer = () => {
                 {cms("footer.company.title", "Entreprise", "Company")}
               </h3>
 
-              <ul className="mt-4 space-y-2 text-sm text-white/70">
+              {/* Mobile */}
+              <div className="mt-4 grid grid-cols-3 items-center gap-2 text-center text-sm text-white/70 md:hidden">
+                <Link to="/faq" className="transition-colors hover:text-white">
+                  {cms("footer.links.faq", "FAQ", "FAQ")}
+                </Link>
+                <Link to="/a-propos" className="transition-colors hover:text-white">
+                  {cms("footer.links.about", "À propos", "About")}
+                </Link>
+                <Link to="/partenaires" className="transition-colors hover:text-white">
+                  {cms("footer.links.partners", "Partenaires", "Partners")}
+                </Link>
+              </div>
+
+              {/* Desktop */}
+              <ul className="mt-4 hidden space-y-2 text-sm text-white/70 md:block">
                 <li>
                   <Link to="/faq" className="transition-colors hover:text-white">
                     {cms("footer.links.faq", "FAQ", "FAQ")}
@@ -172,14 +186,6 @@ const Footer = () => {
                 {cms("footer.contact.title", "Contact", "Contact")}
               </h3>
 
-              <p className="mt-2 text-sm text-white/65">
-                {cms(
-                  "footer.contact.cta",
-                  "Support sous 24–48h (jours ouvrés).",
-                  "We typically respond within 24–48 business hours."
-                )}
-              </p>
-
               {/* Mobile / Emulator : bouton uniquement */}
               <div className="mt-4 md:hidden">
                 <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/8 to-white/[0.03] p-3 shadow-[0_10px_35px_rgba(0,0,0,0.18)] backdrop-blur-sm">
@@ -196,7 +202,7 @@ const Footer = () => {
 
               {/* Desktop : rendu inchangé avec détails visibles */}
               <div className="mt-4 hidden min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm md:block">
-                <div className="space-y-3 min-w-0">
+                <div className="min-w-0 space-y-3">
                   <a
                     href={`mailto:${emailValue}`}
                     className="flex min-w-0 items-center justify-between gap-2 text-sm transition-colors hover:text-white"
