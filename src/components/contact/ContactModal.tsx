@@ -299,26 +299,6 @@ export default function ContactModal({
         </DialogHeader>
 
         <div className="grid gap-3">
-          {/* Objet déplacé au-dessus de Nom */}
-          <div className="grid gap-1.5">
-            <label className="text-sm font-medium text-pro-gray">
-              {cms("contact.form.subject", "Objet", "Subject")}{" "}
-              <span className="text-gray-400">
-                ({cms("common.optional", "optionnel", "optional")})
-              </span>
-            </label>
-            <Input
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder={cms(
-                "contact.form.subject_placeholder",
-                "Ex: Paiement / Sécurité",
-                "e.g., Billing / Security"
-              )}
-              onFocus={resetStatus}
-            />
-          </div>
-
           {/* Mobile / Émulateur uniquement : carte premium de contact */}
           <div className="md:hidden">
             <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-50 via-white to-slate-100/70 p-4 shadow-[0_14px_44px_rgba(15,23,42,0.10)]">
@@ -413,6 +393,26 @@ export default function ContactModal({
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Objet : mobile sous carte contact, desktop inchangé */}
+          <div className="grid gap-1.5">
+            <label className="text-sm font-medium text-pro-gray">
+              {cms("contact.form.subject", "Objet", "Subject")}{" "}
+              <span className="text-gray-400">
+                ({cms("common.optional", "optionnel", "optional")})
+              </span>
+            </label>
+            <Input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder={cms(
+                "contact.form.subject_placeholder",
+                "Ex: Paiement / Sécurité",
+                "e.g., Billing / Security"
+              )}
+              onFocus={resetStatus}
+            />
           </div>
 
           <div className="grid gap-2 sm:grid-cols-2">
