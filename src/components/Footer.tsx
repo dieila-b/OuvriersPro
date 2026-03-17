@@ -11,6 +11,8 @@ import {
   Phone,
   Clock,
   MapPin,
+  Headset,
+  Sparkles,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
@@ -66,6 +68,7 @@ const Footer = () => {
           <div className="absolute -top-20 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-pro-blue/10 blur-3xl" />
           <div className="absolute bottom-0 left-0 h-40 w-40 rounded-full bg-white/[0.03] blur-3xl" />
           <div className="absolute right-0 top-1/3 h-36 w-36 rounded-full bg-pro-blue/5 blur-3xl" />
+          <div className="absolute inset-x-8 bottom-24 h-24 rounded-full bg-pro-blue/5 blur-3xl md:hidden" />
         </div>
 
         <div className="relative mx-auto w-full max-w-7xl min-w-0 px-4 py-8 sm:px-6 lg:px-8">
@@ -180,21 +183,51 @@ const Footer = () => {
                 )}
               </p>
 
-              {/* Mobile / Emulator : bouton uniquement */}
+              {/* Mobile / Emulator : floating premium compact card */}
               <div className="mt-4 md:hidden">
-                <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/8 to-white/[0.03] p-3 shadow-[0_10px_35px_rgba(0,0,0,0.18)] backdrop-blur-sm">
-                  <Button
-                    type="button"
-                    className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-pro-blue text-white shadow-[0_10px_30px_rgba(59,130,246,0.30)] transition-all duration-200 hover:bg-pro-blue/90"
-                    onClick={() => setContactOpen(true)}
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                    {cms("footer.contact.button", "Contacter le support", "Contact support")}
-                  </Button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setContactOpen(true)}
+                  className="group relative w-full overflow-hidden rounded-[20px] border border-white/12 bg-white/[0.055] p-[1px] text-left shadow-[0_14px_40px_rgba(0,0,0,0.22)] backdrop-blur-xl transition-all duration-300 active:scale-[0.985]"
+                >
+                  <div className="pointer-events-none absolute inset-0 rounded-[20px] bg-gradient-to-r from-white/10 via-transparent to-pro-blue/10 opacity-70" />
+                  <div className="pointer-events-none absolute -left-10 top-0 h-20 w-20 rounded-full bg-pro-blue/20 blur-2xl" />
+                  <div className="pointer-events-none absolute bottom-0 right-0 h-16 w-16 rounded-full bg-white/10 blur-2xl" />
+
+                  <div className="relative flex items-center gap-3 rounded-[19px] bg-gradient-to-br from-white/[0.08] to-white/[0.03] px-3.5 py-3.5">
+                    <div className="relative shrink-0">
+                      <div className="absolute inset-0 rounded-2xl bg-pro-blue/30 blur-md" />
+                      <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-pro-blue to-pro-blue/80 shadow-[0_10px_24px_rgba(59,130,246,0.35)]">
+                        <Headset className="h-5 w-5 text-white" />
+                      </div>
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-semibold text-white">
+                          {cms("footer.contact.button", "Contacter le support", "Contact support")}
+                        </span>
+                        <Sparkles className="h-3.5 w-3.5 text-pro-blue/90" />
+                      </div>
+                      <p className="mt-0.5 truncate text-[11px] leading-relaxed text-white/60">
+                        {cms(
+                          "footer.contact.mobile_hint",
+                          "Réponse rapide • support professionnel",
+                          "Fast response • professional support"
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="shrink-0">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-white/75 transition-all duration-200 group-hover:bg-white/[0.09] group-hover:text-white">
+                        <MessageSquare className="h-4 w-4" />
+                      </div>
+                    </div>
+                  </div>
+                </button>
               </div>
 
-              {/* Desktop : rendu inchangé avec détails visibles */}
+              {/* Desktop : inchangé */}
               <div className="mt-4 hidden min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm md:block">
                 <div className="space-y-3 min-w-0">
                   <a
