@@ -281,7 +281,7 @@ export default function ContactModal({
     "+33 1 23 45 67 89"
   );
 
-  const formFields = (
+  const desktopFormFields = (
     <>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="grid gap-1.5">
@@ -361,7 +361,104 @@ export default function ContactModal({
           rows={5}
           required
           onFocus={resetStatus}
-          className="min-h-[140px] rounded-2xl border-slate-200 bg-white resize-none"
+          className="min-h-[140px] resize-none rounded-2xl border-slate-200 bg-white"
+        />
+      </div>
+    </>
+  );
+
+  const mobileFormFields = (
+    <>
+      <div className="mb-1">
+        <h3 className="text-base font-semibold text-slate-900">
+          {cms("contact.modal.title", "Contacter le support", "Contact Support")}
+        </h3>
+        <p className="mt-1 text-sm leading-relaxed text-slate-500">
+          {cms(
+            "contact.modal.desc",
+            "Décrivez votre demande, nous revenons vers vous rapidement.",
+            "Share the details of your request and our team will get back to you shortly."
+          )}
+        </p>
+      </div>
+
+      <div className="grid gap-1.5">
+        <label className="text-sm font-medium text-slate-700">
+          {cms("contact.form.full_name", "Nom", "Full name")}{" "}
+          <span className="text-slate-400">
+            ({cms("common.optional", "optionnel", "optional")})
+          </span>
+        </label>
+        <Input
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          placeholder={cms(
+            "contact.form.full_name_placeholder",
+            "Ex: Mamadou Diallo",
+            "e.g., Alex Johnson"
+          )}
+          onFocus={resetStatus}
+          className="h-11 rounded-xl border-slate-200 bg-white"
+        />
+      </div>
+
+      <div className="grid gap-1.5">
+        <label className="text-sm font-medium text-slate-700">
+          {cms("contact.form.email", "Votre email", "Your email")}{" "}
+          <span className="text-red-500">*</span>
+        </label>
+        <Input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder={cms(
+            "contact.form.email_placeholder",
+            "ex: nom@email.com",
+            "e.g., name@email.com"
+          )}
+          required
+          onFocus={resetStatus}
+          className="h-11 rounded-xl border-slate-200 bg-white"
+        />
+      </div>
+
+      <div className="grid gap-1.5">
+        <label className="text-sm font-medium text-slate-700">
+          {cms("contact.form.subject", "Objet", "Subject")}{" "}
+          <span className="text-slate-400">
+            ({cms("common.optional", "optionnel", "optional")})
+          </span>
+        </label>
+        <Input
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
+          placeholder={cms(
+            "contact.form.subject_placeholder",
+            "Ex: Paiement / Sécurité",
+            "e.g., Billing / Security"
+          )}
+          onFocus={resetStatus}
+          className="h-11 rounded-xl border-slate-200 bg-white"
+        />
+      </div>
+
+      <div className="grid gap-1.5">
+        <label className="text-sm font-medium text-slate-700">
+          {cms("contact.form.message", "Message", "Message")}{" "}
+          <span className="text-red-500">*</span>
+        </label>
+        <Textarea
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder={cms(
+            "contact.form.message_placeholder",
+            "Décrivez votre demande...",
+            "Describe your request..."
+          )}
+          rows={5}
+          required
+          onFocus={resetStatus}
+          className="min-h-[140px] resize-none rounded-2xl border-slate-200 bg-white"
         />
       </div>
     </>
@@ -375,10 +472,11 @@ export default function ContactModal({
         onOpenChange(v);
       }}
     >
-      <DialogContent className="w-[calc(100vw-16px)] max-w-lg overflow-hidden rounded-[26px] border border-slate-200/80 bg-white p-0 shadow-[0_24px_80px_rgba(15,23,42,0.18)] sm:max-w-lg">
+      <DialogContent className="w-[min(94vw,430px)] max-w-lg overflow-hidden rounded-[26px] border border-slate-200/80 bg-white p-0 shadow-[0_24px_80px_rgba(15,23,42,0.18)] sm:max-w-lg">
         <div className="max-h-[88vh] overflow-y-auto">
-          <div className="px-4 pb-4 pt-5 sm:px-6 sm:pb-6 sm:pt-6">
-            <DialogHeader className="space-y-1 text-left">
+          <div className="px-3.5 pb-4 pt-4 sm:px-6 sm:pb-6 sm:pt-6">
+            {/* Header uniquement desktop */}
+            <DialogHeader className="hidden space-y-1 text-left md:block">
               <DialogTitle className="text-lg font-semibold text-slate-900">
                 {cms("contact.modal.title", "Contacter le support", "Contact Support")}
               </DialogTitle>
@@ -391,10 +489,10 @@ export default function ContactModal({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="mt-4 grid gap-4">
-              {/* Mobile / Émulateur : carte contact premium */}
+            <div className="grid gap-4 md:mt-4">
+              {/* Mobile / Émulateur */}
               <div className="md:hidden">
-                <div className="mx-auto w-full max-w-[420px]">
+                <div className="mx-auto flex w-full max-w-[390px] flex-col gap-3">
                   <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-slate-100/80 p-4 shadow-[0_14px_44px_rgba(15,23,42,0.10)]">
                     <div className="pointer-events-none absolute inset-0">
                       <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-blue-100/60 blur-2xl" />
@@ -404,7 +502,7 @@ export default function ContactModal({
 
                     <div className="relative">
                       <div className="mb-4 flex items-center gap-3">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-pro-blue text-white shadow-[0_10px_24px_rgba(59,130,246,0.28)]">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-pro-blue text-white shadow-[0_10px_24px_rgba(59,130,246,0.28)]">
                           <Headset className="h-5 w-5" />
                         </div>
                         <div className="min-w-0">
@@ -415,7 +513,7 @@ export default function ContactModal({
                               "ProxiServices Support"
                             )}
                           </div>
-                          <div className="text-xs text-slate-500">
+                          <div className="text-xs leading-relaxed text-slate-500">
                             {cms(
                               "contact.modal.mobile_support_subtitle",
                               "Informations utiles avant l’envoi de votre message",
@@ -428,26 +526,26 @@ export default function ContactModal({
                       <div className="space-y-2.5">
                         <a
                           href={`mailto:${supportEmail}`}
-                          className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/90 px-3.5 py-3 shadow-[0_4px_16px_rgba(15,23,42,0.04)] transition-all hover:bg-white"
+                          className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/90 px-3.5 py-3 shadow-[0_4px_16px_rgba(15,23,42,0.04)] transition-all hover:bg-white"
                         >
                           <span className="inline-flex min-w-0 items-center gap-2.5 text-sm text-slate-600">
                             <Mail className="h-4 w-4 shrink-0 text-slate-500" />
-                            <span>{cms("footer.contact.label_email", "Email", "Email")}</span>
+                            <span className="truncate">{cms("footer.contact.label_email", "Email", "Email")}</span>
                           </span>
-                          <span className="truncate text-right text-sm font-semibold text-slate-900">
+                          <span className="min-w-0 max-w-[52%] truncate text-right text-xs font-semibold text-slate-900">
                             {supportEmail}
                           </span>
                         </a>
 
                         <a
                           href={`tel:${supportPhoneTel}`}
-                          className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/90 px-3.5 py-3 shadow-[0_4px_16px_rgba(15,23,42,0.04)] transition-all hover:bg-white"
+                          className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/90 px-3.5 py-3 shadow-[0_4px_16px_rgba(15,23,42,0.04)] transition-all hover:bg-white"
                         >
                           <span className="inline-flex min-w-0 items-center gap-2.5 text-sm text-slate-600">
                             <Phone className="h-4 w-4 shrink-0 text-slate-500" />
-                            <span>{cms("footer.contact.label_phone", "Téléphone", "Phone")}</span>
+                            <span className="truncate">{cms("footer.contact.label_phone", "Téléphone", "Phone")}</span>
                           </span>
-                          <span className="truncate text-right text-sm font-semibold text-slate-900">
+                          <span className="min-w-0 max-w-[48%] truncate text-right text-xs font-semibold text-slate-900">
                             {supportPhoneValue}
                           </span>
                         </a>
@@ -456,31 +554,31 @@ export default function ContactModal({
                           href={`https://wa.me/${supportWhatsappTel.replace(/[^\d]/g, "")}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-200/80 bg-gradient-to-r from-emerald-50 via-white to-emerald-50/60 px-3.5 py-3 shadow-[0_6px_18px_rgba(16,185,129,0.10)] transition-all hover:from-emerald-50 hover:to-emerald-50"
+                          className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-emerald-200/80 bg-gradient-to-r from-emerald-50 via-white to-emerald-50/60 px-3.5 py-3 shadow-[0_6px_18px_rgba(16,185,129,0.10)] transition-all hover:from-emerald-50 hover:to-emerald-50"
                         >
-                          <div className="flex min-w-0 items-center gap-2.5">
-                            <span className="inline-flex min-w-0 items-center gap-2.5 text-sm text-slate-600">
-                              <MessageCircle className="h-4 w-4 shrink-0 text-emerald-600" />
-                              <span>{cms("footer.contact.label_whatsapp", "WhatsApp", "WhatsApp")}</span>
-                            </span>
-                          </div>
+                          <span className="inline-flex min-w-0 items-center gap-2.5 text-sm text-slate-600">
+                            <MessageCircle className="h-4 w-4 shrink-0 text-emerald-600" />
+                            <span className="truncate">{cms("footer.contact.label_whatsapp", "WhatsApp", "WhatsApp")}</span>
+                          </span>
 
-                          <div className="flex shrink-0 items-center gap-2">
-                            <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-emerald-700 shadow-sm">
-                              {cms("footer.contact.available_badge", "Disponible", "Available")}
-                            </span>
-                            <span className="truncate text-right text-sm font-semibold text-slate-900">
+                          <div className="min-w-0 max-w-[56%] text-right">
+                            <div className="mb-1 flex justify-end">
+                              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.04em] text-emerald-700 shadow-sm">
+                                {cms("footer.contact.available_badge", "Disponible", "Available")}
+                              </span>
+                            </div>
+                            <div className="truncate text-xs font-semibold text-slate-900">
                               {supportWhatsappValue}
-                            </span>
+                            </div>
                           </div>
                         </a>
 
-                        <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/90 px-3.5 py-3 shadow-[0_4px_16px_rgba(15,23,42,0.04)]">
+                        <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/90 px-3.5 py-3 shadow-[0_4px_16px_rgba(15,23,42,0.04)]">
                           <span className="inline-flex min-w-0 items-center gap-2.5 text-sm text-slate-600">
                             <Clock className="h-4 w-4 shrink-0 text-slate-500" />
-                            <span>{cms("footer.contact.label_hours", "Horaires", "Hours")}</span>
+                            <span className="truncate">{cms("footer.contact.label_hours", "Horaires", "Hours")}</span>
                           </span>
-                          <span className="truncate text-right text-sm font-semibold text-slate-900">
+                          <span className="min-w-0 max-w-[52%] truncate text-right text-xs font-semibold text-slate-900">
                             {supportHoursValue}
                           </span>
                         </div>
@@ -488,21 +586,20 @@ export default function ContactModal({
                     </div>
                   </div>
 
-                  {/* Mobile : bouton d’ouverture du formulaire */}
                   <button
                     type="button"
                     onClick={() => setMobileFormOpen((v) => !v)}
-                    className="mt-3 flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all hover:border-slate-300 hover:bg-slate-50"
+                    className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all hover:border-slate-300 hover:bg-slate-50"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
                         <FileText className="h-4 w-4" />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="text-sm font-semibold text-slate-900">
                           {cms("contact.form.mobile_toggle_title", "Formulaire", "Form")}
                         </div>
-                        <div className="text-xs text-slate-500">
+                        <div className="text-xs leading-relaxed text-slate-500">
                           {cms(
                             "contact.form.mobile_toggle_desc",
                             "Appuyez pour afficher ou masquer le formulaire",
@@ -512,7 +609,7 @@ export default function ContactModal({
                       </div>
                     </div>
 
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
                       {mobileFormOpen ? (
                         <ChevronUp className="h-4 w-4" />
                       ) : (
@@ -522,16 +619,16 @@ export default function ContactModal({
                   </button>
 
                   {mobileFormOpen && (
-                    <div className="mt-3 rounded-3xl border border-slate-200 bg-slate-50/70 p-4 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-                      <div className="grid gap-3">{formFields}</div>
+                    <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
+                      <div className="grid gap-3">{mobileFormFields}</div>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Desktop : formulaire affiché normalement */}
+              {/* Desktop */}
               <div className="hidden md:block">
-                <div className="grid gap-3">{formFields}</div>
+                <div className="grid gap-3">{desktopFormFields}</div>
               </div>
 
               {cooldownRemaining > 0 && (
@@ -566,7 +663,7 @@ export default function ContactModal({
             </div>
           </div>
 
-          <div className="border-t border-slate-200/80 px-4 py-3 sm:px-6">
+          <div className="border-t border-slate-200/80 px-3.5 py-3 sm:px-6">
             <DialogFooter className="flex-col gap-2 sm:flex-row">
               <Button
                 type="button"
