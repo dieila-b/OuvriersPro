@@ -3,10 +3,17 @@ import React, { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, CheckCircle2, Clock, ShieldCheck } from "lucide-react";
+import {
+  ArrowRight,
+  BriefcaseBusiness,
+  Sparkles,
+  ShieldCheck,
+  Users,
+  Clock3,
+} from "lucide-react";
 
 type PlanCode = "FREE" | "MONTHLY" | "YEARLY";
 
@@ -21,7 +28,6 @@ function isNativeRuntime(): boolean {
     if (p === "capacitor:" || p === "file:") return true;
   } catch {}
 
-  // cas Android Capacitor local server
   try {
     const wCap = (window as any)?.Capacitor;
     const { protocol, hostname } = window.location;
@@ -31,10 +37,6 @@ function isNativeRuntime(): boolean {
   return false;
 }
 
-/**
- * HashRouter-friendly path builder
- * HashRouter attend "#/route?x=1"
- */
 function toHashPath(pathnameWithQuery: string) {
   const p = pathnameWithQuery.startsWith("/") ? pathnameWithQuery : `/${pathnameWithQuery}`;
   return `#${p}`;
@@ -44,43 +46,30 @@ const Forfaits: React.FC = () => {
   const navigate = useNavigate();
   const isNative = useMemo(() => isNativeRuntime(), []);
 
-  /**
-   * ✅ Navigation ultra fiable sur Android WebView:
-   * - En natif: on force d'abord window.location.hash (HashRouter)
-   * - Fallback: navigate()
-   * - Self-heal: si détourné, on refait un hash force
-   */
   const go = useCallback(
     (plan: PlanCode) => {
       const targetPath = `/inscription-ouvrier?plan=${encodeURIComponent(plan)}`;
 
-      // Scroll top (best effort)
       const scrollTop = () => {
         try {
           window.scrollTo({ top: 0, behavior: "auto" });
         } catch {}
       };
 
-      // 1) NATIF: hash-first (plus stable que navigate dans certains WebView)
       if (isNative) {
         try {
           const desiredHash = toHashPath(targetPath);
-
-          // Set hash directly => HashRouter route immédiatement
           window.location.hash = desiredHash;
 
-          // fallback navigate (au cas où)
           requestAnimationFrame(() => {
             try {
               navigate(targetPath);
             } catch {}
           });
 
-          // self-heal si un autre click détourne la nav
           window.setTimeout(() => {
             try {
               const nowHash = window.location.hash || "";
-              // on attend "#/inscription-ouvrier?plan=..."
               if (!nowHash.includes("/inscription-ouvrier")) {
                 window.location.hash = desiredHash;
               }
@@ -90,128 +79,94 @@ const Forfaits: React.FC = () => {
 
           scrollTop();
           return;
-        } catch {
-          // si hash fail => on tombe sur navigate
-        }
+        } catch {}
       }
 
-      // 2) WEB/DESKTOP: navigate normal
       navigate(targetPath);
       requestAnimationFrame(scrollTop);
     },
     [navigate, isNative]
   );
 
-  /**
-   * ✅ Masquage provisoire des forfaits payants sur le site
-   */
-  const SHOW_MONTHLY = false;
-  const SHOW_YEARLY = false;
-  const onlyFree = !SHOW_MONTHLY && !SHOW_YEARLY;
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
 
-      <main className="container mx-auto px-4 py-10 max-w-5xl">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-pro-gray">Choisissez votre forfait</h1>
-          <p className="text-gray-600 mt-2">
-            Sélectionnez un forfait pour accéder au formulaire d’inscription prestataire.
+      <main className="container mx-auto max-w-5xl px-4 py-10">
+        <div className="mx-auto max-w-3xl text-center">
+          <Badge className="mb-4 border border-blue-100 bg-blue-50 text-pro-blue">
+            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+            Rejoignez ProxiServices
+          </Badge>
+
+          <h1 className="text-3xl font-bold tracking-tight text-pro-gray sm:text-4xl">
+            Développez votre activité avec plus de visibilité
+          </h1>
+
+          <p className="mt-3 text-base leading-relaxed text-gray-600 sm:text-lg">
+            Créez votre profil professionnel, présentez votre métier et recevez
+            vos premiers contacts avec ProxiServices.
           </p>
         </div>
 
-        <div className={`grid gap-6 ${onlyFree ? "md:grid-cols-1" : "md:grid-cols-3"}`}>
-          {/* ✅ FREE */}
-          <Card
-            className={[
-              "shadow-lg border border-gray-200 overflow-hidden",
-              onlyFree ? "max-w-2xl mx-auto w-full" : "",
-            ].join(" ")}
-          >
-            <CardHeader className="pb-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <CardTitle className="text-xl font-bold text-pro-gray">Gratuit</CardTitle>
-                  <p className="mt-2 text-sm text-gray-600">
-                    Pour créer votre profil et apparaître dans les recherches.
-                  </p>
-                </div>
-                <Badge className="bg-blue-50 text-pro-blue border border-blue-100">
-                  Idéal pour démarrer
-                </Badge>
+        <Card className="mx-auto mt-10 max-w-2xl overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+          <CardContent className="p-6 sm:p-8">
+            <div className="flex flex-col items-center text-center">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-pro-blue">
+                <BriefcaseBusiness className="h-7 w-7" />
               </div>
 
-              <div className="mt-4 flex items-end justify-between">
-                <div className="flex items-end gap-2">
-                  <span className="text-5xl font-extrabold text-pro-blue">0</span>
-                  <span className="text-xl font-semibold text-pro-blue">FG</span>
-                </div>
-                <span className="text-gray-600 text-sm">/mois</span>
-              </div>
-            </CardHeader>
+              <h2 className="text-2xl font-bold text-pro-gray">
+                Les forfaits détaillés arrivent bientôt
+              </h2>
 
-            <CardContent className="space-y-5">
-              {/* Bénéfices */}
-              <div className="space-y-4">
-                <div className="flex gap-3">
-                  <ShieldCheck className="w-5 h-5 text-green-600 mt-0.5" />
-                  <div className="min-w-0">
-                    <div className="font-semibold text-pro-gray">Votre profil en ligne</div>
-                    <div className="text-sm text-gray-600">
-                      Présentez votre métier, votre zone et vos infos de contact.
-                    </div>
-                  </div>
-                </div>
+              <p className="mt-3 max-w-xl text-sm leading-relaxed text-gray-600 sm:text-base">
+                Nous préparons une expérience plus complète avec différentes options
+                de visibilité et d’accompagnement pour les prestataires. En attendant,
+                vous pouvez déjà créer votre profil et rejoindre la plateforme.
+              </p>
+            </div>
 
-                <div className="flex gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5" />
-                  <div className="min-w-0">
-                    <div className="font-semibold text-pro-gray">Apparition dans les recherches</div>
-                    <div className="text-sm text-gray-600">
-                      Les clients vous trouvent par métier et quartier.
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <Clock className="w-5 h-5 text-green-600 mt-0.5" />
-                  <div className="min-w-0">
-                    <div className="font-semibold text-pro-gray">Mise en route rapide</div>
-                    <div className="text-sm text-gray-600">
-                      Profil simplifié pour démarrer en quelques minutes.
-                    </div>
-                  </div>
-                </div>
+            <div className="mt-8 grid gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <ShieldCheck className="mb-3 h-5 w-5 text-green-600" />
+                <div className="font-semibold text-pro-gray">Profil professionnel</div>
+                <p className="mt-1 text-sm leading-relaxed text-gray-600">
+                  Présentez votre activité et inspirez confiance dès maintenant.
+                </p>
               </div>
 
-              {/* Inclus */}
-              <div className="rounded-xl border border-gray-200 bg-white p-4">
-                <div className="font-semibold text-pro-gray mb-3">Inclus dans Gratuit</div>
-                <ul className="text-sm text-gray-700 space-y-2">
-                  <li className="flex items-start gap-3">
-                    <span className="mt-2 w-2 h-2 rounded-full bg-pro-blue shrink-0" />
-                    <span>1 métier affiché</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="mt-2 w-2 h-2 rounded-full bg-pro-blue shrink-0" />
-                    <span>Profil simplifié</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="mt-2 w-2 h-2 rounded-full bg-pro-blue shrink-0" />
-                    <span>Contacts limités (pour tester)</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="mt-2 w-2 h-2 rounded-full bg-pro-blue shrink-0" />
-                    <span>Pas de mise en avant (bientôt)</span>
-                  </li>
-                </ul>
+              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <Users className="mb-3 h-5 w-5 text-pro-blue" />
+                <div className="font-semibold text-pro-gray">Premiers contacts</div>
+                <p className="mt-1 text-sm leading-relaxed text-gray-600">
+                  Commencez à être visible et à recevoir vos premières demandes.
+                </p>
               </div>
 
-              {/* ✅ CTA ultra stable */}
+              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <Clock3 className="mb-3 h-5 w-5 text-amber-600" />
+                <div className="font-semibold text-pro-gray">Évolution continue</div>
+                <p className="mt-1 text-sm leading-relaxed text-gray-600">
+                  De nouvelles options seront ajoutées progressivement.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-8 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-center">
+              <div className="text-sm font-semibold text-pro-gray">
+                Vous pouvez déjà commencer dès aujourd’hui
+              </div>
+              <p className="mt-1 text-sm text-gray-600">
+                Créez votre profil prestataire en quelques minutes et rejoignez
+                ProxiServices sans attendre l’ouverture des futures formules.
+              </p>
+            </div>
+
+            <div className="mt-8 flex flex-col items-center gap-3">
               <Button
                 type="button"
-                className="w-full h-12 rounded-xl bg-gray-900 hover:bg-gray-950 text-white flex items-center justify-center gap-2"
+                className="h-12 w-full max-w-md rounded-xl bg-pro-blue text-white hover:bg-blue-700"
                 style={{ touchAction: "manipulation" as any }}
                 onClick={(e) => {
                   e.preventDefault();
@@ -219,84 +174,24 @@ const Forfaits: React.FC = () => {
                   go("FREE");
                 }}
               >
-                Créer mon profil gratuitement <ArrowRight className="w-4 h-4" />
+                Créer mon profil gratuitement
+                <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
 
-              <p className="text-xs text-gray-500 text-center">
-                Aucun paiement requis. Vous pourrez passer à une formule supérieure dès qu’elle sera disponible.
+              <p className="text-center text-xs text-gray-500">
+                Les offres avancées seront activées prochainement.
               </p>
-            </CardContent>
-          </Card>
-
-          {/* ⛔ Mensuel */}
-          {SHOW_MONTHLY && (
-            <Card className="shadow-sm border-blue-200">
-              <CardHeader>
-                <CardTitle className="text-lg">Mensuel</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="text-2xl font-bold">5 000 FG / mois</div>
-                <ul className="text-sm text-gray-700 list-disc list-inside space-y-1">
-                  <li>Profil complet</li>
-                  <li>Mise en avant dans la recherche</li>
-                  <li>Contacts illimités</li>
-                </ul>
-                <Button
-                  type="button"
-                  className="w-full bg-pro-blue hover:bg-blue-700"
-                  style={{ touchAction: "manipulation" as any }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    go("MONTHLY");
-                  }}
-                >
-                  Choisir ce plan
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* ⛔ Annuel */}
-          {SHOW_YEARLY && (
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg">Annuel</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="text-2xl font-bold">50 000 FG / an</div>
-                <ul className="text-sm text-gray-700 list-disc list-inside space-y-1">
-                  <li>Meilleure valeur</li>
-                  <li>Profil complet + mise en avant</li>
-                  <li>Contacts illimités</li>
-                </ul>
-                <Button
-                  type="button"
-                  className="w-full bg-pro-blue hover:bg-blue-700"
-                  style={{ touchAction: "manipulation" as any }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    go("YEARLY");
-                  }}
-                >
-                  Choisir ce plan
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {onlyFree && (
-          <div className="mt-8 flex justify-center">
-            <div className="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white shadow-sm px-4 sm:px-6 py-4 text-center">
-              <div className="font-semibold text-pro-gray">Bientôt : formules Pro</div>
-              <div className="text-sm text-gray-600 mt-1">
-                Mise en avant, plusieurs métiers, contacts illimités, badge vérifié… (en préparation).
-              </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <div className="mx-auto mt-8 max-w-2xl rounded-2xl border border-gray-200 bg-white px-5 py-4 text-center shadow-sm">
+          <div className="font-semibold text-pro-gray">À venir sur ProxiServices</div>
+          <div className="mt-1 text-sm text-gray-600">
+            Plus de visibilité, davantage d’options de mise en avant et un
+            accompagnement renforcé pour développer votre activité.
           </div>
-        )}
+        </div>
       </main>
 
       <Footer />
