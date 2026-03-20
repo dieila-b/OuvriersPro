@@ -14,24 +14,15 @@ import {
   BarChart3,
   Headphones,
   User,
+  MapPin,
 } from "lucide-react";
 
 const SubscriptionSection = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
 
-  /**
-   * Plans futurs conservés côté structure,
-   * mais totalement masqués dans l'affichage actuel.
-   */
   const SHOW_MONTHLY = false;
   const SHOW_YEARLY = false;
-
-  /**
-   * CTA Flow
-   * - true  => CTA vers /devenir-prestataire
-   * - false => CTA vers /inscription-ouvrier
-   */
   const USE_BECOME_PROVIDER_FLOW = false;
 
   const cms = useCallback(
@@ -58,10 +49,6 @@ const SubscriptionSection = () => {
     });
   }, [navigate]);
 
-  /**
-   * Bloc marketing central unique
-   * => on sort complètement de la logique "forfaits / plans"
-   */
   const marketingHighlights = useMemo(
     () => [
       {
@@ -78,7 +65,7 @@ const SubscriptionSection = () => {
         ),
       },
       {
-        icon: ShieldCheck,
+        icon: MapPin,
         title: cms(
           "pricing.marketing.v2t",
           "Plus de visibilité locale",
@@ -170,22 +157,18 @@ const SubscriptionSection = () => {
     [cms]
   );
 
-  /**
-   * Conserve la structure technique pour l’avenir,
-   * mais sans rien afficher des offres futures.
-   */
   const hasFuturePlans = SHOW_MONTHLY || SHOW_YEARLY;
 
   return (
     <section
       id="subscription"
-      className="w-full bg-gradient-to-br from-gray-50 to-gray-100 py-12 sm:py-16 lg:py-20"
+      className="w-full bg-[linear-gradient(180deg,#f8fbff_0%,#eef4fb_45%,#f5f8fc_100%)] py-14 sm:py-16 lg:py-20"
     >
-      <div className="w-full min-w-0 px-4 sm:px-6 lg:px-10 2xl:px-16">
-        <div className="mb-10 text-center sm:mb-12 lg:mb-16">
-          <div className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-sm shadow-sm">
-            <Sparkles className="h-4 w-4 text-pro-blue" />
-            <span className="font-medium text-pro-gray">
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-10 2xl:px-16">
+        <div className="mx-auto mb-10 max-w-3xl text-center sm:mb-12 lg:mb-14">
+          <div className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-4 py-1.5 text-xs font-medium text-blue-700 shadow-sm sm:text-sm">
+            <Sparkles className="h-4 w-4" />
+            <span>
               {cms(
                 "pricing.section.kicker",
                 "Rejoignez ProxiServices",
@@ -194,7 +177,7 @@ const SubscriptionSection = () => {
             </span>
           </div>
 
-          <h2 className="mt-4 mb-3 text-2xl font-extrabold text-pro-gray sm:mb-4 sm:text-3xl md:text-4xl">
+          <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl lg:text-5xl">
             {cms(
               "pricing.section.title",
               "Développez votre activité avec plus de visibilité",
@@ -202,7 +185,7 @@ const SubscriptionSection = () => {
             )}
           </h2>
 
-          <p className="mx-auto max-w-3xl text-sm text-gray-600 sm:text-base md:text-lg">
+          <p className="mx-auto mt-4 max-w-3xl text-sm leading-7 text-slate-600 sm:text-base md:text-lg">
             {cms(
               "pricing.section.subtitle",
               "Publiez votre métier, inspirez confiance et recevez vos premiers contacts qualifiés.",
@@ -211,31 +194,34 @@ const SubscriptionSection = () => {
           </p>
         </div>
 
-        <div className="flex justify-center">
-          <Card className="relative w-full max-w-3xl overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_16px_50px_rgba(15,23,42,0.10)]">
-            <div className="pointer-events-none absolute inset-0">
-              <div className="absolute -top-20 right-0 h-44 w-44 rounded-full bg-pro-blue/5 blur-3xl" />
-              <div className="absolute -bottom-20 left-0 h-44 w-44 rounded-full bg-blue-100/40 blur-3xl" />
-            </div>
+        <div className="relative mx-auto flex max-w-5xl justify-center">
+          <div className="absolute -top-10 left-1/2 h-32 w-32 -translate-x-1/2 rounded-full bg-blue-500/10 blur-3xl" />
+          <div className="absolute bottom-0 left-0 h-40 w-40 rounded-full bg-cyan-300/10 blur-3xl" />
+          <div className="absolute right-0 top-1/3 h-40 w-40 rounded-full bg-indigo-300/10 blur-3xl" />
 
-            <CardContent className="relative p-5 sm:p-7 lg:p-8">
-              <div className="flex flex-col gap-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <Card className="relative w-full overflow-hidden rounded-[34px] border border-slate-200 bg-white shadow-[0_28px_70px_rgba(15,23,42,0.12)]">
+            <div className="absolute inset-x-0 top-0 h-40 bg-[linear-gradient(180deg,rgba(37,99,235,0.08)_0%,rgba(255,255,255,0)_100%)]" />
+            <div className="absolute right-0 top-0 h-44 w-44 rounded-full bg-blue-500/10 blur-3xl" />
+            <div className="absolute bottom-0 left-0 h-44 w-44 rounded-full bg-sky-300/10 blur-3xl" />
+
+            <CardContent className="relative p-5 sm:p-7 lg:p-9">
+              <div className="flex flex-col gap-7">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-pro-blue/10 text-pro-blue">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] bg-blue-50 text-blue-700 shadow-sm ring-1 ring-blue-100">
                         <Sparkles className="h-6 w-6" />
                       </div>
 
                       <div className="min-w-0">
-                        <h3 className="text-xl font-bold tracking-tight text-pro-gray sm:text-2xl">
+                        <h3 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
                           {cms(
                             "pricing.marketing.card_title",
                             "Présence ProxiServices",
                             "ProxiServices Presence"
                           )}
                         </h3>
-                        <p className="mt-1 text-sm leading-relaxed text-gray-600">
+                        <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
                           {cms(
                             "pricing.marketing.card_desc",
                             "Créez votre profil professionnel, valorisez votre métier et commencez à recevoir des demandes de clients.",
@@ -247,7 +233,7 @@ const SubscriptionSection = () => {
                   </div>
 
                   <div className="shrink-0">
-                    <Badge className="rounded-full border border-blue-100 bg-pro-blue/10 px-3 py-1 text-pro-blue hover:bg-pro-blue/10">
+                    <Badge className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-blue-700 hover:bg-blue-50">
                       {cms(
                         "pricing.marketing.badge",
                         "Idéal pour commencer",
@@ -257,25 +243,28 @@ const SubscriptionSection = () => {
                   </div>
                 </div>
 
-                <div className="grid gap-4">
+                <div className="grid gap-4 md:grid-cols-3">
                   {marketingHighlights.map((item, i) => (
                     <div
                       key={i}
-                      className="flex items-start gap-3 rounded-2xl border border-transparent px-1 py-0.5"
+                      className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 shadow-sm"
                     >
-                      <item.icon className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
-                      <div className="min-w-0">
-                        <div className="font-semibold text-pro-gray">{item.title}</div>
-                        <div className="text-sm leading-relaxed text-gray-600">
-                          {item.desc}
-                        </div>
+                      <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-blue-700 ring-1 ring-slate-100">
+                        <item.icon className="h-5 w-5" />
+                      </div>
+
+                      <div className="text-base font-semibold text-slate-900">
+                        {item.title}
+                      </div>
+                      <div className="mt-1 text-sm leading-6 text-slate-600">
+                        {item.desc}
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4 sm:p-5">
-                  <div className="text-sm font-semibold text-pro-gray">
+                <div className="rounded-[24px] border border-blue-100 bg-blue-50/50 p-5">
+                  <div className="text-sm font-semibold text-slate-900">
                     {cms(
                       "pricing.marketing.included",
                       "Ce que vous obtenez",
@@ -283,10 +272,10 @@ const SubscriptionSection = () => {
                     )}
                   </div>
 
-                  <ul className="mt-3 grid gap-2 text-sm text-gray-700 sm:grid-cols-2">
+                  <ul className="mt-4 grid gap-3 text-sm text-slate-700 sm:grid-cols-2">
                     {marketingBullets.map((item, i) => (
                       <li key={i} className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-pro-blue shrink-0" />
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-blue-600" />
                         <span>{item}</span>
                       </li>
                     ))}
@@ -296,7 +285,7 @@ const SubscriptionSection = () => {
                 <div className="flex flex-col gap-3">
                   <Button
                     type="button"
-                    className="h-12 w-full rounded-2xl bg-pro-blue text-sm font-semibold text-white shadow-[0_10px_24px_rgba(59,130,246,0.24)] hover:bg-pro-blue/90 sm:text-base"
+                    className="h-14 w-full rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 text-sm font-semibold text-white shadow-[0_16px_34px_rgba(37,99,235,0.24)] hover:from-blue-700 hover:to-blue-700 sm:text-base"
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -313,7 +302,7 @@ const SubscriptionSection = () => {
                     </span>
                   </Button>
 
-                  <p className="text-center text-xs leading-relaxed text-gray-500">
+                  <p className="text-center text-xs leading-6 text-slate-500 sm:text-sm">
                     {cms(
                       "pricing.marketing.note",
                       "Rejoignez ProxiServices et présentez votre activité à des clients qui recherchent déjà vos services.",
@@ -326,20 +315,21 @@ const SubscriptionSection = () => {
           </Card>
         </div>
 
-        {hasFuturePlans && (
-          <div className="hidden" aria-hidden="true" />
-        )}
+        {hasFuturePlans && <div className="hidden" aria-hidden="true" />}
 
-        <div className="mt-10 grid min-w-0 grid-cols-1 gap-6 sm:mt-14 sm:grid-cols-2 sm:gap-8 lg:mt-16 lg:grid-cols-3">
+        <div className="mt-10 grid grid-cols-1 gap-5 sm:mt-14 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
           {benefits.map((benefit, index) => (
-            <div key={index} className="min-w-0 text-center">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-pro-blue/10">
-                <benefit.icon className="h-6 w-6 text-pro-blue" />
+            <div
+              key={index}
+              className="rounded-[26px] border border-slate-200 bg-white p-6 text-center shadow-[0_12px_34px_rgba(15,23,42,0.06)]"
+            >
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                <benefit.icon className="h-6 w-6" />
               </div>
-              <h3 className="mb-2 text-sm font-semibold text-pro-gray sm:text-base">
+              <h3 className="mb-2 text-base font-bold tracking-tight text-slate-900">
                 {benefit.title}
               </h3>
-              <p className="text-xs text-gray-600 sm:text-sm">
+              <p className="text-sm leading-6 text-slate-600">
                 {benefit.description}
               </p>
             </div>
