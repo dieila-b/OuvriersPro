@@ -20,10 +20,12 @@ import {
   SlidersHorizontal,
   ChevronDown,
   ChevronUp,
+  ShieldCheck,
+  Briefcase,
 } from "lucide-react";
 
 type DbWorker = {
-  id: string;
+  id: string | null;
   first_name: string | null;
   last_name: string | null;
   profession: string | null;
@@ -477,34 +479,36 @@ const WorkerSearchSection: React.FC = () => {
 
         const rows = (res.data ?? []) as unknown as DbWorker[];
 
-        const mapped: WorkerCard[] = rows.map((w) => {
-          const effectiveRating = (w.computed_average_rating ?? w.average_rating ?? 0) as number;
-          const effectiveCount = (w.computed_rating_count ?? w.rating_count ?? 0) as number;
+        const mapped: WorkerCard[] = rows
+          .filter((w) => !!w.id)
+          .map((w) => {
+            const effectiveRating = (w.computed_average_rating ?? w.average_rating ?? 0) as number;
+            const effectiveCount = (w.computed_rating_count ?? w.rating_count ?? 0) as number;
 
-          const lat = typeof w.latitude === "number" ? w.latitude : null;
-          const lng = typeof w.longitude === "number" ? w.longitude : null;
+            const lat = typeof w.latitude === "number" ? w.latitude : null;
+            const lng = typeof w.longitude === "number" ? w.longitude : null;
 
-          return {
-            id: w.id,
-            name:
-              (((w.first_name || "") + (w.last_name ? ` ${w.last_name}` : "")).trim() ||
-                cms("search.worker.fallback_name", "Ouvrier", "Worker")) as string,
-            job: w.profession ?? "",
-            country: w.country ?? "",
-            region: w.region ?? "",
-            city: w.city ?? "",
-            commune: w.commune ?? "",
-            district: w.district ?? "",
-            experienceYears: w.years_experience ?? 0,
-            hourlyRate: w.hourly_rate ?? 0,
-            currency: w.currency ?? "GNF",
-            rating: Number(effectiveRating) || 0,
-            ratingCount: Number(effectiveCount) || 0,
-            latitude: lat,
-            longitude: lng,
-            distanceKm: null,
-          };
-        });
+            return {
+              id: String(w.id),
+              name:
+                (((w.first_name || "") + (w.last_name ? ` ${w.last_name}` : "")).trim() ||
+                  cms("search.worker.fallback_name", "Professionnel", "Professional")) as string,
+              job: w.profession ?? "",
+              country: w.country ?? "",
+              region: w.region ?? "",
+              city: w.city ?? "",
+              commune: w.commune ?? "",
+              district: w.district ?? "",
+              experienceYears: w.years_experience ?? 0,
+              hourlyRate: w.hourly_rate ?? 0,
+              currency: w.currency ?? "GNF",
+              rating: Number(effectiveRating) || 0,
+              ratingCount: Number(effectiveCount) || 0,
+              latitude: lat,
+              longitude: lng,
+              distanceKm: null,
+            };
+          });
 
         setWorkers(mapped);
       } catch (err: any) {
@@ -819,8 +823,8 @@ const WorkerSearchSection: React.FC = () => {
   const title = cms("search.page.title", "Trouvez votre professionnel", "Find your professional");
   const subtitle = cms(
     "search.page.subtitle",
-    "Modifiez vos filtres pour lancer la recherche automatiquement.",
-    "Adjust filters to automatically update results."
+    "Affinez vos critères pour identifier plus rapidement le professionnel adapté à votre besoin.",
+    "Refine your criteria to find the professional best suited to your needs."
   );
 
   const filtersTitle = cms("search.filters.title", "Filtres", "Filters");
@@ -860,15 +864,17 @@ const WorkerSearchSection: React.FC = () => {
   const viewListLabel = cms("search.view.list", "Liste", "List");
   const viewGridLabel = cms("search.view.grid", "Mosaïque", "Grid");
 
-  const contactLabel = cms("search.card.btn_contact", "Contacter", "Contact");
+  const contactLabel = cms("search.card.btn_contact", "Voir le profil", "View profile");
   const perHourLabel = cms("search.card.per_hour", "/h", "/h");
   const yearsSuffix = cms("search.card.years_suffix", "ans d'expérience", "years of experience");
   const distanceLabel = cms("search.card.distance_label", "Distance", "Distance");
+  const professionalLabel = cms("search.card.professional", "Professionnel", "Professional");
+  const verifiedLabel = cms("search.card.verified", "Profil vérifié", "Verified profile");
 
   const geoHint = cms(
     "search.geo.hint",
-    "Activez la localisation pour trier et filtrer par distance.",
-    "Enable location to sort/filter by distance."
+    "Activez la localisation pour afficher les professionnels proches de vous.",
+    "Enable location to see professionals close to you."
   );
   const useMyPos = cms(
     "search.filters.btn_geolocate",
@@ -1381,8 +1387,28 @@ const WorkerSearchSection: React.FC = () => {
             )}
 
             {loading && filteredWorkers.length === 0 && (
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
-                {loadingWorkers}
+              <div className="space-y-4">
+                {Array.from({ length: applied.view === "grid" ? 6 : 4 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="animate-pulse overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.04)]"
+                  >
+                    <div className="px-4 py-4 sm:px-5 sm:py-5">
+                      <div className="flex items-start gap-4">
+                        <div className="h-16 w-16 shrink-0 rounded-full bg-slate-200" />
+                        <div className="min-w-0 flex-1 space-y-3">
+                          <div className="h-5 w-40 rounded bg-slate-200" />
+                          <div className="h-4 w-56 rounded bg-slate-100" />
+                          <div className="h-4 w-44 rounded bg-slate-100" />
+                          <div className="flex items-center justify-between pt-1">
+                            <div className="h-4 w-28 rounded bg-slate-100" />
+                            <div className="h-10 w-28 rounded-xl bg-slate-200" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -1391,32 +1417,46 @@ const WorkerSearchSection: React.FC = () => {
                 {filteredWorkers.map((w) => (
                   <div
                     key={w.id}
-                    className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_22px_54px_rgba(15,23,42,0.10)]"
+                    className="group overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-100 hover:shadow-[0_22px_54px_rgba(15,23,42,0.10)]"
                   >
                     <div className="bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-4 sm:px-5 sm:py-5">
                       <div className="flex items-start gap-4">
                         <div className="relative shrink-0">
-                          <div className="rounded-full bg-gradient-to-br from-blue-200 via-blue-300 to-blue-600 p-[3px] shadow-[0_14px_28px_rgba(37,99,235,0.22)]">
+                          <div className="rounded-full bg-gradient-to-br from-blue-200 via-blue-300 to-blue-600 p-[3px] shadow-[0_14px_28px_rgba(37,99,235,0.18)]">
                             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-sm font-bold text-blue-700 sm:h-20 sm:w-20 sm:text-lg">
                               {getInitials(w.name)}
                             </div>
+                          </div>
+
+                          <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-emerald-500 shadow-sm">
+                            <Check className="h-3 w-3 text-white" />
                           </div>
                         </div>
 
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="min-w-0">
-                              <h3 className="truncate text-[20px] font-bold tracking-tight text-slate-900 sm:text-[28px]">
-                                {w.name}
-                              </h3>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="truncate text-[20px] font-bold tracking-tight text-slate-900 sm:text-[26px]">
+                                  {w.name}
+                                </h3>
 
-                              <div className="mt-1.5 truncate text-sm text-slate-600 sm:text-base">
-                                {getWorkerSubtitle(w)}
+                                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                                  <ShieldCheck className="h-3.5 w-3.5" />
+                                  {verifiedLabel}
+                                </span>
+                              </div>
+
+                              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-slate-600 sm:text-base">
+                                <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
+                                  <Briefcase className="h-4 w-4 text-blue-600" />
+                                  {getWorkerSubtitle(w)}
+                                </span>
                               </div>
                             </div>
 
                             <div className="shrink-0 text-left sm:text-right">
-                              <div className="text-[20px] font-bold tracking-tight text-blue-700 sm:text-[28px]">
+                              <div className="text-[18px] font-bold tracking-tight text-blue-700 sm:text-[24px]">
                                 {formatCurrency(w.hourlyRate, w.currency)}
                               </div>
                               <div className="mt-1 text-xs text-slate-500">{perHourLabel}</div>
@@ -1424,9 +1464,14 @@ const WorkerSearchSection: React.FC = () => {
                           </div>
 
                           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-slate-500 sm:text-sm">
-                            <span className="inline-flex min-w-0 items-center gap-1.5">
+                            <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 text-slate-600">
                               <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                               <span className="truncate max-w-[360px]">{getWorkerMetaLine(w)}</span>
+                            </span>
+
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 text-slate-600">
+                              <Briefcase className="h-3.5 w-3.5 text-slate-400" />
+                              {professionalLabel}
                             </span>
 
                             {applied.near && appliedHasCoords && (
@@ -1443,19 +1488,21 @@ const WorkerSearchSection: React.FC = () => {
                             <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
                               <div className="flex items-center gap-0.5">{renderStars(w.rating)}</div>
 
-                              <span className="inline-flex items-center gap-1">
-                                <Star className="h-3.5 w-3.5 text-slate-400" />
-                                <span className="font-medium text-slate-700">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">
+                                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                                <span className="font-medium">
                                   {w.rating.toFixed(1)} ({w.ratingCount})
                                 </span>
                               </span>
 
-                              <span>{w.experienceYears} {yearsSuffix}</span>
+                              <span className="rounded-full bg-slate-50 px-2.5 py-1">
+                                {w.experienceYears} {yearsSuffix}
+                              </span>
                             </div>
 
                             <Button
                               size="sm"
-                              className="h-11 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 px-5 text-sm font-semibold text-white shadow-[0_12px_26px_rgba(37,99,235,0.22)] hover:from-blue-700 hover:to-blue-700"
+                              className="h-11 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 px-5 text-sm font-semibold text-white shadow-[0_12px_26px_rgba(37,99,235,0.18)] hover:from-blue-700 hover:to-blue-700"
                               onClick={() => goToWorkerProfile(w.id)}
                             >
                               {contactLabel}
@@ -1476,15 +1523,19 @@ const WorkerSearchSection: React.FC = () => {
                 {filteredWorkers.map((w) => (
                   <div
                     key={w.id}
-                    className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_46px_rgba(15,23,42,0.10)]"
+                    className="group overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-100 hover:shadow-[0_20px_46px_rgba(15,23,42,0.10)]"
                   >
                     <div className="bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-4">
                       <div className="flex items-start gap-3">
                         <div className="relative shrink-0">
-                          <div className="rounded-full bg-gradient-to-br from-blue-200 via-blue-300 to-blue-600 p-[2.5px] shadow-[0_12px_24px_rgba(37,99,235,0.20)]">
+                          <div className="rounded-full bg-gradient-to-br from-blue-200 via-blue-300 to-blue-600 p-[2.5px] shadow-[0_12px_24px_rgba(37,99,235,0.16)]">
                             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-sm font-bold text-blue-700">
                               {getInitials(w.name)}
                             </div>
+                          </div>
+
+                          <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-emerald-500 shadow-sm">
+                            <Check className="h-3 w-3 text-white" />
                           </div>
                         </div>
 
@@ -1500,7 +1551,7 @@ const WorkerSearchSection: React.FC = () => {
                             </div>
 
                             <div className="shrink-0 text-right">
-                              <div className="text-[16px] font-bold tracking-tight text-blue-700">
+                              <div className="text-[15px] font-bold tracking-tight text-blue-700">
                                 {formatCurrency(w.hourlyRate, w.currency)}
                               </div>
                             </div>
@@ -1511,6 +1562,18 @@ const WorkerSearchSection: React.FC = () => {
                             <span className="truncate max-w-[200px]">{getWorkerMetaLine(w)}</span>
                           </div>
 
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">
+                              <ShieldCheck className="h-3 w-3" />
+                              {cms("search.card.verified_short", "Vérifié", "Verified")}
+                            </span>
+
+                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1 text-slate-600">
+                              <Briefcase className="h-3 w-3" />
+                              {w.experienceYears} {language === "fr" ? "ans" : "yrs"}
+                            </span>
+                          </div>
+
                           <div className="mt-3 flex flex-col gap-3">
                             <div>
                               <div className="flex items-center gap-0.5">{renderStars(w.rating)}</div>
@@ -1518,7 +1581,6 @@ const WorkerSearchSection: React.FC = () => {
                                 <span className="font-medium">
                                   {w.rating.toFixed(1)} ({w.ratingCount})
                                 </span>
-                                <span>{w.experienceYears} {yearsSuffix}</span>
                                 {applied.near && appliedHasCoords && (
                                   <span className="text-blue-700">
                                     {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
@@ -1529,7 +1591,7 @@ const WorkerSearchSection: React.FC = () => {
 
                             <Button
                               size="sm"
-                              className="h-10 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 text-[12px] font-semibold text-white shadow-[0_10px_22px_rgba(37,99,235,0.22)] hover:from-blue-700 hover:to-blue-700"
+                              className="h-10 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 text-[12px] font-semibold text-white shadow-[0_10px_22px_rgba(37,99,235,0.18)] hover:from-blue-700 hover:to-blue-700"
                               onClick={() => goToWorkerProfile(w.id)}
                             >
                               {contactLabel}
