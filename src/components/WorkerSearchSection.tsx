@@ -134,7 +134,7 @@ const haversineKm = (lat1: number, lon1: number, lat2: number, lon2: number) => 
   const dLon = toRad(lon2 - lon1);
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(toRad(dLon * 180 / Math.PI) / 2) ** 2;
 
   return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
@@ -853,7 +853,6 @@ const WorkerSearchSection: React.FC = () => {
   const districtAll = cms("search.filters.district.all", "Tous les quartiers", "All districts");
 
   const resetLabel = cms("search.filters.btn_reset", "Réinitialiser", "Reset");
-  const showFiltersLabel = cms("search.filters.show", "Afficher les filtres", "Show filters");
   const hideFiltersLabel = cms("search.filters.hide", "Masquer les filtres", "Hide filters");
   const activeFiltersLabel = cms("search.filters.active_count", "filtres actifs", "active filters");
 
@@ -863,11 +862,7 @@ const WorkerSearchSection: React.FC = () => {
 
   const contactLabel = cms("search.card.btn_contact", "Contacter", "Contact");
   const perHourLabel = cms("search.card.per_hour", "/h", "/h");
-  const yearsSuffix = cms(
-    "search.card.years_suffix",
-    "ans d'expérience",
-    "years of experience"
-  );
+  const yearsSuffix = cms("search.card.years_suffix", "ans d'expérience", "years of experience");
   const distanceLabel = cms("search.card.distance_label", "Distance", "Distance");
 
   const geoHint = cms(
@@ -975,106 +970,104 @@ const WorkerSearchSection: React.FC = () => {
     <section
       ref={sectionRef}
       id="worker-search"
-      className="w-full pt-0 pb-10 sm:pb-14 lg:pb-16 bg-white"
+      className="w-full bg-[linear-gradient(180deg,#f8fbff_0%,#f4f8fd_34%,#ffffff_100%)] pb-12 pt-2 sm:pb-16"
     >
-      <div className="w-full px-4 sm:px-6 lg:px-10 2xl:px-16 min-w-0">
+      <div className="mx-auto w-full px-4 sm:px-6 lg:px-10 2xl:px-16">
         <div ref={topAnchorRef} />
 
-        <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between mb-5 sm:mb-7 border-b border-gray-200 pb-3 min-w-0">
-          <div className="min-w-0">
-            <h2 className="mt-0 text-2xl sm:text-3xl md:text-4xl font-bold text-pro-gray leading-tight">
-              {title}
-            </h2>
-            <p className="text-gray-600 mt-1.5 sm:mt-2 text-sm sm:text-base max-w-4xl">
-              {subtitle}
-            </p>
+        <div className="mb-6 overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+          <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+                {title}
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600 sm:text-base">
+                {subtitle}
+              </p>
 
-            <div className="mt-2 flex flex-wrap items-start gap-2 text-[11px] sm:text-xs text-gray-500 min-w-0">
-              <span className="inline-flex items-center gap-1 max-w-full">
-                <Search className="w-3 h-3 shrink-0" />
-                {loading ? (
-                  <span className="break-words">{loadingShort}</span>
-                ) : (
-                  <span className="break-words">{resultCountLabel}</span>
-                )}
-              </span>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">
+                  <Search className="h-3.5 w-3.5" />
+                  {loading ? loadingShort : resultCountLabel}
+                </span>
 
-              <span className="flex items-start gap-1 min-w-0 basis-full sm:basis-auto sm:max-w-[32rem]">
-                <Info className="w-3 h-3 shrink-0 mt-[1px]" />
-                <span className="min-w-0 break-words leading-relaxed">{geoHint}</span>
-              </span>
-
-              <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 border-emerald-200 bg-emerald-50 text-emerald-700 max-w-full">
-                <Check className="w-3 h-3 shrink-0" />
-                <span className="break-words">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs text-emerald-700">
+                  <Check className="h-3.5 w-3.5" />
                   {cms("search.badge.applied", "Filtres appliqués", "Applied filters")}
                 </span>
-              </span>
-            </div>
 
-            {applied.near && appliedHasCoords && !hasAnyGeoWorkers && (
-              <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-flex items-center gap-2 max-w-full">
-                <Info className="w-4 h-4 shrink-0" />
-                <span className="break-words">
-                  {cms(
-                    "search.geo.no_workers_coords",
-                    "Certains profils n'ont pas encore de position GPS.",
-                    "Some profiles do not have GPS coordinates yet."
-                  )}
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs text-blue-700">
+                  <Info className="h-3.5 w-3.5" />
+                  {geoHint}
                 </span>
               </div>
-            )}
-          </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <span className="text-[10px] sm:text-[11px] text-gray-500 uppercase tracking-wide">
-              {viewModeLabel}
-            </span>
-            <div className="flex border border-gray-300 rounded-lg bg-white overflow-hidden">
-              <button
-                type="button"
-                onClick={() => updateDraft({ view: "list" }, { immediate: true })}
-                className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
-                  draft.view === "list"
-                    ? "bg-pro-blue text-white"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                <LayoutList className="w-3 h-3" />
-                {viewListLabel}
-              </button>
-              <button
-                type="button"
-                onClick={() => updateDraft({ view: "grid" }, { immediate: true })}
-                className={`inline-flex items-center gap-1 px-3 py-2 text-xs ${
-                  draft.view === "grid"
-                    ? "bg-pro-blue text-white"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                <LayoutGrid className="w-3 h-3" />
-                {viewGridLabel}
-              </button>
+              {applied.near && appliedHasCoords && !hasAnyGeoWorkers && (
+                <div className="mt-3 inline-flex max-w-full items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span className="break-words">
+                    {cms(
+                      "search.geo.no_workers_coords",
+                      "Certains profils n'ont pas encore de position GPS.",
+                      "Some profiles do not have GPS coordinates yet."
+                    )}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 self-start lg:self-auto">
+              <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">
+                {viewModeLabel}
+              </span>
+
+              <div className="flex overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => updateDraft({ view: "list" }, { immediate: true })}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition ${
+                    draft.view === "list"
+                      ? "bg-white text-blue-700 shadow-sm"
+                      : "text-slate-600 hover:bg-white/70"
+                  }`}
+                >
+                  <LayoutList className="h-3.5 w-3.5" />
+                  {viewListLabel}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => updateDraft({ view: "grid" }, { immediate: true })}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition ${
+                    draft.view === "grid"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-slate-600 hover:bg-white/70"
+                  }`}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  {viewGridLabel}
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
         {compactMobile && (
           <div className="mb-4">
-            <div className="rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] overflow-hidden">
+            <div className="overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
               <button
                 type="button"
                 onClick={() => setMobileFiltersOpen((v) => !v)}
-                className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
+                className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
               >
-                <div className="min-w-0 flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-xl bg-blue-50 text-pro-blue flex items-center justify-center shrink-0">
-                    <SlidersHorizontal className="w-4 h-4" />
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                    <SlidersHorizontal className="h-4 w-4" />
                   </div>
 
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold text-pro-gray">{filtersTitle}</div>
-                    <div className="text-[11px] text-gray-500 truncate">
+                    <div className="text-sm font-semibold text-slate-900">{filtersTitle}</div>
+                    <div className="truncate text-xs text-slate-500">
                       {activeFiltersCount > 0
                         ? `${activeFiltersCount} ${activeFiltersLabel}`
                         : cms(
@@ -1086,37 +1079,37 @@ const WorkerSearchSection: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2">
                   {activeFiltersCount > 0 && (
-                    <span className="inline-flex items-center justify-center min-w-6 h-6 px-2 rounded-full bg-pro-blue text-white text-[10px] font-semibold">
+                    <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-blue-600 px-2 text-[10px] font-semibold text-white">
                       {activeFiltersCount}
                     </span>
                   )}
                   {mobileFiltersOpen ? (
-                    <ChevronUp className="w-4 h-4 text-gray-500" />
+                    <ChevronUp className="h-4 w-4 text-slate-500" />
                   ) : (
-                    <ChevronDown className="w-4 h-4 text-gray-500" />
+                    <ChevronDown className="h-4 w-4 text-slate-500" />
                   )}
                 </div>
               </button>
 
               {mobileFiltersOpen && (
-                <div className="border-t border-slate-100 px-3 pb-3 pt-3 bg-gradient-to-b from-white to-slate-50/60">
+                <div className="border-t border-slate-100 bg-slate-50/60 px-3 pb-3 pt-3">
                   <div className="mb-3 flex items-center gap-2">
                     <Button
-                      className="flex-1 h-9 text-xs bg-pro-blue hover:bg-blue-700"
+                      className="h-9 flex-1 rounded-xl bg-blue-600 text-xs hover:bg-blue-700"
                       type="button"
                       onClick={() => setMobileFiltersOpen(false)}
                     >
                       {hideFiltersLabel}
                     </Button>
                     <Button
-                      className="h-9 px-3 border-gray-300 text-xs"
+                      className="h-9 rounded-xl border-slate-300 px-3 text-xs"
                       variant="outline"
                       type="button"
                       onClick={resetAll}
                     >
-                      <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                      <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
                       {resetLabel}
                     </Button>
                   </div>
@@ -1126,51 +1119,58 @@ const WorkerSearchSection: React.FC = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-4 lg:gap-8 items-start min-w-0">
+        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)] xl:gap-8">
           {(!compactMobile || mobileFiltersOpen) && (
             <aside
-              className={`min-w-0 bg-gray-50 border border-gray-200 shadow-sm ${
-                compactMobile
-                  ? "rounded-2xl p-3 mb-1"
-                  : "rounded-2xl p-4 sm:p-5"
+              className={`overflow-hidden border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.06)] ${
+                compactMobile ? "rounded-[26px] p-3" : "sticky top-[98px] rounded-[30px] p-5"
               }`}
             >
-              <div className={`flex items-start justify-between gap-3 ${compactMobile ? "mb-3" : "mb-4"}`}>
-                <h3 className={`${compactMobile ? "text-sm" : "text-base"} font-semibold text-pro-gray`}>
-                  {filtersTitle}
-                </h3>
+              <div className={`flex items-start justify-between gap-3 ${compactMobile ? "mb-3" : "mb-5"}`}>
+                <div>
+                  <h3 className={`${compactMobile ? "text-sm" : "text-base"} font-semibold text-slate-900`}>
+                    {filtersTitle}
+                  </h3>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {cms(
+                      "search.filters.desc",
+                      "Affinez la recherche selon vos critères.",
+                      "Refine the search using your criteria."
+                    )}
+                  </div>
+                </div>
 
                 {!compactMobile && (
                   <Button
-                    className="border-gray-300 text-sm"
+                    className="rounded-xl border-slate-300 text-sm"
                     variant="outline"
                     type="button"
                     onClick={resetAll}
                   >
-                    <RotateCcw className="w-4 h-4 mr-2" />
+                    <RotateCcw className="mr-2 h-4 w-4" />
                     {resetLabel}
                   </Button>
                 )}
               </div>
 
-              <div className={compactMobile ? "grid grid-cols-1 gap-3" : ""}>
-                <div className={compactMobile ? "" : "mb-4"}>
-                  <label className="block text-[11px] sm:text-xs font-medium text-gray-600 mb-1">
+              <div className={compactMobile ? "grid grid-cols-1 gap-3" : "space-y-4"}>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
                     {keywordLabel}
                   </label>
                   <Input
                     value={draft.keyword}
                     onChange={(e) => updateDraft({ keyword: e.target.value })}
                     placeholder={keywordPlaceholder}
-                    className={compactMobile ? "h-9 text-xs" : "text-sm"}
+                    className="h-11 rounded-xl border-slate-200 bg-slate-50 text-sm focus-visible:ring-blue-500"
                   />
                 </div>
 
-                <div className={compactMobile ? "" : "mb-5"}>
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-3">
                   <Button
                     type="button"
                     size="sm"
-                    className={`w-full bg-pro-blue hover:bg-blue-700 ${compactMobile ? "h-9 text-xs" : ""}`}
+                    className="h-11 w-full rounded-xl bg-blue-600 hover:bg-blue-700"
                     onClick={() => {
                       if (draft.near || (draft.lat != null && draft.lng != null)) {
                         updateDraft({ near: false, lat: null, lng: null }, { immediate: true });
@@ -1181,23 +1181,23 @@ const WorkerSearchSection: React.FC = () => {
                     }}
                     disabled={geoLocating}
                   >
-                    <LocateFixed className={`${compactMobile ? "w-3.5 h-3.5 mr-1.5" : "w-4 h-4 mr-2"}`} />
+                    <LocateFixed className="mr-2 h-4 w-4" />
                     {geoLocating
                       ? cms("search.geo.locating", "Localisation...", "Locating...")
                       : useMyPos}
                   </Button>
 
                   {geoError && (
-                    <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                    <div className="mt-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">
                       {geoError}
                     </div>
                   )}
 
                   {draft.near && draft.lat != null && draft.lng != null && (
-                    <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
-                      <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="mb-2 flex items-center justify-between text-xs font-medium text-slate-600">
                         <span>{radiusLabel}</span>
-                        <span className="text-[11px] text-gray-500">
+                        <span className="text-slate-500">
                           {draft.radiusKm} {kmLabel}
                         </span>
                       </div>
@@ -1212,121 +1212,99 @@ const WorkerSearchSection: React.FC = () => {
                   )}
                 </div>
 
-                <div className={compactMobile ? "grid grid-cols-1 gap-3" : ""}>
-                  <div className={compactMobile ? "" : "mb-4"}>
-                    <label className="block text-[11px] sm:text-xs font-medium text-gray-600 mb-1">
-                      {jobLabel}
-                    </label>
-                    <select
-                      value={draft.job}
-                      onChange={(e) => updateDraft({ job: e.target.value })}
-                      className={`w-full rounded-md border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue ${
-                        compactMobile ? "px-3 py-2 text-xs h-9" : "px-3 py-2 text-sm"
-                      }`}
-                    >
-                      <option value="all">{jobAll}</option>
-                      {jobs.map((job) => (
-                        <option key={job} value={job}>
-                          {job}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className={compactMobile ? "" : "mb-3"}>
-                    <label className="block text-[11px] sm:text-xs font-medium text-gray-600 mb-1">
-                      {regionLabel}
-                    </label>
-                    <select
-                      value={draft.region}
-                      onChange={(e) => {
-                        const region = e.target.value;
-                        updateDraft({ region, city: "", commune: "", district: "" });
-                      }}
-                      className={`w-full rounded-md border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue ${
-                        compactMobile ? "px-3 py-2 text-xs h-9" : "px-3 py-2 text-sm"
-                      }`}
-                    >
-                      <option value="">{regionAll}</option>
-                      {regions.map((r) => (
-                        <option key={r} value={r}>
-                          {r}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className={compactMobile ? "" : "mb-3"}>
-                    <label className="block text-[11px] sm:text-xs font-medium text-gray-600 mb-1">
-                      {cityLabel}
-                    </label>
-                    <select
-                      value={draft.city}
-                      onChange={(e) => {
-                        const city = e.target.value;
-                        updateDraft({ city, commune: "", district: "" });
-                      }}
-                      className={`w-full rounded-md border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue ${
-                        compactMobile ? "px-3 py-2 text-xs h-9" : "px-3 py-2 text-sm"
-                      }`}
-                    >
-                      <option value="">{cityAll}</option>
-                      {cities.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className={compactMobile ? "" : "mb-3"}>
-                    <label className="block text-[11px] sm:text-xs font-medium text-gray-600 mb-1">
-                      {communeLabel}
-                    </label>
-                    <select
-                      value={draft.commune}
-                      onChange={(e) => {
-                        const commune = e.target.value;
-                        updateDraft({ commune, district: "" });
-                      }}
-                      className={`w-full rounded-md border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue ${
-                        compactMobile ? "px-3 py-2 text-xs h-9" : "px-3 py-2 text-sm"
-                      }`}
-                    >
-                      <option value="">{communeAll}</option>
-                      {communes.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className={compactMobile ? "" : "mb-6"}>
-                    <label className="block text-[11px] sm:text-xs font-medium text-gray-600 mb-1">
-                      {districtLabel}
-                    </label>
-                    <select
-                      value={draft.district}
-                      onChange={(e) => updateDraft({ district: e.target.value })}
-                      className={`w-full rounded-md border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-pro-blue ${
-                        compactMobile ? "px-3 py-2 text-xs h-9" : "px-3 py-2 text-sm"
-                      }`}
-                    >
-                      <option value="">{districtAll}</option>
-                      {districts.map((d) => (
-                        <option key={d} value={d}>
-                          {d}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600">{jobLabel}</label>
+                  <select
+                    value={draft.job}
+                    onChange={(e) => updateDraft({ job: e.target.value })}
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">{jobAll}</option>
+                    {jobs.map((job) => (
+                      <option key={job} value={job}>
+                        {job}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                <div className={compactMobile ? "pt-1" : "mb-6"}>
-                  <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600">{regionLabel}</label>
+                  <select
+                    value={draft.region}
+                    onChange={(e) => {
+                      const region = e.target.value;
+                      updateDraft({ region, city: "", commune: "", district: "" });
+                    }}
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">{regionAll}</option>
+                    {regions.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600">{cityLabel}</label>
+                  <select
+                    value={draft.city}
+                    onChange={(e) => {
+                      const city = e.target.value;
+                      updateDraft({ city, commune: "", district: "" });
+                    }}
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">{cityAll}</option>
+                    {cities.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600">{communeLabel}</label>
+                  <select
+                    value={draft.commune}
+                    onChange={(e) => {
+                      const commune = e.target.value;
+                      updateDraft({ commune, district: "" });
+                    }}
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">{communeAll}</option>
+                    {communes.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600">{districtLabel}</label>
+                  <select
+                    value={draft.district}
+                    onChange={(e) => updateDraft({ district: e.target.value })}
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">{districtAll}</option>
+                    {districts.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="mb-2 flex items-center justify-between text-xs font-medium text-slate-600">
                     <span>{priceLabel}</span>
-                    <span className="text-[11px] text-gray-500">
+                    <span className="text-slate-500">
                       {draft.maxPrice >= DEFAULT_MAX_PRICE
                         ? priceNoLimit
                         : `${draft.maxPrice.toLocaleString("fr-FR")} GNF`}
@@ -1341,10 +1319,10 @@ const WorkerSearchSection: React.FC = () => {
                   />
                 </div>
 
-                <div className={compactMobile ? "pt-1" : "mb-2"}>
-                  <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="mb-2 flex items-center justify-between text-xs font-medium text-slate-600">
                     <span>{ratingLabel}</span>
-                    <span className="text-[11px] text-gray-500">
+                    <span className="text-slate-500">
                       {draft.minRating === 0 ? ratingAny : draft.minRating.toFixed(1)}
                     </span>
                   </div>
@@ -1358,19 +1336,19 @@ const WorkerSearchSection: React.FC = () => {
                 </div>
 
                 {compactMobile && (
-                  <div className="pt-2 flex items-center gap-2">
+                  <div className="flex items-center gap-2 pt-2">
                     <Button
                       type="button"
                       variant="outline"
-                      className="flex-1 h-9 text-xs border-gray-300"
+                      className="h-10 flex-1 rounded-xl border-slate-300 text-xs"
                       onClick={resetAll}
                     >
-                      <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                      <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
                       {resetLabel}
                     </Button>
                     <Button
                       type="button"
-                      className="flex-1 h-9 text-xs bg-pro-blue hover:bg-blue-700"
+                      className="h-10 flex-1 rounded-xl bg-blue-600 text-xs hover:bg-blue-700"
                       onClick={() => setMobileFiltersOpen(false)}
                     >
                       {hideFiltersLabel}
@@ -1385,191 +1363,183 @@ const WorkerSearchSection: React.FC = () => {
             <div ref={resultsAnchorRef} />
 
             {error && (
-              <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl p-4 text-sm mb-4">
+              <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                 {error}
               </div>
             )}
 
             {!error && !loading && workers.length === 0 && (
-              <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
                 {noData}
               </div>
             )}
 
             {!error && !loading && workers.length > 0 && filteredWorkers.length === 0 && (
-              <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
                 {noResults}
               </div>
             )}
 
             {loading && filteredWorkers.length === 0 && (
-              <div className="border border-gray-100 rounded-xl p-6 text-sm text-gray-500">
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
                 {loadingWorkers}
               </div>
             )}
 
             {applied.view === "list" && filteredWorkers.length > 0 && (
-              <div className="space-y-4 min-w-0">
+              <div className="space-y-4">
                 {filteredWorkers.map((w) => (
                   <div
                     key={w.id}
-                    className="min-w-0 rounded-[28px] border border-[#dbe8ff] bg-[linear-gradient(180deg,#f8fbff_0%,#eef5ff_100%)] px-4 py-4 sm:px-5 sm:py-5 shadow-[0_16px_36px_rgba(44,90,160,0.10)]"
+                    className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_22px_54px_rgba(15,23,42,0.10)]"
                   >
-                    <div className="flex items-start gap-3 sm:gap-4">
-                      <div className="relative shrink-0">
-                        <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-full bg-[radial-gradient(circle_at_30%_30%,#cbe0ff_0%,#8db7ff_38%,#4f88f7_68%,#2b63db_100%)] p-[3px] shadow-[0_10px_22px_rgba(59,130,246,0.22)]">
-                          <div className="flex h-full w-full items-center justify-center rounded-full bg-[linear-gradient(180deg,#edf5ff_0%,#dcecff_100%)] text-pro-blue font-bold text-sm sm:text-lg">
-                            {getInitials(w.name)}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <h3 className="truncate text-[20px] sm:text-[28px] leading-none font-bold tracking-[-0.02em] text-[#243b63]">
-                              {w.name}
-                            </h3>
-
-                            <div className="mt-2 text-[13px] sm:text-[18px] leading-tight text-[#66738f] truncate">
-                              {getWorkerSubtitle(w)}
-                            </div>
-                          </div>
-
-                          <div className="shrink-0 text-right">
-                            <div className="text-[20px] sm:text-[28px] leading-none font-semibold tracking-[-0.02em] text-[#243b63]">
-                              {formatCurrency(w.hourlyRate, w.currency)}
-                            </div>
-                            <div className="mt-1 text-[11px] sm:text-[13px] text-[#7f8ca8]">
-                              {perHourLabel}
+                    <div className="bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-4 sm:px-5 sm:py-5">
+                      <div className="flex items-start gap-4">
+                        <div className="relative shrink-0">
+                          <div className="rounded-full bg-gradient-to-br from-blue-200 via-blue-300 to-blue-600 p-[3px] shadow-[0_14px_28px_rgba(37,99,235,0.22)]">
+                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-sm font-bold text-blue-700 sm:h-20 sm:w-20 sm:text-lg">
+                              {getInitials(w.name)}
                             </div>
                           </div>
                         </div>
 
-                        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:text-[13px] text-[#66738f]">
-                          <span className="inline-flex items-center gap-1.5 min-w-0">
-                            <MapPin className="h-3.5 w-3.5 shrink-0 text-[#7a8db1]" />
-                            <span className="truncate max-w-[340px]">{getWorkerMetaLine(w)}</span>
-                          </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                              <h3 className="truncate text-[20px] font-bold tracking-tight text-slate-900 sm:text-[28px]">
+                                {w.name}
+                              </h3>
 
-                          {applied.near && appliedHasCoords && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/70 px-2 py-0.5 text-[#4b5c7d] border border-[#dbe7fb]">
-                              {distanceLabel}:{" "}
-                              <span className="font-semibold">
-                                {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
+                              <div className="mt-1.5 truncate text-sm text-slate-600 sm:text-base">
+                                {getWorkerSubtitle(w)}
+                              </div>
+                            </div>
+
+                            <div className="shrink-0 text-left sm:text-right">
+                              <div className="text-[20px] font-bold tracking-tight text-blue-700 sm:text-[28px]">
+                                {formatCurrency(w.hourlyRate, w.currency)}
+                              </div>
+                              <div className="mt-1 text-xs text-slate-500">{perHourLabel}</div>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-slate-500 sm:text-sm">
+                            <span className="inline-flex min-w-0 items-center gap-1.5">
+                              <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                              <span className="truncate max-w-[360px]">{getWorkerMetaLine(w)}</span>
+                            </span>
+
+                            {applied.near && appliedHasCoords && (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-blue-700">
+                                {distanceLabel}:
+                                <span className="font-semibold">
+                                  {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
+                                </span>
                               </span>
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
-                            <div className="flex items-center gap-0.5">
-                              {renderStars(w.rating)}
-                            </div>
-
-                            <span className="inline-flex items-center gap-1 text-[12px] sm:text-[14px] text-[#6f7d98]">
-                              <Star className="h-3.5 w-3.5 text-[#8ea0bf]" />
-                              <span className="font-medium">
-                                {w.rating.toFixed(1)} ({w.ratingCount})
-                              </span>
-                            </span>
-
-                            <span className="text-[12px] sm:text-[14px] text-[#6f7d98]">
-                              {w.experienceYears} {yearsSuffix}
-                            </span>
+                            )}
                           </div>
 
-                          <Button
-                            size="sm"
-                            className="h-10 rounded-xl bg-[#3b6df6] px-5 text-xs sm:text-sm font-semibold shadow-[0_8px_18px_rgba(59,109,246,0.28)] hover:bg-[#2f61eb]"
-                            onClick={() => goToWorkerProfile(w.id)}
-                          >
-                            {contactLabel}
-                          </Button>
+                          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                              <div className="flex items-center gap-0.5">{renderStars(w.rating)}</div>
+
+                              <span className="inline-flex items-center gap-1">
+                                <Star className="h-3.5 w-3.5 text-slate-400" />
+                                <span className="font-medium text-slate-700">
+                                  {w.rating.toFixed(1)} ({w.ratingCount})
+                                </span>
+                              </span>
+
+                              <span>{w.experienceYears} {yearsSuffix}</span>
+                            </div>
+
+                            <Button
+                              size="sm"
+                              className="h-11 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 px-5 text-sm font-semibold text-white shadow-[0_12px_26px_rgba(37,99,235,0.22)] hover:from-blue-700 hover:to-blue-700"
+                              onClick={() => goToWorkerProfile(w.id)}
+                            >
+                              {contactLabel}
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="mt-4 h-[3px] w-full rounded-full bg-[linear-gradient(90deg,#b9d1ff_0%,#dfeaff_55%,#b9d1ff_100%)]" />
+                    <div className="h-[3px] w-full bg-gradient-to-r from-blue-100 via-blue-300 to-blue-100" />
                   </div>
                 ))}
               </div>
             )}
 
             {applied.view === "grid" && filteredWorkers.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-3 sm:gap-4 min-w-0">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
                 {filteredWorkers.map((w) => (
                   <div
                     key={w.id}
-                    className="min-w-0 rounded-[24px] border border-[#dbe8ff] bg-[linear-gradient(180deg,#f8fbff_0%,#eef5ff_100%)] px-3.5 py-3.5 sm:px-4 sm:py-4 shadow-[0_14px_32px_rgba(44,90,160,0.10)] hover:shadow-[0_18px_36px_rgba(44,90,160,0.14)] transition-all duration-200"
+                    className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_46px_rgba(15,23,42,0.10)]"
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="relative shrink-0">
-                        <div className="h-14 w-14 rounded-full bg-[radial-gradient(circle_at_30%_30%,#cbe0ff_0%,#8db7ff_38%,#4f88f7_68%,#2b63db_100%)] p-[2.5px] shadow-[0_10px_20px_rgba(59,130,246,0.20)]">
-                          <div className="flex h-full w-full items-center justify-center rounded-full bg-[linear-gradient(180deg,#edf5ff_0%,#dcecff_100%)] text-pro-blue font-bold text-sm">
-                            {getInitials(w.name)}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <h3 className="truncate text-[16px] sm:text-[18px] leading-tight font-bold tracking-[-0.02em] text-[#243b63]">
-                              {w.name}
-                            </h3>
-                            <div className="mt-1 truncate text-[11px] sm:text-[12px] text-[#6f7d98]">
-                              {getWorkerSubtitle(w)}
-                            </div>
-                          </div>
-
-                          <div className="shrink-0 text-right">
-                            <div className="text-[16px] sm:text-[18px] leading-none font-semibold tracking-[-0.02em] text-[#243b63]">
-                              {formatCurrency(w.hourlyRate, w.currency)}
+                    <div className="bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-4">
+                      <div className="flex items-start gap-3">
+                        <div className="relative shrink-0">
+                          <div className="rounded-full bg-gradient-to-br from-blue-200 via-blue-300 to-blue-600 p-[2.5px] shadow-[0_12px_24px_rgba(37,99,235,0.20)]">
+                            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-sm font-bold text-blue-700">
+                              {getInitials(w.name)}
                             </div>
                           </div>
                         </div>
 
-                        <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] sm:text-[11px] text-[#6f7d98]">
-                          <span className="inline-flex items-center gap-1 min-w-0">
-                            <MapPin className="h-3 w-3 shrink-0 text-[#7a8db1]" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <h3 className="truncate text-[17px] font-bold tracking-tight text-slate-900">
+                                {w.name}
+                              </h3>
+                              <div className="mt-1 truncate text-xs text-slate-600">
+                                {getWorkerSubtitle(w)}
+                              </div>
+                            </div>
+
+                            <div className="shrink-0 text-right">
+                              <div className="text-[16px] font-bold tracking-tight text-blue-700">
+                                {formatCurrency(w.hourlyRate, w.currency)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500">
+                            <MapPin className="h-3 w-3 shrink-0 text-slate-400" />
                             <span className="truncate max-w-[200px]">{getWorkerMetaLine(w)}</span>
-                          </span>
-                        </div>
-
-                        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-0.5">
-                              {renderStars(w.rating)}
-                            </div>
-                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] sm:text-[11px] text-[#6f7d98]">
-                              <span className="font-medium">
-                                {w.rating.toFixed(1)} ({w.ratingCount})
-                              </span>
-                              <span>
-                                {w.experienceYears} {yearsSuffix}
-                              </span>
-                              {applied.near && appliedHasCoords && (
-                                <span className="text-[#4b5c7d]">
-                                  {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
-                                </span>
-                              )}
-                            </div>
                           </div>
 
-                          <Button
-                            size="sm"
-                            className="h-8 rounded-xl bg-[#3b6df6] px-3 text-[11px] font-semibold shadow-[0_8px_18px_rgba(59,109,246,0.22)] hover:bg-[#2f61eb]"
-                            onClick={() => goToWorkerProfile(w.id)}
-                          >
-                            {contactLabel}
-                          </Button>
+                          <div className="mt-3 flex flex-col gap-3">
+                            <div>
+                              <div className="flex items-center gap-0.5">{renderStars(w.rating)}</div>
+                              <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                                <span className="font-medium">
+                                  {w.rating.toFixed(1)} ({w.ratingCount})
+                                </span>
+                                <span>{w.experienceYears} {yearsSuffix}</span>
+                                {applied.near && appliedHasCoords && (
+                                  <span className="text-blue-700">
+                                    {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <Button
+                              size="sm"
+                              className="h-10 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 text-[12px] font-semibold text-white shadow-[0_10px_22px_rgba(37,99,235,0.22)] hover:from-blue-700 hover:to-blue-700"
+                              onClick={() => goToWorkerProfile(w.id)}
+                            >
+                              {contactLabel}
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="mt-3 h-[2px] w-full rounded-full bg-[linear-gradient(90deg,#b9d1ff_0%,#dfeaff_55%,#b9d1ff_100%)]" />
+                    <div className="h-[2px] w-full bg-gradient-to-r from-blue-100 via-blue-300 to-blue-100" />
                   </div>
                 ))}
               </div>
