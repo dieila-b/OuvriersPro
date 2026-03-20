@@ -3,32 +3,37 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Search,
-  MapPin,
-  ChevronDown,
-  LocateFixed,
-  ShieldCheck,
-  Zap,
-} from "lucide-react";
+import { Search, MapPin, ChevronDown, LocateFixed } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import AdSlot from "@/components/AdSlot";
 import { Capacitor } from "@capacitor/core";
 
 const isNativeRuntime = () => {
+  const wCap = (() => {
+    try {
+      return (window as any)?.Capacitor ?? null;
+    } catch {
+      return null;
+    }
+  })();
+
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
-
   try {
-    const wCap = (window as any)?.Capacitor;
     if (wCap?.isNativePlatform?.()) return true;
   } catch {}
 
   try {
     const p = window.location?.protocol ?? "";
     if (p === "capacitor:" || p === "file:") return true;
+  } catch {}
+
+  // http://localhost en WebView (Capacitor local server)
+  try {
+    const { protocol, hostname } = window.location;
+    if (wCap && protocol === "http:" && hostname === "localhost") return true;
   } catch {}
 
   return false;
@@ -38,9 +43,9 @@ const HeroSection = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
 
-  const cms = (key: string, fr: string, en: string) => {
+  const cms = (key: string, fallbackFr: string, fallbackEn: string) => {
     const v = t(key);
-    if (!v || v === key) return language === "fr" ? fr : en;
+    if (!v || v === key) return language === "fr" ? fallbackFr : fallbackEn;
     return v;
   };
 
@@ -67,19 +72,32 @@ const HeroSection = () => {
     const loadOptions = async () => {
       setLoadingOptions(true);
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("op_ouvriers")
         .select("profession, district, status")
         .eq("status", "approved");
 
-      if (data) {
-        setJobOptions(
-          [...new Set(data.map((w: any) => w.profession).filter(Boolean))].sort()
-        );
+      if (!error && data) {
+        const jobs = Array.from(
+          new Set(
+            data
+              .map((w: any) => (w.profession ?? "").trim())
+              .filter((v: string) => v.length > 0)
+          )
+        ).sort((a, b) => a.localeCompare(b, "fr"));
 
-        setDistrictOptions(
-          [...new Set(data.map((w: any) => w.district).filter(Boolean))].sort()
-        );
+        const districts = Array.from(
+          new Set(
+            data
+              .map((w: any) => (w.district ?? "").trim())
+              .filter((v: string) => v.length > 0)
+          )
+        ).sort((a, b) => a.localeCompare(b, "fr"));
+
+        setJobOptions(jobs);
+        setDistrictOptions(districts);
+      } else {
+        console.error("Hero options error:", error);
       }
 
       setLoadingOptions(false);
@@ -89,160 +107,235 @@ const HeroSection = () => {
   }, []);
 
   const filteredJobs = useMemo(() => {
-    const q = searchTerm.toLowerCase();
+    const q = searchTerm.trim().toLowerCase();
+    if (q.length < 2) return [];
     return jobOptions.filter((j) => j.toLowerCase().includes(q)).slice(0, 8);
   }, [searchTerm, jobOptions]);
 
   const filteredDistricts = useMemo(() => {
-    const q = district.toLowerCase();
+    const q = district.trim().toLowerCase();
+    if (q.length < 2) return [];
     return districtOptions.filter((d) => d.toLowerCase().includes(q)).slice(0, 8);
   }, [district, districtOptions]);
 
+  useEffect(() => {
+    const onClickOutside = (e: MouseEvent) => {
+      if (jobsBoxRef.current && !jobsBoxRef.current.contains(e.target as Node)) setOpenJobs(false);
+      if (districtsBoxRef.current && !districtsBoxRef.current.contains(e.target as Node)) setOpenDistricts(false);
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpenJobs(false);
+        setOpenDistricts(false);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const handleGeoLocate = () => {
+    setGeoError(null);
     setGeoLoading(true);
+
+    if (!("geolocation" in navigator)) {
+      setGeoError(
+        cms(
+          "home.search.geo.unsupported",
+          "La géolocalisation n'est pas supportée sur ce navigateur.",
+          "Geolocation is not supported by this browser."
+        )
+      );
+      setGeoLoading(false);
+      return;
+    }
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setGeo({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setOpenDistricts(false);
         setGeoLoading(false);
       },
-      () => {
-        setGeoError("Localisation impossible");
+      (err) => {
+        console.error(err);
+        setGeoError(
+          cms(
+            "home.search.geo.error",
+            "Impossible de récupérer votre position. Vérifiez les permissions.",
+            "Unable to get your location. Check permissions."
+          )
+        );
         setGeoLoading(false);
-      }
+      },
+      { enableHighAccuracy: true, timeout: 9000, maximumAge: 0 }
     );
   };
 
   const handleSearch = () => {
+    const job = searchTerm.trim();
+    const qDistrict = district.trim();
+
     const params = new URLSearchParams();
-    if (searchTerm) params.set("keyword", searchTerm);
-    if (district) params.set("district", district);
+    if (job) params.set("keyword", job);
+    if (qDistrict) params.set("district", qDistrict);
     if (geo) {
       params.set("lat", String(geo.lat));
       params.set("lng", String(geo.lng));
       params.set("near", "1");
     }
 
-    navigate(`/rechercher?${params.toString()}`);
+    navigate({
+      pathname: "/rechercher",
+      search: params.toString() ? `?${params.toString()}` : "",
+    });
   };
 
   return (
-    <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden">
-
-      <div className="relative z-10 px-4 sm:px-6 lg:px-10 py-10">
-
-        {/* TITRE */}
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-3xl sm:text-5xl font-bold leading-tight">
-            {cms(
-              "home.hero.title",
-              "Trouvez le bon professionnel, près de chez vous",
-              "Find the right professional near you"
-            )}
+    <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden min-w-0">
+      <div className="relative z-10 w-full max-w-full px-4 sm:px-6 lg:px-10 py-8 sm:py-10 min-w-0">
+        <div className="w-full max-w-5xl mx-auto text-center">
+          <h1 className="mx-auto text-balance text-2xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight break-words">
+            {cms("home.hero.title", "Trouvez des prestataires fiables près de chez vous", "Find trusted providers near you")}
           </h1>
 
-          <p className="mt-3 text-blue-100 text-sm sm:text-lg">
-            {cms(
-              "home.hero.subtitle",
-              "Simple, rapide et fiable — en quelques clics.",
-              "Simple, fast and reliable — in just a few clicks."
-            )}
+          <p className="mt-3 sm:mt-4 text-sm sm:text-base md:text-xl text-blue-100 break-words">
+            {cms("home.hero.subtitle", "Comparez, contactez et réservez en toute confiance.", "Compare, contact and book with confidence.")}
           </p>
-
-          {/* BADGES TRUST */}
-          <div className="mt-4 flex justify-center gap-3 flex-wrap text-xs">
-            <span className="flex items-center gap-1 bg-white/10 px-3 py-1 rounded-full">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              {cms("hero.badge.verified", "Profils vérifiés", "Verified profiles")}
-            </span>
-
-            <span className="flex items-center gap-1 bg-white/10 px-3 py-1 rounded-full">
-              <Zap className="w-3.5 h-3.5" />
-              {cms("hero.badge.fast", "Réponse rapide", "Fast response")}
-            </span>
-          </div>
         </div>
 
-        {/* SEARCH */}
-        <div className="mt-8 max-w-4xl mx-auto">
+        <div className="mt-6 sm:mt-7 w-full">
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleSearch();
             }}
-            className="bg-white rounded-2xl p-3 shadow-xl text-gray-900"
+            className="w-full max-w-full bg-white rounded-2xl p-2 sm:p-3 md:p-4 shadow-xl text-gray-900 relative z-20 min-w-0 overflow-hidden"
           >
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-
-              {/* JOB */}
-              <div className="relative" ref={jobsBoxRef}>
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-3 items-stretch min-w-0 max-w-full">
+              {/* Job */}
+              <div ref={jobsBoxRef} className="relative min-w-0 text-left lg:col-span-6">
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
-                  placeholder="Quel service ?"
+                  placeholder={cms("home.search.placeholder_keyword", "Ex : plombier, électricien…", "e.g., plumber, electrician…")}
                   value={searchTerm}
                   onFocus={() => setOpenJobs(true)}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 h-11"
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setOpenJobs(true);
+                  }}
+                  className="w-full min-w-0 h-11 sm:h-12 pl-10 pr-9 text-sm sm:text-base text-gray-900"
                 />
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
 
-                {openJobs && filteredJobs.length > 0 && (
-                  <div className="absolute w-full bg-white border rounded-xl shadow mt-1 z-50">
-                    {filteredJobs.map((j) => (
-                      <div
-                        key={j}
-                        onClick={() => {
-                          setSearchTerm(j);
-                          setOpenJobs(false);
-                        }}
-                        className="px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                      >
-                        {j}
+                {openJobs && (filteredJobs.length > 0 || loadingOptions) && (
+                  <div className="absolute z-50 mt-1 w-full min-w-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                    {loadingOptions && (
+                      <div className="px-3 py-2 text-xs text-gray-500">
+                        {cms("common.loading", "Chargement...", "Loading...")}
                       </div>
-                    ))}
+                    )}
+                    {!loadingOptions &&
+                      filteredJobs.map((j) => (
+                        <button
+                          key={j}
+                          type="button"
+                          onClick={() => {
+                            setSearchTerm(j);
+                            setOpenJobs(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          {j}
+                        </button>
+                      ))}
                   </div>
                 )}
               </div>
 
-              {/* LOCATION */}
-              <div className="relative" ref={districtsBoxRef}>
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+              {/* District */}
+              <div ref={districtsBoxRef} className="relative min-w-0 text-left lg:col-span-6">
+                <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
-                  placeholder="Où ?"
+                  placeholder={cms("home.search.placeholder_district", "Quartier / commune", "District / area")}
                   value={district}
                   onFocus={() => setOpenDistricts(true)}
-                  onChange={(e) => setDistrict(e.target.value)}
-                  className="pl-9 pr-10 h-11"
+                  onChange={(e) => {
+                    setDistrict(e.target.value);
+                    setGeo(null);
+                    setOpenDistricts(true);
+                  }}
+                  className="w-full min-w-0 h-11 sm:h-12 pl-10 pr-14 text-sm sm:text-base text-gray-900"
                 />
 
                 <button
                   type="button"
                   onClick={handleGeoLocate}
-                  className="absolute right-2 top-1/2 -translate-y-1/2"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center rounded-md border border-gray-200 bg-white px-2 py-1 text-gray-600 hover:bg-gray-50"
+                  aria-label={cms("home.search.geo.cta", "Utiliser ma position", "Use my location")}
+                  title={cms("home.search.geo.cta", "Utiliser ma position", "Use my location")}
                 >
                   <LocateFixed className={`w-4 h-4 ${geoLoading ? "animate-pulse" : ""}`} />
                 </button>
+
+                {openDistricts && (filteredDistricts.length > 0 || loadingOptions) && (
+                  <div className="absolute z-50 mt-1 w-full min-w-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                    {loadingOptions && (
+                      <div className="px-3 py-2 text-xs text-gray-500">
+                        {cms("common.loading", "Chargement...", "Loading...")}
+                      </div>
+                    )}
+                    {!loadingOptions &&
+                      filteredDistricts.map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => {
+                            setDistrict(d);
+                            setGeo(null);
+                            setOpenDistricts(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          {d}
+                        </button>
+                      ))}
+                  </div>
+                )}
               </div>
 
-              {/* CTA */}
+              {geoError && (
+                <div className="lg:col-span-12 text-xs text-red-600 text-left px-1">{geoError}</div>
+              )}
+
               <Button
                 type="submit"
-                className="h-11 bg-pro-blue hover:bg-blue-700 font-semibold"
+                className="lg:col-span-12 w-full h-11 sm:h-12 bg-pro-blue hover:bg-blue-700 text-sm sm:text-base"
               >
-                {cms("home.search.btn", "Trouver", "Search")}
+                {cms("home.search.btn_search", "Rechercher", "Search")}
               </Button>
             </div>
 
             {geo && (
-              <div className="text-xs text-gray-500 mt-2">
-                📍 {cms("geo.active", "Recherche proche activée", "Nearby search enabled")}
+              <div className="mt-2 text-left text-[11px] sm:text-xs text-gray-500 px-1">
+                {cms(
+                  "home.search.geo.enabled",
+                  "Position détectée : le tri par distance sera activé.",
+                  "Location detected: distance sorting will be enabled."
+                )}
               </div>
             )}
           </form>
         </div>
       </div>
 
+      {/* ✅ IMPORTANT: désactiver pubs/iframes en natif (WebView) pour éviter blocage des taps */}
       {!native && (
-        <div className="mt-6">
-          <AdSlot placement="home_feed" />
+        <div className="relative z-0 w-full px-0 pb-8 sm:pb-10 lg:pb-12 mt-4 sm:mt-6">
+          <AdSlot placement="home_feed" className="w-full" />
         </div>
       )}
     </section>
