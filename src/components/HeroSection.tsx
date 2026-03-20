@@ -82,12 +82,50 @@ const HeroSection = () => {
       .slice(0, 8);
   }, [searchTerm, jobOptions]);
 
+  const filteredDistricts = useMemo(() => {
+    return districtOptions
+      .filter((d) => d.toLowerCase().includes(district.toLowerCase()))
+      .slice(0, 8);
+  }, [district, districtOptions]);
+
+  useEffect(() => {
+    const onClickOutside = (e: MouseEvent) => {
+      if (jobsBoxRef.current && !jobsBoxRef.current.contains(e.target as Node)) {
+        setOpenJobs(false);
+      }
+      if (districtsBoxRef.current && !districtsBoxRef.current.contains(e.target as Node)) {
+        setOpenDistricts(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpenJobs(false);
+        setOpenDistricts(false);
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const handleGeoLocate = () => {
     setGeoLoading(true);
-    navigator.geolocation.getCurrentPosition((pos) => {
-      setGeo({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      setGeoLoading(false);
-    });
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGeo({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setGeoLoading(false);
+      },
+      () => {
+        setGeoLoading(false);
+      }
+    );
   };
 
   const handleSearch = () => {
@@ -104,64 +142,59 @@ const HeroSection = () => {
   };
 
   return (
-    <section className="relative w-full text-white bg-gradient-to-br from-pro-blue to-blue-600 overflow-hidden">
-
-      <div className="relative z-10 px-4 sm:px-6 lg:px-10 py-12">
-
-        {/* TITRE */}
-        <div className="max-w-6xl mx-auto text-center">
-
-          <h1 className="whitespace-nowrap overflow-hidden text-ellipsis text-[22px] sm:text-4xl lg:text-5xl font-bold tracking-tight">
-            Trouvez le bon professionnel pour votre besoin
+    <section className="relative w-full overflow-hidden bg-gradient-to-br from-pro-blue to-blue-600 text-white">
+      <div className="relative z-10 px-4 py-12 sm:px-6 lg:px-10">
+        <div className="mx-auto max-w-6xl text-center">
+          <h1 className="overflow-hidden text-ellipsis whitespace-nowrap text-[20px] font-bold tracking-tight sm:text-4xl lg:text-5xl">
+            Le bon professionnel, au bon moment, près de chez vous
           </h1>
 
-          <p className="mt-3 text-blue-100 text-sm sm:text-lg">
-            {cms(
-              "home.hero.subtitle",
-              "Simple, rapide et fiable — en quelques clics.",
-              "Simple, fast and reliable — in just a few clicks."
-            )}
+          <p className="mt-3 text-sm text-blue-100 sm:text-lg">
+            Parce que trouver la bonne personne devrait toujours être simple.
           </p>
 
-          {/* BADGES */}
-          <div className="mt-4 flex justify-center gap-3 flex-wrap text-xs">
-            <span className="flex items-center gap-1 bg-white/10 px-3 py-1 rounded-full backdrop-blur">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Profils vérifiés
+          <div className="mt-4 flex flex-wrap justify-center gap-3 text-xs">
+            <span className="flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 backdrop-blur">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              {cms("hero.badge.verified", "Profils vérifiés", "Verified profiles")}
             </span>
 
-            <span className="flex items-center gap-1 bg-white/10 px-3 py-1 rounded-full backdrop-blur">
-              <Zap className="w-3.5 h-3.5" />
-              Réponse rapide
+            <span className="flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 backdrop-blur">
+              <Zap className="h-3.5 w-3.5" />
+              {cms("hero.badge.fast", "Réponse rapide", "Fast response")}
             </span>
           </div>
         </div>
 
-        {/* SEARCH */}
-        <div className="mt-8 max-w-4xl mx-auto">
+        <div className="mx-auto mt-8 max-w-4xl">
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleSearch();
             }}
-            className="bg-white rounded-2xl p-3 shadow-[0_20px_50px_rgba(0,0,0,0.15)] text-gray-900"
+            className="rounded-2xl bg-white p-3 text-gray-900 shadow-[0_20px_50px_rgba(0,0,0,0.15)]"
           >
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-
-              {/* JOB */}
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <div className="relative" ref={jobsBoxRef}>
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
 
                 <Input
-                  placeholder="Quel service ?"
+                  placeholder={cms(
+                    "home.search.placeholder_keyword",
+                    "Quel service ?",
+                    "What service?"
+                  )}
                   value={searchTerm}
                   onFocus={() => setOpenJobs(true)}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 h-11 rounded-xl border-gray-200 focus:ring-2 focus:ring-blue-500"
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setOpenJobs(true);
+                  }}
+                  className="h-11 rounded-xl border-gray-200 pl-9 focus:ring-2 focus:ring-blue-500"
                 />
 
                 {openJobs && filteredJobs.length > 0 && (
-                  <div className="absolute w-full bg-white border rounded-xl shadow mt-1 z-50">
+                  <div className="absolute z-50 mt-1 w-full rounded-xl border bg-white shadow">
                     {filteredJobs.map((j) => (
                       <div
                         key={j}
@@ -169,7 +202,7 @@ const HeroSection = () => {
                           setSearchTerm(j);
                           setOpenJobs(false);
                         }}
-                        className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
+                        className="cursor-pointer px-3 py-2 text-sm hover:bg-gray-50"
                       >
                         {j}
                       </div>
@@ -178,16 +211,23 @@ const HeroSection = () => {
                 )}
               </div>
 
-              {/* LOCATION */}
               <div className="relative" ref={districtsBoxRef}>
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
 
                 <Input
-                  placeholder="Où ?"
+                  placeholder={cms(
+                    "home.search.placeholder_district",
+                    "Où ?",
+                    "Where?"
+                  )}
                   value={district}
                   onFocus={() => setOpenDistricts(true)}
-                  onChange={(e) => setDistrict(e.target.value)}
-                  className="pl-9 pr-10 h-11 rounded-xl border-gray-200 focus:ring-2 focus:ring-blue-500"
+                  onChange={(e) => {
+                    setDistrict(e.target.value);
+                    setOpenDistricts(true);
+                    if (geo) setGeo(null);
+                  }}
+                  className="h-11 rounded-xl border-gray-200 pl-9 pr-10 focus:ring-2 focus:ring-blue-500"
                 />
 
                 <button
@@ -195,22 +235,39 @@ const HeroSection = () => {
                   onClick={handleGeoLocate}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-blue-600"
                 >
-                  <LocateFixed className={`w-4 h-4 ${geoLoading ? "animate-pulse" : ""}`} />
+                  <LocateFixed className={`h-4 w-4 ${geoLoading ? "animate-pulse" : ""}`} />
                 </button>
+
+                {openDistricts && filteredDistricts.length > 0 && (
+                  <div className="absolute z-50 mt-1 w-full rounded-xl border bg-white shadow">
+                    {filteredDistricts.map((d) => (
+                      <div
+                        key={d}
+                        onClick={() => {
+                          setDistrict(d);
+                          setGeo(null);
+                          setOpenDistricts(false);
+                        }}
+                        className="cursor-pointer px-3 py-2 text-sm hover:bg-gray-50"
+                      >
+                        {d}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* CTA */}
               <Button
                 type="submit"
-                className="h-11 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-700 text-white font-semibold shadow-md"
+                className="h-11 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 font-semibold text-white shadow-md hover:from-blue-700 hover:to-blue-700"
               >
-                Trouver maintenant
+                {cms("home.search.btn", "Trouver maintenant", "Find now")}
               </Button>
             </div>
 
             {geo && (
-              <div className="text-xs text-gray-500 mt-2">
-                📍 Recherche proche activée
+              <div className="mt-2 text-xs text-gray-500">
+                📍 {cms("geo.active", "Recherche proche activée", "Nearby search enabled")}
               </div>
             )}
           </form>
