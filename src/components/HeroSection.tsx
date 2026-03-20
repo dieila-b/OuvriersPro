@@ -144,8 +144,8 @@ const HeroSection = () => {
   return (
     <section className="relative w-full overflow-hidden bg-gradient-to-br from-pro-blue to-blue-600 text-white">
       <div className="relative z-10 px-4 py-12 sm:px-6 lg:px-10">
-        <div className="mx-auto max-w-6xl text-center">
-          <h1 className="whitespace-nowrap text-[18px] font-bold tracking-tight sm:text-[30px] lg:text-[42px] xl:text-[50px]">
+        <div className="mx-auto max-w-7xl text-center">
+          <h1 className="mx-auto max-w-[1200px] text-center text-[16px] font-bold leading-[1.15] tracking-tight sm:text-[24px] md:text-[34px] lg:text-[42px] xl:text-[48px]">
             Le bon professionnel, au bon moment, près de chez vous
           </h1>
 
