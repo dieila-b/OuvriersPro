@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
-import { Languages, User, Menu, X } from "lucide-react";
+import { Languages, User, Menu, X, Sparkles } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import {
   DropdownMenu,
@@ -25,8 +25,8 @@ const normalizeRole = (r: any): Role => {
   return "user";
 };
 
-const HEADER_LIGHT_BLUE = "#EEF5FF";
-const HEADER_BORDER_BLUE = "#D9E7FF";
+const HEADER_LIGHT = "rgba(248,250,252,0.88)";
+const HEADER_BORDER = "rgba(148,163,184,0.18)";
 
 const Header = () => {
   const { t, language, setLanguage } = useLanguage();
@@ -91,8 +91,8 @@ const Header = () => {
     });
 
     return () => {
-      mounted = false;
-      sub.subscription.unsubscribe();
+        mounted = false;
+        sub.subscription.unsubscribe();
     };
   }, []);
 
@@ -199,209 +199,199 @@ const Header = () => {
     setMobileOpen((v) => !v);
   }, []);
 
-  const MobileMenuPanel = mobileOpen ? (
-    <div
-      className="md:hidden min-w-0 shrink-0 flex items-center gap-2 rounded-2xl px-2 py-1 border shadow-sm"
-      style={{ pointerEvents: "auto", backgroundColor: HEADER_LIGHT_BLUE, borderColor: HEADER_BORDER_BLUE }}
-    >
-      <div className="w-full px-4 sm:px-6 py-3">
-        <div className="flex items-center justify-between gap-3 min-w-0">
-          <span className="text-sm font-semibold text-foreground">
-            {cms("header.mobile_menu.title", "Menu", "Menu")}
-          </span>
-
-          <Button
-            variant="outline"
-            size="sm"
-            type="button"
-            className="rounded-full bg-white"
-            onClick={() => setMobileOpen(false)}
-            style={{ touchAction: "manipulation" as any }}
-          >
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
-
-        <div className="mt-3 flex flex-col gap-3 min-w-0">
-          <button
-            type="button"
-            className="w-full text-left py-2 font-medium text-foreground hover:text-primary"
-            style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
-            onClick={() => {
-              safeGo("/inscription-ouvrier", "become_provider_mobile", true);
-            }}
-          >
-            {becomeProviderLabel}
-          </button>
-
-          <button
-            type="button"
-            className="w-full rounded-full bg-primary text-primary-foreground py-3 font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
-            style={{ touchAction: "manipulation" as any, pointerEvents: "auto" }}
-            onClick={() => {
-              safeGo(accountPath, "account_mobile", true);
-            }}
-          >
-            <User className="w-4 h-4" />
-            {accountLabel}
-          </button>
-
-          <div className="h-1" />
-        </div>
-      </div>
-    </div>
-  ) : null;
-
   return (
     <>
       <header
-        className="fixed top-0 left-0 right-0 z-40 w-full max-w-full overflow-x-hidden shadow-sm"
+        className="fixed left-0 right-0 top-0 z-50 w-full border-b backdrop-blur-xl"
         style={{
           paddingTop: "env(safe-area-inset-top, 0px)",
-          backgroundColor: HEADER_LIGHT_BLUE,
+          background: HEADER_LIGHT,
+          borderColor: HEADER_BORDER,
+          boxShadow: "0 10px 40px rgba(15, 23, 42, 0.06)",
         }}
       >
-        <div
-          className="w-full overflow-hidden"
-          style={{
-            backgroundColor: HEADER_LIGHT_BLUE,
-            borderBottom: `1px solid ${HEADER_BORDER_BLUE}`,
-          }}
-        >
-          <div className="w-full px-4 sm:px-6 lg:px-10 min-w-0">
-            <div className="h-20 sm:h-[88px] min-w-0 flex items-center justify-between gap-3">
-              <button
+        <div className="mx-auto w-full px-4 sm:px-6 lg:px-10">
+          <div className="flex h-[74px] items-center justify-between gap-3 sm:h-[82px]">
+            <button
+              type="button"
+              onClick={() => go("/")}
+              className="min-w-0 flex items-center text-left"
+              style={{
+                WebkitTapHighlightColor: "transparent",
+                touchAction: "manipulation" as any,
+              }}
+              aria-label={cms("brand.name", "ProxiServices", "ProxiServices")}
+            >
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl border border-blue-100 bg-white/90 px-2 py-1 shadow-sm">
+                  <img
+                    src={logoSrc}
+                    alt={cms("brand.name", "ProxiServices", "ProxiServices")}
+                    className="h-10 w-auto object-contain sm:h-12"
+                    loading="eager"
+                    decoding="async"
+                    // @ts-ignore
+                    fetchpriority="high"
+                  />
+                </div>
+
+                <div className="hidden lg:block">
+                  <div className="text-sm font-bold tracking-tight text-slate-900">
+                    {cms("brand.name", "ProxiServices", "ProxiServices")}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {cms(
+                      "header.brand.tagline",
+                      "Marketplace de services locale, moderne et fiable",
+                      "Modern and trusted local services marketplace"
+                    )}
+                  </div>
+                </div>
+              </div>
+            </button>
+
+            <div className="hidden items-center gap-2 md:flex">
+              <Button
                 type="button"
-                onClick={() => go("/")}
-                className="min-w-0 flex-1 max-w-[58%] sm:max-w-none flex items-center text-left"
-                style={{
-                  WebkitTapHighlightColor: "transparent",
-                  touchAction: "manipulation" as any,
-                }}
-                aria-label={cms("brand.name", "ProxiServices", "ProxiServices")}
+                variant="outline"
+                size="sm"
+                className="h-10 rounded-full border-slate-200 bg-white px-4 text-slate-700 shadow-sm hover:bg-slate-50"
+                onClick={() => safeGo("/inscription-ouvrier", "become_provider_desktop")}
+                style={{ touchAction: "manipulation" as any }}
               >
-                <img
-                  src={logoSrc}
-                  alt={cms("brand.name", "ProxiServices", "ProxiServices")}
-                  className="h-11 sm:h-14 w-auto max-w-[50vw] sm:max-w-[340px] md:max-w-[420px] object-contain select-none"
-                  loading="eager"
-                  decoding="async"
-                  // @ts-ignore
-                  fetchpriority="high"
-                />
-              </button>
+                <Sparkles className="mr-2 h-4 w-4 text-blue-600" />
+                {becomeProviderLabel}
+              </Button>
 
-              <nav className="hidden md:flex" aria-hidden="true" />
-
-              <div className="hidden md:flex min-w-0 items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full whitespace-nowrap bg-white"
-                  onClick={() => safeGo("/inscription-ouvrier", "become_provider_desktop")}
-                  style={{ touchAction: "manipulation" as any }}
-                >
-                  {becomeProviderLabel}
-                </Button>
-
-                <Button
-                  type="button"
-                  size="sm"
-                  className="rounded-full bg-pro-blue text-white hover:bg-pro-blue/90 flex items-center gap-2 whitespace-nowrap shadow-sm"
-                  onClick={() => safeGo(accountPath, "account_desktop")}
-                  style={{ touchAction: "manipulation" as any }}
-                >
-                  <User className="w-4 h-4" />
-                  <span className="hidden lg:inline">{accountLabel}</span>
-                  <span className="lg:hidden">
-                    {cms("header.btn_account_short", "Compte", "Account")}
-                  </span>
-                </Button>
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-full flex items-center gap-1 whitespace-nowrap bg-white"
-                      aria-label={cms("header.lang.aria", "Changer de langue", "Change language")}
-                      type="button"
-                      style={{ touchAction: "manipulation" as any }}
-                    >
-                      <Languages className="w-4 h-4" />
-                      <span className="uppercase">{language}</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-white">
-                    <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
-                      {cms("header.lang.fr", "Français", "French")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
-                      {cms("header.lang.en", "English", "English")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-
-              <div
-                className="md:hidden min-w-0 shrink-0 flex items-center gap-2"
-                style={{ backgroundColor: HEADER_LIGHT_BLUE }}
+              <Button
+                type="button"
+                size="sm"
+                className="h-10 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 px-4 text-white shadow-[0_10px_24px_rgba(37,99,235,0.28)] hover:from-blue-700 hover:to-blue-700"
+                onClick={() => safeGo(accountPath, "account_desktop")}
+                style={{ touchAction: "manipulation" as any }}
               >
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-9 rounded-full px-3 flex items-center gap-1 whitespace-nowrap bg-white"
-                      type="button"
-                      style={{ touchAction: "manipulation" as any }}
-                    >
-                      <Languages className="w-4 h-4" />
-                      <span className="uppercase text-xs">{language}</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-white">
-                    <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
-                      {cms("header.lang.fr", "Français", "French")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
-                      {cms("header.lang.en", "English", "English")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <User className="mr-2 h-4 w-4" />
+                <span className="hidden lg:inline">{accountLabel}</span>
+                <span className="lg:hidden">
+                  {cms("header.btn_account_short", "Compte", "Account")}
+                </span>
+              </Button>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  onClick={toggleMobileMenu}
-                  aria-label={cms("header.mobile_menu.aria", "Menu mobile", "Mobile menu")}
-                  className="h-9 rounded-full px-3 whitespace-nowrap bg-white"
-                  style={{ touchAction: "manipulation" as any }}
-                >
-                  {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-                </Button>
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-10 rounded-full border-slate-200 bg-white px-3 shadow-sm"
+                    aria-label={cms("header.lang.aria", "Changer de langue", "Change language")}
+                    type="button"
+                    style={{ touchAction: "manipulation" as any }}
+                  >
+                    <Languages className="mr-1.5 h-4 w-4" />
+                    <span className="uppercase">{language}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="rounded-2xl border-slate-200 bg-white p-1 shadow-xl">
+                  <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer rounded-xl">
+                    {cms("header.lang.fr", "Français", "French")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer rounded-xl">
+                    {cms("header.lang.en", "English", "English")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            <div className="flex items-center gap-2 md:hidden">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-10 rounded-full border-slate-200 bg-white px-3 shadow-sm"
+                    type="button"
+                    style={{ touchAction: "manipulation" as any }}
+                  >
+                    <Languages className="mr-1 h-4 w-4" />
+                    <span className="text-xs uppercase">{language}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="rounded-2xl border-slate-200 bg-white p-1 shadow-xl">
+                  <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer rounded-xl">
+                    {cms("header.lang.fr", "Français", "French")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer rounded-xl">
+                    {cms("header.lang.en", "English", "English")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={toggleMobileMenu}
+                aria-label={cms("header.mobile_menu.aria", "Menu mobile", "Mobile menu")}
+                className="h-10 rounded-full border-slate-200 bg-white px-3 shadow-sm"
+                style={{ touchAction: "manipulation" as any }}
+              >
+                {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              </Button>
             </div>
           </div>
-
-          <div className="h-1.5 w-full bg-gradient-to-r from-pro-blue via-blue-600 to-pro-blue" />
         </div>
+
+        <div className="h-[2px] w-full bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-500" />
       </header>
 
       <div
         aria-hidden
         className="w-full shrink-0 sm:hidden"
-        style={{ height: "calc(env(safe-area-inset-top, 0px) + 44px)" }}
+        style={{ height: "calc(env(safe-area-inset-top, 0px) + 74px)" }}
       />
-      <div
-        aria-hidden
-        className="hidden w-full shrink-0 sm:block"
-        style={{ height: "88px" }}
-      />
+      <div aria-hidden className="hidden w-full shrink-0 sm:block" style={{ height: "82px" }} />
 
-      {MobileMenuPanel}
+      {mobileOpen && (
+        <div className="fixed inset-x-0 top-[74px] z-40 px-4 sm:hidden">
+          <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white/95 shadow-[0_25px_60px_rgba(15,23,42,0.18)] backdrop-blur-xl">
+            <div className="border-b border-slate-100 px-4 py-4">
+              <div className="text-sm font-semibold text-slate-900">
+                {cms("header.mobile_menu.title", "Menu", "Menu")}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {cms(
+                  "header.mobile_menu.subtitle",
+                  "Accédez rapidement à votre compte et à l’espace prestataire.",
+                  "Quick access to your account and provider area."
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-3 p-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 w-full rounded-2xl border-slate-200 bg-slate-50 text-slate-800"
+                onClick={() => safeGo("/inscription-ouvrier", "become_provider_mobile", true)}
+                style={{ touchAction: "manipulation" as any }}
+              >
+                <Sparkles className="mr-2 h-4 w-4 text-blue-600" />
+                {becomeProviderLabel}
+              </Button>
+
+              <Button
+                type="button"
+                className="h-11 w-full rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-[0_10px_24px_rgba(37,99,235,0.24)]"
+                onClick={() => safeGo(accountPath, "account_mobile", true)}
+                style={{ touchAction: "manipulation" as any }}
+              >
+                <User className="mr-2 h-4 w-4" />
+                {accountLabel}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ContactModal open={contactOpen} onOpenChange={setContactOpen} cooldownSeconds={30} />
     </>
