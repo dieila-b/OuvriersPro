@@ -1,4 +1,3 @@
-// src/pages/Forfaits.tsx
 import React, { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
