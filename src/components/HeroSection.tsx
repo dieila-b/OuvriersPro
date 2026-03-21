@@ -203,7 +203,7 @@ const HeroSection = () => {
           </div>
         </div>
 
-        <div className="mx-auto mt-8 max-w-4xl">
+        <div className={`mx-auto ${compactHero ? "mt-6" : "mt-8"} max-w-4xl`}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -311,8 +311,14 @@ const HeroSection = () => {
         </div>
       </div>
 
-      <div className="mt-6">
-        <AdSlot placement="home_feed" />
+      <div className={`${compactHero ? "mt-2" : "mt-6"} px-4 sm:px-6 lg:px-10`}>
+        <div className="mx-auto max-w-7xl">
+          <AdSlot
+            placement="home_feed"
+            showSponsorBadge={true}
+            showCounter={false}
+          />
+        </div>
       </div>
     </section>
   );
