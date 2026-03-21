@@ -173,14 +173,14 @@ const HeroSection = () => {
             className={
               compactHero
                 ? "mx-auto flex min-h-[40px] w-full max-w-[92vw] items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-2 py-2 text-center text-[11px] font-extrabold leading-none tracking-[-0.02em] text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-sm"
-                : "mx-auto block w-full max-w-[1280px] px-2 text-center font-black leading-[0.98] tracking-[-0.05em] text-[clamp(2.8rem,4.4vw,5.4rem)]"
+                : "mx-auto block w-full max-w-[1280px] px-2 text-center font-black leading-[1.02] tracking-[-0.04em] text-[clamp(2.2rem,3.2vw,4.2rem)]"
             }
           >
             <span
               className={
                 compactHero
                   ? "block whitespace-nowrap drop-shadow-[0_1px_6px_rgba(0,0,0,0.28)]"
-                  : "block bg-gradient-to-b from-white via-white/95 to-white/72 bg-clip-text text-transparent drop-shadow-[0_20px_60px_rgba(0,0,0,0.34)]"
+                  : "block whitespace-nowrap bg-gradient-to-b from-white via-white/95 to-white/72 bg-clip-text text-transparent drop-shadow-[0_20px_60px_rgba(0,0,0,0.34)]"
               }
             >
               Le bon professionnel, au bon moment, près de chez vous
