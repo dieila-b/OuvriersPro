@@ -164,20 +164,20 @@ const HeroSection = () => {
 
   return (
     <section className="relative w-full overflow-hidden bg-gradient-to-br from-pro-blue to-blue-600 text-white">
-      <div className="relative z-10 px-4 py-10 sm:px-6 sm:py-12 lg:px-10">
-        <div className="mx-auto max-w-7xl text-center">
+      <div className="relative z-10 px-4 py-10 sm:px-6 sm:py-12 lg:px-4 xl:px-5">
+        <div className={compactHero ? "mx-auto max-w-7xl text-center" : "mx-auto w-full max-w-none text-center"}>
           <h1
             className={
               compactHero
                 ? "mx-auto flex min-h-[40px] w-full max-w-[92vw] items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-2 py-2 text-center text-[11px] font-extrabold leading-none tracking-[-0.02em] text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-sm"
-                : "mx-auto max-w-[1600px] text-center text-[16px] font-bold leading-[1.1] tracking-tight sm:text-[24px] md:text-[34px] lg:text-[42px] xl:text-[52px]"
+                : "mx-auto block w-full max-w-none px-2 text-center font-extrabold leading-[1.02] tracking-[-0.035em] text-white drop-shadow-[0_10px_28px_rgba(0,0,0,0.18)] text-[clamp(2rem,3.25vw,4.35rem)]"
             }
           >
             <span
               className={
                 compactHero
                   ? "block whitespace-nowrap drop-shadow-[0_1px_6px_rgba(0,0,0,0.28)]"
-                  : "block whitespace-nowrap"
+                  : "block w-full"
               }
             >
               Le bon professionnel, au bon moment, près de chez vous
@@ -185,7 +185,7 @@ const HeroSection = () => {
           </h1>
 
           {!compactHero && (
-            <p className="mt-3 text-sm text-blue-100 sm:text-lg">
+            <p className="mx-auto mt-3 max-w-3xl text-sm text-blue-100 sm:text-lg">
               Parce que trouver la bonne personne devrait toujours être simple.
             </p>
           )}
@@ -315,10 +315,10 @@ const HeroSection = () => {
         className={[
           compactHero
             ? "mt-1 -translate-y-4 px-4"
-            : "mt-6 px-2 sm:px-3 lg:px-4",
+            : "mt-6 px-2 sm:px-3 lg:px-4 xl:px-5",
         ].join(" ")}
       >
-        <div className={compactHero ? "mx-auto max-w-7xl" : "mx-auto max-w-[1800px]"}>
+        <div className={compactHero ? "mx-auto max-w-7xl" : "mx-auto w-full max-w-none"}>
           <AdSlot
             placement="home_feed"
             showSponsorBadge={true}
