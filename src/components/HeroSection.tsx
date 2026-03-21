@@ -163,59 +163,53 @@ const HeroSection = () => {
   };
 
   return (
-    <section className="relative w-full overflow-hidden bg-gradient-to-br from-pro-blue via-blue-600 to-blue-700 text-white">
-      <div className="relative z-10 px-4 py-10 sm:px-6 sm:py-12 lg:px-10 lg:py-14">
-        <div className="mx-auto max-w-[1600px] text-center">
-          <div className="mx-auto max-w-[1400px]">
-            <h1
+    <section className="relative w-full overflow-hidden bg-gradient-to-br from-pro-blue to-blue-600 text-white">
+      <div className="relative z-10 px-4 py-10 sm:px-6 sm:py-12 lg:px-10">
+        <div className="mx-auto max-w-7xl text-center">
+          <h1
+            className={
+              compactHero
+                ? "mx-auto flex min-h-[40px] w-full max-w-[92vw] items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-2 py-2 text-center text-[11px] font-extrabold leading-none tracking-[-0.02em] text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-sm"
+                : "mx-auto max-w-[1200px] text-center text-[16px] font-bold leading-[1.15] tracking-tight sm:text-[24px] md:text-[34px] lg:text-[42px] xl:text-[48px]"
+            }
+          >
+            <span
               className={
                 compactHero
-                  ? "mx-auto flex min-h-[40px] w-full max-w-[92vw] items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-2 py-2 text-center text-[11px] font-extrabold leading-none tracking-[-0.02em] text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-sm"
-                  : "mx-auto w-full text-center text-[clamp(32px,3.7vw,58px)] font-extrabold leading-[1.05] tracking-[-0.04em] text-white"
+                  ? "block whitespace-nowrap drop-shadow-[0_1px_6px_rgba(0,0,0,0.28)]"
+                  : ""
               }
             >
-              <span
-                className={
-                  compactHero
-                    ? "block whitespace-nowrap drop-shadow-[0_1px_6px_rgba(0,0,0,0.28)]"
-                    : "block whitespace-nowrap text-balance drop-shadow-[0_6px_22px_rgba(0,0,0,0.18)]"
-                }
-              >
-                Le bon professionnel, au bon moment, près de chez vous
-              </span>
-            </h1>
+              Le bon professionnel, au bon moment, près de chez vous
+            </span>
+          </h1>
 
-            {!compactHero && (
-              <p className="mx-auto mt-4 max-w-3xl text-[15px] text-blue-50/95 sm:text-lg">
-                Parce que trouver la bonne personne devrait toujours être simple.
-              </p>
-            )}
+          {!compactHero && (
+            <p className="mt-3 text-sm text-blue-100 sm:text-lg">
+              Parce que trouver la bonne personne devrait toujours être simple.
+            </p>
+          )}
 
-            <div
-              className={`${
-                compactHero ? "mt-3" : "mt-5"
-              } flex flex-wrap justify-center gap-3 text-xs`}
-            >
-              <span className="flex items-center gap-1 rounded-full border border-white/10 bg-white/10 px-3 py-1 backdrop-blur">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                {cms("hero.badge.verified", "Profils vérifiés", "Verified profiles")}
-              </span>
+          <div className={`${compactHero ? "mt-3" : "mt-4"} flex flex-wrap justify-center gap-3 text-xs`}>
+            <span className="flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 backdrop-blur">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              {cms("hero.badge.verified", "Profils vérifiés", "Verified profiles")}
+            </span>
 
-              <span className="flex items-center gap-1 rounded-full border border-white/10 bg-white/10 px-3 py-1 backdrop-blur">
-                <Zap className="h-3.5 w-3.5" />
-                {cms("hero.badge.fast", "Réponse rapide", "Fast response")}
-              </span>
-            </div>
+            <span className="flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 backdrop-blur">
+              <Zap className="h-3.5 w-3.5" />
+              {cms("hero.badge.fast", "Réponse rapide", "Fast response")}
+            </span>
           </div>
         </div>
 
-        <div className={`mx-auto ${compactHero ? "mt-6 max-w-4xl" : "mt-8 max-w-5xl"}`}>
+        <div className={`mx-auto ${compactHero ? "mt-6" : "mt-8"} max-w-4xl`}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleSearch();
             }}
-            className="rounded-[28px] border border-white/15 bg-white p-3 text-gray-900 shadow-[0_24px_60px_rgba(0,0,0,0.18)]"
+            className="rounded-2xl bg-white p-3 text-gray-900 shadow-[0_20px_50px_rgba(0,0,0,0.15)]"
           >
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <div className="relative" ref={jobsBoxRef}>
@@ -233,7 +227,7 @@ const HeroSection = () => {
                     setSearchTerm(e.target.value);
                     setOpenJobs(true);
                   }}
-                  className="h-11 rounded-xl border-gray-200 bg-slate-50 pl-9 focus:ring-2 focus:ring-blue-500"
+                  className="h-11 rounded-xl border-gray-200 pl-9 focus:ring-2 focus:ring-blue-500"
                 />
 
                 {openJobs && filteredJobs.length > 0 && (
@@ -270,7 +264,7 @@ const HeroSection = () => {
                     setOpenDistricts(true);
                     if (geo) setGeo(null);
                   }}
-                  className="h-11 rounded-xl border-gray-200 bg-slate-50 pl-9 pr-10 focus:ring-2 focus:ring-blue-500"
+                  className="h-11 rounded-xl border-gray-200 pl-9 pr-10 focus:ring-2 focus:ring-blue-500"
                 />
 
                 <button
@@ -321,15 +315,14 @@ const HeroSection = () => {
         className={[
           compactHero
             ? "mt-1 -translate-y-4 px-4"
-            : "mt-6 -translate-y-1 px-4 sm:px-6 lg:px-8 xl:px-10",
+            : "mt-6 px-4 sm:px-6 lg:px-10",
         ].join(" ")}
       >
-        <div className="w-full">
+        <div className="mx-auto max-w-7xl">
           <AdSlot
             placement="home_feed"
             showSponsorBadge={true}
             showCounter={false}
-            className="block w-full"
           />
         </div>
       </div>
