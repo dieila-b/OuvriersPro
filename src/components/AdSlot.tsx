@@ -1,6 +1,7 @@
 // src/components/AdSlot.tsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { ExternalLink, Image as ImageIcon, Sparkles } from "lucide-react";
 
 type CampaignStatus = "draft" | "published" | "paused" | "ended";
 
@@ -13,7 +14,7 @@ type AdCampaign = {
   end_at: string | null;
   status: CampaignStatus;
   created_at?: string;
-  display_seconds?: number | null; // optionnel
+  display_seconds?: number | null;
 };
 
 type AdAsset = {
@@ -28,12 +29,12 @@ type AdAsset = {
 
 type AdItem =
   | {
-      kind: "spot"; // rotation par campagne (1 média = asset le + récent)
+      kind: "spot";
       campaign: AdCampaign;
       asset: AdAsset;
     }
   | {
-      kind: "asset"; // rotation par asset (tous les assets)
+      kind: "asset";
       campaign: AdCampaign;
       asset: AdAsset;
     };
@@ -41,19 +42,11 @@ type AdItem =
 type Props = {
   placement: string;
   className?: string;
-
-  // ✅ Choix du mode de rotation
-  mode?: "spot" | "asset"; // spot = par campagne, asset = par média
-
-  // URL signées
-  expiresIn?: number; // secondes (URL signée). Reco: 600+
-
-  // Timing
-  defaultDisplaySeconds?: number; // fallback si display_seconds absent
-  transitionMs?: number; // durée du crossfade
+  mode?: "spot" | "asset";
+  expiresIn?: number;
+  defaultDisplaySeconds?: number;
+  transitionMs?: number;
   pauseOnHover?: boolean;
-
-  // UI
   showSponsorBadge?: boolean;
   showCounter?: boolean;
 };
@@ -73,7 +66,6 @@ function safeSeconds(n: any, fallback = DEFAULT_SECONDS) {
 }
 
 async function safeSelectCampaigns(placement: string) {
-  // On tente avec display_seconds, puis fallback sans
   const withDisplay = await supabase
     .from("ads_campaigns")
     .select("id,title,link_url,placement,start_at,end_at,status,display_seconds,created_at")
@@ -96,7 +88,6 @@ async function safeSelectCampaigns(placement: string) {
 
 type SignedEntry = {
   url: string;
-  // timestamp ms pour “vieillissement” (optionnel)
   signedAt: number;
 };
 
@@ -114,28 +105,18 @@ export default function AdSlot({
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<AdItem[]>([]);
   const [error, setError] = useState<string | null>(null);
-
-  // index “actif”
   const [idx, setIdx] = useState(0);
-
-  // crossfade state
   const [isFading, setIsFading] = useState(false);
   const [front, setFront] = useState<{ item: AdItem; signed: SignedEntry } | null>(null);
   const [back, setBack] = useState<{ item: AdItem; signed: SignedEntry } | null>(null);
-
-  // pause
   const [hovered, setHovered] = useState(false);
 
-  // cache URLs signées par asset_id
   const signedCache = useRef<Map<string, SignedEntry>>(new Map());
-
-  // timer “pause/resume” propre
   const timerRef = useRef<number | null>(null);
   const remainingRef = useRef<number>(0);
   const startedAtRef = useRef<number>(0);
 
   const totalCount = items.length;
-
   const currentItem = useMemo(() => items[idx] ?? null, [items, idx]);
   const nextIndex = useMemo(() => {
     if (!items.length) return 0;
@@ -167,7 +148,6 @@ export default function AdSlot({
       timerRef.current = window.setTimeout(() => {
         remainingRef.current = 0;
         startedAtRef.current = 0;
-        // déclenche la transition
         void goNext();
       }, ms);
     },
@@ -186,7 +166,6 @@ export default function AdSlot({
     if (remainingRef.current > 0) scheduleTimer(remainingRef.current);
   };
 
-  // signer un asset (avec cache)
   const signAsset = useCallback(
     async (asset: AdAsset): Promise<SignedEntry> => {
       const cached = signedCache.current.get(asset.id);
@@ -210,18 +189,16 @@ export default function AdSlot({
     [expiresIn]
   );
 
-  // précharger le prochain média (sign URL en avance)
   const prefetchNext = useCallback(async () => {
     const next = items[nextIndex];
     if (!next) return;
     try {
       await signAsset(next.asset);
     } catch {
-      // silencieux : on gèrera à l’affichage
+      // no-op
     }
   }, [items, nextIndex, signAsset]);
 
-  // construire la liste selon le mode
   useEffect(() => {
     let cancelled = false;
 
@@ -237,6 +214,8 @@ export default function AdSlot({
           if (!cancelled) {
             setItems([]);
             setIdx(0);
+            setFront(null);
+            setBack(null);
           }
           return;
         }
@@ -252,12 +231,13 @@ export default function AdSlot({
         if (aErr) throw aErr;
 
         const byId: Record<string, AdCampaign> = {};
-        active.forEach((c) => (byId[c.id] = c));
+        active.forEach((c) => {
+          byId[c.id] = c;
+        });
 
         let built: AdItem[] = [];
 
         if (mode === "asset") {
-          // rotation par asset: on garde tous les assets
           built = (assets ?? [])
             .map((a: any) => {
               const c = byId[a.campaign_id];
@@ -266,10 +246,11 @@ export default function AdSlot({
             })
             .filter(Boolean) as AdItem[];
         } else {
-          // rotation par spot/campagne: 1 seul asset (le + récent) par campagne
           const latestByCampaign: Record<string, AdAsset> = {};
           (assets ?? []).forEach((a: any) => {
-            if (!latestByCampaign[a.campaign_id]) latestByCampaign[a.campaign_id] = a as AdAsset;
+            if (!latestByCampaign[a.campaign_id]) {
+              latestByCampaign[a.campaign_id] = a as AdAsset;
+            }
           });
 
           built = active
@@ -284,6 +265,8 @@ export default function AdSlot({
         if (!cancelled) {
           setItems(built);
           setIdx(0);
+          setFront(null);
+          setBack(null);
           signedCache.current.clear();
         }
       } catch (e: any) {
@@ -294,12 +277,12 @@ export default function AdSlot({
     };
 
     run();
+
     return () => {
       cancelled = true;
     };
   }, [placement, mode]);
 
-  // initialiser front/back quand currentItem change
   useEffect(() => {
     let cancelled = false;
 
@@ -316,8 +299,6 @@ export default function AdSlot({
 
         setFront({ item: currentItem, signed });
         setBack(null);
-
-        // précharge le prochain
         void prefetchNext();
       } catch (e: any) {
         if (!cancelled) setError(e?.message ?? "Ads media error");
@@ -328,7 +309,6 @@ export default function AdSlot({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentItem?.asset?.id, currentItem?.campaign?.id]);
 
-  // timer: (re)planifier quand item/durée change et pas en pause
   useEffect(() => {
     clearTimer();
 
@@ -341,7 +321,6 @@ export default function AdSlot({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [front?.item.asset.id, idx, items.length, currentDurationMs, shouldPause]);
 
-  // pause/resume sur hover
   useEffect(() => {
     if (!pauseOnHover) return;
 
@@ -356,37 +335,27 @@ export default function AdSlot({
 
     const next = items[nextIndex];
     if (!next) return;
-
-    // si déjà en transition, ignore
     if (isFading) return;
 
     try {
-      // assurer url signée prête (cache)
       const nextSigned = await signAsset(next.asset);
 
-      // monter le back + lancer fade
       setBack({ item: next, signed: nextSigned });
       setIsFading(true);
 
-      // après transition: swap idx + front/back
       window.setTimeout(() => {
         setIdx(nextIndex);
         setFront({ item: next, signed: nextSigned });
         setBack(null);
         setIsFading(false);
 
-        // précharge le suivant (nouvel idx)
-        // (la valeur nextIndex dans ce scope correspond à l’ancien, mais idx est mis à jour)
-        // On déclenche une précharge “optimiste” via microtask:
         Promise.resolve().then(() => {
-          // recalcul via items + (nextIndex+1)
           const ni = items.length ? (nextIndex + 1) % items.length : 0;
           const nxt = items[ni];
           if (nxt) void signAsset(nxt.asset).catch(() => {});
         });
       }, transitionMs);
     } catch {
-      // si media en erreur: on saute direct au prochain index
       setIdx(nextIndex);
     }
   }, [items, nextIndex, isFading, signAsset, transitionMs]);
@@ -396,25 +365,104 @@ export default function AdSlot({
     setIdx((i) => (items.length ? (i + 1) % items.length : 0));
   }, [items.length]);
 
-  // UI classes
   const frameClass =
-    "relative w-full overflow-hidden rounded-2xl border border-white/15 bg-white/5 shadow-[0_24px_70px_rgba(0,0,0,0.22)]";
+    "relative w-full overflow-hidden rounded-[22px] border border-white/15 bg-white/[0.06] shadow-[0_24px_70px_rgba(0,0,0,0.22)] ring-1 ring-white/10 backdrop-blur-sm";
+
   const aspectClass =
-    "aspect-[16/5] max-h-[180px] sm:max-h-[220px] md:max-h-[260px] lg:max-h-[320px]";
-  const skeletonClass =
-    "animate-pulse bg-white/10 border border-white/10 rounded-2xl w-full aspect-[16/5] max-h-[180px] sm:max-h-[220px] md:max-h-[260px] lg:max-h-[320px]";
+    "aspect-[16/8] min-h-[180px] sm:aspect-[16/7] sm:min-h-[210px] md:aspect-[16/6] md:min-h-[240px] lg:aspect-[16/5] lg:min-h-[280px]";
+
+  const skeletonClass = [
+    "w-full rounded-[22px] border border-white/10",
+    "bg-gradient-to-br from-white/10 via-white/5 to-white/10",
+    "shadow-[0_24px_70px_rgba(0,0,0,0.18)] animate-pulse",
+    aspectClass,
+  ].join(" ");
+
   const mediaBase = "absolute inset-0 h-full w-full object-cover";
+
+  const fallbackClass = [
+    "relative isolate w-full overflow-hidden rounded-[22px]",
+    "border border-white/15 bg-gradient-to-br from-slate-900 via-blue-950 to-blue-900",
+    "shadow-[0_24px_70px_rgba(0,0,0,0.22)] ring-1 ring-white/10",
+    aspectClass,
+  ].join(" ");
 
   if (error) {
     return (
-      <div className="text-xs text-red-200/90 bg-red-500/10 border border-red-300/20 rounded-xl px-3 py-2">
-        Ads error: {error}
+      <div className={fallbackClass}>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.16),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.28),transparent_35%)]" />
+        <div className="relative z-10 flex h-full flex-col justify-between p-5 sm:p-6">
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/90 backdrop-blur">
+              Espace sponsorisé
+            </span>
+            <span className="rounded-full bg-red-500/15 px-3 py-1 text-[11px] font-medium text-red-100 backdrop-blur">
+              Indisponible
+            </span>
+          </div>
+
+          <div className="max-w-xl">
+            <h3 className="text-lg font-extrabold text-white sm:text-xl">
+              Publicité momentanément indisponible
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-white/75">
+              Le slot publicitaire existe bien, mais le média n’a pas pu être chargé pour le moment.
+            </p>
+            <p className="mt-2 text-xs text-red-100/80">{error}</p>
+          </div>
+
+          <div className="flex items-center gap-2 text-white/70">
+            <ImageIcon className="h-4 w-4" />
+            <span className="text-xs">Rechargement automatique au prochain rendu</span>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (loading) return <div className={skeletonClass} />;
-  if (!front) return null;
+
+  if (!front) {
+    return (
+      <div className={fallbackClass}>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.30),transparent_35%)]" />
+        <div className="absolute right-[-40px] top-[-40px] h-32 w-32 rounded-full bg-white/10 blur-3xl" />
+        <div className="absolute bottom-[-50px] left-[-30px] h-36 w-36 rounded-full bg-blue-400/20 blur-3xl" />
+
+        <div className="relative z-10 flex h-full flex-col justify-between p-5 sm:p-6">
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/90 backdrop-blur">
+              Espace sponsorisé
+            </span>
+            <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-medium text-white/80 backdrop-blur">
+              Disponible
+            </span>
+          </div>
+
+          <div className="max-w-xl">
+            <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-white shadow-lg backdrop-blur">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <h3 className="text-lg font-extrabold text-white sm:text-2xl">
+              Votre publicité peut apparaître ici
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-white/75 sm:text-[15px]">
+              Mettez en avant votre campagne avec un visuel premium visible sur mobile et desktop.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs text-white/65">
+              Placement : <span className="font-semibold text-white/85">{placement}</span>
+            </div>
+            <div className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-medium text-white/85 backdrop-blur">
+              Aucun média actif
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const activeCampaign = front.item.campaign;
 
@@ -433,6 +481,7 @@ export default function AdSlot({
         </a>
       );
     }
+
     return <div className={className}>{children}</div>;
   };
 
@@ -457,7 +506,6 @@ export default function AdSlot({
       isTop ? "z-10" : "z-0",
     ].join(" ");
 
-    // ✅ Key = URL signée => force refresh + évite “freeze” navigateur
     const k = `${asset.id}:${url}`;
 
     if (asset.media_type === "video") {
@@ -494,47 +542,88 @@ export default function AdSlot({
   return (
     <Wrapper>
       <div
-        className={[frameClass, aspectClass].join(" ")}
+        className={[frameClass, aspectClass, "group"].join(" ")}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        {/* couches crossfade */}
         {renderMedia(front, "front")}
         {back ? renderMedia(back, "back") : null}
 
-        {/* overlay pro */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/35 via-black/10 to-black/30" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-black/15" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_22%),radial-gradient(circle_at_bottom_right,rgba(37,99,235,0.28),transparent_30%)]" />
 
-        {/* chips */}
-        <div className="absolute left-3 top-3 flex items-center gap-2 z-20">
+        <div className="absolute left-3 top-3 z-20 flex max-w-[75%] flex-wrap items-center gap-2 sm:left-4 sm:top-4">
           {showSponsorBadge && (
-            <span className="rounded-full bg-white/90 text-gray-900 text-[11px] px-2 py-1 font-medium shadow-sm">
+            <span className="rounded-full bg-white/92 px-2.5 py-1 text-[11px] font-semibold text-slate-900 shadow-sm">
               Sponsorisé
             </span>
           )}
-          <span className="rounded-full bg-black/35 text-white text-[11px] px-2 py-1 font-medium backdrop-blur">
+
+          <span className="max-w-full truncate rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur">
             {front.item.campaign.title}
           </span>
+
           {mode === "asset" && (
-            <span className="rounded-full bg-black/35 text-white text-[11px] px-2 py-1 font-medium backdrop-blur">
+            <span className="rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur">
               Média
             </span>
           )}
         </div>
 
-        {/* counter */}
         {showCounter && totalCount > 1 && (
-          <div className="absolute right-3 top-3 z-20 rounded-full bg-black/35 text-white text-[11px] px-2 py-1 font-medium backdrop-blur">
+          <div className="absolute right-3 top-3 z-20 rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur sm:right-4 sm:top-4">
             {idx + 1}/{totalCount}
           </div>
         )}
 
-        {/* petit “hint pause” */}
-        {pauseOnHover && (
-          <div className="absolute right-3 bottom-3 z-20 text-[11px] text-white/90 bg-black/25 px-2 py-1 rounded-full backdrop-blur">
-            {hovered ? "Pause" : "Auto"}
+        <div className="absolute inset-x-0 bottom-0 z-20 p-4 sm:p-5">
+          <div className="flex items-end justify-between gap-4">
+            <div className="max-w-[78%]">
+              <h3 className="line-clamp-2 text-sm font-extrabold text-white drop-shadow sm:text-lg">
+                {activeCampaign.title}
+              </h3>
+
+              <p className="mt-1 line-clamp-2 text-[11px] text-white/80 sm:text-sm">
+                Découvrez cette campagne sponsorisée et profitez d’une mise en avant premium.
+              </p>
+            </div>
+
+            {activeCampaign.link_url && (
+              <div className="hidden shrink-0 items-center gap-2 rounded-full bg-white/12 px-3 py-2 text-xs font-semibold text-white backdrop-blur md:flex">
+                <span>Découvrir</span>
+                <ExternalLink className="h-3.5 w-3.5" />
+              </div>
+            )}
           </div>
-        )}
+
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/15">
+              <div
+                key={`${activeCampaign.id}-${idx}`}
+                className="h-full rounded-full bg-white/85"
+                style={{
+                  width: "100%",
+                  animation: shouldPause ? "none" : `adProgress ${currentDurationMs}ms linear forwards`,
+                }}
+              />
+            </div>
+
+            {pauseOnHover && (
+              <div className="shrink-0 rounded-full bg-black/25 px-2.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur">
+                {hovered ? "Pause" : "Auto"}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <style>
+          {`
+            @keyframes adProgress {
+              from { width: 100%; }
+              to { width: 0%; }
+            }
+          `}
+        </style>
       </div>
     </Wrapper>
   );
