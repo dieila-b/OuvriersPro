@@ -169,11 +169,13 @@ const HeroSection = () => {
           <h1
             className={
               compactHero
-                ? "mx-auto w-full text-center whitespace-nowrap text-[11px] font-bold leading-none tracking-tight"
+                ? "mx-auto flex min-h-[40px] w-full max-w-[360px] items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-center text-[13px] font-extrabold leading-snug tracking-[-0.015em] text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-sm"
                 : "mx-auto max-w-[1200px] text-center text-[16px] font-bold leading-[1.15] tracking-tight sm:text-[24px] md:text-[34px] lg:text-[42px] xl:text-[48px]"
             }
           >
-            Le bon professionnel, au bon moment, près de chez vous
+            <span className={compactHero ? "block drop-shadow-[0_1px_6px_rgba(0,0,0,0.28)]" : ""}>
+              Le bon professionnel, au bon moment, près de chez vous
+            </span>
           </h1>
 
           {!compactHero && (
