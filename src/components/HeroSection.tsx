@@ -59,6 +59,27 @@ const HeroSection = () => {
   const [geoLoading, setGeoLoading] = useState(false);
 
   const native = useMemo(() => isNativeRuntime(), []);
+  const [compactHero, setCompactHero] = useState(() => {
+    try {
+      return native || window.innerWidth < 640;
+    } catch {
+      return native;
+    }
+  });
+
+  useEffect(() => {
+    const syncCompactHero = () => {
+      try {
+        setCompactHero(native || window.innerWidth < 640);
+      } catch {
+        setCompactHero(native);
+      }
+    };
+
+    syncCompactHero();
+    window.addEventListener("resize", syncCompactHero);
+    return () => window.removeEventListener("resize", syncCompactHero);
+  }, [native]);
 
   useEffect(() => {
     const loadOptions = async () => {
@@ -143,17 +164,25 @@ const HeroSection = () => {
 
   return (
     <section className="relative w-full overflow-hidden bg-gradient-to-br from-pro-blue to-blue-600 text-white">
-      <div className="relative z-10 px-4 py-12 sm:px-6 lg:px-10">
+      <div className="relative z-10 px-4 py-10 sm:px-6 sm:py-12 lg:px-10">
         <div className="mx-auto max-w-7xl text-center">
-          <h1 className="mx-auto max-w-[1400px] whitespace-nowrap text-center text-[14px] font-bold leading-none tracking-tight sm:text-[20px] md:text-[28px] lg:text-[36px] xl:text-[42px]">
+          <h1
+            className={
+              compactHero
+                ? "mx-auto w-full text-center whitespace-nowrap text-[11px] font-bold leading-none tracking-tight"
+                : "mx-auto max-w-[1200px] text-center text-[16px] font-bold leading-[1.15] tracking-tight sm:text-[24px] md:text-[34px] lg:text-[42px] xl:text-[48px]"
+            }
+          >
             Le bon professionnel, au bon moment, près de chez vous
           </h1>
 
-          <p className="mt-3 text-sm text-blue-100 sm:text-lg">
-            Parce que trouver la bonne personne devrait toujours être simple.
-          </p>
+          {!compactHero && (
+            <p className="mt-3 text-sm text-blue-100 sm:text-lg">
+              Parce que trouver la bonne personne devrait toujours être simple.
+            </p>
+          )}
 
-          <div className="mt-4 flex flex-wrap justify-center gap-3 text-xs">
+          <div className={`${compactHero ? "mt-3" : "mt-4"} flex flex-wrap justify-center gap-3 text-xs`}>
             <span className="flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 backdrop-blur">
               <ShieldCheck className="h-3.5 w-3.5" />
               {cms("hero.badge.verified", "Profils vérifiés", "Verified profiles")}
