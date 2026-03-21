@@ -429,7 +429,7 @@ export default function AdSlot({
 
   const aspectClass = compactAd
     ? "aspect-[16/7] min-h-[132px]"
-    : "aspect-[24/7] min-h-[160px] sm:aspect-[24/7] sm:min-h-[180px] md:aspect-[26/7] md:min-h-[200px] lg:aspect-[28/7] lg:min-h-[220px] xl:aspect-[30/7] xl:min-h-[235px]";
+    : "aspect-[32/7] min-h-[165px] sm:aspect-[32/7] sm:min-h-[185px] md:aspect-[34/7] md:min-h-[205px] lg:aspect-[36/7] lg:min-h-[225px] xl:aspect-[38/7] xl:min-h-[245px]";
 
   const skeletonClass = [
     "w-full rounded-[22px] border border-white/10",
@@ -633,8 +633,8 @@ export default function AdSlot({
         {renderMedia(front, "front")}
         {back ? renderMedia(back, "back") : null}
 
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/52 via-black/16 to-black/10" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_22%),radial-gradient(circle_at_bottom_right,rgba(37,99,235,0.22),transparent_30%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/48 via-black/14 to-black/8" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.16),transparent_22%),radial-gradient(circle_at_bottom_right,rgba(37,99,235,0.18),transparent_30%)]" />
 
         <div className="absolute left-3 top-3 z-20 flex max-w-[75%] flex-wrap items-center gap-2 sm:left-4 sm:top-4">
           {showSponsorBadge && (
@@ -665,7 +665,7 @@ export default function AdSlot({
         )}
 
         {!compactAd && (
-          <div className="absolute inset-x-0 bottom-0 z-20 p-3 sm:p-4">
+          <div className="absolute inset-x-0 bottom-0 z-20 p-3 sm:p-4 lg:p-4">
             <div className="flex items-end justify-between gap-4">
               <div className="max-w-[80%]">
                 <h3 className="line-clamp-2 text-sm font-extrabold text-white drop-shadow sm:text-base lg:text-lg">
