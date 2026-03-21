@@ -173,7 +173,7 @@ const HeroSection = () => {
             className={
               compactHero
                 ? "mx-auto flex min-h-[40px] w-full max-w-[92vw] items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-2 py-2 text-center text-[11px] font-extrabold leading-none tracking-[-0.02em] text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-sm"
-                : "mx-auto block w-full max-w-[1280px] px-2 text-center font-black leading-[1.02] tracking-[-0.04em] text-[clamp(2.2rem,3.2vw,4.2rem)]"
+                : "mx-auto block w-full max-w-[1460px] px-2 text-center font-black leading-[1.02] tracking-[-0.035em] text-[clamp(1.8rem,2.65vw,3.55rem)]"
             }
           >
             <span
