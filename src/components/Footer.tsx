@@ -1,4 +1,3 @@
-// src/components/Footer.tsx
 import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -62,20 +61,21 @@ const Footer = () => {
       <footer className="relative overflow-hidden border-t border-white/10 bg-[#1e293b] text-white">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-          <div className="absolute -top-20 left-1/2 h-52 w-52 -translate-x-1/2 rounded-full bg-blue-500/10 blur-3xl" />
-          <div className="absolute bottom-0 left-0 h-48 w-48 rounded-full bg-white/[0.03] blur-3xl" />
-          <div className="absolute right-0 top-1/3 h-44 w-44 rounded-full bg-blue-400/10 blur-3xl" />
+          <div className="absolute -top-20 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-blue-500/10 blur-3xl" />
+          <div className="absolute bottom-0 left-0 h-52 w-52 rounded-full bg-white/[0.03] blur-3xl" />
+          <div className="absolute right-0 top-1/3 h-48 w-48 rounded-full bg-blue-400/10 blur-3xl" />
+          <div className="absolute inset-y-0 left-1/2 hidden w-px -translate-x-1/2 bg-white/[0.03] xl:block" />
         </div>
 
-        <div className="relative mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-          <div className="grid gap-8 md:grid-cols-4">
-            <div>
+        <div className="relative mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+          <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-[1.2fr_0.85fr_1fr_1.1fr] xl:gap-10">
+            <div className="xl:pr-6">
               <div className="flex items-start gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 shadow-[0_16px_30px_rgba(37,99,235,0.28)]">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 shadow-[0_16px_30px_rgba(37,99,235,0.28)]">
                   <span className="text-sm font-bold text-white">PS</span>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <div className="text-lg font-bold text-white">
                     {cms("brand.name", "ProxiServices", "ProxiServices")}
                   </div>
@@ -89,7 +89,7 @@ const Footer = () => {
                 </div>
               </div>
 
-              <p className="mt-5 max-w-sm text-sm leading-7 text-white/72">
+              <p className="mt-5 max-w-md text-sm leading-7 text-white/72 lg:text-[15px]">
                 {cms(
                   "footer.brand.desc",
                   "Une plateforme moderne de mise en relation entre particuliers, entreprises et prestataires vérifiés dans plusieurs métiers du quotidien.",
@@ -98,11 +98,11 @@ const Footer = () => {
               </p>
 
               {social.length > 0 && (
-                <div className="mt-5">
+                <div className="mt-6">
                   <div className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-white/40">
                     {cms("footer.social.follow_label", "Suivez-nous", "Follow us")}
                   </div>
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex flex-wrap items-center gap-2.5">
                     {social.map(({ name, href, Icon }) => (
                       <a
                         key={name}
@@ -120,35 +120,45 @@ const Footer = () => {
               )}
             </div>
 
-            <div>
+            <div className="xl:pl-2">
               <h3 className="text-sm font-semibold tracking-wide text-white/95">
                 {cms("footer.services.title", "Services", "Services")}
               </h3>
 
-              <ul className="mt-4 space-y-3 text-sm text-white/72">
-                <li>{cms("footer.services.item1", "Bâtiment", "Construction")}</li>
-                <li>{cms("footer.services.item2", "Plomberie", "Plumbing")}</li>
-                <li>{cms("footer.services.item3", "Électricité", "Electrical")}</li>
-                <li>{cms("footer.services.item4", "Jardinage", "Gardening")}</li>
-                <li>{cms("footer.services.item5", "Informatique", "IT services")}</li>
+              <ul className="mt-4 space-y-3 text-sm text-white/72 lg:text-[15px]">
+                <li className="transition-colors hover:text-white">
+                  {cms("footer.services.item1", "Bâtiment", "Construction")}
+                </li>
+                <li className="transition-colors hover:text-white">
+                  {cms("footer.services.item2", "Plomberie", "Plumbing")}
+                </li>
+                <li className="transition-colors hover:text-white">
+                  {cms("footer.services.item3", "Électricité", "Electrical")}
+                </li>
+                <li className="transition-colors hover:text-white">
+                  {cms("footer.services.item4", "Jardinage", "Gardening")}
+                </li>
+                <li className="transition-colors hover:text-white">
+                  {cms("footer.services.item5", "Informatique", "IT services")}
+                </li>
               </ul>
 
               <button
                 type="button"
                 onClick={() => navigate("/#search")}
-                className="mt-5 inline-flex items-center gap-2 text-sm text-blue-300 transition-colors hover:text-white"
+                className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-blue-300 transition-colors hover:text-white"
               >
                 {cms("footer.services.more", "Découvrir", "Explore")}
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
 
-            <div>
+            <div className="xl:pl-2">
               <h3 className="text-sm font-semibold tracking-wide text-white/95">
                 {cms("footer.company.title", "Entreprise", "Company")}
               </h3>
 
-              <ul className="mt-4 space-y-3 text-sm text-white/72">
+              <ul className="mt-4 space-y-3 text-sm text-white/72 lg:text-[15px]">
                 <li>
                   <Link to="/faq" className="transition-colors hover:text-white">
                     {cms("footer.links.faq", "FAQ", "FAQ")}
@@ -166,20 +176,20 @@ const Footer = () => {
                 </li>
               </ul>
 
-              <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+              <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.045] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur-sm">
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/15 text-blue-300">
+                  <div className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-500/15 text-blue-300">
                     <Sparkles className="h-4 w-4" />
                   </div>
-                  <div>
-                    <div className="text-sm font-semibold text-white">
+                  <div className="min-w-0">
+                    <div className="text-[15px] font-semibold text-white">
                       {cms(
                         "footer.company.promo.title",
                         "Développez votre visibilité",
                         "Grow your visibility"
                       )}
                     </div>
-                    <div className="mt-1 text-sm leading-6 text-white/65">
+                    <div className="mt-1.5 text-sm leading-7 text-white/65 lg:text-[15px]">
                       {cms(
                         "footer.company.promo.text",
                         "Créez votre présence professionnelle et attirez davantage de clients dans votre zone.",
@@ -191,31 +201,31 @@ const Footer = () => {
               </div>
             </div>
 
-            <div>
+            <div className="xl:pl-2">
               <h3 className="text-sm font-semibold tracking-wide text-white/95">
                 {cms("footer.contact.title", "Contact", "Contact")}
               </h3>
 
-              <div className="mt-4 overflow-hidden rounded-[24px] border border-white/10 bg-white/[0.05] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur-sm">
-                <div className="space-y-3">
+              <div className="mt-4 overflow-hidden rounded-[26px] border border-white/10 bg-white/[0.055] p-5 shadow-[0_20px_48px_rgba(0,0,0,0.20)] backdrop-blur-sm">
+                <div className="space-y-3.5">
                   <a
                     href={`mailto:${emailValue}`}
-                    className="flex items-center justify-between gap-2 text-sm text-white/75 transition-colors hover:text-white"
+                    className="flex items-center justify-between gap-3 text-sm text-white/75 transition-colors hover:text-white"
                   >
-                    <span className="inline-flex items-center gap-2">
-                      <Mail className="h-4 w-4" />
-                      {cms("footer.contact.label_email", "Email", "Email")}
+                    <span className="inline-flex min-w-0 items-center gap-2">
+                      <Mail className="h-4 w-4 shrink-0" />
+                      <span>{cms("footer.contact.label_email", "Email", "Email")}</span>
                     </span>
                     <span className="truncate font-medium text-white/90">{emailValue}</span>
                   </a>
 
                   <a
                     href={`tel:${phoneTel}`}
-                    className="flex items-center justify-between gap-2 text-sm text-white/75 transition-colors hover:text-white"
+                    className="flex items-center justify-between gap-3 text-sm text-white/75 transition-colors hover:text-white"
                   >
-                    <span className="inline-flex items-center gap-2">
-                      <Phone className="h-4 w-4" />
-                      {cms("footer.contact.label_phone", "Téléphone", "Phone")}
+                    <span className="inline-flex min-w-0 items-center gap-2">
+                      <Phone className="h-4 w-4 shrink-0" />
+                      <span>{cms("footer.contact.label_phone", "Téléphone", "Phone")}</span>
                     </span>
                     <span className="truncate font-medium text-white/90">{phoneValue}</span>
                   </a>
@@ -224,19 +234,19 @@ const Footer = () => {
                     href={`https://wa.me/${whatsappTel.replace(/[^\d]/g, "")}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center justify-between gap-2 text-sm text-white/75 transition-colors hover:text-white"
+                    className="flex items-center justify-between gap-3 text-sm text-white/75 transition-colors hover:text-white"
                   >
-                    <span className="inline-flex items-center gap-2">
-                      <MessageCircle className="h-4 w-4" />
-                      {cms("footer.contact.label_whatsapp", "WhatsApp", "WhatsApp")}
+                    <span className="inline-flex min-w-0 items-center gap-2">
+                      <MessageCircle className="h-4 w-4 shrink-0" />
+                      <span>{cms("footer.contact.label_whatsapp", "WhatsApp", "WhatsApp")}</span>
                     </span>
                     <span className="truncate text-white/90">{whatsappValue}</span>
                   </a>
 
-                  <div className="flex items-center justify-between gap-2 text-sm text-white/75">
-                    <span className="inline-flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      {cms("footer.contact.label_hours", "Horaires", "Hours")}
+                  <div className="flex items-center justify-between gap-3 text-sm text-white/75">
+                    <span className="inline-flex min-w-0 items-center gap-2">
+                      <Clock className="h-4 w-4 shrink-0" />
+                      <span>{cms("footer.contact.label_hours", "Horaires", "Hours")}</span>
                     </span>
                     <span className="truncate text-white/90">{hoursValue}</span>
                   </div>
@@ -244,7 +254,7 @@ const Footer = () => {
 
                 <Button
                   type="button"
-                  className="mt-5 h-11 w-full rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-[0_12px_28px_rgba(37,99,235,0.25)] hover:from-blue-700 hover:to-blue-700"
+                  className="mt-6 h-12 w-full rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-[0_12px_28px_rgba(37,99,235,0.25)] hover:from-blue-700 hover:to-blue-700"
                   onClick={() => setContactOpen(true)}
                 >
                   <MessageSquare className="mr-2 h-4 w-4" />
@@ -254,8 +264,8 @@ const Footer = () => {
             </div>
           </div>
 
-          <div className="mt-8 flex flex-col gap-3 border-t border-white/10 pt-5 md:flex-row md:items-center md:justify-between">
-            <p className="text-xs text-white/55">
+          <div className="mt-10 flex flex-col gap-4 border-t border-white/10 pt-6 md:flex-row md:items-center md:justify-between">
+            <p className="text-xs text-white/55 lg:text-[13px]">
               {cms(
                 "footer.bottom.rights",
                 `© ${year} ProxiServices. Tous droits réservés.`,
@@ -263,7 +273,7 @@ const Footer = () => {
               )}
             </p>
 
-            <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-white/60">
+            <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-white/60 lg:text-[13px]">
               <Link to="/conditions" className="transition-colors hover:text-white">
                 {cms("legal.terms.title", "Conditions d'utilisation", "Terms & Conditions")}
               </Link>
