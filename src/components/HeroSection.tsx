@@ -170,14 +170,14 @@ const HeroSection = () => {
             className={
               compactHero
                 ? "mx-auto flex min-h-[40px] w-full max-w-[92vw] items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-2 py-2 text-center text-[11px] font-extrabold leading-none tracking-[-0.02em] text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-sm"
-                : "mx-auto max-w-[1200px] text-center text-[16px] font-bold leading-[1.15] tracking-tight sm:text-[24px] md:text-[34px] lg:text-[42px] xl:text-[48px]"
+                : "mx-auto max-w-[1600px] text-center text-[16px] font-bold leading-[1.1] tracking-tight sm:text-[24px] md:text-[34px] lg:text-[42px] xl:text-[52px]"
             }
           >
             <span
               className={
                 compactHero
                   ? "block whitespace-nowrap drop-shadow-[0_1px_6px_rgba(0,0,0,0.28)]"
-                  : ""
+                  : "block whitespace-nowrap"
               }
             >
               Le bon professionnel, au bon moment, près de chez vous
@@ -315,10 +315,10 @@ const HeroSection = () => {
         className={[
           compactHero
             ? "mt-1 -translate-y-4 px-4"
-            : "mt-6 px-4 sm:px-6 lg:px-10",
+            : "mt-6 px-2 sm:px-3 lg:px-4",
         ].join(" ")}
       >
-        <div className="mx-auto max-w-7xl">
+        <div className={compactHero ? "mx-auto max-w-7xl" : "mx-auto max-w-[1800px]"}>
           <AdSlot
             placement="home_feed"
             showSponsorBadge={true}
