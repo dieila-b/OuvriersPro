@@ -2,7 +2,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ExternalLink, Image as ImageIcon, Sparkles } from "lucide-react";
-import { Capacitor } from "@capacitor/core";
 
 type CampaignStatus = "draft" | "published" | "paused" | "ended";
 
@@ -66,24 +65,6 @@ function safeSeconds(n: any, fallback = DEFAULT_SECONDS) {
   return Math.max(1, Math.floor(v));
 }
 
-function isNativeRuntime() {
-  try {
-    if (Capacitor?.isNativePlatform?.()) return true;
-  } catch {}
-
-  try {
-    const wCap = (window as any)?.Capacitor;
-    if (wCap?.isNativePlatform?.()) return true;
-  } catch {}
-
-  try {
-    const p = window.location?.protocol ?? "";
-    if (p === "capacitor:" || p === "file:") return true;
-  } catch {}
-
-  return false;
-}
-
 async function safeSelectCampaigns(placement: string) {
   const withDisplay = await supabase
     .from("ads_campaigns")
@@ -124,18 +105,18 @@ export default function AdSlot({
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<AdItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+
   const [idx, setIdx] = useState(0);
   const [isFading, setIsFading] = useState(false);
   const [front, setFront] = useState<{ item: AdItem; signed: SignedEntry } | null>(null);
   const [back, setBack] = useState<{ item: AdItem; signed: SignedEntry } | null>(null);
   const [hovered, setHovered] = useState(false);
 
-  const native = useMemo(() => isNativeRuntime(), []);
   const [compactAd, setCompactAd] = useState(() => {
     try {
-      return native || window.innerWidth < 640;
+      return window.innerWidth < 640;
     } catch {
-      return native;
+      return false;
     }
   });
 
@@ -146,6 +127,7 @@ export default function AdSlot({
 
   const totalCount = items.length;
   const currentItem = useMemo(() => items[idx] ?? null, [items, idx]);
+
   const nextIndex = useMemo(() => {
     if (!items.length) return 0;
     return (idx + 1) % items.length;
@@ -158,22 +140,22 @@ export default function AdSlot({
     return seconds * 1000;
   }, [currentItem, defaultDisplaySeconds]);
 
-  const shouldPause = pauseOnHover && hovered;
+  const shouldPause = pauseOnHover && hovered && !compactAd;
   const effectiveShowCounter = showCounter && !compactAd;
 
   useEffect(() => {
-    const syncCompactAd = () => {
+    const syncCompact = () => {
       try {
-        setCompactAd(native || window.innerWidth < 640);
+        setCompactAd(window.innerWidth < 640);
       } catch {
-        setCompactAd(native);
+        setCompactAd(false);
       }
     };
 
-    syncCompactAd();
-    window.addEventListener("resize", syncCompactAd);
-    return () => window.removeEventListener("resize", syncCompactAd);
-  }, [native]);
+    syncCompact();
+    window.addEventListener("resize", syncCompact);
+    return () => window.removeEventListener("resize", syncCompact);
+  }, []);
 
   const clearTimer = () => {
     if (timerRef.current) {
@@ -210,9 +192,9 @@ export default function AdSlot({
   };
 
   const signAsset = useCallback(
-    async (asset: AdAsset): Promise<SignedEntry> => {
+    async (asset: AdAsset, forceRefresh = false): Promise<SignedEntry> => {
       const cached = signedCache.current.get(asset.id);
-      if (cached) return cached;
+      if (cached && !forceRefresh) return cached;
 
       const { data, error: sErr } = await supabase.storage
         .from("ads-media")
@@ -232,15 +214,27 @@ export default function AdSlot({
     [expiresIn]
   );
 
+  const signAssetWithRetry = useCallback(
+    async (asset: AdAsset): Promise<SignedEntry> => {
+      try {
+        return await signAsset(asset, false);
+      } catch {
+        signedCache.current.delete(asset.id);
+        return await signAsset(asset, true);
+      }
+    },
+    [signAsset]
+  );
+
   const prefetchNext = useCallback(async () => {
     const next = items[nextIndex];
     if (!next) return;
     try {
-      await signAsset(next.asset);
+      await signAssetWithRetry(next.asset);
     } catch {
-      // no-op
+      // silencieux
     }
-  }, [items, nextIndex, signAsset]);
+  }, [items, nextIndex, signAssetWithRetry]);
 
   useEffect(() => {
     let cancelled = false;
@@ -337,20 +331,29 @@ export default function AdSlot({
       }
 
       try {
-        const signed = await signAsset(currentItem.asset);
+        const signed = await signAssetWithRetry(currentItem.asset);
         if (cancelled) return;
 
+        setError(null);
         setFront({ item: currentItem, signed });
         setBack(null);
+
         void prefetchNext();
       } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? "Ads media error");
+        if (cancelled) return;
+
+        if (items.length > 1) {
+          setIdx((prev) => (items.length ? (prev + 1) % items.length : 0));
+          return;
+        }
+
+        setError(e?.message ?? "Ads media error");
       }
     };
 
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentItem?.asset?.id, currentItem?.campaign?.id]);
+  }, [currentItem?.asset?.id, currentItem?.campaign?.id, items.length]);
 
   useEffect(() => {
     clearTimer();
@@ -382,7 +385,7 @@ export default function AdSlot({
     if (isFading) return;
 
     try {
-      const nextSigned = await signAsset(next.asset);
+      const nextSigned = await signAssetWithRetry(next.asset);
 
       setBack({ item: next, signed: nextSigned });
       setIsFading(true);
@@ -396,24 +399,36 @@ export default function AdSlot({
         Promise.resolve().then(() => {
           const ni = items.length ? (nextIndex + 1) % items.length : 0;
           const nxt = items[ni];
-          if (nxt) void signAsset(nxt.asset).catch(() => {});
+          if (nxt) void signAssetWithRetry(nxt.asset).catch(() => {});
         });
       }, transitionMs);
     } catch {
-      setIdx(nextIndex);
+      if (items.length > 1) {
+        setIdx((i) => (items.length ? (i + 1) % items.length : 0));
+      } else {
+        setError("Ads media error");
+      }
     }
-  }, [items, nextIndex, isFading, signAsset, transitionMs]);
+  }, [items, nextIndex, isFading, signAssetWithRetry, transitionMs]);
 
   const skipOnError = useCallback(() => {
     if (!items.length) return;
-    setIdx((i) => (items.length ? (i + 1) % items.length : 0));
-  }, [items.length]);
+
+    signedCache.current.delete(items[idx]?.asset.id);
+
+    if (items.length > 1) {
+      setIdx((i) => (items.length ? (i + 1) % items.length : 0));
+      return;
+    }
+
+    setError("Ads media error");
+  }, [items, idx]);
 
   const frameClass =
     "relative w-full overflow-hidden rounded-[22px] border border-white/15 bg-white/[0.06] shadow-[0_24px_70px_rgba(0,0,0,0.22)] ring-1 ring-white/10 backdrop-blur-sm";
 
   const aspectClass = compactAd
-    ? "aspect-[16/7] min-h-[140px]"
+    ? "aspect-[16/7] min-h-[132px]"
     : "aspect-[16/8] min-h-[180px] sm:aspect-[16/7] sm:min-h-[210px] md:aspect-[16/6] md:min-h-[240px] lg:aspect-[16/5] lg:min-h-[280px]";
 
   const skeletonClass = [
@@ -439,7 +454,7 @@ export default function AdSlot({
         <div className="relative z-10 flex h-full flex-col justify-between p-5 sm:p-6">
           <div className="flex items-center gap-2">
             <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/90 backdrop-blur">
-              Espace sponsorisé
+              {compactAd ? "Sponsorisé" : "Espace sponsorisé"}
             </span>
             {!compactAd && (
               <span className="rounded-full bg-red-500/15 px-3 py-1 text-[11px] font-medium text-red-100 backdrop-blur">
@@ -487,7 +502,7 @@ export default function AdSlot({
         <div className="relative z-10 flex h-full flex-col justify-between p-5 sm:p-6">
           <div className="flex items-center gap-2">
             <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/90 backdrop-blur">
-              Espace sponsorisé
+              {compactAd ? "Sponsorisé" : "Espace sponsorisé"}
             </span>
             {!compactAd && (
               <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-medium text-white/80 backdrop-blur">
