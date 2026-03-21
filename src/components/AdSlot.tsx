@@ -425,25 +425,25 @@ export default function AdSlot({
   }, [items, idx]);
 
   const frameClass =
-    "relative w-full overflow-hidden rounded-[22px] border border-white/15 bg-white/[0.06] shadow-[0_24px_70px_rgba(0,0,0,0.22)] ring-1 ring-white/10 backdrop-blur-sm";
+    "relative w-full overflow-hidden rounded-[28px] border border-white/18 bg-white/[0.04] shadow-[0_28px_80px_rgba(0,0,0,0.20)] ring-1 ring-white/10 backdrop-blur-sm";
 
   const aspectClass = compactAd
     ? "aspect-[16/7] min-h-[132px]"
-    : "aspect-[32/7] min-h-[165px] sm:aspect-[32/7] sm:min-h-[185px] md:aspect-[34/7] md:min-h-[205px] lg:aspect-[36/7] lg:min-h-[225px] xl:aspect-[38/7] xl:min-h-[245px]";
+    : "aspect-[36/7] min-h-[156px] sm:aspect-[36/7] sm:min-h-[176px] md:aspect-[38/7] md:min-h-[192px] lg:aspect-[40/7] lg:min-h-[208px] xl:aspect-[42/7] xl:min-h-[224px]";
 
   const skeletonClass = [
-    "w-full rounded-[22px] border border-white/10",
+    "w-full rounded-[28px] border border-white/10",
     "bg-gradient-to-br from-white/10 via-white/5 to-white/10",
-    "shadow-[0_24px_70px_rgba(0,0,0,0.18)] animate-pulse",
+    "shadow-[0_28px_80px_rgba(0,0,0,0.18)] animate-pulse",
     aspectClass,
   ].join(" ");
 
   const mediaBase = "absolute inset-0 h-full w-full object-cover";
 
   const fallbackClass = [
-    "relative isolate w-full overflow-hidden rounded-[22px]",
+    "relative isolate w-full overflow-hidden rounded-[28px]",
     "border border-white/15 bg-gradient-to-br from-slate-900 via-blue-950 to-blue-900",
-    "shadow-[0_24px_70px_rgba(0,0,0,0.22)] ring-1 ring-white/10",
+    "shadow-[0_28px_80px_rgba(0,0,0,0.20)] ring-1 ring-white/10",
     aspectClass,
   ].join(" ");
 
@@ -633,8 +633,9 @@ export default function AdSlot({
         {renderMedia(front, "front")}
         {back ? renderMedia(back, "back") : null}
 
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/48 via-black/14 to-black/8" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.16),transparent_22%),radial-gradient(circle_at_bottom_right,rgba(37,99,235,0.18),transparent_30%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/42 via-black/10 to-black/4" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.12),transparent_22%),radial-gradient(circle_at_bottom_right,rgba(37,99,235,0.12),transparent_30%)]" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/20" />
 
         <div className="absolute left-3 top-3 z-20 flex max-w-[75%] flex-wrap items-center gap-2 sm:left-4 sm:top-4">
           {showSponsorBadge && (
@@ -645,12 +646,12 @@ export default function AdSlot({
 
           {!compactAd && (
             <>
-              <span className="max-w-full truncate rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur">
+              <span className="max-w-full truncate rounded-full bg-black/28 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur">
                 {front.item.campaign.title}
               </span>
 
               {mode === "asset" && (
-                <span className="rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur">
+                <span className="rounded-full bg-black/28 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur">
                   Média
                 </span>
               )}
@@ -659,26 +660,26 @@ export default function AdSlot({
         </div>
 
         {effectiveShowCounter && totalCount > 1 && (
-          <div className="absolute right-3 top-3 z-20 rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur sm:right-4 sm:top-4">
+          <div className="absolute right-3 top-3 z-20 rounded-full bg-black/28 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur sm:right-4 sm:top-4">
             {idx + 1}/{totalCount}
           </div>
         )}
 
         {!compactAd && (
-          <div className="absolute inset-x-0 bottom-0 z-20 p-3 sm:p-4 lg:p-4">
+          <div className="absolute inset-x-0 bottom-0 z-20 p-3 sm:p-4 lg:px-5 lg:py-4">
             <div className="flex items-end justify-between gap-4">
               <div className="max-w-[80%]">
-                <h3 className="line-clamp-2 text-sm font-extrabold text-white drop-shadow sm:text-base lg:text-lg">
+                <h3 className="line-clamp-2 text-sm font-extrabold text-white drop-shadow sm:text-base lg:text-[1.05rem]">
                   {activeCampaign.title}
                 </h3>
 
-                <p className="mt-1 line-clamp-2 text-[11px] text-white/80 sm:text-xs lg:text-sm">
+                <p className="mt-1 line-clamp-2 text-[11px] text-white/82 sm:text-xs lg:text-[13px]">
                   Découvrez cette campagne sponsorisée et profitez d’une mise en avant premium.
                 </p>
               </div>
 
               {activeCampaign.link_url && (
-                <div className="hidden shrink-0 items-center gap-2 rounded-full bg-white/12 px-3 py-2 text-xs font-semibold text-white backdrop-blur lg:flex">
+                <div className="hidden shrink-0 items-center gap-2 rounded-full border border-white/12 bg-white/10 px-3 py-2 text-xs font-semibold text-white backdrop-blur lg:flex">
                   <span>Découvrir</span>
                   <ExternalLink className="h-3.5 w-3.5" />
                 </div>
@@ -686,10 +687,10 @@ export default function AdSlot({
             </div>
 
             <div className="mt-2.5 flex items-center justify-between gap-3">
-              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/15">
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/14">
                 <div
                   key={`${activeCampaign.id}-${idx}`}
-                  className="h-full rounded-full bg-white/85"
+                  className="h-full rounded-full bg-white/90"
                   style={{
                     width: "100%",
                     animation: shouldPause ? "none" : `adProgress ${currentDurationMs}ms linear forwards`,
@@ -698,7 +699,7 @@ export default function AdSlot({
               </div>
 
               {pauseOnHover && (
-                <div className="shrink-0 rounded-full bg-black/25 px-2.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur">
+                <div className="shrink-0 rounded-full bg-black/20 px-2.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur">
                   {hovered ? "Pause" : "Auto"}
                 </div>
               )}
