@@ -185,7 +185,7 @@ const HeroSection = () => {
           </h1>
 
           {!compactHero && (
-            <p className="mx-auto mt-3 max-w-3xl text-sm text-blue-100 sm:text-lg">
+            <p className="mx-auto mt-3 max-w-4xl text-[15px] leading-relaxed text-blue-100 sm:text-[18px] lg:text-[19px]">
               Parce que trouver la bonne personne devrait toujours être simple.
             </p>
           )}
@@ -203,7 +203,7 @@ const HeroSection = () => {
           </div>
         </div>
 
-        <div className={`mx-auto ${compactHero ? "mt-6" : "mt-8"} max-w-4xl`}>
+        <div className={`mx-auto ${compactHero ? "mt-6" : "mt-8"} max-w-[920px] lg:max-w-[980px] xl:max-w-[1040px]`}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -211,7 +211,7 @@ const HeroSection = () => {
             }}
             className="rounded-2xl bg-white p-3 text-gray-900 shadow-[0_20px_50px_rgba(0,0,0,0.15)]"
           >
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.15fr_1.15fr_0.9fr]">
               <div className="relative" ref={jobsBoxRef}>
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
 
