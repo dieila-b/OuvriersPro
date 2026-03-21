@@ -429,7 +429,7 @@ export default function AdSlot({
 
   const aspectClass = compactAd
     ? "aspect-[16/7] min-h-[132px]"
-    : "aspect-[16/8] min-h-[180px] sm:aspect-[16/7] sm:min-h-[210px] md:aspect-[16/6] md:min-h-[240px] lg:aspect-[16/5] lg:min-h-[280px]";
+    : "aspect-[24/7] min-h-[160px] sm:aspect-[24/7] sm:min-h-[180px] md:aspect-[26/7] md:min-h-[200px] lg:aspect-[28/7] lg:min-h-[220px] xl:aspect-[30/7] xl:min-h-[235px]";
 
   const skeletonClass = [
     "w-full rounded-[22px] border border-white/10",
@@ -633,8 +633,8 @@ export default function AdSlot({
         {renderMedia(front, "front")}
         {back ? renderMedia(back, "back") : null}
 
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-black/15" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_22%),radial-gradient(circle_at_bottom_right,rgba(37,99,235,0.28),transparent_30%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/52 via-black/16 to-black/10" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_22%),radial-gradient(circle_at_bottom_right,rgba(37,99,235,0.22),transparent_30%)]" />
 
         <div className="absolute left-3 top-3 z-20 flex max-w-[75%] flex-wrap items-center gap-2 sm:left-4 sm:top-4">
           {showSponsorBadge && (
@@ -665,27 +665,27 @@ export default function AdSlot({
         )}
 
         {!compactAd && (
-          <div className="absolute inset-x-0 bottom-0 z-20 p-4 sm:p-5">
+          <div className="absolute inset-x-0 bottom-0 z-20 p-3 sm:p-4">
             <div className="flex items-end justify-between gap-4">
-              <div className="max-w-[78%]">
-                <h3 className="line-clamp-2 text-sm font-extrabold text-white drop-shadow sm:text-lg">
+              <div className="max-w-[80%]">
+                <h3 className="line-clamp-2 text-sm font-extrabold text-white drop-shadow sm:text-base lg:text-lg">
                   {activeCampaign.title}
                 </h3>
 
-                <p className="mt-1 line-clamp-2 text-[11px] text-white/80 sm:text-sm">
+                <p className="mt-1 line-clamp-2 text-[11px] text-white/80 sm:text-xs lg:text-sm">
                   Découvrez cette campagne sponsorisée et profitez d’une mise en avant premium.
                 </p>
               </div>
 
               {activeCampaign.link_url && (
-                <div className="hidden shrink-0 items-center gap-2 rounded-full bg-white/12 px-3 py-2 text-xs font-semibold text-white backdrop-blur md:flex">
+                <div className="hidden shrink-0 items-center gap-2 rounded-full bg-white/12 px-3 py-2 text-xs font-semibold text-white backdrop-blur lg:flex">
                   <span>Découvrir</span>
                   <ExternalLink className="h-3.5 w-3.5" />
                 </div>
               )}
             </div>
 
-            <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="mt-2.5 flex items-center justify-between gap-3">
               <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/15">
                 <div
                   key={`${activeCampaign.id}-${idx}`}
