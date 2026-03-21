@@ -163,14 +163,15 @@ const HeroSection = () => {
   };
 
   return (
-    <section className="relative w-full overflow-hidden bg-gradient-to-br from-pro-blue to-blue-600 text-white">
+    <section className="relative w-full overflow-hidden bg-gradient-to-br from-pro-blue via-[#2d63e2] to-[#2f66ea] text-white">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_center,rgba(255,255,255,0.08),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.06),transparent_28%)]" />
       <div className="relative z-10 px-4 py-10 sm:px-6 sm:py-12 lg:px-4 xl:px-5">
         <div className={compactHero ? "mx-auto max-w-7xl text-center" : "mx-auto w-full max-w-none text-center"}>
           <h1
             className={
               compactHero
                 ? "mx-auto flex min-h-[40px] w-full max-w-[92vw] items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-2 py-2 text-center text-[11px] font-extrabold leading-none tracking-[-0.02em] text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-sm"
-                : "mx-auto block w-full max-w-none px-2 text-center font-extrabold leading-[1.02] tracking-[-0.035em] text-white drop-shadow-[0_10px_28px_rgba(0,0,0,0.18)] text-[clamp(2rem,3.25vw,4.35rem)]"
+                : "mx-auto block w-full max-w-none px-2 text-center font-extrabold leading-[1.01] tracking-[-0.04em] text-white drop-shadow-[0_14px_34px_rgba(0,0,0,0.20)] text-[clamp(2rem,3.25vw,4.35rem)]"
             }
           >
             <span
@@ -185,35 +186,41 @@ const HeroSection = () => {
           </h1>
 
           {!compactHero && (
-            <p className="mx-auto mt-3 max-w-4xl text-[15px] leading-relaxed text-blue-100 sm:text-[18px] lg:text-[19px]">
-              Parce que trouver la bonne personne devrait toujours être simple.
-            </p>
+            <div className="mx-auto mt-4 flex justify-center">
+              <p className="max-w-[760px] text-center text-[16px] leading-[1.65] text-blue-100/95 sm:text-[18px] lg:text-[19px]">
+                Parce que trouver la bonne personne devrait toujours être simple.
+              </p>
+            </div>
           )}
 
-          <div className={`${compactHero ? "mt-3" : "mt-4"} flex flex-wrap justify-center gap-3 text-xs`}>
-            <span className="flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 backdrop-blur">
+          <div className={`${compactHero ? "mt-3" : "mt-5"} flex flex-wrap justify-center gap-3 text-xs`}>
+            <span className="flex items-center gap-1 rounded-full border border-white/12 bg-white/10 px-3 py-1 text-white/95 backdrop-blur">
               <ShieldCheck className="h-3.5 w-3.5" />
               {cms("hero.badge.verified", "Profils vérifiés", "Verified profiles")}
             </span>
 
-            <span className="flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 backdrop-blur">
+            <span className="flex items-center gap-1 rounded-full border border-white/12 bg-white/10 px-3 py-1 text-white/95 backdrop-blur">
               <Zap className="h-3.5 w-3.5" />
               {cms("hero.badge.fast", "Réponse rapide", "Fast response")}
             </span>
           </div>
         </div>
 
-        <div className={`mx-auto ${compactHero ? "mt-6" : "mt-8"} max-w-[920px] lg:max-w-[980px] xl:max-w-[1040px]`}>
+        <div className={`mx-auto ${compactHero ? "mt-6" : "mt-8"} max-w-[980px] lg:max-w-[1080px] xl:max-w-[1140px]`}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleSearch();
             }}
-            className="rounded-2xl bg-white p-3 text-gray-900 shadow-[0_20px_50px_rgba(0,0,0,0.15)]"
+            className={[
+              "rounded-[26px] border border-white/55 bg-white/95 p-3 text-gray-900",
+              "shadow-[0_26px_70px_rgba(0,0,0,0.18)] backdrop-blur-md",
+              compactHero ? "" : "ring-1 ring-white/30",
+            ].join(" ")}
           >
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.15fr_1.15fr_0.9fr]">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.18fr_1.18fr_0.92fr]">
               <div className="relative" ref={jobsBoxRef}>
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
 
                 <Input
                   placeholder={cms(
@@ -227,11 +234,11 @@ const HeroSection = () => {
                     setSearchTerm(e.target.value);
                     setOpenJobs(true);
                   }}
-                  className="h-11 rounded-xl border-gray-200 pl-9 focus:ring-2 focus:ring-blue-500"
+                  className="h-12 rounded-2xl border-slate-200/90 bg-slate-50/90 pl-9 text-[15px] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
                 />
 
                 {openJobs && filteredJobs.length > 0 && (
-                  <div className="absolute z-50 mt-1 w-full rounded-xl border bg-white shadow">
+                  <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.16)]">
                     {filteredJobs.map((j) => (
                       <div
                         key={j}
@@ -239,7 +246,7 @@ const HeroSection = () => {
                           setSearchTerm(j);
                           setOpenJobs(false);
                         }}
-                        className="cursor-pointer px-3 py-2 text-sm hover:bg-gray-50"
+                        className="cursor-pointer px-4 py-3 text-sm text-slate-700 hover:bg-slate-50"
                       >
                         {j}
                       </div>
@@ -249,7 +256,7 @@ const HeroSection = () => {
               </div>
 
               <div className="relative" ref={districtsBoxRef}>
-                <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
 
                 <Input
                   placeholder={cms(
@@ -264,19 +271,19 @@ const HeroSection = () => {
                     setOpenDistricts(true);
                     if (geo) setGeo(null);
                   }}
-                  className="h-11 rounded-xl border-gray-200 pl-9 pr-10 focus:ring-2 focus:ring-blue-500"
+                  className="h-12 rounded-2xl border-slate-200/90 bg-slate-50/90 pl-9 pr-10 text-[15px] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
                 />
 
                 <button
                   type="button"
                   onClick={handleGeoLocate}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-blue-600"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-slate-500 transition-colors hover:bg-blue-50 hover:text-blue-600"
                 >
                   <LocateFixed className={`h-4 w-4 ${geoLoading ? "animate-pulse" : ""}`} />
                 </button>
 
                 {openDistricts && filteredDistricts.length > 0 && (
-                  <div className="absolute z-50 mt-1 w-full rounded-xl border bg-white shadow">
+                  <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.16)]">
                     {filteredDistricts.map((d) => (
                       <div
                         key={d}
@@ -285,7 +292,7 @@ const HeroSection = () => {
                           setGeo(null);
                           setOpenDistricts(false);
                         }}
-                        className="cursor-pointer px-3 py-2 text-sm hover:bg-gray-50"
+                        className="cursor-pointer px-4 py-3 text-sm text-slate-700 hover:bg-slate-50"
                       >
                         {d}
                       </div>
@@ -296,14 +303,19 @@ const HeroSection = () => {
 
               <Button
                 type="submit"
-                className="h-11 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 font-semibold text-white shadow-md hover:from-blue-700 hover:to-blue-700"
+                className={[
+                  "h-12 rounded-2xl border border-blue-500/70",
+                  "bg-gradient-to-r from-blue-600 via-[#2f66ea] to-blue-700",
+                  "font-semibold text-white shadow-[0_12px_28px_rgba(37,99,235,0.32)]",
+                  "transition-all duration-200 hover:-translate-y-[1px] hover:from-blue-700 hover:to-blue-700",
+                ].join(" ")}
               >
                 {cms("home.search.btn", "Trouver maintenant", "Find now")}
               </Button>
             </div>
 
             {geo && (
-              <div className="mt-2 text-xs text-gray-500">
+              <div className="mt-3 text-xs text-slate-500">
                 📍 {cms("geo.active", "Recherche proche activée", "Nearby search enabled")}
               </div>
             )}
