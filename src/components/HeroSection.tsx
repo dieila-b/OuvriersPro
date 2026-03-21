@@ -311,11 +311,9 @@ const HeroSection = () => {
         </div>
       </div>
 
-      {!native && (
-        <div className="mt-6">
-          <AdSlot placement="home_feed" />
-        </div>
-      )}
+      <div className="mt-6">
+        <AdSlot placement="home_feed" />
+      </div>
     </section>
   );
 };
