@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ExternalLink, Image as ImageIcon, Sparkles } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
 
 type CampaignStatus = "draft" | "published" | "paused" | "ended";
 
@@ -65,6 +66,24 @@ function safeSeconds(n: any, fallback = DEFAULT_SECONDS) {
   return Math.max(1, Math.floor(v));
 }
 
+function isNativeRuntime() {
+  try {
+    if (Capacitor?.isNativePlatform?.()) return true;
+  } catch {}
+
+  try {
+    const wCap = (window as any)?.Capacitor;
+    if (wCap?.isNativePlatform?.()) return true;
+  } catch {}
+
+  try {
+    const p = window.location?.protocol ?? "";
+    if (p === "capacitor:" || p === "file:") return true;
+  } catch {}
+
+  return false;
+}
+
 async function safeSelectCampaigns(placement: string) {
   const withDisplay = await supabase
     .from("ads_campaigns")
@@ -111,6 +130,15 @@ export default function AdSlot({
   const [back, setBack] = useState<{ item: AdItem; signed: SignedEntry } | null>(null);
   const [hovered, setHovered] = useState(false);
 
+  const native = useMemo(() => isNativeRuntime(), []);
+  const [compactAd, setCompactAd] = useState(() => {
+    try {
+      return native || window.innerWidth < 640;
+    } catch {
+      return native;
+    }
+  });
+
   const signedCache = useRef<Map<string, SignedEntry>>(new Map());
   const timerRef = useRef<number | null>(null);
   const remainingRef = useRef<number>(0);
@@ -131,6 +159,21 @@ export default function AdSlot({
   }, [currentItem, defaultDisplaySeconds]);
 
   const shouldPause = pauseOnHover && hovered;
+  const effectiveShowCounter = showCounter && !compactAd;
+
+  useEffect(() => {
+    const syncCompactAd = () => {
+      try {
+        setCompactAd(native || window.innerWidth < 640);
+      } catch {
+        setCompactAd(native);
+      }
+    };
+
+    syncCompactAd();
+    window.addEventListener("resize", syncCompactAd);
+    return () => window.removeEventListener("resize", syncCompactAd);
+  }, [native]);
 
   const clearTimer = () => {
     if (timerRef.current) {
@@ -323,12 +366,13 @@ export default function AdSlot({
 
   useEffect(() => {
     if (!pauseOnHover) return;
+    if (compactAd) return;
 
     if (shouldPause) pauseTimer();
     else resumeTimer();
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shouldPause]);
+  }, [shouldPause, compactAd]);
 
   const goNext = useCallback(async () => {
     if (!items.length) return;
@@ -368,8 +412,9 @@ export default function AdSlot({
   const frameClass =
     "relative w-full overflow-hidden rounded-[22px] border border-white/15 bg-white/[0.06] shadow-[0_24px_70px_rgba(0,0,0,0.22)] ring-1 ring-white/10 backdrop-blur-sm";
 
-  const aspectClass =
-    "aspect-[16/8] min-h-[180px] sm:aspect-[16/7] sm:min-h-[210px] md:aspect-[16/6] md:min-h-[240px] lg:aspect-[16/5] lg:min-h-[280px]";
+  const aspectClass = compactAd
+    ? "aspect-[16/7] min-h-[140px]"
+    : "aspect-[16/8] min-h-[180px] sm:aspect-[16/7] sm:min-h-[210px] md:aspect-[16/6] md:min-h-[240px] lg:aspect-[16/5] lg:min-h-[280px]";
 
   const skeletonClass = [
     "w-full rounded-[22px] border border-white/10",
@@ -396,25 +441,35 @@ export default function AdSlot({
             <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/90 backdrop-blur">
               Espace sponsorisé
             </span>
-            <span className="rounded-full bg-red-500/15 px-3 py-1 text-[11px] font-medium text-red-100 backdrop-blur">
-              Indisponible
-            </span>
+            {!compactAd && (
+              <span className="rounded-full bg-red-500/15 px-3 py-1 text-[11px] font-medium text-red-100 backdrop-blur">
+                Indisponible
+              </span>
+            )}
           </div>
 
-          <div className="max-w-xl">
-            <h3 className="text-lg font-extrabold text-white sm:text-xl">
-              Publicité momentanément indisponible
-            </h3>
-            <p className="mt-2 text-sm leading-6 text-white/75">
-              Le slot publicitaire existe bien, mais le média n’a pas pu être chargé pour le moment.
-            </p>
-            <p className="mt-2 text-xs text-red-100/80">{error}</p>
-          </div>
+          {!compactAd ? (
+            <>
+              <div className="max-w-xl">
+                <h3 className="text-lg font-extrabold text-white sm:text-xl">
+                  Publicité momentanément indisponible
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-white/75">
+                  Le slot publicitaire existe bien, mais le média n’a pas pu être chargé pour le moment.
+                </p>
+                <p className="mt-2 text-xs text-red-100/80">{error}</p>
+              </div>
 
-          <div className="flex items-center gap-2 text-white/70">
-            <ImageIcon className="h-4 w-4" />
-            <span className="text-xs">Rechargement automatique au prochain rendu</span>
-          </div>
+              <div className="flex items-center gap-2 text-white/70">
+                <ImageIcon className="h-4 w-4" />
+                <span className="text-xs">Rechargement automatique au prochain rendu</span>
+              </div>
+            </>
+          ) : (
+            <div className="flex h-full items-end">
+              <p className="text-xs text-white/70">Publicité indisponible</p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -434,31 +489,41 @@ export default function AdSlot({
             <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/90 backdrop-blur">
               Espace sponsorisé
             </span>
-            <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-medium text-white/80 backdrop-blur">
-              Disponible
-            </span>
+            {!compactAd && (
+              <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-medium text-white/80 backdrop-blur">
+                Disponible
+              </span>
+            )}
           </div>
 
-          <div className="max-w-xl">
-            <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-white shadow-lg backdrop-blur">
-              <Sparkles className="h-5 w-5" />
-            </div>
-            <h3 className="text-lg font-extrabold text-white sm:text-2xl">
-              Votre publicité peut apparaître ici
-            </h3>
-            <p className="mt-2 text-sm leading-6 text-white/75 sm:text-[15px]">
-              Mettez en avant votre campagne avec un visuel premium visible sur mobile et desktop.
-            </p>
-          </div>
+          {!compactAd ? (
+            <>
+              <div className="max-w-xl">
+                <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-white shadow-lg backdrop-blur">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <h3 className="text-lg font-extrabold text-white sm:text-2xl">
+                  Votre publicité peut apparaître ici
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-white/75 sm:text-[15px]">
+                  Mettez en avant votre campagne avec un visuel premium visible sur mobile et desktop.
+                </p>
+              </div>
 
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-xs text-white/65">
-              Placement : <span className="font-semibold text-white/85">{placement}</span>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs text-white/65">
+                  Placement : <span className="font-semibold text-white/85">{placement}</span>
+                </div>
+                <div className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-medium text-white/85 backdrop-blur">
+                  Aucun média actif
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex h-full items-end">
+              <p className="text-xs text-white/70">Aucun média actif</p>
             </div>
-            <div className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-medium text-white/85 backdrop-blur">
-              Aucun média actif
-            </div>
-          </div>
+          )}
         </div>
       </div>
     );
@@ -543,8 +608,12 @@ export default function AdSlot({
     <Wrapper>
       <div
         className={[frameClass, aspectClass, "group"].join(" ")}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
+        onMouseEnter={() => {
+          if (!compactAd) setHovered(true);
+        }}
+        onMouseLeave={() => {
+          if (!compactAd) setHovered(false);
+        }}
       >
         {renderMedia(front, "front")}
         {back ? renderMedia(back, "back") : null}
@@ -559,62 +628,68 @@ export default function AdSlot({
             </span>
           )}
 
-          <span className="max-w-full truncate rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur">
-            {front.item.campaign.title}
-          </span>
+          {!compactAd && (
+            <>
+              <span className="max-w-full truncate rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur">
+                {front.item.campaign.title}
+              </span>
 
-          {mode === "asset" && (
-            <span className="rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur">
-              Média
-            </span>
+              {mode === "asset" && (
+                <span className="rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur">
+                  Média
+                </span>
+              )}
+            </>
           )}
         </div>
 
-        {showCounter && totalCount > 1 && (
+        {effectiveShowCounter && totalCount > 1 && (
           <div className="absolute right-3 top-3 z-20 rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur sm:right-4 sm:top-4">
             {idx + 1}/{totalCount}
           </div>
         )}
 
-        <div className="absolute inset-x-0 bottom-0 z-20 p-4 sm:p-5">
-          <div className="flex items-end justify-between gap-4">
-            <div className="max-w-[78%]">
-              <h3 className="line-clamp-2 text-sm font-extrabold text-white drop-shadow sm:text-lg">
-                {activeCampaign.title}
-              </h3>
+        {!compactAd && (
+          <div className="absolute inset-x-0 bottom-0 z-20 p-4 sm:p-5">
+            <div className="flex items-end justify-between gap-4">
+              <div className="max-w-[78%]">
+                <h3 className="line-clamp-2 text-sm font-extrabold text-white drop-shadow sm:text-lg">
+                  {activeCampaign.title}
+                </h3>
 
-              <p className="mt-1 line-clamp-2 text-[11px] text-white/80 sm:text-sm">
-                Découvrez cette campagne sponsorisée et profitez d’une mise en avant premium.
-              </p>
+                <p className="mt-1 line-clamp-2 text-[11px] text-white/80 sm:text-sm">
+                  Découvrez cette campagne sponsorisée et profitez d’une mise en avant premium.
+                </p>
+              </div>
+
+              {activeCampaign.link_url && (
+                <div className="hidden shrink-0 items-center gap-2 rounded-full bg-white/12 px-3 py-2 text-xs font-semibold text-white backdrop-blur md:flex">
+                  <span>Découvrir</span>
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </div>
+              )}
             </div>
 
-            {activeCampaign.link_url && (
-              <div className="hidden shrink-0 items-center gap-2 rounded-full bg-white/12 px-3 py-2 text-xs font-semibold text-white backdrop-blur md:flex">
-                <span>Découvrir</span>
-                <ExternalLink className="h-3.5 w-3.5" />
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/15">
+                <div
+                  key={`${activeCampaign.id}-${idx}`}
+                  className="h-full rounded-full bg-white/85"
+                  style={{
+                    width: "100%",
+                    animation: shouldPause ? "none" : `adProgress ${currentDurationMs}ms linear forwards`,
+                  }}
+                />
               </div>
-            )}
-          </div>
 
-          <div className="mt-3 flex items-center justify-between gap-3">
-            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/15">
-              <div
-                key={`${activeCampaign.id}-${idx}`}
-                className="h-full rounded-full bg-white/85"
-                style={{
-                  width: "100%",
-                  animation: shouldPause ? "none" : `adProgress ${currentDurationMs}ms linear forwards`,
-                }}
-              />
+              {pauseOnHover && (
+                <div className="shrink-0 rounded-full bg-black/25 px-2.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur">
+                  {hovered ? "Pause" : "Auto"}
+                </div>
+              )}
             </div>
-
-            {pauseOnHover && (
-              <div className="shrink-0 rounded-full bg-black/25 px-2.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur">
-                {hovered ? "Pause" : "Auto"}
-              </div>
-            )}
           </div>
-        </div>
+        )}
 
         <style>
           {`
