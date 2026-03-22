@@ -13,6 +13,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import AdSlot from "@/components/AdSlot";
 import { Capacitor } from "@capacitor/core";
+import { Geolocation } from "@capacitor/geolocation";
 
 const isNativeRuntime = () => {
   try {
@@ -56,6 +57,7 @@ const HeroSection = () => {
   const districtsBoxRef = useRef<HTMLDivElement>(null);
 
   const [geoLoading, setGeoLoading] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
 
   const native = useMemo(() => isNativeRuntime(), []);
   const [compactHero, setCompactHero] = useState(() => {
@@ -134,18 +136,92 @@ const HeroSection = () => {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const handleGeoLocate = () => {
-    setGeoLoading(true);
+  const handleGeoLocate = async () => {
+    try {
+      setGeoLoading(true);
+      setGeoError(null);
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setGeo({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setGeoLoading(false);
-      },
-      () => {
+      if (native) {
+        const currentPermissions = await Geolocation.checkPermissions();
+
+        const alreadyGranted =
+          currentPermissions.location === "granted" ||
+          currentPermissions.coarseLocation === "granted";
+
+        if (!alreadyGranted) {
+          const requested = await Geolocation.requestPermissions({
+            permissions: ["location", "coarseLocation"],
+          });
+
+          const granted =
+            requested.location === "granted" ||
+            requested.coarseLocation === "granted";
+
+          if (!granted) {
+            setGeoError(
+              cms(
+                "geo.error.permission_denied",
+                "Autorisation de localisation refusée.",
+                "Location permission denied."
+              )
+            );
+            return;
+          }
+        }
+
+        const position = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+        });
+
+        setGeo({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setGeoError(null);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setGeo({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          });
+          setGeoError(null);
+          setGeoLoading(false);
+        },
+        () => {
+          setGeoError(
+            cms(
+              "geo.error.unavailable",
+              "Impossible de récupérer votre position. Autorisez la localisation dans votre navigateur.",
+              "Unable to retrieve your location. Please allow location access in your browser."
+            )
+          );
+          setGeoLoading(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+        }
+      );
+    } catch (error) {
+      console.error("Geolocation error:", error);
+      setGeoError(
+        cms(
+          "geo.error.generic",
+          "Impossible de récupérer votre position. Vérifiez que la localisation du téléphone est activée.",
+          "Unable to retrieve your location. Make sure location is enabled on your phone."
+        )
+      );
+    } finally {
+      if (native) {
         setGeoLoading(false);
       }
-    );
+    }
   };
 
   const handleSearch = () => {
@@ -327,6 +403,12 @@ const HeroSection = () => {
               {geo && (
                 <div className="mt-3 text-xs text-slate-500">
                   📍 {cms("geo.active", "Recherche proche activée", "Nearby search enabled")}
+                </div>
+              )}
+
+              {geoError && (
+                <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+                  {geoError}
                 </div>
               )}
             </div>
