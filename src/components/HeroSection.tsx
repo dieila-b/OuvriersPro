@@ -13,7 +13,6 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import AdSlot from "@/components/AdSlot";
 import { Capacitor } from "@capacitor/core";
-import { Geolocation } from "@capacitor/geolocation";
 
 const isNativeRuntime = () => {
   try {
@@ -137,90 +136,112 @@ const HeroSection = () => {
   }, []);
 
   const handleGeoLocate = async () => {
+    setGeoLoading(true);
+    setGeoError(null);
+
     try {
-      setGeoLoading(true);
-      setGeoError(null);
-
       if (native) {
-        const currentPermissions = await Geolocation.checkPermissions();
+        const geoPlugin =
+          (window as any)?.Capacitor?.Plugins?.Geolocation ||
+          (window as any)?.CapacitorCustomPlatform?.Plugins?.Geolocation;
 
-        const alreadyGranted =
-          currentPermissions.location === "granted" ||
-          currentPermissions.coarseLocation === "granted";
-
-        if (!alreadyGranted) {
-          const requested = await Geolocation.requestPermissions({
-            permissions: ["location", "coarseLocation"],
-          });
-
-          const granted =
-            requested.location === "granted" ||
-            requested.coarseLocation === "granted";
-
-          if (!granted) {
-            setGeoError(
-              cms(
-                "geo.error.permission_denied",
-                "Autorisation de localisation refusée.",
-                "Location permission denied."
-              )
-            );
-            return;
-          }
+        if (!geoPlugin) {
+          throw new Error("PLUGIN_UNAVAILABLE");
         }
 
-        const position = await Geolocation.getCurrentPosition({
+        try {
+          if (typeof geoPlugin.checkPermissions === "function") {
+            const permissions = await geoPlugin.checkPermissions();
+            const granted =
+              permissions?.location === "granted" ||
+              permissions?.coarseLocation === "granted";
+
+            if (!granted && typeof geoPlugin.requestPermissions === "function") {
+              const requested = await geoPlugin.requestPermissions();
+              const nowGranted =
+                requested?.location === "granted" ||
+                requested?.coarseLocation === "granted";
+
+              if (!nowGranted) {
+                throw new Error("PERMISSION_DENIED");
+              }
+            }
+          }
+        } catch (permErr) {
+          console.error("Permission error:", permErr);
+        }
+
+        const pos = await geoPlugin.getCurrentPosition({
           enableHighAccuracy: true,
           timeout: 15000,
           maximumAge: 0,
         });
 
         setGeo({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
         });
         setGeoError(null);
         return;
       }
 
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setGeo({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-          });
-          setGeoError(null);
-          setGeoLoading(false);
-        },
-        () => {
-          setGeoError(
-            cms(
-              "geo.error.unavailable",
-              "Impossible de récupérer votre position. Autorisez la localisation dans votre navigateur.",
-              "Unable to retrieve your location. Please allow location access in your browser."
-            )
-          );
-          setGeoLoading(false);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0,
-        }
-      );
-    } catch (error) {
-      console.error("Geolocation error:", error);
-      setGeoError(
-        cms(
-          "geo.error.generic",
-          "Impossible de récupérer votre position. Vérifiez que la localisation du téléphone est activée.",
-          "Unable to retrieve your location. Make sure location is enabled on your phone."
-        )
-      );
-    } finally {
-      if (native) {
-        setGeoLoading(false);
+      if (!("geolocation" in navigator)) {
+        throw new Error("WEB_GEO_UNAVAILABLE");
       }
+
+      await new Promise<void>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            setGeo({
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+            });
+            setGeoError(null);
+            resolve();
+          },
+          (err) => {
+            reject(err);
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0,
+          }
+        );
+      });
+    } catch (error: any) {
+      console.error("Geolocation error:", error);
+
+      const code = error?.code;
+      const message = error?.message ?? "";
+
+      if (message === "PERMISSION_DENIED" || code === 1) {
+        setGeoError(
+          cms(
+            "geo.error.permission_denied",
+            "Autorisation de localisation refusée.",
+            "Location permission denied."
+          )
+        );
+      } else if (message === "PLUGIN_UNAVAILABLE") {
+        setGeoError(
+          cms(
+            "geo.error.plugin_unavailable",
+            "Le module de localisation mobile n'est pas disponible dans cette version de l'application.",
+            "The mobile geolocation plugin is not available in this app build."
+          )
+        );
+      } else {
+        setGeoError(
+          cms(
+            "geo.error.unavailable",
+            "Impossible de récupérer votre position. Autorisez la localisation dans votre navigateur ou sur votre téléphone.",
+            "Unable to retrieve your location. Please allow location access in your browser or on your phone."
+          )
+        );
+      }
+    } finally {
+      setGeoLoading(false);
     }
   };
 
