@@ -18,8 +18,6 @@ import { supabase } from "@/lib/supabase";
 import { Capacitor } from "@capacitor/core";
 
 import { UiModeProvider } from "@/contexts/UiModeContext";
-import { networkService } from "@/services/networkService";
-import OfflineBanner from "@/components/offline/OfflineBanner";
 
 import PrivateRoute from "./components/PrivateRoute";
 import AdminLayout from "@/components/layout/AdminLayout";
@@ -93,6 +91,7 @@ const ClientContactForm = lazyRetry(() => import("./pages/ClientContactForm"));
  * Détection native robuste (Capacitor / WebView)
  */
 const isNativeRuntime = () => {
+
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
@@ -114,10 +113,7 @@ const isNativeRuntime = () => {
     const ua = navigator?.userAgent ?? "";
     if (ua.includes("wv") || ua.includes("Capacitor")) return true;
 
-    if (
-      window.location?.protocol === "https:" &&
-      /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)
-    ) {
+    if (window.location?.protocol === "https:" && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) {
       return true;
     }
   } catch {}
@@ -272,6 +268,7 @@ function AuthAuditLogger() {
   return null;
 }
 
+
 /**
  * Intercepteur global (Natif uniquement)
  * - Intercepte les <a href="/..."> pour les router en SPA via navigate()
@@ -330,6 +327,7 @@ function GlobalLinkInterceptor() {
 
   return null;
 }
+
 
 const AppRoutes = () => (
   <>
@@ -544,66 +542,6 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
 const App = () => {
   const queryClient = useAppQueryClient();
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const boot = async () => {
-      try {
-        try {
-          await networkService.init();
-        } catch (error) {
-          console.warn("[App] networkService.init warning:", error);
-        }
-
-        try {
-          const { error } = await supabase.auth.getSession();
-          if (error) {
-            console.warn("[App] getSession warning:", error.message);
-          }
-        } catch (error) {
-          console.warn("[App] getSession exception:", error);
-        }
-
-        try {
-          const current = networkService.getStatus?.();
-          if (current?.connected) {
-            const { syncService } = await import("@/services/syncService");
-            await syncService.processQueue();
-          }
-        } catch (error) {
-          console.warn("[App] initial sync warning:", error);
-        }
-      } catch (error) {
-        console.error("[App] boot fatal error:", error);
-      }
-    };
-
-    void boot();
-
-    const unsubscribe = networkService.subscribe(() => {
-      const status = networkService.getStatus?.();
-
-      if (status?.connected) {
-        import("@/services/syncService")
-          .then(({ syncService }) => syncService.processQueue())
-          .catch((error) => {
-            console.warn("[App] sync on reconnect warning:", error);
-          });
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      unsubscribe?.();
-
-      if (isMounted) return;
-
-      networkService.destroy().catch((error) => {
-        console.warn("[App] networkService.destroy warning:", error);
-      });
-    };
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -613,7 +551,6 @@ const App = () => {
             <Sonner />
             <RouterSwitch>
               <div className="min-h-dvh w-full min-w-0 overflow-x-hidden bg-white">
-                <OfflineBanner />
                 <AppRoutes />
               </div>
             </RouterSwitch>
