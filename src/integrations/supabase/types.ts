@@ -2644,6 +2644,7 @@ export type Database = {
       geomfromewkt: { Args: { "": string }; Returns: unknown }
       gettransactionid: { Args: never; Returns: unknown }
       is_admin: { Args: { uid: string }; Returns: boolean }
+      is_backoffice_admin: { Args: never; Returns: boolean }
       longtransactionsenabled: { Args: never; Returns: boolean }
       mark_contact_read: {
         Args: { p_contact_id: string; p_role: string }

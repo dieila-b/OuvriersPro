@@ -49,22 +49,22 @@ export const localStore = {
     await Preferences.clear();
   },
 
-  async mergeObject<T extends Record<string, any>>(key: string, patch: Partial<T>): Promise<T> {
-    const current = (await this.get<T>(key)) ?? ({} as T);
-    const merged = { ...current, ...patch } as T;
-    await this.set(key, merged);
+  async mergeObject(key: string, patch: Record<string, any>): Promise<Record<string, any>> {
+    const current = (await localStore.get<Record<string, any>>(key)) ?? {};
+    const merged = { ...current, ...patch };
+    await localStore.set(key, merged);
     return merged;
   },
 
   async replaceArray<T>(key: string, items: T[]): Promise<T[]> {
-    await this.set(key, items);
+    await localStore.set(key, items);
     return items;
   },
 
   async pushToArray<T>(key: string, item: T): Promise<T[]> {
-    const current = (await this.get<T[]>(key)) ?? [];
+    const current = (await localStore.get<T[]>(key)) ?? [];
     const next = [...current, item];
-    await this.set(key, next);
+    await localStore.set(key, next);
     return next;
   },
 };
