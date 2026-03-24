@@ -581,6 +581,12 @@ const App = () => {
         if (error) {
           console.warn("[App] getSession warning:", error.message);
         }
+
+        const current = networkService.getStatus();
+        if (current.connected) {
+          const { syncService } = await import("@/services/syncService");
+          await syncService.processQueue();
+        }
       } catch (error) {
         console.error("[App] boot error:", error);
       } finally {
@@ -588,10 +594,23 @@ const App = () => {
       }
     };
 
-    boot();
+    void boot();
+
+    const unsubscribe = networkService.subscribe(() => {
+      const status = networkService.getStatus();
+
+      if (status.connected) {
+        import("@/services/syncService")
+          .then(({ syncService }) => syncService.processQueue())
+          .catch((error) => {
+            console.warn("[App] sync on reconnect warning:", error);
+          });
+      }
+    });
 
     return () => {
       mounted = false;
+      unsubscribe();
       networkService.destroy().catch((error) => {
         console.warn("[App] networkService.destroy warning:", error);
       });
