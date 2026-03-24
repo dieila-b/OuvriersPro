@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useEffect, useMemo, useRef, Suspense, lazy } from "react";
+import React, { useEffect, useMemo, useRef, Suspense, lazy, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -16,8 +16,11 @@ import {
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Capacitor } from "@capacitor/core";
+import { Loader2 } from "lucide-react";
 
 import { UiModeProvider } from "@/contexts/UiModeContext";
+import { networkService } from "@/services/networkService";
+import OfflineBanner from "@/components/offline/OfflineBanner";
 
 import PrivateRoute from "./components/PrivateRoute";
 import AdminLayout from "@/components/layout/AdminLayout";
@@ -91,7 +94,6 @@ const ClientContactForm = lazyRetry(() => import("./pages/ClientContactForm"));
  * Détection native robuste (Capacitor / WebView)
  */
 const isNativeRuntime = () => {
-
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
@@ -113,7 +115,10 @@ const isNativeRuntime = () => {
     const ua = navigator?.userAgent ?? "";
     if (ua.includes("wv") || ua.includes("Capacitor")) return true;
 
-    if (window.location?.protocol === "https:" && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) {
+    if (
+      window.location?.protocol === "https:" &&
+      /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)
+    ) {
       return true;
     }
   } catch {}
@@ -268,7 +273,6 @@ function AuthAuditLogger() {
   return null;
 }
 
-
 /**
  * Intercepteur global (Natif uniquement)
  * - Intercepte les <a href="/..."> pour les router en SPA via navigate()
@@ -327,7 +331,6 @@ function GlobalLinkInterceptor() {
 
   return null;
 }
-
 
 const AppRoutes = () => (
   <>
@@ -539,8 +542,61 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
   return <Router>{children}</Router>;
 }
 
+function AppBootLoader() {
+  return (
+    <div className="flex min-h-dvh w-full items-center justify-center bg-white px-6">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <Loader2 className="h-6 w-6 animate-spin text-slate-700" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-slate-900">Initialisation de l’application</p>
+          <p className="text-xs text-slate-500">
+            Vérification de la session locale et du réseau…
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const App = () => {
   const queryClient = useAppQueryClient();
+  const [bootReady, setBootReady] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const boot = async () => {
+      try {
+        await networkService.init();
+
+        /**
+         * Important :
+         * on hydrate d'abord la session locale Supabase.
+         * Cela aide à conserver l'accès lorsque l'utilisateur
+         * a déjà été connecté auparavant.
+         */
+        const { error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn("[App] getSession warning:", error.message);
+        }
+      } catch (error) {
+        console.error("[App] boot error:", error);
+      } finally {
+        if (mounted) setBootReady(true);
+      }
+    };
+
+    boot();
+
+    return () => {
+      mounted = false;
+      networkService.destroy().catch((error) => {
+        console.warn("[App] networkService.destroy warning:", error);
+      });
+    };
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -551,7 +607,14 @@ const App = () => {
             <Sonner />
             <RouterSwitch>
               <div className="min-h-dvh w-full min-w-0 overflow-x-hidden bg-white">
-                <AppRoutes />
+                {bootReady ? (
+                  <>
+                    <OfflineBanner />
+                    <AppRoutes />
+                  </>
+                ) : (
+                  <AppBootLoader />
+                )}
               </div>
             </RouterSwitch>
           </UiModeProvider>
