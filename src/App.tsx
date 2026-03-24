@@ -274,7 +274,7 @@ function AuthAuditLogger() {
         localStorage.setItem(LS_KEY, String(now));
         return true;
       } catch {
-        return true;
+        return true; 
       }
     };
 
