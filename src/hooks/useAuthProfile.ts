@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Session, User } from "@supabase/supabase-js";
-import { authCache, normalizeRole } from "@/services/authCache";
-import { localStore } from "@/services/localStore";
-import { networkService } from "@/services/networkService";
 
 type UserRole = "user" | "admin" | "worker";
 
@@ -14,91 +11,20 @@ interface OpUserProfile {
   role: UserRole;
 }
 
-const PROFILE_CACHE_KEY = "cached_op_user_profile";
-
-function normalizeProfileRole(role: any): UserRole {
-  const normalized = normalizeRole(role);
-  if (normalized === "admin") return "admin";
-  if (normalized === "worker") return "worker";
-  return "user";
-}
-
-async function readCachedProfile(userId: string): Promise<OpUserProfile | null> {
-  try {
-    const [cachedProfile, cachedAuthProfile, cachedRole] = await Promise.all([
-      localStore.get<OpUserProfile>(PROFILE_CACHE_KEY),
-      authCache.getProfile<OpUserProfile>(),
-      authCache.getRole(),
-    ]);
-
-    if (cachedProfile?.id === userId) {
-      return {
-        ...cachedProfile,
-        role: normalizeProfileRole(cachedProfile.role ?? cachedRole ?? "user"),
-      };
-    }
-
-    if (cachedAuthProfile?.id === userId) {
-      return {
-        ...cachedAuthProfile,
-        role: normalizeProfileRole(cachedAuthProfile.role ?? cachedRole ?? "user"),
-      };
-    }
-
-    return {
-      id: userId,
-      full_name: null,
-      phone: null,
-      role: normalizeProfileRole(cachedRole ?? "user"),
-    };
-  } catch (error) {
-    console.warn("[useAuthProfile] readCachedProfile warning:", error);
-    return null;
-  }
-}
-
-async function persistProfile(profile: OpUserProfile) {
-  try {
-    await Promise.all([
-      localStore.set(PROFILE_CACHE_KEY, profile),
-      authCache.saveUser(profile.id, normalizeProfileRole(profile.role), profile),
-    ]);
-  } catch (error) {
-    console.warn("[useAuthProfile] persistProfile warning:", error);
-  }
-}
-
 async function fetchProfile(userId: string): Promise<OpUserProfile | null> {
-  const { connected } = networkService.getStatus();
-
-  if (!connected) {
-    return readCachedProfile(userId);
-  }
-
   const { data, error } = await supabase
     .from("op_users")
     .select("id, full_name, phone, role")
     .eq("id", userId)
     .maybeSingle();
 
+  // ✅ Non bloquant : garde l'app utilisable même si RLS/réseau
   if (error) {
     console.warn("[useAuthProfile] fetchProfile error:", error);
-    return readCachedProfile(userId);
+    return null;
   }
 
-  const profile = data
-    ? ({
-        ...(data as OpUserProfile),
-        role: normalizeProfileRole((data as OpUserProfile).role),
-      } as OpUserProfile)
-    : null;
-
-  if (profile) {
-    await persistProfile(profile);
-    return profile;
-  }
-
-  return readCachedProfile(userId);
+  return (data as OpUserProfile) ?? null;
 }
 
 export function useAuthProfile() {
@@ -116,28 +42,15 @@ export function useAuthProfile() {
       if (mountedRef.current) fn();
     };
 
-    const clearLocalAuth = async () => {
-      try {
-        await Promise.all([
-          authCache.clear(),
-          localStore.remove(PROFILE_CACHE_KEY),
-        ]);
-      } catch (error) {
-        console.warn("[useAuthProfile] clearLocalAuth warning:", error);
-      }
-    };
-
     const applySession = async (session: Session | null) => {
       const seq = ++seqRef.current;
       const u = session?.user ?? null;
 
       safe(() => setUser(u));
 
+      // ✅ pas connecté => état normal
       if (!u) {
         if (!mountedRef.current || seq !== seqRef.current) return;
-
-        await clearLocalAuth();
-
         safe(() => {
           setProfile(null);
           setLoading(false);
@@ -145,36 +58,11 @@ export function useAuthProfile() {
         return;
       }
 
-      const metaRole = normalizeProfileRole(
-        u.user_metadata?.role ?? u.app_metadata?.role ?? null
-      );
-
-      try {
-        await authCache.saveUser(u.id, metaRole);
-      } catch (error) {
-        console.warn("[useAuthProfile] save meta role warning:", error);
-      }
-
       const p = await fetchProfile(u.id);
-
       if (!mountedRef.current || seq !== seqRef.current) return;
 
-      const resolvedProfile =
-        p ??
-        ({
-          id: u.id,
-          full_name:
-            (u.user_metadata?.full_name as string | undefined) ??
-            (u.user_metadata?.name as string | undefined) ??
-            null,
-          phone: (u.user_metadata?.phone as string | undefined) ?? null,
-          role: metaRole,
-        } satisfies OpUserProfile);
-
-      await persistProfile(resolvedProfile);
-
       safe(() => {
-        setProfile(resolvedProfile);
+        setProfile(p);
         setLoading(false);
       });
     };
@@ -182,30 +70,13 @@ export function useAuthProfile() {
     const bootstrap = async () => {
       safe(() => setLoading(true));
 
+      // ✅ Stable partout (web + android webview)
       const { data, error } = await supabase.auth.getSession();
 
       if (!mountedRef.current) return;
 
       if (error) {
         console.warn("[useAuthProfile] getSession error:", error);
-
-        try {
-          const cachedUserId = await authCache.getUserId();
-
-          if (cachedUserId) {
-            const cachedProfile = await readCachedProfile(cachedUserId);
-
-            safe(() => {
-              setUser(null);
-              setProfile(cachedProfile);
-              setLoading(false);
-            });
-            return;
-          }
-        } catch (cacheError) {
-          console.warn("[useAuthProfile] bootstrap cache fallback warning:", cacheError);
-        }
-
         safe(() => {
           setUser(null);
           setProfile(null);
@@ -224,38 +95,14 @@ export function useAuthProfile() {
       void applySession(session ?? null);
     });
 
-    const unsubscribeNetwork = networkService.subscribe(() => {
-      const status = networkService.getStatus();
-
-      if (!status.connected) return;
-      if (!mountedRef.current) return;
-      if (!user?.id) return;
-
-      const currentSeq = ++seqRef.current;
-
-      safe(() => setLoading(true));
-
-      void (async () => {
-        const refreshed = await fetchProfile(user.id);
-
-        if (!mountedRef.current || currentSeq !== seqRef.current) return;
-
-        safe(() => {
-          if (refreshed) setProfile(refreshed);
-          setLoading(false);
-        });
-      })();
-    });
-
     return () => {
       mountedRef.current = false;
       listener.subscription.unsubscribe();
-      unsubscribeNetwork();
     };
-  }, [user?.id]);
+  }, []);
 
   const flags = useMemo(() => {
-    const role = normalizeProfileRole(profile?.role ?? "user");
+    const role = profile?.role;
     return {
       isAdmin: role === "admin",
       isWorker: role === "worker",

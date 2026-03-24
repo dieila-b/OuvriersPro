@@ -1,4 +1,5 @@
 // src/services/networkService.ts
+import { Network } from "@capacitor/network";
 import { useSyncExternalStore } from "react";
 
 export type AppNetworkStatus = {
@@ -8,21 +9,6 @@ export type AppNetworkStatus = {
 };
 
 type Listener = () => void;
-
-type CapacitorNetworkModule = {
-  Network: {
-    getStatus: () => Promise<{
-      connected: boolean;
-      connectionType: string;
-    }>;
-    addListener: (
-      eventName: "networkStatusChange",
-      listener: (status: { connected: boolean; connectionType: string }) => void
-    ) => Promise<{
-      remove: () => Promise<void>;
-    }>;
-  };
-};
 
 class NetworkService {
   private status: AppNetworkStatus = {
@@ -49,56 +35,36 @@ class NetworkService {
     this.emit();
   }
 
-  private async getCapacitorNetwork(): Promise<CapacitorNetworkModule["Network"] | null> {
-    try {
-      const mod = (await import("@capacitor/network")) as CapacitorNetworkModule;
-      return mod.Network;
-    } catch (error) {
-      console.warn("[networkService] @capacitor/network indisponible, fallback navigateur.", error);
-      return null;
-    }
-  }
-
   async init() {
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
-      const Network = await this.getCapacitorNetwork();
+      try {
+        const status = await Network.getStatus();
 
-      if (Network) {
-        try {
-          const status = await Network.getStatus();
+        this.setStatus({
+          connected: status.connected,
+          connectionType: status.connectionType,
+          initialized: true,
+        });
 
+        const nativeHandle = await Network.addListener("networkStatusChange", (status) => {
           this.setStatus({
             connected: status.connected,
             connectionType: status.connectionType,
             initialized: true,
           });
+        });
 
-          const nativeHandle = await Network.addListener("networkStatusChange", (status) => {
-            this.setStatus({
-              connected: status.connected,
-              connectionType: status.connectionType,
-              initialized: true,
-            });
-          });
+        this.nativeListenerCleanup = async () => {
+          await nativeHandle.remove();
+        };
+      } catch (error) {
+        console.warn("[networkService] Capacitor Network unavailable, fallback navigateur.", error);
 
-          this.nativeListenerCleanup = async () => {
-            await nativeHandle.remove();
-          };
-        } catch (error) {
-          console.warn("[networkService] Capacitor Network unavailable, fallback navigateur.", error);
-
-          this.setStatus({
-            connected: typeof navigator !== "undefined" ? navigator.onLine : true,
-            connectionType: "unknown",
-            initialized: true,
-          });
-        }
-      } else {
         this.setStatus({
           connected: typeof navigator !== "undefined" ? navigator.onLine : true,
-          connectionType: typeof navigator !== "undefined" && !navigator.onLine ? "none" : "unknown",
+          connectionType: "unknown",
           initialized: true,
         });
       }
@@ -107,7 +73,7 @@ class NetworkService {
         this.browserOnlineHandler = () => {
           this.setStatus({
             connected: true,
-            connectionType: this.status.connectionType === "none" ? "unknown" : this.status.connectionType || "unknown",
+            connectionType: this.status.connectionType || "unknown",
             initialized: true,
           });
         };
@@ -129,27 +95,20 @@ class NetworkService {
   }
 
   async refresh() {
-    const Network = await this.getCapacitorNetwork();
-
-    if (Network) {
-      try {
-        const status = await Network.getStatus();
-        this.setStatus({
-          connected: status.connected,
-          connectionType: status.connectionType,
-          initialized: true,
-        });
-        return;
-      } catch {
-        // fallback navigateur juste en dessous
-      }
+    try {
+      const status = await Network.getStatus();
+      this.setStatus({
+        connected: status.connected,
+        connectionType: status.connectionType,
+        initialized: true,
+      });
+    } catch {
+      this.setStatus({
+        connected: typeof navigator !== "undefined" ? navigator.onLine : true,
+        connectionType: "unknown",
+        initialized: true,
+      });
     }
-
-    this.setStatus({
-      connected: typeof navigator !== "undefined" ? navigator.onLine : true,
-      connectionType: typeof navigator !== "undefined" && !navigator.onLine ? "none" : "unknown",
-      initialized: true,
-    });
   }
 
   getStatus(): AppNetworkStatus {

@@ -3,28 +3,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useNetworkStatus } from "@/services/networkService";
-import { authCache } from "@/services/authCache";
-import {
-  profileRepository,
-  type CachedProfile,
-} from "@/services/repositories/profileRepository";
-import { useAuthProfile } from "@/hooks/useAuthProfile";
-
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  User,
-  ArrowLeft,
-  Save,
-  Star,
-  Send,
-  MessageCircle,
-  WifiOff,
-  RefreshCw,
-} from "lucide-react";
+import { User, ArrowLeft, Save, Star, Send, MessageCircle } from "lucide-react";
 
 type Profile = {
   id: string;
@@ -64,25 +47,13 @@ type ReviewReplyRow = {
   id: string;
   review_id: string | null;
   client_id: string | null;
-  content: string | null;
+  content: string | null; // ✅ content (PAS message)
   created_at: string;
 };
-
-const toEditableProfile = (data: CachedProfile | Profile): Profile => ({
-  id: data.id,
-  email: data.email ?? null,
-  full_name: data.full_name ?? null,
-  phone: data.phone ?? null,
-  country: data.country ?? null,
-  city: data.city ?? null,
-  preferred_contact: data.preferred_contact ?? null,
-});
 
 const ClientProfile: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
-  const { connected, initialized } = useNetworkStatus();
-  const { user, loading: authLoading } = useAuthProfile();
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [client, setClient] = useState<ClientRow | null>(null);
@@ -122,6 +93,7 @@ const ClientProfile: React.FC = () => {
     save: language === "fr" ? "Enregistrer" : "Save",
     saving: language === "fr" ? "Enregistrement..." : "Saving...",
 
+    // ✅ bouton demandé (libellé plus explicite)
     backToClientArea:
       language === "fr"
         ? "Retour à l’espace client / particulier"
@@ -131,12 +103,6 @@ const ClientProfile: React.FC = () => {
       language === "fr"
         ? "Profil mis à jour avec succès."
         : "Profile updated successfully.",
-
-    successOffline:
-      language === "fr"
-        ? "Modifications enregistrées localement. Elles seront synchronisées dès le retour du réseau."
-        : "Changes saved locally. They will sync automatically when the connection is restored.",
-
     errorLoad:
       language === "fr"
         ? "Impossible de charger votre profil."
@@ -146,6 +112,7 @@ const ClientProfile: React.FC = () => {
         ? "Erreur lors de l’enregistrement de votre profil."
         : "Error while saving your profile.",
 
+    // Avis
     reviewsTitle: language === "fr" ? "Avis reçus" : "Reviews received",
     reviewsSubtitle:
       language === "fr"
@@ -162,11 +129,6 @@ const ClientProfile: React.FC = () => {
         : "Unable to send your reply.",
     reviewsError:
       language === "fr" ? "Impossible de charger les avis." : "Unable to load reviews.",
-
-    reviewsOfflineInfo:
-      language === "fr"
-        ? "Les avis nécessitent une connexion Internet pour être chargés et envoyés."
-        : "Reviews require an internet connection to load and send.",
   };
 
   const formatDateTime = (iso: string) => {
@@ -203,20 +165,18 @@ const ClientProfile: React.FC = () => {
       setReviewsError(null);
 
       try {
-        const userId = user?.id ?? (await authCache.getUserId());
-        if (!userId) throw new Error("No user id");
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError || !authData?.user) throw authError || new Error("No user");
+        const userId = authData.user.id;
 
-        const profileData = await profileRepository.getMyProfile(userId);
-        if (!profileData) throw new Error("Profile not found");
+        const { data: userRow, error: userErr } = await supabase
+          .from("op_users")
+          .select("id, email, full_name, phone, country, city, preferred_contact")
+          .eq("id", userId)
+          .maybeSingle();
 
-        setProfile(toEditableProfile(profileData));
-
-        if (!connected) {
-          setClient(null);
-          setReviews([]);
-          setRepliesByReviewId({});
-          return;
-        }
+        if (userErr || !userRow) throw userErr || new Error("Profile not found");
+        setProfile(userRow as Profile);
 
         const { data: clientRow, error: clientErr } = await supabase
           .from("op_clients")
@@ -245,19 +205,11 @@ const ClientProfile: React.FC = () => {
       }
     };
 
-    if (!authLoading && initialized) {
-      void loadAll();
-    }
+    loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, initialized, connected, language, user?.id]);
+  }, [language]);
 
   const loadReviewsAndReplies = async (clientId: string) => {
-    if (!connected) {
-      setReviews([]);
-      setRepliesByReviewId({});
-      return;
-    }
-
     setReviewsLoading(true);
     setReviewsError(null);
 
@@ -340,20 +292,20 @@ const ClientProfile: React.FC = () => {
     setSuccess(null);
 
     try {
-      const result = await profileRepository.updateMyProfile(profile.id, {
-        full_name: profile.full_name,
-        phone: profile.phone,
-        country: profile.country,
-        city: profile.city,
-        preferred_contact: profile.preferred_contact,
-        updated_at: new Date().toISOString(),
-      });
+      const { error: updErr } = await supabase
+        .from("op_users")
+        .update({
+          full_name: profile.full_name,
+          phone: profile.phone,
+          country: profile.country,
+          city: profile.city,
+          preferred_contact: profile.preferred_contact,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", profile.id);
 
-      if (result?.data) {
-        setProfile(toEditableProfile(result.data));
-      }
-
-      setSuccess(result?.offline ? t.successOffline : t.success);
+      if (updErr) throw updErr;
+      setSuccess(t.success);
     } catch (err) {
       console.error(err);
       setError(t.errorSave);
@@ -362,16 +314,14 @@ const ClientProfile: React.FC = () => {
     }
   };
 
-  const canReply = useMemo(() => Boolean(client?.id) && connected, [client?.id, connected]);
+  const canReply = useMemo(() => Boolean(client?.id), [client?.id]);
 
   const handleSendReply = async (review: ReviewRow) => {
-    if (!client?.id || !connected) return;
-
+    if (!client?.id) return;
     const textValue = (replyDraft[review.id] || "").trim();
     if (!textValue) return;
 
     setReplySending((prev) => ({ ...prev, [review.id]: true }));
-    setReviewsError(null);
 
     try {
       const { data, error } = await supabase
@@ -406,7 +356,7 @@ const ClientProfile: React.FC = () => {
     }
   };
 
-  if (loading || authLoading || !initialized) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-sm text-slate-500">
@@ -428,6 +378,7 @@ const ClientProfile: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-slate-50 to-slate-100">
       <div className="max-w-3xl mx-auto px-4 py-8 md:py-10">
         <div className="mb-6 flex items-center justify-between gap-3">
+          {/* ✅ Bouton demandé */}
           <Button
             variant="outline"
             size="sm"
@@ -449,22 +400,6 @@ const ClientProfile: React.FC = () => {
           </div>
         </div>
 
-        {!connected && (
-          <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
-            <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
-            <div>
-              <div className="font-medium">
-                {language === "fr" ? "Mode hors connexion" : "Offline mode"}
-              </div>
-              <div className="text-xs text-amber-800">
-                {language === "fr"
-                  ? "Vous pouvez modifier votre profil. Les changements seront synchronisés automatiquement dès le retour du réseau."
-                  : "You can update your profile. Changes will sync automatically once the connection is restored."}
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* PROFIL */}
         <Card className="p-6 md:p-7 rounded-2xl bg-white/90 shadow-sm border-slate-200 space-y-6">
           {error && (
@@ -483,9 +418,7 @@ const ClientProfile: React.FC = () => {
               <h2 className="text-sm font-semibold text-slate-800 mb-3">{t.mainInfo}</h2>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    {t.fullNameLabel}
-                  </label>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">{t.fullNameLabel}</label>
                   <Input
                     name="full_name"
                     value={profile.full_name ?? ""}
@@ -495,14 +428,8 @@ const ClientProfile: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    {t.emailLabel}
-                  </label>
-                  <Input
-                    value={profile.email ?? ""}
-                    disabled
-                    className="bg-slate-50 cursor-not-allowed"
-                  />
+                  <label className="block text-xs font-medium text-slate-600 mb-1">{t.emailLabel}</label>
+                  <Input value={profile.email ?? ""} disabled className="bg-slate-50 cursor-not-allowed" />
                 </div>
               </div>
             </div>
@@ -511,9 +438,7 @@ const ClientProfile: React.FC = () => {
               <h2 className="text-sm font-semibold text-slate-800 mb-3">{t.contactInfo}</h2>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    {t.phoneLabel}
-                  </label>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">{t.phoneLabel}</label>
                   <Input
                     name="phone"
                     value={profile.phone ?? ""}
@@ -523,9 +448,7 @@ const ClientProfile: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    {t.countryLabel}
-                  </label>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">{t.countryLabel}</label>
                   <Input
                     name="country"
                     value={profile.country ?? ""}
@@ -535,9 +458,7 @@ const ClientProfile: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    {t.cityLabel}
-                  </label>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">{t.cityLabel}</label>
                   <Input
                     name="city"
                     value={profile.city ?? ""}
@@ -549,9 +470,7 @@ const ClientProfile: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">
-                {t.preferredContactLabel}
-              </label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t.preferredContactLabel}</label>
               <Textarea
                 name="preferred_contact"
                 value={profile.preferred_contact ?? ""}
@@ -570,11 +489,7 @@ const ClientProfile: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    {!connected ? (
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                    ) : (
-                      <Save className="w-4 h-4 mr-2" />
-                    )}
+                    <Save className="w-4 h-4 mr-2" />
                     {t.save}
                   </>
                 )}
@@ -592,12 +507,6 @@ const ClientProfile: React.FC = () => {
             </div>
           </div>
 
-          {!connected && (
-            <div className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-3 py-2">
-              {t.reviewsOfflineInfo}
-            </div>
-          )}
-
           {reviewsError && (
             <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
               {reviewsError}
@@ -606,11 +515,9 @@ const ClientProfile: React.FC = () => {
 
           {reviewsLoading && <div className="text-sm text-slate-500">{t.reviewsLoading}</div>}
 
-          {!reviewsLoading && reviews.length === 0 && (
-            <div className="text-sm text-slate-500">{t.reviewsEmpty}</div>
-          )}
+          {!reviewsLoading && reviews.length === 0 && <div className="text-sm text-slate-500">{t.reviewsEmpty}</div>}
 
-          {!reviewsLoading && reviews.length > 0 && connected && (
+          {!reviewsLoading && reviews.length > 0 && (
             <div className="space-y-4">
               {reviews.map((r) => {
                 const workerLabel = fullWorkerName(r.worker);
@@ -622,18 +529,14 @@ const ClientProfile: React.FC = () => {
                   <div key={r.id} className="rounded-xl border border-slate-200 p-4 bg-white">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-slate-900 truncate">
-                          {workerLabel}
-                        </div>
+                        <div className="text-sm font-semibold text-slate-900 truncate">{workerLabel}</div>
                         <div className="text-xs text-slate-500 mt-0.5">
                           {[r.worker?.profession, r.worker?.city].filter(Boolean).join(" • ")}
                         </div>
 
                         <div className="mt-2 flex items-center gap-2">
                           <div className="flex items-center gap-1">{stars(r.rating)}</div>
-                          <span className="text-xs text-slate-400">
-                            • {formatDateTime(r.created_at)}
-                          </span>
+                          <span className="text-xs text-slate-400">• {formatDateTime(r.created_at)}</span>
                         </div>
                       </div>
                     </div>
@@ -641,25 +544,21 @@ const ClientProfile: React.FC = () => {
                     {(r.title || r.content) && (
                       <div className="mt-3 text-sm text-slate-800 whitespace-pre-line">
                         {r.title ? <div className="font-semibold">{r.title}</div> : null}
-                        {r.content ? <div className={r.title ? "mt-1" : ""}>{r.content}</div> : null}
+                        {r.content ? (
+                          <div className={r.title ? "mt-1" : ""}>{r.content}</div>
+                        ) : null}
                       </div>
                     )}
 
                     {replies.length > 0 && (
                       <div className="mt-4 space-y-2">
                         {replies.map((rep) => (
-                          <div
-                            key={rep.id}
-                            className="rounded-lg bg-slate-50 border border-slate-100 p-3"
-                          >
+                          <div key={rep.id} className="rounded-lg bg-slate-50 border border-slate-100 p-3">
                             <div className="text-xs text-slate-500 flex items-center gap-2">
                               <MessageCircle className="w-4 h-4 text-slate-400" />
-                              {language === "fr" ? "Votre réponse" : "Your reply"} •{" "}
-                              {formatDateTime(rep.created_at)}
+                              {language === "fr" ? "Votre réponse" : "Your reply"} • {formatDateTime(rep.created_at)}
                             </div>
-                            <div className="mt-1 text-sm text-slate-800 whitespace-pre-line">
-                              {rep.content}
-                            </div>
+                            <div className="mt-1 text-sm text-slate-800 whitespace-pre-line">{rep.content}</div>
                           </div>
                         ))}
                       </div>
@@ -670,9 +569,7 @@ const ClientProfile: React.FC = () => {
                         rows={2}
                         placeholder={t.replyPlaceholder}
                         value={draftText}
-                        onChange={(e) =>
-                          setReplyDraft((prev) => ({ ...prev, [r.id]: e.target.value }))
-                        }
+                        onChange={(e) => setReplyDraft((prev) => ({ ...prev, [r.id]: e.target.value }))}
                         disabled={!canReply || sendingThis}
                       />
                       <div className="mt-2 flex justify-end">

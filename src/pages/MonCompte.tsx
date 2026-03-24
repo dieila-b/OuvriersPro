@@ -1,10 +1,8 @@
 // src/pages/MonCompte.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { authCache, normalizeRole, type Role } from "@/services/authCache";
-import { useNetworkStatus } from "@/services/networkService";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,73 +13,36 @@ import {
   HardHat,
   ArrowRight,
   User,
-  WifiOff,
 } from "lucide-react";
 
 const MonCompte: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
-  const { connected, initialized } = useNetworkStatus();
   const { user, profile, isAdmin, isWorker, isClient, loading } = useAuthProfile();
-
-  const [cachedUserId, setCachedUserId] = useState<string | null>(null);
-  const [cachedRole, setCachedRole] = useState<Role>("user");
-  const [cacheReady, setCacheReady] = useState(false);
 
   // ✅ empêche les boucles / double redirect en dev (React strict mode)
   const redirectedRef = useRef(false);
 
-  useEffect(() => {
-    let mounted = true;
-
-    (async () => {
-      try {
-        const [userId, role] = await Promise.all([authCache.getUserId(), authCache.getRole()]);
-
-        if (!mounted) return;
-
-        setCachedUserId(userId ?? null);
-        setCachedRole(normalizeRole(role));
-      } finally {
-        if (mounted) setCacheReady(true);
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const resolvedRole = useMemo<Role>(() => {
-    if (profile?.role) return normalizeRole(profile.role);
-    if (isAdmin) return "admin";
-    if (isWorker) return "worker";
-    if (isClient) return "client";
-    return cachedRole;
-  }, [profile?.role, isAdmin, isWorker, isClient, cachedRole]);
-
-  const hasKnownSession = Boolean(user || cachedUserId);
-
   // ✅ Si l'utilisateur est déjà connecté => rediriger vers son espace
-  // ✅ Offline-safe : on utilise aussi le cache local si besoin
   useEffect(() => {
     if (redirectedRef.current) return;
-    if (loading || !cacheReady || !initialized) return;
-    if (!hasKnownSession) return;
+    if (loading) return;
+
+    if (!user) return;
 
     redirectedRef.current = true;
 
-    if (resolvedRole === "admin") {
+    if (isAdmin) {
       navigate("/admin", { replace: true });
       return;
     }
-    if (resolvedRole === "worker") {
+    if (isWorker) {
       navigate("/espace-ouvrier", { replace: true });
       return;
     }
-
+    // client = user
     navigate("/espace-client", { replace: true });
-  }, [loading, cacheReady, initialized, hasKnownSession, resolvedRole, navigate]);
+  }, [loading, user, isAdmin, isWorker, isClient, navigate]);
 
   const text = useMemo(() => {
     return {
@@ -124,8 +85,8 @@ const MonCompte: React.FC = () => {
     };
   }, [language]);
 
-  // ✅ Pendant le chargement auth/cache, on évite un flash de contenu
-  if (loading || !cacheReady || !initialized) {
+  // ✅ Pendant le chargement auth, on évite un flash de contenu
+  if (loading) {
     return (
       <div className="min-h-[55vh] w-full flex items-center justify-center bg-white">
         <div className="text-sm text-slate-600">Chargement…</div>
@@ -133,13 +94,15 @@ const MonCompte: React.FC = () => {
     );
   }
 
-  // ✅ Si user connecté ou connu localement, on affiche un fallback léger
-  if (hasKnownSession) {
+  // ✅ Si user connecté, on affiche un fallback léger (le temps du navigate replace)
+  if (user) {
     return (
       <div className="min-h-[55vh] w-full flex items-center justify-center bg-white">
         <div className="text-sm text-slate-600">
           {language === "fr" ? "Redirection…" : "Redirecting…"}
-          <span className="ml-2 text-slate-400">({resolvedRole})</span>
+          {profile?.role ? (
+            <span className="ml-2 text-slate-400">({profile.role})</span>
+          ) : null}
         </div>
       </div>
     );
@@ -154,19 +117,10 @@ const MonCompte: React.FC = () => {
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
             {language === "fr" ? "Espace sécurisé ProxiServices" : "Secure ProxiServices space"}
           </div>
-          <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">{text.title}</h1>
+          <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
+            {text.title}
+          </h1>
           <p className="text-sm md:text-base text-slate-600">{text.subtitle}</p>
-
-          {initialized && !connected && (
-            <div className="mt-4 inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              <WifiOff className="h-4 w-4" />
-              <span>
-                {language === "fr"
-                  ? "Mode hors connexion actif."
-                  : "Offline mode is active."}
-              </span>
-            </div>
-          )}
         </header>
 
         {/* Bloc connexion existant */}
@@ -272,9 +226,7 @@ const MonCompte: React.FC = () => {
                     <li className="flex items-start gap-1.5">
                       <CheckCircle2 className="mt-[2px] w-3.5 h-3.5 text-emerald-500" />
                       <span>
-                        {language === "fr"
-                          ? "Historique de vos échanges"
-                          : "History of your conversations"}
+                        {language === "fr" ? "Historique de vos échanges" : "History of your conversations"}
                       </span>
                     </li>
                   </ul>
