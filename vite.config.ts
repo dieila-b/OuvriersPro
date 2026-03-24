@@ -32,6 +32,10 @@ export default defineConfig(() => {
 
     plugins: [react()],
 
+    optimizeDeps: {
+      include: ["react", "react-dom", "react-router-dom"],
+    },
+
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
