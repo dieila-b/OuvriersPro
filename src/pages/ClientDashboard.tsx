@@ -3,9 +3,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
-import { useNetworkStatus } from "@/services/networkService";
-import { authCache } from "@/services/authCache";
-import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,8 +17,6 @@ import {
   Send,
   Info,
   ArrowLeft,
-  WifiOff,
-  RefreshCw,
 } from "lucide-react";
 
 type ClientInfo = {
@@ -56,19 +51,18 @@ type ReviewReplyRow = {
   id: string;
   review_id: string | null;
   client_id: string | null;
-  content: string | null;
+  content: string | null; // ✅ content (PAS message)
   created_at: string;
 };
 
 const ClientDashboard: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
-  const { connected, initialized } = useNetworkStatus();
-  const { user, profile, loading: authLoading } = useAuthProfile();
 
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
+  // ✅ Pour afficher les avis
   const [clientDb, setClientDb] = useState<DbClientRow | null>(null);
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
@@ -82,58 +76,38 @@ const ClientDashboard: React.FC = () => {
   useEffect(() => {
     const loadUser = async () => {
       try {
-        const cachedUserId = await authCache.getUserId();
-        const userId = user?.id ?? cachedUserId ?? null;
+        const { data } = await supabase.auth.getUser();
+        const user = data?.user;
 
-        if (!userId) {
+        if (!user) {
           setClientInfo(null);
           setClientDb(null);
           return;
         }
 
-        const metaFullName =
-          (user?.user_metadata?.full_name as string | undefined) ||
-          (user?.user_metadata?.name as string | undefined) ||
+        // Profil (nom + role)
+        const { data: profile } = await supabase
+          .from("op_users")
+          .select("full_name, role")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        const fullNameFromMeta =
+          (user.user_metadata?.full_name as string | undefined) ||
+          (user.user_metadata?.name as string | undefined) ||
           null;
-
-        const cachedProfile = await authCache.getProfile<{
-          id: string;
-          full_name?: string | null;
-          email?: string | null;
-          role?: string | null;
-        }>();
-
-        const fullName =
-          profile?.full_name ??
-          cachedProfile?.full_name ??
-          metaFullName ??
-          null;
-
-        const email =
-          user?.email ??
-          cachedProfile?.email ??
-          null;
-
-        const role =
-          profile?.role ??
-          cachedProfile?.role ??
-          "user";
 
         setClientInfo({
-          fullName,
-          email,
-          role,
+          fullName: profile?.full_name ?? fullNameFromMeta,
+          email: user.email ?? null,
+          role: (profile?.role as string) || "user",
         });
 
-        if (!connected) {
-          setClientDb(null);
-          return;
-        }
-
+        // ✅ Récupérer le client DB (op_clients.id)
         const { data: c, error: cErr } = await supabase
           .from("op_clients")
           .select("id, user_id")
-          .eq("user_id", userId)
+          .eq("user_id", user.id)
           .maybeSingle();
 
         if (cErr) throw cErr;
@@ -147,21 +121,12 @@ const ClientDashboard: React.FC = () => {
       }
     };
 
-    if (!authLoading && initialized) {
-      void loadUser();
-    }
-  }, [authLoading, initialized, connected, user, profile]);
+    loadUser();
+  }, []);
 
+  // ✅ Charger les avis reçus par le client
   useEffect(() => {
     const loadReviews = async () => {
-      if (!connected) {
-        setReviews([]);
-        setRepliesByReview({});
-        setReviewsLoading(false);
-        setReviewsError(null);
-        return;
-      }
-
       if (!clientDb?.id) {
         setReviews([]);
         return;
@@ -214,8 +179,8 @@ const ClientDashboard: React.FC = () => {
       }
     };
 
-    void loadReviews();
-  }, [clientDb?.id, language, connected]);
+    loadReviews();
+  }, [clientDb?.id, language]);
 
   const handleLogout = async () => {
     try {
@@ -227,6 +192,7 @@ const ClientDashboard: React.FC = () => {
     }
   };
 
+  // ✅ Bouton retour (en haut à gauche) -> DOIT ALLER A L'ACCUEIL
   const handleBack = () => {
     navigate("/", { replace: true });
   };
@@ -266,6 +232,7 @@ const ClientDashboard: React.FC = () => {
     logout: language === "fr" ? "Se déconnecter" : "Sign out",
     backTopLeft: language === "fr" ? "Retour" : "Back",
 
+    // ✅ Avis
     reviewsTitle: language === "fr" ? "Avis reçus" : "Reviews received",
     reviewsDesc:
       language === "fr"
@@ -278,13 +245,6 @@ const ClientDashboard: React.FC = () => {
     published: language === "fr" ? "Publié" : "Published",
     private: language === "fr" ? "Non publié" : "Not published",
     loadReviewsError: language === "fr" ? "Impossible de charger vos avis." : "Unable to load your reviews.",
-    offlineTitle: language === "fr" ? "Mode hors connexion" : "Offline mode",
-    offlineDesc:
-      language === "fr"
-        ? "Vos raccourcis restent accessibles. Certaines sections dynamiques, comme les avis et réponses, nécessitent Internet."
-        : "Your shortcuts remain available. Some dynamic sections, like reviews and replies, require internet.",
-    cachedSession:
-      language === "fr" ? "Session locale détectée" : "Local session detected",
   };
 
   const displayName =
@@ -317,11 +277,10 @@ const ClientDashboard: React.FC = () => {
   };
 
   const openReply = async (reviewId: string) => {
-    if (!connected) return;
-
     setReplyOpenFor(reviewId);
     setReplyText("");
 
+    // Charger les réponses existantes
     try {
       const { data, error } = await supabase
         .from("op_worker_client_review_replies")
@@ -341,7 +300,6 @@ const ClientDashboard: React.FC = () => {
   };
 
   const sendReply = async () => {
-    if (!connected) return;
     if (!replyOpenFor || !clientDb?.id) return;
     if (!replyText.trim()) return;
 
@@ -349,8 +307,8 @@ const ClientDashboard: React.FC = () => {
     try {
       const payload = {
         review_id: replyOpenFor,
-        client_id: clientDb.id,
-        content: replyText.trim(),
+        client_id: clientDb.id, // ✅ op_clients.id
+        content: replyText.trim(), // ✅ content (PAS message)
       };
 
       const { data, error } = await supabase
@@ -383,21 +341,13 @@ const ClientDashboard: React.FC = () => {
     return Math.round((sum / vals.length) * 10) / 10;
   }, [reviews]);
 
-  if (authLoading || !initialized) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-sm text-slate-500">
-          {language === "fr" ? "Chargement de votre espace..." : "Loading your dashboard..."}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-50 via-slate-50 to-slate-100">
       <div className="max-w-6xl mx-auto px-4 py-8 md:py-10">
+        {/* En-tête / Hero */}
         <header className="mb-8 rounded-3xl bg-white/90 border border-slate-100 shadow-sm px-5 py-5 md:px-8 md:py-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
+            {/* ✅ Ligne top-left: bouton retour + badge */}
             <div className="flex items-center gap-3 mb-3">
               <Button
                 type="button"
@@ -423,13 +373,6 @@ const ClientDashboard: React.FC = () => {
                   </>
                 )}
               </div>
-
-              {!connected && (
-                <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-medium text-amber-700 border border-amber-100">
-                  <WifiOff className="h-3.5 w-3.5" />
-                  {t.cachedSession}
-                </div>
-              )}
             </div>
 
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-1">{t.title}</h1>
@@ -458,17 +401,8 @@ const ClientDashboard: React.FC = () => {
           </div>
         </header>
 
-        {!connected && (
-          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
-            <div>
-              <div className="font-semibold">{t.offlineTitle}</div>
-              <div className="text-xs text-amber-800 mt-1">{t.offlineDesc}</div>
-            </div>
-          </div>
-        )}
-
         <div className="grid gap-6 md:grid-cols-[1.75fr,1.25fr] items-start">
+          {/* Colonne gauche */}
           <div className="space-y-6">
             <Card className="p-6 md:p-7 rounded-3xl bg-white/90 shadow-sm border border-slate-100">
               <div className="flex items-center justify-between mb-4">
@@ -531,6 +465,7 @@ const ClientDashboard: React.FC = () => {
               </div>
             </Card>
 
+            {/* ✅ Avis */}
             <Card className="p-6 md:p-7 rounded-3xl bg-white/90 shadow-sm border border-slate-100">
               <div className="flex items-start justify-between gap-3 mb-4">
                 <div>
@@ -547,24 +482,13 @@ const ClientDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {!connected && (
-                <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
-                  <RefreshCw className="mt-0.5 h-4 w-4 shrink-0" />
-                  <div className="text-xs">
-                    {language === "fr"
-                      ? "Les avis et réponses nécessitent une connexion Internet."
-                      : "Reviews and replies require an internet connection."}
-                  </div>
-                </div>
-              )}
-
-              {reviewsLoading && connected && (
+              {reviewsLoading && (
                 <div className="text-sm text-slate-500">
                   {language === "fr" ? "Chargement des avis..." : "Loading reviews..."}
                 </div>
               )}
 
-              {!reviewsLoading && reviewsError && connected && (
+              {!reviewsLoading && reviewsError && (
                 <div className="text-sm text-red-600 flex items-start gap-2">
                   <Info className="w-4 h-4 mt-0.5" />
                   <div>
@@ -574,11 +498,11 @@ const ClientDashboard: React.FC = () => {
                 </div>
               )}
 
-              {!reviewsLoading && !reviewsError && reviews.length === 0 && connected && (
+              {!reviewsLoading && !reviewsError && reviews.length === 0 && (
                 <div className="text-sm text-slate-500">{t.reviewsEmpty}</div>
               )}
 
-              {!reviewsLoading && !reviewsError && reviews.length > 0 && connected && (
+              {!reviewsLoading && !reviewsError && reviews.length > 0 && (
                 <div className="space-y-3">
                   {reviews.map((r) => {
                     const isOpen = replyOpenFor === r.id;
@@ -623,6 +547,7 @@ const ClientDashboard: React.FC = () => {
                           </div>
                         )}
 
+                        {/* Réponses */}
                         {replies.length > 0 && (
                           <div className="mt-3 space-y-2">
                             {replies.map((rep) => (
@@ -679,6 +604,7 @@ const ClientDashboard: React.FC = () => {
             </Card>
           </div>
 
+          {/* Colonne droite */}
           <div className="space-y-6">
             <Card className="p-6 rounded-3xl bg-white/90 shadow-sm border border-slate-100">
               <div className="flex items-center justify-between gap-3 mb-3">
@@ -708,9 +634,7 @@ const ClientDashboard: React.FC = () => {
                   variant="outline"
                   className="flex-1 rounded-full text-sm border-slate-200 hover:border-pro-blue/70"
                 >
-                  <Link to="/mon-profil">
-                    {language === "fr" ? "Modifier mon profil" : "Edit my profile"}
-                  </Link>
+                  <Link to="/mon-profil">{language === "fr" ? "Modifier mon profil" : "Edit my profile"}</Link>
                 </Button>
                 <Button
                   variant="ghost"
