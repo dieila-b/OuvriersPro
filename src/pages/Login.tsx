@@ -6,18 +6,25 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useNetworkStatus } from "@/services/networkService";
+import { localStore } from "@/services/localStore";
 
 type LocationState = {
   from?: string;
 };
+
+type Role = "user" | "client" | "worker" | "admin";
+
+const LOCAL_ROLE_KEY = "local_auth_role";
+const LOCAL_USER_ID_KEY = "local_auth_user_id";
 
 function safeRedirectPath(raw: string | null) {
   if (!raw) return null;
   let v = raw.trim();
 
   // ✅ accepte "#/xxx" (HashRouter) et normalise -> "/xxx"
-  if (v.startsWith("#/")) v = v.slice(1); // "#/x" -> "/x"
-  if (v.startsWith("#")) v = v.slice(1);  // "#x" -> "x" (puis invalidé)
+  if (v.startsWith("#/")) v = v.slice(1);
+  if (v.startsWith("#")) v = v.slice(1);
 
   // ✅ sécurité: on n'autorise que les chemins internes
   if (!v.startsWith("/")) return null;
@@ -31,32 +38,85 @@ function safeRedirectPath(raw: string | null) {
   return v;
 }
 
+const normalizeRole = (r: any): Role => {
+  const v = String(r ?? "").toLowerCase().trim();
+
+  if (v === "admin") return "admin";
+  if (v === "worker" || v === "ouvrier" || v === "provider" || v === "prestataire") return "worker";
+  if (v === "client" || v === "customer") return "client";
+  if (v === "user" || v === "particulier") return "user";
+
+  return "user";
+};
+
 const Login: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation() as { state?: LocationState; search: string };
+  const { connected, initialized } = useNetworkStatus();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  const [checkingSession, setCheckingSession] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const redirectParam = useMemo(() => safeRedirectPath(searchParams.get("redirect")), [searchParams]);
 
-  // ✅ Si déjà connecté, rediriger immédiatement (sans appeler getUser)
+  const goAfterLogin = (role: string, redirect?: string | null) => {
+    const normalizedRole = normalizeRole(role);
+
+    // redirect explicite autorisé uniquement pour clients/users
+    if (redirect && normalizedRole !== "admin" && normalizedRole !== "worker") {
+      navigate(redirect, { replace: true });
+      return;
+    }
+
+    if (normalizedRole === "admin") {
+      navigate("/admin", { replace: true });
+    } else if (normalizedRole === "worker") {
+      navigate("/espace-ouvrier", { replace: true });
+    } else {
+      navigate("/espace-client", { replace: true });
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
 
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
+      try {
+        const { data, error } = await supabase.auth.getSession();
 
-      if (data.session?.user) {
-        // ✅ priorité au redirectParam (si valide)
-        if (redirectParam) navigate(redirectParam, { replace: true });
-        else navigate("/espace-client", { replace: true });
+        if (!mounted) return;
+
+        if (error) {
+          console.warn("[Login] getSession warning:", error);
+          return;
+        }
+
+        if (data.session?.user) {
+          const user = data.session.user;
+
+          // essaie de relire le rôle local d'abord pour accélérer le boot offline
+          const cachedRole = await localStore.get<Role>(LOCAL_ROLE_KEY);
+          if (!mounted) return;
+
+          if (cachedRole) {
+            goAfterLogin(cachedRole, redirectParam);
+            return;
+          }
+
+          const metaRole = normalizeRole(
+            user.user_metadata?.role ?? user.app_metadata?.role ?? null
+          );
+
+          goAfterLogin(metaRole, redirectParam);
+        }
+      } finally {
+        if (mounted) setCheckingSession(false);
       }
     })();
 
@@ -67,12 +127,25 @@ const Login: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+
     setError(null);
+
+    if (initialized && !connected) {
+      setError(
+        language === "fr"
+          ? "Connexion Internet requise pour vous connecter. Si vous vous êtes déjà connecté auparavant, revenez quand la session locale est encore active."
+          : "An internet connection is required to sign in. If you already signed in before, come back when the local session is still active."
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+
       const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         password,
       });
 
@@ -88,11 +161,15 @@ const Login: React.FC = () => {
       }
 
       const userId = user.id;
-      const userEmail = user.email ?? email.trim().toLowerCase();
+      const userEmail = user.email ?? normalizedEmail;
       const defaultFullName =
         (user.user_metadata?.full_name as string | undefined) ||
         (user.user_metadata?.name as string | undefined) ||
         "";
+
+      let resolvedRole: Role = normalizeRole(
+        user.user_metadata?.role ?? user.app_metadata?.role ?? null
+      );
 
       // 2) Récupérer / créer le profil dans op_users
       let { data: profile, error: profileError } = await supabase
@@ -119,40 +196,52 @@ const Login: React.FC = () => {
         profile = inserted;
       }
 
-      const roleRaw = String(profile?.role ?? "user").toLowerCase();
-      const role =
-        roleRaw === "ouvrier" || roleRaw === "provider" || roleRaw === "prestataire"
-          ? "worker"
-          : roleRaw === "client" || roleRaw === "particulier"
-          ? "user"
-          : roleRaw;
-
-      // ✅ redirect explicite autorisé uniquement pour les clients
-      if (redirectParam && role !== "admin" && role !== "worker") {
-        navigate(redirectParam, { replace: true });
-        return;
+      if (profile?.role) {
+        resolvedRole = normalizeRole(profile.role);
       }
 
-      // ✅ Redirect par rôle (stables / conformes à tes routes)
-      if (role === "admin") {
-        navigate("/admin", { replace: true });
-      } else if (role === "worker") {
-        navigate("/espace-ouvrier", { replace: true });
-      } else {
-        navigate("/espace-client", { replace: true });
-      }
+      // persistance locale pour aider le mode offline-safe
+      await Promise.all([
+        localStore.set(LOCAL_USER_ID_KEY, userId),
+        localStore.set(LOCAL_ROLE_KEY, resolvedRole),
+      ]);
+
+      goAfterLogin(resolvedRole, redirectParam);
     } catch (err: any) {
       console.error(err);
-      setError(
-        err?.message ??
-          (language === "fr"
-            ? "Connexion impossible. Vérifiez vos identifiants."
-            : "Unable to log in. Please check your credentials.")
-      );
+
+      const rawMessage = String(err?.message ?? "").toLowerCase();
+
+      if (rawMessage.includes("failed to fetch") || rawMessage.includes("network")) {
+        setError(
+          language === "fr"
+            ? "Connexion impossible sans Internet. Vérifiez votre réseau puis réessayez."
+            : "Unable to sign in without internet. Please check your connection and try again."
+        );
+      } else {
+        setError(
+          err?.message ??
+            (language === "fr"
+              ? "Connexion impossible. Vérifiez vos identifiants."
+              : "Unable to log in. Please check your credentials.")
+        );
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+        <Card className="w-full max-w-md shadow-lg">
+          <CardContent className="py-10 text-center text-slate-600">
+            {language === "fr" ? "Vérification de votre session..." : "Checking your session..."}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
@@ -167,6 +256,14 @@ const Login: React.FC = () => {
               {language === "fr" ? "Connectez-vous pour continuer." : "Sign in to continue."}
             </p>
           )}
+
+          {initialized && !connected && (
+            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {language === "fr"
+                ? "Vous êtes hors connexion. Une nouvelle connexion nécessite Internet, mais une session déjà enregistrée peut encore permettre l’accès."
+                : "You are offline. A new sign-in requires internet, but a previously saved session may still allow access."}
+            </div>
+          )}
         </CardHeader>
 
         <CardContent>
@@ -176,6 +273,7 @@ const Login: React.FC = () => {
               <Input
                 type="email"
                 required
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="vous@exemple.com"
@@ -190,6 +288,7 @@ const Login: React.FC = () => {
                 type="password"
                 required
                 minLength={6}
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={language === "fr" ? "Votre mot de passe" : "Your password"}
@@ -203,7 +302,11 @@ const Login: React.FC = () => {
             )}
 
             <div className="space-y-2">
-              <Button type="submit" disabled={loading} className="w-full bg-pro-blue hover:bg-blue-700">
+              <Button
+                type="submit"
+                disabled={loading || (initialized && !connected)}
+                className="w-full bg-pro-blue hover:bg-blue-700"
+              >
                 {loading
                   ? language === "fr"
                     ? "Connexion..."
