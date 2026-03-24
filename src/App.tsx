@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useEffect, useMemo, useRef, Suspense, lazy, useState } from "react";
+import React, { useEffect, useMemo, useRef, Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -16,7 +16,6 @@ import {
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Capacitor } from "@capacitor/core";
-import { Loader2 } from "lucide-react";
 
 import { UiModeProvider } from "@/contexts/UiModeContext";
 import { networkService } from "@/services/networkService";
@@ -542,62 +541,49 @@ function RouterSwitch({ children }: { children: React.ReactNode }) {
   return <Router>{children}</Router>;
 }
 
-function AppBootLoader() {
-  return (
-    <div className="flex min-h-dvh w-full items-center justify-center bg-white px-6">
-      <div className="flex flex-col items-center gap-3 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <Loader2 className="h-6 w-6 animate-spin text-slate-700" />
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-slate-900">Initialisation de l’application</p>
-          <p className="text-xs text-slate-500">
-            Vérification de la session locale et du réseau…
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 const App = () => {
   const queryClient = useAppQueryClient();
-  const [bootReady, setBootReady] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
+    let isMounted = true;
 
     const boot = async () => {
       try {
-        await networkService.init();
-
-        const { error } = await supabase.auth.getSession();
-        if (error) {
-          console.warn("[App] getSession warning:", error.message);
+        try {
+          await networkService.init();
+        } catch (error) {
+          console.warn("[App] networkService.init warning:", error);
         }
 
-        const current = networkService.getStatus();
-        if (current.connected) {
-          try {
+        try {
+          const { error } = await supabase.auth.getSession();
+          if (error) {
+            console.warn("[App] getSession warning:", error.message);
+          }
+        } catch (error) {
+          console.warn("[App] getSession exception:", error);
+        }
+
+        try {
+          const current = networkService.getStatus?.();
+          if (current?.connected) {
             const { syncService } = await import("@/services/syncService");
             await syncService.processQueue();
-          } catch (error) {
-            console.warn("[App] initial sync warning:", error);
           }
+        } catch (error) {
+          console.warn("[App] initial sync warning:", error);
         }
       } catch (error) {
-        console.error("[App] boot error:", error);
-      } finally {
-        if (mounted) setBootReady(true);
+        console.error("[App] boot fatal error:", error);
       }
     };
 
     void boot();
 
     const unsubscribe = networkService.subscribe(() => {
-      const status = networkService.getStatus();
+      const status = networkService.getStatus?.();
 
-      if (status.connected) {
+      if (status?.connected) {
         import("@/services/syncService")
           .then(({ syncService }) => syncService.processQueue())
           .catch((error) => {
@@ -607,8 +593,11 @@ const App = () => {
     });
 
     return () => {
-      mounted = false;
-      unsubscribe();
+      isMounted = false;
+      unsubscribe?.();
+
+      if (isMounted) return;
+
       networkService.destroy().catch((error) => {
         console.warn("[App] networkService.destroy warning:", error);
       });
@@ -624,14 +613,8 @@ const App = () => {
             <Sonner />
             <RouterSwitch>
               <div className="min-h-dvh w-full min-w-0 overflow-x-hidden bg-white">
-                {bootReady ? (
-                  <>
-                    <OfflineBanner />
-                    <AppRoutes />
-                  </>
-                ) : (
-                  <AppBootLoader />
-                )}
+                <OfflineBanner />
+                <AppRoutes />
               </div>
             </RouterSwitch>
           </UiModeProvider>
