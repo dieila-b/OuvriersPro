@@ -1,15 +1,5 @@
 // src/App.tsx
-<<<<<<< HEAD
-<<<<<<< HEAD
 import React, { useEffect, useMemo, useRef, Suspense, lazy, useState } from "react";
-=======
-=======
-﻿// src/App.tsx
->>>>>>> Stashed changes
-=======
->>>>>>> 096e902 (Resolve merge conflicts)
-import React, { useEffect, useMemo, useRef, Suspense, lazy } from "react";
->>>>>>> 45fb39d (Sauvegarde locale avant synchronisation)
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -26,14 +16,7 @@ import {
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { Capacitor } from "@capacitor/core";
-<<<<<<< HEAD
-<<<<<<< HEAD
 import { Loader2 } from "lucide-react";
-=======
-<<<<<<< Updated upstream
->>>>>>> 45fb39d (Sauvegarde locale avant synchronisation)
-=======
->>>>>>> 096e902 (Resolve merge conflicts)
 
 import { UiModeProvider } from "@/contexts/UiModeContext";
 import { networkService } from "@/services/networkService";
@@ -111,16 +94,6 @@ const ClientContactForm = lazyRetry(() => import("./pages/ClientContactForm"));
  * Détection native robuste (Capacitor / WebView)
  */
 const isNativeRuntime = () => {
-<<<<<<< HEAD
-=======
-
-<<<<<<< HEAD
-=======
-const isNativeRuntime = () => {
->>>>>>> Stashed changes
->>>>>>> 45fb39d (Sauvegarde locale avant synchronisation)
-=======
->>>>>>> 096e902 (Resolve merge conflicts)
   try {
     if (Capacitor?.isNativePlatform?.()) return true;
   } catch {}
@@ -142,24 +115,10 @@ const isNativeRuntime = () => {
     const ua = navigator?.userAgent ?? "";
     if (ua.includes("wv") || ua.includes("Capacitor")) return true;
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-<<<<<<< Updated upstream
-    if (window.location?.protocol === "https:" && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) {
-=======
->>>>>>> 45fb39d (Sauvegarde locale avant synchronisation)
     if (
       window.location?.protocol === "https:" &&
       /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)
     ) {
-<<<<<<< HEAD
-=======
->>>>>>> Stashed changes
->>>>>>> 45fb39d (Sauvegarde locale avant synchronisation)
-=======
-    if (window.location?.protocol === "https:" && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) {
->>>>>>> 096e902 (Resolve merge conflicts)
       return true;
     }
   } catch {}
@@ -274,7 +233,7 @@ function AuthAuditLogger() {
         localStorage.setItem(LS_KEY, String(now));
         return true;
       } catch {
-        return true; 
+        return true;
       }
     };
 
@@ -314,14 +273,6 @@ function AuthAuditLogger() {
   return null;
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-<<<<<<< Updated upstream
-=======
->>>>>>> 096e902 (Resolve merge conflicts)
-
->>>>>>> 45fb39d (Sauvegarde locale avant synchronisation)
 /**
  * Intercepteur global (Natif uniquement)
  * - Intercepte les <a href="/..."> pour les router en SPA via navigate()
@@ -381,17 +332,6 @@ function GlobalLinkInterceptor() {
   return null;
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-<<<<<<< Updated upstream
-
-=======
->>>>>>> Stashed changes
->>>>>>> 45fb39d (Sauvegarde locale avant synchronisation)
-=======
-
->>>>>>> 096e902 (Resolve merge conflicts)
 const AppRoutes = () => (
   <>
     <ScrollManager />
