@@ -25,20 +25,10 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useNetworkStatus } from "@/services/networkService";
-import { authCache } from "@/services/authCache";
+import { authCache, normalizeRole, type Role } from "@/services/authCache";
 import { useSyncStatusSummary } from "@/hooks/useSyncStatusSummary";
 import ContactModal from "@/components/contact/ContactModal";
 import ProxiLogo from "@/assets/logo-proxiservices.png";
-
-type Role = "user" | "client" | "worker" | "admin";
-
-const normalizeRole = (r: any): Role => {
-  const v = String(r ?? "").toLowerCase().trim();
-  if (v === "admin") return "admin";
-  if (v === "worker" || v === "ouvrier" || v === "provider" || v === "prestataire") return "worker";
-  if (v === "client" || v === "customer") return "client";
-  return "user";
-};
 
 const HEADER_LIGHT_BLUE = "#EEF5FF";
 const HEADER_BORDER_BLUE = "#D9E7FF";
@@ -65,66 +55,122 @@ const Header = () => {
   useEffect(() => {
     let mounted = true;
 
+    const applyLocalSnapshot = async () => {
+      const snapshot = await authCache.getSnapshot();
+      if (!mounted) return;
+
+      setResolvedUserId(snapshot.userId ?? null);
+      setHasSession(!!snapshot.userId);
+      setRole(normalizeRole(snapshot.role));
+      return snapshot;
+    };
+
     const refresh = async () => {
       try {
+        const localSnapshot = await applyLocalSnapshot();
+
+        if (!connected) {
+          return;
+        }
+
         const { data } = await supabase.auth.getSession();
         const u = data?.session?.user ?? null;
 
         if (!mounted) return;
 
-        const fallbackUserId = await authCache.getUserId();
-        const finalUserId = u?.id ?? fallbackUserId ?? null;
-
-        setResolvedUserId(finalUserId);
-        setHasSession(!!finalUserId);
-
-        if (!finalUserId) {
-          setRole("user");
+        if (!u?.id) {
+          if (!localSnapshot?.userId) {
+            setResolvedUserId(null);
+            setHasSession(false);
+            setRole("user");
+          }
           return;
         }
 
         const metaRole = normalizeRole(u?.user_metadata?.role ?? u?.app_metadata?.role ?? null);
 
-        if (!connected || !u?.id) {
-          const cachedRole = await authCache.getRole();
+        let nextRole: Role = metaRole;
+
+        try {
+          const { data: row, error } = await supabase
+            .from("op_users")
+            .select("role")
+            .eq("id", u.id)
+            .maybeSingle();
+
           if (!mounted) return;
-          setRole(normalizeRole(cachedRole ?? metaRole));
-          return;
+
+          if (error) {
+            console.warn("[Header] op_users role fetch error:", error);
+          } else {
+            nextRole = normalizeRole(row?.role ?? metaRole);
+          }
+        } catch (error) {
+          console.warn("[Header] role resolution failed:", error);
         }
 
-        const { data: row, error } = await supabase
-          .from("op_users")
-          .select("role")
-          .eq("id", u.id)
-          .maybeSingle();
+        setResolvedUserId(u.id);
+        setHasSession(true);
+        setRole(nextRole);
 
-        if (!mounted) return;
-
-        if (error) {
-          console.warn("[Header] op_users role fetch error:", error);
-          const cachedRole = await authCache.getRole();
-          if (!mounted) return;
-          setRole(normalizeRole(cachedRole ?? metaRole));
-        } else {
-          setRole(normalizeRole(row?.role ?? metaRole));
-        }
-      } catch {
-        if (!mounted) return;
-
-        const fallbackUserId = await authCache.getUserId();
-        const fallbackRole = await authCache.getRole();
-
-        if (!mounted) return;
-        setResolvedUserId(fallbackUserId ?? null);
-        setHasSession(!!fallbackUserId);
-        setRole(normalizeRole(fallbackRole));
+        const cachedProfile = await authCache.getProfile();
+        await authCache.saveUser(u.id, nextRole, typeof cachedProfile === "undefined" ? undefined : cachedProfile);
+      } catch (error) {
+        console.warn("[Header] refresh auth failed, fallback cache used:", error);
+        await applyLocalSnapshot();
       }
     };
 
     void refresh();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      void refresh();
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      try {
+        const user = session?.user ?? null;
+
+        if (!user?.id) {
+          await authCache.clear();
+          if (!mounted) return;
+          setResolvedUserId(null);
+          setHasSession(false);
+          setRole("user");
+          return;
+        }
+
+        const metaRole = normalizeRole(user?.user_metadata?.role ?? user?.app_metadata?.role ?? null);
+
+        let nextRole: Role = metaRole;
+
+        if (connected) {
+          try {
+            const { data: row, error } = await supabase
+              .from("op_users")
+              .select("role")
+              .eq("id", user.id)
+              .maybeSingle();
+
+            if (!error) {
+              nextRole = normalizeRole(row?.role ?? metaRole);
+            }
+          } catch (error) {
+            console.warn("[Header] onAuthStateChange role fetch failed:", error);
+          }
+        }
+
+        const existingProfile = await authCache.getProfile();
+        await authCache.saveUser(
+          user.id,
+          nextRole,
+          typeof existingProfile === "undefined" ? undefined : existingProfile
+        );
+
+        if (!mounted) return;
+        setResolvedUserId(user.id);
+        setHasSession(true);
+        setRole(nextRole);
+      } catch (error) {
+        console.warn("[Header] onAuthStateChange fallback failed:", error);
+        await applyLocalSnapshot();
+      }
     });
 
     return () => {
@@ -253,8 +299,8 @@ const Header = () => {
       ? `${totalPending} en attente`
       : `${totalPending} pending`
     : language === "fr"
-    ? "Synchronisé"
-    : "Synced";
+      ? "Synchronisé"
+      : "Synced";
 
   const syncDetailRequests =
     pendingRequestsCount > 0
@@ -288,8 +334,8 @@ const Header = () => {
         hasPendingSync
           ? [syncDetailRequests, syncDetailMessages, syncDetailFavorites].filter(Boolean).join(" • ")
           : language === "fr"
-          ? "Aucune action en attente"
-          : "No action pending"
+            ? "Aucune action en attente"
+            : "No action pending"
       }
     >
       {!connected ? (
