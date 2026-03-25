@@ -1,7 +1,9 @@
+// src/components/PrivateRoute.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
-import { authCache, normalizeRole } from "@/services/authCache";
+import type { Session } from "@supabase/supabase-js";
+import { localStore } from "@/services/localStore";
 import { useNetworkStatus } from "@/services/networkService";
 
 type Role = "user" | "client" | "worker" | "admin";
@@ -14,10 +16,33 @@ type Props = {
   showLoader?: boolean;
 };
 
+const LOCAL_ROLE_KEY = "local_auth_role";
+const LOCAL_USER_ID_KEY = "local_auth_user_id";
+
+/**
+ * Normalisation des rôles
+ */
+const normalizeRole = (r: any): Role => {
+  const v = String(r ?? "").toLowerCase().trim();
+
+  if (v === "admin") return "admin";
+  if (["worker", "ouvrier", "provider", "prestataire"].includes(v)) return "worker";
+  if (["client", "customer"].includes(v)) return "client";
+  if (["user", "particulier"].includes(v)) return "user";
+
+  return "user";
+};
+
+/**
+ * Vérification autorisation
+ */
 function isRoleAllowed(effective: Role, allowed: Role[]) {
   if (allowed.includes(effective)) return true;
+
+  // tolérance user <-> client
   if (effective === "client" && allowed.includes("user")) return true;
   if (effective === "user" && allowed.includes("client")) return true;
+
   return false;
 }
 
@@ -38,161 +63,172 @@ export default function PrivateRoute({
   useEffect(() => {
     let mounted = true;
 
-    const applyAnonymous = () => {
-      if (!mounted) return;
-      setSessionUserId(null);
-      setEffectiveRole("user");
+    const safe = (fn: () => void) => {
+      if (mounted) fn();
     };
 
-    const applyCacheSnapshot = async () => {
-      const snapshot = await authCache.getSnapshot();
+    /**
+     * Restore OFFLINE session
+     */
+    const restoreLocalSession = async (): Promise<boolean> => {
+      try {
+        const [uid, role] = await Promise.all([
+          localStore.get<string>(LOCAL_USER_ID_KEY),
+          localStore.get<Role>(LOCAL_ROLE_KEY),
+        ]);
 
-      if (!mounted) return false;
+        if (!mounted) return false;
 
-      if (snapshot.userId) {
-        setSessionUserId(snapshot.userId);
-        setEffectiveRole(normalizeRole(snapshot.role));
-        return true;
+        if (uid) {
+          safe(() => {
+            setSessionUserId(uid);
+            setEffectiveRole(normalizeRole(role));
+          });
+          return true;
+        }
+
+        return false;
+      } catch (err) {
+        console.warn("[PrivateRoute] restoreLocalSession error:", err);
+        return false;
+      }
+    };
+
+    /**
+     * Save local session (offline-first)
+     */
+    const persistLocalSession = async (userId: string, role: Role) => {
+      try {
+        await Promise.all([
+          localStore.set(LOCAL_USER_ID_KEY, userId),
+          localStore.set(LOCAL_ROLE_KEY, role),
+        ]);
+      } catch (err) {
+        console.warn("[PrivateRoute] persistLocalSession error:", err);
+      }
+    };
+
+    /**
+     * Clear session
+     */
+    const clearSession = async () => {
+      safe(() => {
+        setSessionUserId(null);
+        setEffectiveRole("user");
+      });
+
+      try {
+        await Promise.all([
+          localStore.remove(LOCAL_USER_ID_KEY),
+          localStore.remove(LOCAL_ROLE_KEY),
+        ]);
+      } catch (err) {
+        console.warn("[PrivateRoute] clearSession error:", err);
+      }
+    };
+
+    /**
+     * Appliquer session
+     */
+    const applySession = async (session: Session | null) => {
+      const user = session?.user;
+
+      /**
+       * ❌ Pas de session → fallback local
+       */
+      if (!user?.id) {
+        const restored = await restoreLocalSession();
+        if (!restored) {
+          await clearSession();
+        }
+        return;
       }
 
-      applyAnonymous();
-      return false;
+      /**
+       * ✅ Session valide
+       */
+      safe(() => setSessionUserId(user.id));
+
+      const metaRole = normalizeRole(
+        user.user_metadata?.role ?? user.app_metadata?.role
+      );
+
+      /**
+       * 🔴 OFFLINE → utiliser metadata directement
+       */
+      if (!connected && initialized) {
+        safe(() => setEffectiveRole(metaRole));
+        await persistLocalSession(user.id, metaRole);
+        return;
+      }
+
+      /**
+       * 🟢 ONLINE → essayer Supabase
+       */
+      try {
+        const { data, error } = await supabase
+          .from("op_users")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (!mounted) return;
+
+        if (error) {
+          console.warn("[PrivateRoute] DB role error:", error);
+          safe(() => setEffectiveRole(metaRole));
+          await persistLocalSession(user.id, metaRole);
+          return;
+        }
+
+        const role = data?.role ? normalizeRole(data.role) : metaRole;
+
+        safe(() => setEffectiveRole(role));
+        await persistLocalSession(user.id, role);
+      } catch (err) {
+        console.warn("[PrivateRoute] role fetch exception:", err);
+
+        if (!mounted) return;
+
+        safe(() => setEffectiveRole(metaRole));
+        await persistLocalSession(user.id, metaRole);
+      }
     };
 
-    const applyLiveSession = async () => {
+    /**
+     * Boot
+     */
+    const boot = async () => {
+      safe(() => setLoading(true));
+
       try {
         const { data, error } = await supabase.auth.getSession();
 
         if (error) {
           console.warn("[PrivateRoute] getSession error:", error);
-          return await applyCacheSnapshot();
-        }
 
-        const user = data?.session?.user ?? null;
+          const restored = await restoreLocalSession();
+          if (!restored) await clearSession();
 
-        if (!user?.id) {
-          return await applyCacheSnapshot();
-        }
-
-        const metaRole = normalizeRole(
-          user.user_metadata?.role ?? user.app_metadata?.role ?? null
-        );
-
-        let resolvedRole: Role = metaRole;
-
-        if (connected) {
-          try {
-            const { data: row, error: rowError } = await supabase
-              .from("op_users")
-              .select("role")
-              .eq("id", user.id)
-              .maybeSingle();
-
-            if (rowError) {
-              console.warn("[PrivateRoute] op_users role fetch error:", rowError);
-            } else if (row?.role) {
-              resolvedRole = normalizeRole(row.role);
-            }
-          } catch (error) {
-            console.warn("[PrivateRoute] role resolution exception:", error);
-          }
-        }
-
-        const cachedProfile = await authCache.getProfile();
-
-        await authCache.saveUser(
-          user.id,
-          resolvedRole,
-          typeof cachedProfile === "undefined" ? undefined : cachedProfile
-        );
-
-        if (!mounted) return true;
-
-        setSessionUserId(user.id);
-        setEffectiveRole(resolvedRole);
-        return true;
-      } catch (error) {
-        console.warn("[PrivateRoute] applyLiveSession exception:", error);
-        return await applyCacheSnapshot();
-      }
-    };
-
-    const load = async () => {
-      setLoading(true);
-
-      try {
-        if (!initialized) return;
-
-        if (!connected) {
-          await applyCacheSnapshot();
           return;
         }
 
-        await applyLiveSession();
+        await applySession(data.session ?? null);
       } finally {
-        if (mounted) setLoading(false);
+        safe(() => setLoading(false));
       }
     };
 
-    void load();
+    void boot();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    /**
+     * Listener auth
+     */
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      safe(() => setLoading(true));
       void (async () => {
-        if (!mounted) return;
-
-        setLoading(true);
-
-        try {
-          const user = session?.user ?? null;
-
-          if (!user?.id) {
-            if (!connected) {
-              await applyCacheSnapshot();
-            } else {
-              const restored = await applyCacheSnapshot();
-              if (!restored) {
-                applyAnonymous();
-              }
-            }
-            return;
-          }
-
-          const metaRole = normalizeRole(
-            user.user_metadata?.role ?? user.app_metadata?.role ?? null
-          );
-
-          let resolvedRole: Role = metaRole;
-
-          if (connected) {
-            try {
-              const { data: row, error } = await supabase
-                .from("op_users")
-                .select("role")
-                .eq("id", user.id)
-                .maybeSingle();
-
-              if (!error && row?.role) {
-                resolvedRole = normalizeRole(row.role);
-              }
-            } catch (error) {
-              console.warn("[PrivateRoute] onAuthStateChange role fetch error:", error);
-            }
-          }
-
-          const cachedProfile = await authCache.getProfile();
-          await authCache.saveUser(
-            user.id,
-            resolvedRole,
-            typeof cachedProfile === "undefined" ? undefined : cachedProfile
-          );
-
-          if (!mounted) return;
-
-          setSessionUserId(user.id);
-          setEffectiveRole(resolvedRole);
-        } finally {
-          if (mounted) setLoading(false);
-        }
+        await applySession(session ?? null);
+        safe(() => setLoading(false));
       })();
     });
 
@@ -202,11 +238,17 @@ export default function PrivateRoute({
     };
   }, [connected, initialized]);
 
+  /**
+   * Autorisation
+   */
   const allowed = useMemo(
     () => isRoleAllowed(effectiveRole, allowedRoles),
     [effectiveRole, allowedRoles]
   );
 
+  /**
+   * Loader
+   */
   if (loading || !initialized) {
     if (!showLoader) return null;
 
@@ -217,6 +259,9 @@ export default function PrivateRoute({
     );
   }
 
+  /**
+   * ❌ Pas connecté
+   */
   if (!sessionUserId) {
     return (
       <Navigate
@@ -227,9 +272,15 @@ export default function PrivateRoute({
     );
   }
 
+  /**
+   * ❌ Pas autorisé
+   */
   if (!allowed) {
     return <Navigate to={forbiddenRedirectTo} replace />;
   }
 
+  /**
+   * ✅ OK
+   */
   return <>{children}</>;
 }
