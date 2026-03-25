@@ -2,6 +2,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useNetworkStatus } from "@/services/networkService";
+import { localStore } from "@/services/localStore";
+import { WifiOff } from "lucide-react";
 
 import Header from "@/components/Header";
 import HeroSection from "@/components/HeroSection";
@@ -17,6 +21,9 @@ type SearchPayload = {
   lng?: string;
   near?: string;
 };
+
+const LAST_SEARCH_KEY = "op:last_search";
+const SEARCH_BOOTSTRAP_KEY = "op:last_search_bootstrap";
 
 /**
  * ✅ Native = vrai Capacitor (protocol capacitor/file, ou Capacitor platform != web)
@@ -61,7 +68,6 @@ function useNativeTapToClickFix(enabled: boolean) {
       if (tag === "a" && (el as HTMLAnchorElement).href) return true;
       if (el.getAttribute("role") === "button") return true;
       if (el.hasAttribute("data-clickable")) return true;
-      // Radix/shadcn items
       if (el.getAttribute("data-radix-collection-item") != null) return true;
       return false;
     };
@@ -84,9 +90,8 @@ function useNativeTapToClickFix(enabled: boolean) {
     };
 
     const onTouchEndCapture = (e: TouchEvent) => {
-      // multi-touch / preventDefault => on ne synthétise pas
       if (e.defaultPrevented) return;
-      if (e.touches && e.touches.length > 0) return; // encore un doigt posé
+      if (e.touches && e.touches.length > 0) return;
 
       const now = Date.now();
       if (now - lastSyntheticAt < 350) return;
@@ -118,6 +123,9 @@ function useNativeTapToClickFix(enabled: boolean) {
 }
 
 const Index = () => {
+  const { language } = useLanguage();
+  const { connected, initialized } = useNetworkStatus();
+
   const location = useLocation();
   const navigate = useNavigate();
   const redirectedRef = useRef(false);
@@ -125,13 +133,11 @@ const Index = () => {
   const isSearchRoute = location.pathname === "/search" || location.pathname === "/rechercher";
   const isHomeRoute = location.pathname === "/";
 
-  // ✅ IMPORTANT (Android WebView): le hack touchend→click peut provoquer un double déclenchement
-  // (touchend synthétique + click natif) => toggle annulé / navigation “fantôme”.
-  // On le désactive pour fiabiliser les taps.
   useNativeTapToClickFix(false);
 
   const [workerCheckLoading, setWorkerCheckLoading] = useState(true);
   const [isWorker, setIsWorker] = useState(false);
+  const [restoredSearch, setRestoredSearch] = useState<SearchPayload | null>(null);
 
   /**
    * ✅ Détecter si l'utilisateur connecté est un ouvrier (table op_ouvriers)
@@ -151,6 +157,11 @@ const Index = () => {
         if (!mounted) return;
 
         if (!user) {
+          setIsWorker(false);
+          return;
+        }
+
+        if (!connected) {
           setIsWorker(false);
           return;
         }
@@ -178,7 +189,9 @@ const Index = () => {
       }
     };
 
-    void checkWorker();
+    if (initialized) {
+      void checkWorker();
+    }
 
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
       void checkWorker();
@@ -188,7 +201,7 @@ const Index = () => {
       mounted = false;
       sub?.subscription?.unsubscribe();
     };
-  }, []);
+  }, [connected, initialized]);
 
   const searchPayload: SearchPayload = useMemo(() => {
     const p = new URLSearchParams(location.search);
@@ -218,6 +231,96 @@ const Index = () => {
       !!searchPayload.near
     );
   }, [searchPayload]);
+
+  // ✅ restauration de la dernière recherche locale
+  useEffect(() => {
+    let mounted = true;
+
+    const restoreLastSearch = async () => {
+      try {
+        const cached =
+          (await localStore.get<SearchPayload>(LAST_SEARCH_KEY)) ??
+          (() => {
+            try {
+              const raw = sessionStorage.getItem(LAST_SEARCH_KEY);
+              return raw ? (JSON.parse(raw) as SearchPayload) : null;
+            } catch {
+              return null;
+            }
+          })();
+
+        if (!mounted) return;
+        setRestoredSearch(cached);
+      } catch {
+        if (!mounted) return;
+        setRestoredSearch(null);
+      }
+    };
+
+    if (initialized) {
+      void restoreLastSearch();
+    }
+
+    return () => {
+      mounted = false;
+    };
+  }, [initialized]);
+
+  // ✅ persistance de la recherche courante
+  useEffect(() => {
+    const persist = async () => {
+      if (!hasAnySearchParam) return;
+
+      try {
+        await localStore.set(LAST_SEARCH_KEY, searchPayload);
+      } catch {
+        // ignore
+      }
+
+      try {
+        sessionStorage.setItem(LAST_SEARCH_KEY, JSON.stringify(searchPayload));
+      } catch {
+        // ignore
+      }
+    };
+
+    void persist();
+  }, [hasAnySearchParam, searchPayload]);
+
+  // ✅ diffuse l’état réseau au composant de recherche
+  useEffect(() => {
+    if (!initialized) return;
+
+    try {
+      window.dispatchEvent(
+        new CustomEvent("op:network-status", {
+          detail: {
+            connected,
+            initialized,
+          },
+        })
+      );
+    } catch {
+      // ignore
+    }
+  }, [connected, initialized]);
+
+  // ✅ diffuse la dernière recherche connue au composant de recherche
+  useEffect(() => {
+    if (!initialized) return;
+    if (hasAnySearchParam) return;
+    if (!restoredSearch) return;
+
+    try {
+      window.dispatchEvent(
+        new CustomEvent("op:search-bootstrap", {
+          detail: restoredSearch,
+        })
+      );
+    } catch {
+      // ignore
+    }
+  }, [initialized, restoredSearch, hasAnySearchParam]);
 
   // ✅ Mesure des overlays en haut (header + barres sticky/fixed)
   const getTopOverlayOffset = () => {
@@ -263,10 +366,12 @@ const Index = () => {
 
     if (hasAnySearchParam) {
       try {
-        sessionStorage.setItem("op:last_search", JSON.stringify(searchPayload));
+        sessionStorage.setItem(LAST_SEARCH_KEY, JSON.stringify(searchPayload));
       } catch {
         // ignore
       }
+
+      void localStore.set(LAST_SEARCH_KEY, searchPayload).catch(() => undefined);
     }
 
     const target = `/${location.search || ""}#search`;
@@ -277,14 +382,16 @@ const Index = () => {
   useEffect(() => {
     if (!isHomeRoute) return;
     if (location.hash !== "#search") return;
-    if (!hasAnySearchParam) return;
+
+    const detail = hasAnySearchParam ? searchPayload : restoredSearch;
+    if (!detail) return;
 
     try {
-      window.dispatchEvent(new CustomEvent("op:search", { detail: searchPayload }));
+      window.dispatchEvent(new CustomEvent("op:search", { detail }));
     } catch {
       // ignore
     }
-  }, [isHomeRoute, location.hash, hasAnySearchParam, searchPayload]);
+  }, [isHomeRoute, location.hash, hasAnySearchParam, searchPayload, restoredSearch]);
 
   // ✅ 2) Scroll ancres (#search, #subscription...) sur l’accueil
   useEffect(() => {
@@ -338,6 +445,24 @@ const Index = () => {
       <Header />
 
       <main className="w-full flex-1 min-w-0 relative">
+        {!connected && initialized && (
+          <div className="mx-auto w-full max-w-7xl px-4 pt-4">
+            <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+              <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <div className="font-medium">
+                  {language === "fr" ? "Mode hors connexion" : "Offline mode"}
+                </div>
+                <div className="text-xs text-amber-800 mt-1">
+                  {language === "fr"
+                    ? "Affichage des prestataires et profils synchronisés jusqu’à la dernière connexion."
+                    : "Showing workers and profiles synced up to the last connection."}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <HeroSection />
         <FeaturesSection />
 
