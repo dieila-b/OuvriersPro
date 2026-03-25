@@ -7,6 +7,7 @@ import { useNetworkStatus } from "@/services/networkService";
 import { localStore } from "@/services/localStore";
 import { authCache } from "@/services/authCache";
 import { favoritesRepository } from "@/services/favoritesRepository";
+import { syncService } from "@/services/syncService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -77,23 +78,13 @@ type CachedClientRequest = {
   status: string | null;
   message: string | null;
   origin: string | null;
-};
-
-type OfflineQueueItem = {
-  id: string;
-  action_type: "CREATE_CONTACT_REQUEST";
-  table_name: "op_ouvrier_contacts";
-  payload_json: Record<string, any>;
-  created_at: string;
-  status: "pending";
-  retry_count: number;
+  sync_status?: "pending" | "synced";
 };
 
 const WORKER_CACHE_KEY_PREFIX = "cached_worker_profile";
 const WORKER_REVIEWS_CACHE_KEY_PREFIX = "cached_worker_reviews";
 const WORKER_PHOTOS_CACHE_KEY_PREFIX = "cached_worker_photos";
 const REQUESTS_CACHE_PREFIX = "cached_client_requests";
-const OFFLINE_QUEUE_KEY = "offline_queue_v1";
 
 const getWorkerCacheKey = (workerId?: string | null) =>
   workerId ? `${WORKER_CACHE_KEY_PREFIX}:${workerId}` : WORKER_CACHE_KEY_PREFIX;
@@ -260,7 +251,7 @@ const WorkerDetail: React.FC = () => {
       loginRequiredOffline:
         language === "fr"
           ? "Vous devez avoir déjà été connecté sur cet appareil pour enregistrer une demande hors ligne."
-          : "You must have already logged in on this device to save a request offline.",
+          : "You must have already been logged in on this device to save an offline request.",
     };
   }, [language]);
 
@@ -1024,15 +1015,19 @@ const WorkerDetail: React.FC = () => {
     navigate,
   ]);
 
-  const addOfflineQueueItem = async (item: OfflineQueueItem) => {
-    const existing = (await localStore.get<OfflineQueueItem[]>(OFFLINE_QUEUE_KEY)) || [];
-    await localStore.set(OFFLINE_QUEUE_KEY, [item, ...existing]);
-  };
-
   const addCachedClientRequest = async (userId: string, request: CachedClientRequest) => {
     const cacheKey = getRequestsCacheKey(userId);
     const existing = (await localStore.get<CachedClientRequest[]>(cacheKey)) || [];
-    await localStore.set(cacheKey, [request, ...existing]);
+
+    const next = [request, ...existing.filter((item) => item.id !== request.id)];
+
+    next.sort((a, b) => {
+      const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return tb - ta;
+    });
+
+    await localStore.set(cacheKey, next);
   };
 
   const buildDetailedMessage = () => {
@@ -1091,6 +1086,7 @@ const WorkerDetail: React.FC = () => {
 
         const payload = {
           id: offlineContactId,
+          user_id: cachedUserId,
           worker_id: worker.id,
           client_id: offlineClientId,
           full_name: clientName || null,
@@ -1106,23 +1102,22 @@ const WorkerDetail: React.FC = () => {
           created_at: createdAt,
         };
 
-        await addOfflineQueueItem({
+        await syncService.enqueue({
           id: createOfflineId("queue"),
           action_type: "CREATE_CONTACT_REQUEST",
           table_name: "op_ouvrier_contacts",
           payload_json: payload,
           created_at: createdAt,
-          status: "pending",
-          retry_count: 0,
         });
 
         await addCachedClientRequest(cachedUserId, {
           id: offlineContactId,
           created_at: createdAt,
           worker_name: fullName || (language === "fr" ? "Ouvrier" : "Worker"),
-          status: "new",
+          status: "pending_sync",
           message: detailedMessage || "",
           origin: "offline",
+          sync_status: "pending",
         });
 
         setSubmitSuccess(tContact.offlineSaved);
@@ -1237,6 +1232,7 @@ const WorkerDetail: React.FC = () => {
         status: insertedContact?.status || "new",
         message: insertedContact?.message || detailedMessage || "",
         origin: insertedContact?.origin || "web",
+        sync_status: "synced",
       });
 
       setSubmitSuccess(
