@@ -69,9 +69,30 @@ type ReviewVoteRow = {
 
 type ViewerRole = "client" | "worker" | null;
 
+type CachedClientRequest = {
+  id: string;
+  created_at: string | null;
+  worker_name: string | null;
+  status: string | null;
+  message: string | null;
+  origin: string | null;
+};
+
+type OfflineQueueItem = {
+  id: string;
+  action_type: "CREATE_CONTACT_REQUEST";
+  table_name: "op_ouvrier_contacts";
+  payload_json: Record<string, any>;
+  created_at: string;
+  status: "pending";
+  retry_count: number;
+};
+
 const WORKER_CACHE_KEY_PREFIX = "cached_worker_profile";
 const WORKER_REVIEWS_CACHE_KEY_PREFIX = "cached_worker_reviews";
 const WORKER_PHOTOS_CACHE_KEY_PREFIX = "cached_worker_photos";
+const REQUESTS_CACHE_PREFIX = "cached_client_requests";
+const OFFLINE_QUEUE_KEY = "offline_queue_v1";
 
 const getWorkerCacheKey = (workerId?: string | null) =>
   workerId ? `${WORKER_CACHE_KEY_PREFIX}:${workerId}` : WORKER_CACHE_KEY_PREFIX;
@@ -81,6 +102,12 @@ const getWorkerReviewsCacheKey = (workerId?: string | null) =>
 
 const getWorkerPhotosCacheKey = (workerId?: string | null) =>
   workerId ? `${WORKER_PHOTOS_CACHE_KEY_PREFIX}:${workerId}` : WORKER_PHOTOS_CACHE_KEY_PREFIX;
+
+const getRequestsCacheKey = (userId?: string | null) =>
+  userId ? `${REQUESTS_CACHE_PREFIX}:${userId}` : REQUESTS_CACHE_PREFIX;
+
+const createOfflineId = (prefix: string) =>
+  `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
 const WorkerDetail: React.FC = () => {
   const { language } = useLanguage();
@@ -225,8 +252,16 @@ const WorkerDetail: React.FC = () => {
         language === "fr" ? "Votre demande a été envoyée. Fermeture…" : "Request sent. Closing…",
       offline:
         language === "fr"
-          ? "L’envoi de demande nécessite Internet."
-          : "Sending a request requires internet.",
+          ? "Vous pouvez enregistrer votre demande hors connexion. Elle sera conservée localement pour synchronisation ultérieure."
+          : "You can save your request offline. It will be stored locally for later sync.",
+      offlineSaved:
+        language === "fr"
+          ? "Demande enregistrée localement. Elle apparaît maintenant dans vos demandes hors ligne."
+          : "Request saved locally. It now appears in your offline requests.",
+      loginRequiredOffline:
+        language === "fr"
+          ? "Vous devez avoir déjà été connecté sur cet appareil pour enregistrer une demande hors ligne."
+          : "You must have already logged in on this device to save a request offline.",
     };
   }, [language]);
 
@@ -774,7 +809,6 @@ const WorkerDetail: React.FC = () => {
     });
   };
 
-  // Contact submit
   const resetContactForm = () => {
     setRequestType("Demande de devis");
     setApproxBudget("");
@@ -800,14 +834,43 @@ const WorkerDetail: React.FC = () => {
     setGalleryOpen(false);
   }, []);
 
+  const addOfflineQueueItem = async (item: OfflineQueueItem) => {
+    const existing = (await localStore.get<OfflineQueueItem[]>(OFFLINE_QUEUE_KEY)) || [];
+    await localStore.set(OFFLINE_QUEUE_KEY, [item, ...existing]);
+  };
+
+  const addCachedClientRequest = async (userId: string, request: CachedClientRequest) => {
+    const cacheKey = getRequestsCacheKey(userId);
+    const existing = (await localStore.get<CachedClientRequest[]>(cacheKey)) || [];
+    await localStore.set(cacheKey, [request, ...existing]);
+  };
+
+  const buildDetailedMessage = () => {
+    const detailedMessageLines: string[] = [];
+    if (requestType) {
+      detailedMessageLines.push(
+        `${language === "fr" ? "Type de demande" : "Request type"} : ${requestType}`
+      );
+    }
+    if (approxBudget) {
+      detailedMessageLines.push(
+        `${language === "fr" ? "Budget approximatif" : "Approx. budget"} : ${approxBudget}`
+      );
+    }
+    if (desiredDate) {
+      detailedMessageLines.push(
+        `${language === "fr" ? "Date souhaitée" : "Desired date"} : ${desiredDate}`
+      );
+    }
+    if (clientMessage) {
+      detailedMessageLines.push(clientMessage);
+    }
+    return detailedMessageLines.join("\n");
+  };
+
   const handleSubmitContact = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!worker) return;
-
-    if (!connected) {
-      setSubmitError(tContact.offline);
-      return;
-    }
 
     if (!acceptedSharing) {
       setSubmitError(
@@ -823,6 +886,66 @@ const WorkerDetail: React.FC = () => {
     setSubmitSuccess(null);
 
     try {
+      const detailedMessage = buildDetailedMessage();
+
+      if (!connected) {
+        const cachedUserId = authUserId || (await authCache.getUserId());
+
+        if (!cachedUserId) {
+          throw new Error(tContact.loginRequiredOffline);
+        }
+
+        const offlineContactId = createOfflineId("offline_contact");
+        const offlineClientId = `local_client_${cachedUserId}`;
+        const createdAt = new Date().toISOString();
+
+        const payload = {
+          id: offlineContactId,
+          worker_id: worker.id,
+          client_id: offlineClientId,
+          full_name: clientName || null,
+          email: clientEmail || null,
+          phone: clientPhone || null,
+          message: detailedMessage || "",
+          status: "new",
+          origin: "offline",
+          client_name: clientName || null,
+          client_email: clientEmail || null,
+          client_phone: clientPhone || null,
+          worker_name: fullName || null,
+          created_at: createdAt,
+        };
+
+        await addOfflineQueueItem({
+          id: createOfflineId("queue"),
+          action_type: "CREATE_CONTACT_REQUEST",
+          table_name: "op_ouvrier_contacts",
+          payload_json: payload,
+          created_at: createdAt,
+          status: "pending",
+          retry_count: 0,
+        });
+
+        await addCachedClientRequest(cachedUserId, {
+          id: offlineContactId,
+          created_at: createdAt,
+          worker_name: fullName || (language === "fr" ? "Ouvrier" : "Worker"),
+          status: "new",
+          message: detailedMessage || "",
+          origin: "offline",
+        });
+
+        setSubmitSuccess(tContact.offlineSaved);
+        resetContactForm();
+
+        window.setTimeout(() => {
+          closeContact();
+          setSubmitSuccess(null);
+        }, 1100);
+
+        return;
+      }
+
       const { data: authData, error: authError } = await supabase.auth.getUser();
       const user = authData?.user;
 
@@ -886,23 +1009,7 @@ const WorkerDetail: React.FC = () => {
         );
       }
 
-      const detailedMessageLines: string[] = [];
-      if (requestType)
-        detailedMessageLines.push(
-          `${language === "fr" ? "Type de demande" : "Request type"} : ${requestType}`
-        );
-      if (approxBudget)
-        detailedMessageLines.push(
-          `${language === "fr" ? "Budget approximatif" : "Approx. budget"} : ${approxBudget}`
-        );
-      if (desiredDate)
-        detailedMessageLines.push(
-          `${language === "fr" ? "Date souhaitée" : "Desired date"} : ${desiredDate}`
-        );
-      if (clientMessage) detailedMessageLines.push(clientMessage);
-      const detailedMessage = detailedMessageLines.join("\n");
-
-      const { error: contactError } = await supabase.from("op_ouvrier_contacts").insert({
+      const insertPayload = {
         worker_id: worker.id,
         client_id: clientProfileId,
         full_name: clientName || (user.user_metadata as any)?.full_name || user.email || null,
@@ -915,7 +1022,13 @@ const WorkerDetail: React.FC = () => {
         client_email: clientEmail || user.email || null,
         client_phone: clientPhone || null,
         worker_name: fullName || null,
-      });
+      };
+
+      const { data: insertedContact, error: contactError } = await supabase
+        .from("op_ouvrier_contacts")
+        .insert(insertPayload)
+        .select("id, created_at, worker_name, status, message, origin")
+        .maybeSingle();
 
       if (contactError) {
         console.error("insert contact error", contactError);
@@ -925,6 +1038,16 @@ const WorkerDetail: React.FC = () => {
             : "An error occurred while sending your request."
         );
       }
+
+      const userIdForCache = user.id;
+      await addCachedClientRequest(userIdForCache, {
+        id: insertedContact?.id || createOfflineId("synced_contact"),
+        created_at: insertedContact?.created_at || new Date().toISOString(),
+        worker_name: insertedContact?.worker_name || fullName || null,
+        status: insertedContact?.status || "new",
+        message: insertedContact?.message || detailedMessage || "",
+        origin: insertedContact?.origin || "web",
+      });
 
       setSubmitSuccess(
         language === "fr" ? "Votre demande a été envoyée." : "Your request was sent."
@@ -1550,7 +1673,9 @@ const WorkerDetail: React.FC = () => {
                   {submitSuccess && (
                     <div className="mb-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-3 py-2">
                       {submitSuccess}
-                      <span className="ml-2 text-emerald-600">{tContact.sentAutoClose}</span>
+                      {connected ? (
+                        <span className="ml-2 text-emerald-600">{tContact.sentAutoClose}</span>
+                      ) : null}
                     </div>
                   )}
 
@@ -1563,7 +1688,6 @@ const WorkerDetail: React.FC = () => {
                         value={clientName}
                         onChange={(e) => setClientName(e.target.value)}
                         required
-                        disabled={!connected}
                       />
                     </div>
 
@@ -1575,7 +1699,6 @@ const WorkerDetail: React.FC = () => {
                         value={clientPhone}
                         onChange={(e) => setClientPhone(e.target.value)}
                         required
-                        disabled={!connected}
                       />
                     </div>
 
@@ -1589,7 +1712,6 @@ const WorkerDetail: React.FC = () => {
                         type="email"
                         value={clientEmail}
                         onChange={(e) => setClientEmail(e.target.value)}
-                        disabled={!connected}
                       />
                     </div>
 
@@ -1598,10 +1720,9 @@ const WorkerDetail: React.FC = () => {
                         {language === "fr" ? "Type de demande" : "Request type"}
                       </label>
                       <select
-                        className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-pro-blue disabled:bg-slate-50 disabled:text-slate-400"
+                        className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-pro-blue"
                         value={requestType}
                         onChange={(e) => setRequestType(e.target.value)}
-                        disabled={!connected}
                       >
                         <option value="Demande de devis">
                           {language === "fr" ? "Demande de devis" : "Quote request"}
@@ -1624,7 +1745,6 @@ const WorkerDetail: React.FC = () => {
                         value={approxBudget}
                         onChange={(e) => setApproxBudget(e.target.value)}
                         placeholder="5000000"
-                        disabled={!connected}
                       />
                     </div>
 
@@ -1638,7 +1758,6 @@ const WorkerDetail: React.FC = () => {
                         type="date"
                         value={desiredDate}
                         onChange={(e) => setDesiredDate(e.target.value)}
-                        disabled={!connected}
                       />
                     </div>
 
@@ -1651,7 +1770,6 @@ const WorkerDetail: React.FC = () => {
                         value={clientMessage}
                         onChange={(e) => setClientMessage(e.target.value)}
                         required
-                        disabled={!connected}
                         placeholder={
                           language === "fr"
                             ? "Décrivez vos besoins, les travaux à réaliser, les délais souhaités…"
@@ -1667,7 +1785,6 @@ const WorkerDetail: React.FC = () => {
                         className="mt-0.5"
                         checked={acceptedSharing}
                         onChange={(e) => setAcceptedSharing(e.target.checked)}
-                        disabled={!connected}
                       />
                       <label htmlFor="share-consent-modal" className="text-slate-500">
                         {language === "fr"
@@ -1679,22 +1796,34 @@ const WorkerDetail: React.FC = () => {
                     <Button
                       type="submit"
                       className="w-full bg-pro-blue hover:bg-blue-700"
-                      disabled={submitting || !connected}
+                      disabled={submitting}
                     >
                       {submitting
                         ? language === "fr"
-                          ? "Envoi de la demande..."
-                          : "Sending request..."
+                          ? connected
+                            ? "Envoi de la demande..."
+                            : "Enregistrement local..."
+                          : connected
+                          ? "Sending request..."
+                          : "Saving locally..."
                         : language === "fr"
-                        ? "Envoyer la demande"
-                        : "Send request"}
+                        ? connected
+                          ? "Envoyer la demande"
+                          : "Enregistrer hors ligne"
+                        : connected
+                        ? "Send request"
+                        : "Save offline"}
                     </Button>
                   </form>
 
                   <p className="mt-3 text-[11px] text-slate-400">
                     {language === "fr"
-                      ? "Vos données sont uniquement transmises à ce professionnel."
-                      : "Your data is only shared with this professional."}
+                      ? connected
+                        ? "Vos données sont uniquement transmises à ce professionnel."
+                        : "Votre demande sera conservée localement sur cet appareil."
+                      : connected
+                      ? "Your data is only shared with this professional."
+                      : "Your request will be kept locally on this device."}
                   </p>
                 </div>
               </div>
