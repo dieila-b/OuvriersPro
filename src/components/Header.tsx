@@ -25,28 +25,12 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useNetworkStatus } from "@/services/networkService";
-import { localStore } from "@/services/localStore";
 import { authCache } from "@/services/authCache";
+import { useSyncStatusSummary } from "@/hooks/useSyncStatusSummary";
 import ContactModal from "@/components/contact/ContactModal";
 import ProxiLogo from "@/assets/logo-proxiservices.png";
 
 type Role = "user" | "client" | "worker" | "admin";
-
-type OfflineQueueItem = {
-  id: string;
-  action_type:
-    | "CREATE_CONTACT_REQUEST"
-    | "ADD_FAVORITE"
-    | "REMOVE_FAVORITE"
-    | "SEND_CLIENT_MESSAGE";
-  table_name: "op_ouvrier_contacts" | "op_ouvrier_favorites" | "op_client_worker_messages";
-  payload_json: Record<string, any>;
-  created_at: string;
-  status: "pending";
-  retry_count: number;
-};
-
-const OFFLINE_QUEUE_KEY = "offline_queue_v1";
 
 const normalizeRole = (r: any): Role => {
   const v = String(r ?? "").toLowerCase().trim();
@@ -66,16 +50,11 @@ const Header = () => {
 
   const location = useLocation();
   const navigate = useNavigate();
-  const { connected, initialized } = useNetworkStatus();
+  const { connected } = useNetworkStatus();
 
   const [hasSession, setHasSession] = useState(false);
   const [role, setRole] = useState<Role>("user");
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
-
-  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
-  const [pendingMessagesCount, setPendingMessagesCount] = useState(0);
-  const [pendingFavoritesCount, setPendingFavoritesCount] = useState(0);
-  const syncPollRef = useRef<number | null>(null);
 
   const cms = (key: string, fallbackFr: string, fallbackEn: string) => {
     const v = t(key);
@@ -131,6 +110,7 @@ const Header = () => {
         }
       } catch {
         if (!mounted) return;
+
         const fallbackUserId = await authCache.getUserId();
         const fallbackRole = await authCache.getRole();
 
@@ -153,6 +133,18 @@ const Header = () => {
     };
   }, [connected]);
 
+  const {
+    pendingRequestsCount,
+    pendingMessagesCount,
+    pendingFavoritesCount,
+    totalPending,
+    hasPendingSync,
+  } = useSyncStatusSummary({
+    userId: resolvedUserId,
+    enabled: hasSession,
+    pollMs: 3500,
+  });
+
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname, location.search, location.hash]);
@@ -167,88 +159,6 @@ const Header = () => {
       document.body.style.overflow = "";
     };
   }, [mobileOpen]);
-
-  const refreshSyncSummary = useCallback(async () => {
-    try {
-      const userId = resolvedUserId ?? (await authCache.getUserId());
-
-      if (!userId) {
-        setPendingRequestsCount(0);
-        setPendingMessagesCount(0);
-        setPendingFavoritesCount(0);
-        return;
-      }
-
-      const queue = (await localStore.get<OfflineQueueItem[]>(OFFLINE_QUEUE_KEY)) || [];
-
-      const scopedQueue = queue.filter((item) => {
-        if (item.status !== "pending") return false;
-        const payloadUserId = item.payload_json?.user_id;
-        return String(payloadUserId || userId) === String(userId);
-      });
-
-      const pendingRequests = scopedQueue.filter(
-        (item) => item.action_type === "CREATE_CONTACT_REQUEST"
-      ).length;
-
-      const pendingMessages = scopedQueue.filter(
-        (item) => item.action_type === "SEND_CLIENT_MESSAGE"
-      ).length;
-
-      const pendingFavorites = scopedQueue.filter(
-        (item) => item.action_type === "ADD_FAVORITE" || item.action_type === "REMOVE_FAVORITE"
-      ).length;
-
-      setPendingRequestsCount(pendingRequests);
-      setPendingMessagesCount(pendingMessages);
-      setPendingFavoritesCount(pendingFavorites);
-    } catch (error) {
-      console.error("[Header] refreshSyncSummary error:", error);
-      setPendingRequestsCount(0);
-      setPendingMessagesCount(0);
-      setPendingFavoritesCount(0);
-    }
-  }, [resolvedUserId]);
-
-  useEffect(() => {
-    if (!initialized) return;
-
-    void refreshSyncSummary();
-
-    const onRefresh = () => {
-      void refreshSyncSummary();
-    };
-
-    window.addEventListener("focus", onRefresh);
-    window.addEventListener("storage", onRefresh);
-    document.addEventListener("visibilitychange", onRefresh);
-
-    return () => {
-      window.removeEventListener("focus", onRefresh);
-      window.removeEventListener("storage", onRefresh);
-      document.removeEventListener("visibilitychange", onRefresh);
-    };
-  }, [initialized, refreshSyncSummary]);
-
-  useEffect(() => {
-    if (syncPollRef.current != null) {
-      window.clearInterval(syncPollRef.current);
-      syncPollRef.current = null;
-    }
-
-    if (!initialized) return;
-
-    syncPollRef.current = window.setInterval(() => {
-      void refreshSyncSummary();
-    }, 3500);
-
-    return () => {
-      if (syncPollRef.current != null) {
-        window.clearInterval(syncPollRef.current);
-        syncPollRef.current = null;
-      }
-    };
-  }, [initialized, refreshSyncSummary]);
 
   const accountLabel = useMemo(() => {
     if (hasSession) return cms("header.btn_account", "Mon compte", "My account");
@@ -338,9 +248,6 @@ const Header = () => {
     setMobileOpen((v) => !v);
   }, []);
 
-  const totalPending = pendingRequestsCount + pendingMessagesCount + pendingFavoritesCount;
-  const hasPendingSync = totalPending > 0;
-
   const syncLabel = hasPendingSync
     ? language === "fr"
       ? `${totalPending} en attente`
@@ -399,7 +306,11 @@ const Header = () => {
   const MobileMenuPanel = mobileOpen ? (
     <div
       className="md:hidden min-w-0 shrink-0 flex items-center gap-2 rounded-2xl px-2 py-1 border shadow-sm"
-      style={{ pointerEvents: "auto", backgroundColor: HEADER_LIGHT_BLUE, borderColor: HEADER_BORDER_BLUE }}
+      style={{
+        pointerEvents: "auto",
+        backgroundColor: HEADER_LIGHT_BLUE,
+        borderColor: HEADER_BORDER_BLUE,
+      }}
     >
       <div className="w-full px-4 sm:px-6 py-3">
         <div className="flex items-center justify-between gap-3 min-w-0">
@@ -663,7 +574,11 @@ const Header = () => {
         className="w-full shrink-0 sm:hidden"
         style={{ height: "calc(env(safe-area-inset-top, 0px) + 44px)" }}
       />
-      <div aria-hidden className="hidden w-full shrink-0 sm:block" style={{ height: "88px" }} />
+      <div
+        aria-hidden
+        className="hidden w-full shrink-0 sm:block"
+        style={{ height: "88px" }}
+      />
 
       {MobileMenuPanel}
 
