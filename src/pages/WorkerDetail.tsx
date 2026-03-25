@@ -6,6 +6,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useNetworkStatus } from "@/services/networkService";
 import { localStore } from "@/services/localStore";
 import { authCache } from "@/services/authCache";
+import { favoritesRepository } from "@/services/favoritesRepository";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +21,8 @@ import {
   AlertTriangle,
   X,
   WifiOff,
+  Heart,
+  Loader2,
 } from "lucide-react";
 
 // ✅ Hook global UI
@@ -128,6 +131,14 @@ const WorkerDetail: React.FC = () => {
   // Auth
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [viewerRole, setViewerRole] = useState<ViewerRole>(null);
+
+  // Favoris
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [favoriteId, setFavoriteId] = useState<string | null>(null);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [favoriteInfo, setFavoriteInfo] = useState<string | null>(null);
+  const [favoriteError, setFavoriteError] = useState<string | null>(null);
+  const [favoritesLoadedFromCache, setFavoritesLoadedFromCache] = useState(false);
 
   // Formulaire de contact
   const [clientName, setClientName] = useState("");
@@ -288,6 +299,38 @@ const WorkerDetail: React.FC = () => {
         language === "fr"
           ? "Photos chargées depuis le cache local."
           : "Photos loaded from local cache.",
+    };
+  }, [language]);
+
+  const tFavorite = useMemo(() => {
+    return {
+      add: language === "fr" ? "Ajouter aux favoris" : "Add to favourites",
+      remove: language === "fr" ? "Retirer des favoris" : "Remove from favourites",
+      loading: language === "fr" ? "Mise à jour..." : "Updating...",
+      loginRequired:
+        language === "fr"
+          ? "Connectez-vous pour ajouter ce prestataire à vos favoris."
+          : "Log in to add this provider to your favourites.",
+      addedOnline:
+        language === "fr"
+          ? "Prestataire ajouté aux favoris."
+          : "Provider added to favourites.",
+      removedOnline:
+        language === "fr"
+          ? "Prestataire retiré des favoris."
+          : "Provider removed from favourites.",
+      addedOffline:
+        language === "fr"
+          ? "Favori enregistré hors ligne. Il sera synchronisé automatiquement."
+          : "Favourite saved offline. It will sync automatically.",
+      removedOffline:
+        language === "fr"
+          ? "Retrait enregistré hors ligne. Il sera synchronisé automatiquement."
+          : "Offline removal saved. It will sync automatically.",
+      cacheLoaded:
+        language === "fr"
+          ? "État des favoris chargé depuis le cache local."
+          : "Favourite state loaded from local cache.",
     };
   }, [language]);
 
@@ -487,6 +530,53 @@ const WorkerDetail: React.FC = () => {
       void loadWorker();
     }
   }, [workerId, language, connected, initialized]);
+
+  // Favoris
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadFavoriteState = async () => {
+      setFavoriteError(null);
+      setFavoriteInfo(null);
+      setFavoritesLoadedFromCache(false);
+
+      if (!initialized || !workerId) return;
+
+      const resolvedUserId = authUserId || (await authCache.getUserId());
+      if (!resolvedUserId) {
+        if (!cancelled) {
+          setIsFavorite(false);
+          setFavoriteId(null);
+        }
+        return;
+      }
+
+      try {
+        const result = await favoritesRepository.loadFavorites(resolvedUserId, connected);
+        if (cancelled) return;
+
+        const match = result.items.find((item) => item.worker_id === workerId) || null;
+        setIsFavorite(!!match);
+        setFavoriteId(match?.id ?? null);
+        setFavoritesLoadedFromCache(result.fromCache);
+
+        if (result.fromCache) {
+          setFavoriteInfo(tFavorite.cacheLoaded);
+        }
+      } catch (error) {
+        console.error("[WorkerDetail] loadFavoriteState error:", error);
+        if (cancelled) return;
+        setIsFavorite(false);
+        setFavoriteId(null);
+      }
+    };
+
+    void loadFavoriteState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authUserId, connected, initialized, workerId, tFavorite.cacheLoaded]);
 
   // Avis
   const fetchReviews = async (wid: string) => {
@@ -833,6 +923,68 @@ const WorkerDetail: React.FC = () => {
   const closeGallery = useCallback(() => {
     setGalleryOpen(false);
   }, []);
+
+  const handleToggleFavorite = useCallback(async () => {
+    if (!worker) return;
+
+    const resolvedUserId = authUserId || (await authCache.getUserId());
+
+    if (!resolvedUserId) {
+      navigate(`/login?redirect=${encodeURIComponent(`/ouvrier/${worker.id}`)}`);
+      return;
+    }
+
+    setFavoriteLoading(true);
+    setFavoriteError(null);
+    setFavoriteInfo(null);
+
+    try {
+      if (isFavorite) {
+        await favoritesRepository.removeFavorite({
+          userId: resolvedUserId,
+          connected,
+          workerId: worker.id,
+          favoriteId,
+        });
+
+        setIsFavorite(false);
+        setFavoriteId(null);
+        setFavoriteInfo(connected ? tFavorite.removedOnline : tFavorite.removedOffline);
+      } else {
+        const result = await favoritesRepository.addFavorite({
+          userId: resolvedUserId,
+          connected,
+          workerId: worker.id,
+          workerName: fullName || (language === "fr" ? "Ouvrier" : "Worker"),
+          profession: worker.profession ?? null,
+        });
+
+        setIsFavorite(true);
+        setFavoriteId(result.id);
+        setFavoriteInfo(connected ? tFavorite.addedOnline : tFavorite.addedOffline);
+      }
+    } catch (error: any) {
+      console.error("[WorkerDetail] favorite toggle error:", error);
+      setFavoriteError(
+        error?.message ||
+          (language === "fr"
+            ? "Impossible de mettre à jour les favoris."
+            : "Unable to update favourites.")
+      );
+    } finally {
+      setFavoriteLoading(false);
+    }
+  }, [
+    worker,
+    authUserId,
+    connected,
+    favoriteId,
+    isFavorite,
+    tFavorite,
+    fullName,
+    language,
+    navigate,
+  ]);
 
   const addOfflineQueueItem = async (item: OfflineQueueItem) => {
     const existing = (await localStore.get<OfflineQueueItem[]>(OFFLINE_QUEUE_KEY)) || [];
@@ -1195,7 +1347,7 @@ const WorkerDetail: React.FC = () => {
           </div>
         )}
 
-        {(usedWorkerCache || usedReviewsCache || usedPhotosCache) && (
+        {(usedWorkerCache || usedReviewsCache || usedPhotosCache || favoritesLoadedFromCache) && (
           <div className="mb-4 space-y-2">
             {usedWorkerCache && (
               <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
@@ -1212,13 +1364,42 @@ const WorkerDetail: React.FC = () => {
                 {tOffline.cachePhotos}
               </div>
             )}
+            {favoritesLoadedFromCache && (
+              <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                {tFavorite.cacheLoaded}
+              </div>
+            )}
           </div>
         )}
 
         {/* ✅ CTA sticky (mobile uniquement) */}
         {isMobileUI && (
           <div className="fixed left-0 right-0 bottom-0 z-40 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-            <div className="max-w-6xl mx-auto">
+            <div className="max-w-6xl mx-auto space-y-2">
+              <Button
+                type="button"
+                variant={isFavorite ? "outline" : "secondary"}
+                className={`w-full shadow-lg ${
+                  isFavorite
+                    ? "border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
+                    : "bg-white text-slate-900 hover:bg-slate-100"
+                }`}
+                onClick={handleToggleFavorite}
+                disabled={favoriteLoading}
+              >
+                {favoriteLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {tFavorite.loading}
+                  </>
+                ) : (
+                  <>
+                    <Heart className={`mr-2 h-4 w-4 ${isFavorite ? "fill-rose-500 text-rose-500" : ""}`} />
+                    {isFavorite ? tFavorite.remove : tFavorite.add}
+                  </>
+                )}
+              </Button>
+
               <Button
                 type="button"
                 className="w-full bg-pro-blue hover:bg-blue-700 shadow-lg"
@@ -1230,7 +1411,7 @@ const WorkerDetail: React.FC = () => {
           </div>
         )}
 
-        <div className={`flex flex-col lg:flex-row gap-6 ${isMobileUI ? "pb-20" : "pb-0"}`}>
+        <div className={`flex flex-col lg:flex-row gap-6 ${isMobileUI ? "pb-32" : "pb-0"}`}>
           <div className="flex-1 space-y-4">
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -1566,6 +1747,21 @@ const WorkerDetail: React.FC = () => {
                 {language === "fr" ? "Coordonnées directes" : "Direct contact"}
               </h2>
 
+              {(favoriteError || favoriteInfo) && (
+                <div className="mb-3 space-y-2">
+                  {favoriteError && (
+                    <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">
+                      {favoriteError}
+                    </div>
+                  )}
+                  {favoriteInfo && (
+                    <div className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+                      {favoriteInfo}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="mb-3">
                 {canReportWorker ? (
                   <ReportAccountDialog
@@ -1585,6 +1781,34 @@ const WorkerDetail: React.FC = () => {
                     {tReport.loginToReport}
                   </Button>
                 )}
+              </div>
+
+              <div className="mb-3">
+                <Button
+                  type="button"
+                  variant={isFavorite ? "outline" : "secondary"}
+                  className={`w-full justify-start ${
+                    isFavorite
+                      ? "border-rose-200 text-rose-600 hover:bg-rose-50"
+                      : "hover:bg-slate-100"
+                  }`}
+                  onClick={handleToggleFavorite}
+                  disabled={favoriteLoading}
+                >
+                  {favoriteLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      {tFavorite.loading}
+                    </>
+                  ) : (
+                    <>
+                      <Heart
+                        className={`w-4 h-4 mr-2 ${isFavorite ? "fill-rose-500 text-rose-500" : ""}`}
+                      />
+                      {isFavorite ? tFavorite.remove : tFavorite.add}
+                    </>
+                  )}
+                </Button>
               </div>
 
               <div className="space-y-2 text-xs">
