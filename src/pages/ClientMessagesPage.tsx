@@ -1,4 +1,3 @@
-// src/pages/ClientMessagesPage.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -6,6 +5,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useNetworkStatus } from "@/services/networkService";
 import { localStore } from "@/services/localStore";
 import { authCache } from "@/services/authCache";
+import { syncService, type OfflineQueueItem } from "@/services/syncService";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -22,7 +22,6 @@ import {
   WifiOff,
 } from "lucide-react";
 
-// Capacitor (mobile)
 import { Capacitor } from "@capacitor/core";
 import { Camera as CapCamera, CameraResultType, CameraSource } from "@capacitor/camera";
 
@@ -76,27 +75,12 @@ type MessageRow = {
 
 type ThreadFilter = "all" | "unread";
 
-type OfflineQueueItem = {
-  id: string;
-  action_type:
-    | "CREATE_CONTACT_REQUEST"
-    | "ADD_FAVORITE"
-    | "REMOVE_FAVORITE"
-    | "SEND_CLIENT_MESSAGE";
-  table_name: "op_ouvrier_contacts" | "op_ouvrier_favorites" | "op_client_worker_messages";
-  payload_json: Record<string, any>;
-  created_at: string;
-  status: "pending";
-  retry_count: number;
-};
-
 const BUCKET_CHAT = "chat-media";
 const SIGNED_URL_TTL = 60 * 60;
 
 const CLIENT_CACHE_PREFIX = "cached_client_profile";
 const CONTACTS_CACHE_PREFIX = "cached_client_contacts";
 const MESSAGES_CACHE_PREFIX = "cached_client_messages";
-const OFFLINE_QUEUE_KEY = "offline_queue_v1";
 
 const getClientCacheKey = (userId?: string | null) =>
   userId ? `${CLIENT_CACHE_PREFIX}:${userId}` : CLIENT_CACHE_PREFIX;
@@ -195,7 +179,7 @@ async function createSignedUrl(path: string): Promise<string | null> {
   }
 }
 
-const ClientMessagesList: React.FC = () => {
+const ClientMessagesPage: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
   const { connected, initialized } = useNetworkStatus();
@@ -218,6 +202,7 @@ const ClientMessagesList: React.FC = () => {
 
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [sendingImage, setSendingImage] = useState(false);
 
   const [signedUrlByPath, setSignedUrlByPath] = useState<Record<string, string>>({});
   const signingInFlightRef = useRef<Record<string, boolean>>({});
@@ -231,10 +216,14 @@ const ClientMessagesList: React.FC = () => {
     select: language === "fr" ? "Sélectionner" : "Select",
     loadingContacts: language === "fr" ? "Chargement des échanges…" : "Loading threads…",
     loadingMessages: language === "fr" ? "Chargement des messages…" : "Loading messages…",
-    loadMessagesError: language === "fr" ? "Impossible de charger les messages." : "Unable to load messages.",
-    loadContactsError: language === "fr" ? "Impossible de charger vos échanges." : "Unable to load your threads.",
-    noContacts: language === "fr" ? "Aucun échange pour le moment." : "No conversation yet.",
-    noUnread: language === "fr" ? "Aucun message non lu." : "No unread messages.",
+    loadMessagesError:
+      language === "fr" ? "Impossible de charger les messages." : "Unable to load messages.",
+    loadContactsError:
+      language === "fr" ? "Impossible de charger vos échanges." : "Unable to load your threads.",
+    noContacts:
+      language === "fr" ? "Aucun échange pour le moment." : "No conversation yet.",
+    noUnread:
+      language === "fr" ? "Aucun message non lu." : "No unread messages.",
     typeHere: language === "fr" ? "Écrivez votre message" : "Type your message",
     send: language === "fr" ? "Envoyer" : "Send",
     image: language === "fr" ? "Image" : "Image",
@@ -272,6 +261,8 @@ const ClientMessagesList: React.FC = () => {
       language === "fr"
         ? "L’envoi d’image reste disponible uniquement en ligne pour le moment."
         : "Image sending is online-only for now.",
+    loadingImage:
+      language === "fr" ? "Chargement de l’image…" : "Loading image…",
   };
 
   const initials = (name: string | null) =>
@@ -326,15 +317,6 @@ const ClientMessagesList: React.FC = () => {
     return t.threadFallback;
   };
 
-  const readQueue = async (): Promise<OfflineQueueItem[]> => {
-    return (await localStore.get<OfflineQueueItem[]>(OFFLINE_QUEUE_KEY)) || [];
-  };
-
-  const addQueueItem = async (item: OfflineQueueItem) => {
-    const queue = await readQueue();
-    await localStore.set(OFFLINE_QUEUE_KEY, [item, ...queue]);
-  };
-
   const loadCachedMessages = async (contactId: string) => {
     return (await localStore.get<MessageRow[]>(getMessagesCacheKey(contactId))) || [];
   };
@@ -369,6 +351,10 @@ const ClientMessagesList: React.FC = () => {
     );
   };
 
+  const readQueue = async (): Promise<OfflineQueueItem[]> => {
+    return await syncService.getQueue();
+  };
+
   const loadPendingQueueMessagesForContact = async (contactId: string): Promise<MessageRow[]> => {
     const queue = await readQueue();
 
@@ -376,7 +362,7 @@ const ClientMessagesList: React.FC = () => {
       .filter(
         (item) =>
           item.action_type === "SEND_CLIENT_MESSAGE" &&
-          item.status === "pending" &&
+          (item.status === "pending" || item.status === "processing" || item.status === "failed") &&
           item.payload_json?.contact_id === contactId
       )
       .map((item) => ({
@@ -404,14 +390,6 @@ const ClientMessagesList: React.FC = () => {
   ) => {
     const nextStatus = computeThreadSyncStatus(threadMessages);
 
-    setContacts((prev) => {
-      const base = nextContactsOverride ?? prev;
-      const next = base.map((c) =>
-        c.id === contactId ? { ...c, sync_status: nextStatus } : c
-      );
-      return next;
-    });
-
     const currentUserId = authUserId || (await authCache.getUserId());
     if (!currentUserId) return;
 
@@ -419,6 +397,8 @@ const ClientMessagesList: React.FC = () => {
     const nextContacts = baseContacts.map((c) =>
       c.id === contactId ? { ...c, sync_status: nextStatus } : c
     );
+
+    setContacts(nextContacts);
     await localStore.set(getContactsCacheKey(currentUserId), nextContacts);
   };
 
@@ -451,7 +431,7 @@ const ClientMessagesList: React.FC = () => {
         .filter(
           (item) =>
             item.action_type === "SEND_CLIENT_MESSAGE" &&
-            item.status === "pending" &&
+            (item.status === "pending" || item.status === "processing" || item.status === "failed") &&
             item.payload_json?.contact_id === contactId
         )
         .map((item) => String(item.payload_json?.local_message_id || item.id))
@@ -555,7 +535,9 @@ const ClientMessagesList: React.FC = () => {
     const currentUserId = authUserId || (await authCache.getUserId());
     if (!currentUserId) return;
 
-    const baseContacts = (await localStore.get<ContactRow[]>(getContactsCacheKey(currentUserId))) || contacts;
+    const baseContacts =
+      (await localStore.get<ContactRow[]>(getContactsCacheKey(currentUserId))) || contacts;
+
     if (!baseContacts.length) return;
 
     const nextContacts: ContactRow[] = [];
@@ -579,7 +561,6 @@ const ClientMessagesList: React.FC = () => {
     await localStore.set(getContactsCacheKey(currentUserId), nextContacts);
   };
 
-  // Auth user id
   useEffect(() => {
     let mounted = true;
 
@@ -614,7 +595,6 @@ const ClientMessagesList: React.FC = () => {
     };
   }, [initialized]);
 
-  // Charger client + threads
   useEffect(() => {
     let mounted = true;
 
@@ -645,7 +625,9 @@ const ClientMessagesList: React.FC = () => {
 
           const firstUnread = cachedContacts.find((x) => isUnreadThread(x));
           if (cachedContacts.length > 0) {
-            setSelectedContactId(filter === "unread" ? firstUnread?.id ?? cachedContacts[0].id : cachedContacts[0].id);
+            setSelectedContactId(
+              filter === "unread" ? firstUnread?.id ?? cachedContacts[0].id : cachedContacts[0].id
+            );
           } else {
             setSelectedContactId(null);
           }
@@ -664,6 +646,7 @@ const ClientMessagesList: React.FC = () => {
           .maybeSingle();
 
         if (clientError) throw clientError;
+
         if (!clientData) {
           await readCache();
           await recomputeAllThreadSyncStatuses();
@@ -672,6 +655,7 @@ const ClientMessagesList: React.FC = () => {
 
         const currentClient = clientData as ClientRow;
         if (!mounted) return;
+
         setClient(currentClient);
         await localStore.set(clientCacheKey, currentClient);
 
@@ -725,8 +709,8 @@ const ClientMessagesList: React.FC = () => {
             prev && mapped.some((item) => item.id === prev)
               ? prev
               : filter === "unread"
-              ? firstUnread?.id ?? mapped[0].id
-              : mapped[0].id
+                ? firstUnread?.id ?? mapped[0].id
+                : mapped[0].id
           );
         } else {
           setSelectedContactId(null);
@@ -734,7 +718,7 @@ const ClientMessagesList: React.FC = () => {
 
         await recomputeAllThreadSyncStatuses();
       } catch (e: any) {
-        console.error("ClientMessagesList load contacts error", e);
+        console.error("ClientMessagesPage load contacts error", e);
         if (!mounted) return;
 
         setContactsError(e?.message || t.loadContactsError);
@@ -770,10 +754,7 @@ const ClientMessagesList: React.FC = () => {
     setSelectedContactId(contactId);
 
     const c = contacts.find((x) => x.id === contactId);
-    if (!c) return;
-    if (!isUnreadThread(c)) return;
-
-    if (!connected) return;
+    if (!c || !isUnreadThread(c) || !connected) return;
 
     try {
       const { error } = await supabase
@@ -796,7 +777,6 @@ const ClientMessagesList: React.FC = () => {
     } catch {}
   };
 
-  // Charger messages du thread
   useEffect(() => {
     let mounted = true;
 
@@ -839,7 +819,7 @@ const ClientMessagesList: React.FC = () => {
         await saveCachedMessages(selectedContactId, merged);
         await persistThreadSyncStatusFromMessages(selectedContactId, merged);
       } catch (e) {
-        console.error("ClientMessagesList load messages error", e);
+        console.error("ClientMessagesPage load messages error", e);
         if (!mounted) return;
 
         const cached = await loadCachedMessages(selectedContactId);
@@ -975,7 +955,7 @@ const ClientMessagesList: React.FC = () => {
 
         await persistMessageLocally(selectedContact.id, localMessage);
 
-        await addQueueItem({
+        await syncService.enqueue({
           id: createOfflineId("queue"),
           action_type: "SEND_CLIENT_MESSAGE",
           table_name: "op_client_worker_messages",
@@ -990,8 +970,6 @@ const ClientMessagesList: React.FC = () => {
             created_at: localMessage.created_at,
           },
           created_at: localMessage.created_at,
-          status: "pending",
-          retry_count: 0,
         });
 
         await refreshPendingMessagesForCurrentThread(selectedContact.id);
@@ -1025,7 +1003,7 @@ const ClientMessagesList: React.FC = () => {
       setNewMessage("");
       void reconcileThreadFromServer(selectedContact.id);
     } catch (e) {
-      console.error("ClientMessagesList send error", e);
+      console.error("ClientMessagesPage send error", e);
       setMessagesError(
         language === "fr"
           ? "Impossible d'envoyer votre message."
@@ -1035,8 +1013,6 @@ const ClientMessagesList: React.FC = () => {
       setSending(false);
     }
   };
-
-  const [sendingImage, setSendingImage] = useState(false);
 
   const handleSendImage = async () => {
     if (!client || !selectedContact) return;
@@ -1098,9 +1074,10 @@ const ClientMessagesList: React.FC = () => {
 
       void reconcileThreadFromServer(selectedContact.id);
     } catch (e: any) {
-      console.error("ClientMessagesList send image error", e);
+      console.error("ClientMessagesPage send image error", e);
       setMessagesError(
-        e?.message || (language === "fr" ? "Impossible d'envoyer l'image." : "Unable to send image.")
+        e?.message ||
+          (language === "fr" ? "Impossible d'envoyer l'image." : "Unable to send image.")
       );
     } finally {
       setSendingImage(false);
@@ -1153,7 +1130,6 @@ const ClientMessagesList: React.FC = () => {
         <h1 className="text-2xl font-bold text-slate-900 mb-4">{t.title}</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          {/* Colonne 1 : threads */}
           <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:col-span-3">
             <div className="px-4 pt-3 flex items-center gap-3 border-b border-slate-100">
               <div className="flex gap-2">
@@ -1266,7 +1242,6 @@ const ClientMessagesList: React.FC = () => {
             </div>
           </div>
 
-          {/* Colonne 2 : conversation */}
           <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:col-span-6">
             <div className="px-4 py-3 border-b border-slate-100">
               <div className="text-sm font-semibold text-slate-900">{t.aboutWorker}</div>
@@ -1338,7 +1313,7 @@ const ClientMessagesList: React.FC = () => {
                                 {!imgUrl ? (
                                   <div className="flex items-center gap-2 text-xs opacity-90">
                                     <Loader2 className="w-4 h-4 animate-spin" />
-                                    {language === "fr" ? "Chargement de l’image…" : "Loading image…"}
+                                    {t.loadingImage}
                                   </div>
                                 ) : (
                                   <a href={imgUrl} target="_blank" rel="noreferrer">
@@ -1410,7 +1385,6 @@ const ClientMessagesList: React.FC = () => {
             </div>
           </div>
 
-          {/* Colonne 3 : fiche ouvrier */}
           <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:col-span-3">
             <div className="px-4 py-3 border-b border-slate-100">
               <div className="text-sm font-semibold text-slate-900">{workerName}</div>
@@ -1497,4 +1471,4 @@ const ClientMessagesList: React.FC = () => {
   );
 };
 
-export default ClientMessagesList;
+export default ClientMessagesPage;
