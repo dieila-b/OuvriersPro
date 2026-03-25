@@ -1,11 +1,14 @@
-// src/services/repositories/profileRepository.ts
 import { supabase } from "@/lib/supabase";
 import { localStore } from "@/services/localStore";
 import { authCache, normalizeRole } from "@/services/authCache";
 import { syncService } from "@/services/syncService";
 import { networkService } from "@/services/networkService";
 
-const PROFILE_CACHE_KEY = "cached_op_user_profile";
+const PROFILE_CACHE_KEY_PREFIX = "cached_op_user_profile";
+
+function getProfileCacheKey(userId?: string | null) {
+  return userId ? `${PROFILE_CACHE_KEY_PREFIX}:${userId}` : PROFILE_CACHE_KEY_PREFIX;
+}
 
 export type CachedProfile = {
   id: string;
@@ -20,6 +23,7 @@ export type CachedProfile = {
 export const profileRepository = {
   async getMyProfile(userId: string): Promise<CachedProfile | null> {
     const { connected } = networkService.getStatus();
+    const cacheKey = getProfileCacheKey(userId);
 
     if (connected) {
       const { data, error } = await supabase
@@ -29,13 +33,13 @@ export const profileRepository = {
         .maybeSingle();
 
       if (!error && data) {
-        await localStore.set(PROFILE_CACHE_KEY, data);
+        await localStore.set(cacheKey, data);
         await authCache.saveUser(userId, normalizeRole(data.role), data);
         return data as CachedProfile;
       }
     }
 
-    const cached = await localStore.get<CachedProfile>(PROFILE_CACHE_KEY);
+    const cached = await localStore.get<CachedProfile>(cacheKey);
     if (cached?.id === userId) return cached;
 
     const cachedAuthProfile = await authCache.getProfile<CachedProfile>();
@@ -46,6 +50,7 @@ export const profileRepository = {
 
   async updateMyProfile(userId: string, values: Partial<CachedProfile>) {
     const { connected } = networkService.getStatus();
+    const cacheKey = getProfileCacheKey(userId);
 
     const current = await this.getMyProfile(userId);
     const optimistic = {
@@ -53,7 +58,7 @@ export const profileRepository = {
       ...values,
     };
 
-    await localStore.set(PROFILE_CACHE_KEY, optimistic);
+    await localStore.set(cacheKey, optimistic);
     await authCache.saveUser(
       userId,
       normalizeRole(optimistic.role ?? current?.role ?? "user"),
@@ -83,7 +88,7 @@ export const profileRepository = {
 
     const finalProfile = (data ?? optimistic) as CachedProfile;
 
-    await localStore.set(PROFILE_CACHE_KEY, finalProfile);
+    await localStore.set(cacheKey, finalProfile);
     await authCache.saveUser(
       userId,
       normalizeRole(finalProfile.role ?? "user"),
