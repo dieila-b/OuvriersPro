@@ -46,6 +46,7 @@ type ContactRow = {
   status: string | null;
   origin: string | null;
   created_at: string;
+  sync_status?: "pending" | "synced";
 
   worker?: {
     id: string | null;
@@ -173,8 +174,7 @@ async function uploadChatImage(params: {
   const fileName = `${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
   const storagePath = `contacts/${contactId}/${senderUserId}/${fileName}`;
 
-  const { error: upErr } = await supabase
-    .storage
+  const { error: upErr } = await supabase.storage
     .from(BUCKET_CHAT)
     .upload(storagePath, blob, { contentType: mimeType, upsert: false });
 
@@ -185,11 +185,9 @@ async function uploadChatImage(params: {
 
 async function createSignedUrl(path: string): Promise<string | null> {
   try {
-    const { data, error } = await supabase
-      .storage
+    const { data, error } = await supabase.storage
       .from(BUCKET_CHAT)
       .createSignedUrl(path, SIGNED_URL_TTL);
-
     if (error) return null;
     return data?.signedUrl ?? null;
   } catch {
@@ -233,10 +231,8 @@ const ClientMessagesList: React.FC = () => {
     select: language === "fr" ? "Sélectionner" : "Select",
     loadingContacts: language === "fr" ? "Chargement des échanges…" : "Loading threads…",
     loadingMessages: language === "fr" ? "Chargement des messages…" : "Loading messages…",
-    loadMessagesError:
-      language === "fr" ? "Impossible de charger les messages." : "Unable to load messages.",
-    loadContactsError:
-      language === "fr" ? "Impossible de charger vos échanges." : "Unable to load your threads.",
+    loadMessagesError: language === "fr" ? "Impossible de charger les messages." : "Unable to load messages.",
+    loadContactsError: language === "fr" ? "Impossible de charger vos échanges." : "Unable to load your threads.",
     noContacts: language === "fr" ? "Aucun échange pour le moment." : "No conversation yet.",
     noUnread: language === "fr" ? "Aucun message non lu." : "No unread messages.",
     typeHere: language === "fr" ? "Écrivez votre message" : "Type your message",
@@ -267,6 +263,7 @@ const ClientMessagesList: React.FC = () => {
         ? "Messages chargés depuis le cache local."
         : "Messages loaded from local cache.",
     pending: language === "fr" ? "En attente" : "Pending",
+    synced: language === "fr" ? "Synchronisé" : "Synced",
     savedOffline:
       language === "fr"
         ? "Message enregistré localement. Il sera envoyé dès le retour du réseau."
@@ -396,6 +393,35 @@ const ClientMessagesList: React.FC = () => {
       }));
   };
 
+  const computeThreadSyncStatus = (items: MessageRow[]): "pending" | "synced" => {
+    return items.some((m) => m.sync_status === "pending") ? "pending" : "synced";
+  };
+
+  const persistThreadSyncStatusFromMessages = async (
+    contactId: string,
+    threadMessages: MessageRow[],
+    nextContactsOverride?: ContactRow[]
+  ) => {
+    const nextStatus = computeThreadSyncStatus(threadMessages);
+
+    setContacts((prev) => {
+      const base = nextContactsOverride ?? prev;
+      const next = base.map((c) =>
+        c.id === contactId ? { ...c, sync_status: nextStatus } : c
+      );
+      return next;
+    });
+
+    const currentUserId = authUserId || (await authCache.getUserId());
+    if (!currentUserId) return;
+
+    const baseContacts = nextContactsOverride ?? contacts;
+    const nextContacts = baseContacts.map((c) =>
+      c.id === contactId ? { ...c, sync_status: nextStatus } : c
+    );
+    await localStore.set(getContactsCacheKey(currentUserId), nextContacts);
+  };
+
   const areMessagesLikelySame = (pendingMsg: MessageRow, serverMsg: MessageRow) => {
     if (pendingMsg.sender_role !== "client" || serverMsg.sender_role !== "client") return false;
     if ((pendingMsg.contact_id || "") !== (serverMsg.contact_id || "")) return false;
@@ -469,6 +495,7 @@ const ClientMessagesList: React.FC = () => {
     const merged = mergeAndDeduplicateMessages([...syncedOnly, ...pending]);
 
     await saveCachedMessages(contactId, merged);
+    await persistThreadSyncStatusFromMessages(contactId, merged);
 
     if (selectedContactId === contactId) {
       setMessages(merged);
@@ -513,6 +540,7 @@ const ClientMessagesList: React.FC = () => {
       const merged = await reconcilePendingAgainstServer(contactId, serverMessages);
 
       await saveCachedMessages(contactId, merged);
+      await persistThreadSyncStatusFromMessages(contactId, merged);
 
       if (selectedContactId === contactId) {
         setMessages(merged);
@@ -521,6 +549,34 @@ const ClientMessagesList: React.FC = () => {
     } catch (e) {
       console.warn("[ClientMessagesPage] reconcileThreadFromServer error", e);
     }
+  };
+
+  const recomputeAllThreadSyncStatuses = async () => {
+    const currentUserId = authUserId || (await authCache.getUserId());
+    if (!currentUserId) return;
+
+    const baseContacts = (await localStore.get<ContactRow[]>(getContactsCacheKey(currentUserId))) || contacts;
+    if (!baseContacts.length) return;
+
+    const nextContacts: ContactRow[] = [];
+
+    for (const contact of baseContacts) {
+      const cachedMessages = await loadCachedMessages(contact.id);
+      const pendingQueueMessages = await loadPendingQueueMessagesForContact(contact.id);
+      const merged = mergeAndDeduplicateMessages([...cachedMessages, ...pendingQueueMessages]);
+
+      if (merged.length) {
+        await saveCachedMessages(contact.id, merged);
+      }
+
+      nextContacts.push({
+        ...contact,
+        sync_status: computeThreadSyncStatus(merged),
+      });
+    }
+
+    setContacts(nextContacts);
+    await localStore.set(getContactsCacheKey(currentUserId), nextContacts);
   };
 
   // Auth user id
@@ -589,9 +645,7 @@ const ClientMessagesList: React.FC = () => {
 
           const firstUnread = cachedContacts.find((x) => isUnreadThread(x));
           if (cachedContacts.length > 0) {
-            setSelectedContactId(
-              filter === "unread" ? firstUnread?.id ?? cachedContacts[0].id : cachedContacts[0].id
-            );
+            setSelectedContactId(filter === "unread" ? firstUnread?.id ?? cachedContacts[0].id : cachedContacts[0].id);
           } else {
             setSelectedContactId(null);
           }
@@ -599,6 +653,7 @@ const ClientMessagesList: React.FC = () => {
 
         if (!connected) {
           await readCache();
+          await recomputeAllThreadSyncStatuses();
           return;
         }
 
@@ -611,6 +666,7 @@ const ClientMessagesList: React.FC = () => {
         if (clientError) throw clientError;
         if (!clientData) {
           await readCache();
+          await recomputeAllThreadSyncStatuses();
           return;
         }
 
@@ -654,6 +710,7 @@ const ClientMessagesList: React.FC = () => {
         const mapped: ContactRow[] = (contactsData || []).map((row: any) => ({
           ...row,
           worker: row.worker ?? null,
+          sync_status: "synced",
         }));
 
         if (!mounted) return;
@@ -674,6 +731,8 @@ const ClientMessagesList: React.FC = () => {
         } else {
           setSelectedContactId(null);
         }
+
+        await recomputeAllThreadSyncStatuses();
       } catch (e: any) {
         console.error("ClientMessagesList load contacts error", e);
         if (!mounted) return;
@@ -758,6 +817,7 @@ const ClientMessagesList: React.FC = () => {
           const merged = mergeAndDeduplicateMessages([...cached, ...pendingQueueItems]);
 
           await saveCachedMessages(selectedContactId, merged);
+          await persistThreadSyncStatusFromMessages(selectedContactId, merged);
 
           if (!mounted) return;
           setMessages(merged);
@@ -777,6 +837,7 @@ const ClientMessagesList: React.FC = () => {
         setMessages(merged);
         setMessagesFromCache(false);
         await saveCachedMessages(selectedContactId, merged);
+        await persistThreadSyncStatusFromMessages(selectedContactId, merged);
       } catch (e) {
         console.error("ClientMessagesList load messages error", e);
         if (!mounted) return;
@@ -789,6 +850,7 @@ const ClientMessagesList: React.FC = () => {
         setMessagesFromCache(true);
 
         await saveCachedMessages(selectedContactId, merged);
+        await persistThreadSyncStatusFromMessages(selectedContactId, merged);
 
         if (!merged.length) {
           setMessagesError(t.loadMessagesError);
@@ -835,13 +897,16 @@ const ClientMessagesList: React.FC = () => {
   }, [filter, displayedContacts, selectedContactId]);
 
   useEffect(() => {
-    if (!selectedContactId) return;
-
     const onSyncSignal = () => {
+      void recomputeAllThreadSyncStatuses();
+
+      if (!selectedContactId) return;
+
       if (!connected) {
         void refreshPendingMessagesForCurrentThread(selectedContactId);
         return;
       }
+
       void reconcileThreadFromServer(selectedContactId);
     };
 
@@ -854,10 +919,10 @@ const ClientMessagesList: React.FC = () => {
       window.removeEventListener("focus", onSyncSignal);
       window.removeEventListener("visibilitychange", onSyncSignal);
     };
-  }, [selectedContactId, connected]);
+  }, [selectedContactId, connected, authUserId, contacts]);
 
   useEffect(() => {
-    if (!selectedContactId || !connected) return;
+    if (!connected) return;
 
     if (reconcileTimerRef.current != null) {
       window.clearInterval(reconcileTimerRef.current);
@@ -865,7 +930,11 @@ const ClientMessagesList: React.FC = () => {
     }
 
     reconcileTimerRef.current = window.setInterval(() => {
-      void reconcileThreadFromServer(selectedContactId);
+      void recomputeAllThreadSyncStatuses();
+
+      if (selectedContactId) {
+        void reconcileThreadFromServer(selectedContactId);
+      }
     }, 4000);
 
     return () => {
@@ -874,12 +943,13 @@ const ClientMessagesList: React.FC = () => {
         reconcileTimerRef.current = null;
       }
     };
-  }, [selectedContactId, connected]);
+  }, [selectedContactId, connected, authUserId, contacts]);
 
   const persistMessageLocally = async (contactId: string, nextMessage: MessageRow) => {
     const cached = await loadCachedMessages(contactId);
     const merged = mergeAndDeduplicateMessages([...cached, nextMessage]);
     await saveCachedMessages(contactId, merged);
+    await persistThreadSyncStatusFromMessages(contactId, merged);
     setMessages(merged);
   };
 
@@ -925,6 +995,8 @@ const ClientMessagesList: React.FC = () => {
         });
 
         await refreshPendingMessagesForCurrentThread(selectedContact.id);
+        await recomputeAllThreadSyncStatuses();
+
         setNewMessage("");
         setMessagesError(t.savedOffline);
         return;
@@ -948,8 +1020,9 @@ const ClientMessagesList: React.FC = () => {
 
       const nextMessage = { ...(data as MessageRow), sync_status: "synced" as const };
       await persistMessageLocally(selectedContact.id, nextMessage);
-      setNewMessage("");
+      await recomputeAllThreadSyncStatuses();
 
+      setNewMessage("");
       void reconcileThreadFromServer(selectedContact.id);
     } catch (e) {
       console.error("ClientMessagesList send error", e);
@@ -1016,6 +1089,7 @@ const ClientMessagesList: React.FC = () => {
 
       const nextMessage = { ...(data as MessageRow), sync_status: "synced" as const };
       await persistMessageLocally(selectedContact.id, nextMessage);
+      await recomputeAllThreadSyncStatuses();
 
       if (data?.media_path) {
         const url = await createSignedUrl(data.media_path);
@@ -1146,6 +1220,7 @@ const ClientMessagesList: React.FC = () => {
                     const name = w ? fullName(w.first_name, w.last_name) : "Ouvrier";
                     const threadTitle = getThreadTitle(c);
                     const unread = isUnreadThread(c);
+                    const pendingThread = c.sync_status === "pending";
 
                     return (
                       <li key={c.id}>
@@ -1165,7 +1240,14 @@ const ClientMessagesList: React.FC = () => {
                               <span className="text-sm font-semibold text-slate-900 truncate">{name}</span>
 
                               <span className="shrink-0 flex items-center gap-2">
-                                {unread && <span className="inline-block w-2 h-2 rounded-full bg-orange-500" />}
+                                {pendingThread ? (
+                                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                                    {t.pending}
+                                  </span>
+                                ) : unread ? (
+                                  <span className="inline-block w-2 h-2 rounded-full bg-orange-500" />
+                                ) : null}
+
                                 <span className="flex items-center gap-1 text-xs text-slate-400">
                                   <Clock className="w-3 h-3" />
                                   {formatDate(c.created_at)}
