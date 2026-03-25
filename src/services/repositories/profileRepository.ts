@@ -17,6 +17,9 @@ export type CachedProfile = {
   role?: string | null;
   phone?: string | null;
   avatar_url?: string | null;
+  country?: string | null;
+  city?: string | null;
+  preferred_contact?: string | null;
   [key: string]: any;
 };
 
