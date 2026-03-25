@@ -1,6 +1,6 @@
 // src/services/networkService.ts
 import { Network } from "@capacitor/network";
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 export type AppNetworkStatus = {
   connected: boolean;
@@ -64,7 +64,7 @@ class NetworkService {
 
         this.setStatus({
           connected: typeof navigator !== "undefined" ? navigator.onLine : true,
-          connectionType: "unknown",
+          connectionType: typeof navigator !== "undefined" && navigator.onLine ? "unknown" : "none",
           initialized: true,
         });
       }
@@ -105,7 +105,8 @@ class NetworkService {
     } catch {
       this.setStatus({
         connected: typeof navigator !== "undefined" ? navigator.onLine : true,
-        connectionType: "unknown",
+        connectionType:
+          typeof navigator !== "undefined" && navigator.onLine ? "unknown" : "none",
         initialized: true,
       });
     }
@@ -150,6 +151,10 @@ class NetworkService {
 export const networkService = new NetworkService();
 
 export function useNetworkStatus() {
+  useEffect(() => {
+    void networkService.init();
+  }, []);
+
   return useSyncExternalStore(
     (listener) => networkService.subscribe(listener),
     () => networkService.getStatus(),
