@@ -1,8 +1,11 @@
-// src/pages/ClientMessagesList.tsx
+// src/pages/ClientMessagesPage.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useNetworkStatus } from "@/services/networkService";
+import { localStore } from "@/services/localStore";
+import { authCache } from "@/services/authCache";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -16,6 +19,7 @@ import {
   Camera,
   Image as ImageIcon,
   Loader2,
+  WifiOff,
 } from "lucide-react";
 
 // Capacitor (mobile)
@@ -64,16 +68,46 @@ type MessageRow = {
   sender_role: "worker" | "client";
   message: string | null;
   created_at: string;
-
-  // ✅ nouveaux champs
   media_type?: string | null;
   media_path?: string | null;
+  sync_status?: "pending" | "synced";
 };
 
 type ThreadFilter = "all" | "unread";
 
+type OfflineQueueItem = {
+  id: string;
+  action_type:
+    | "CREATE_CONTACT_REQUEST"
+    | "ADD_FAVORITE"
+    | "REMOVE_FAVORITE"
+    | "SEND_CLIENT_MESSAGE";
+  table_name: "op_ouvrier_contacts" | "op_ouvrier_favorites" | "op_client_worker_messages";
+  payload_json: Record<string, any>;
+  created_at: string;
+  status: "pending";
+  retry_count: number;
+};
+
 const BUCKET_CHAT = "chat-media";
 const SIGNED_URL_TTL = 60 * 60;
+
+const CLIENT_CACHE_PREFIX = "cached_client_profile";
+const CONTACTS_CACHE_PREFIX = "cached_client_contacts";
+const MESSAGES_CACHE_PREFIX = "cached_client_messages";
+const OFFLINE_QUEUE_KEY = "offline_queue_v1";
+
+const getClientCacheKey = (userId?: string | null) =>
+  userId ? `${CLIENT_CACHE_PREFIX}:${userId}` : CLIENT_CACHE_PREFIX;
+
+const getContactsCacheKey = (userId?: string | null) =>
+  userId ? `${CONTACTS_CACHE_PREFIX}:${userId}` : CONTACTS_CACHE_PREFIX;
+
+const getMessagesCacheKey = (contactId?: string | null) =>
+  contactId ? `${MESSAGES_CACHE_PREFIX}:${contactId}` : MESSAGES_CACHE_PREFIX;
+
+const createOfflineId = (prefix: string) =>
+  `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
 function extFromMime(mime?: string | null) {
   if (!mime) return "jpg";
@@ -150,7 +184,9 @@ async function uploadChatImage(params: {
 
 async function createSignedUrl(path: string): Promise<string | null> {
   try {
-    const { data, error } = await supabase.storage.from(BUCKET_CHAT).createSignedUrl(path, SIGNED_URL_TTL);
+    const { data, error } = await supabase.storage
+      .from(BUCKET_CHAT)
+      .createSignedUrl(path, SIGNED_URL_TTL);
     if (error) return null;
     return data?.signedUrl ?? null;
   } catch {
@@ -161,6 +197,7 @@ async function createSignedUrl(path: string): Promise<string | null> {
 const ClientMessagesList: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
+  const { connected, initialized } = useNetworkStatus();
 
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [client, setClient] = useState<ClientRow | null>(null);
@@ -168,6 +205,7 @@ const ClientMessagesList: React.FC = () => {
   const [contacts, setContacts] = useState<ContactRow[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
+  const [contactsFromCache, setContactsFromCache] = useState(false);
 
   const [filter, setFilter] = useState<ThreadFilter>("all");
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
@@ -175,11 +213,11 @@ const ClientMessagesList: React.FC = () => {
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messagesError, setMessagesError] = useState<string | null>(null);
+  const [messagesFromCache, setMessagesFromCache] = useState(false);
 
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
 
-  // ✅ signed url cache
   const [signedUrlByPath, setSignedUrlByPath] = useState<Record<string, string>>({});
   const signingInFlightRef = useRef<Record<string, boolean>>({});
 
@@ -209,6 +247,28 @@ const ClientMessagesList: React.FC = () => {
     you: language === "fr" ? "Vous" : "You",
     workerLabel: language === "fr" ? "Ouvrier" : "Worker",
     threadFallback: language === "fr" ? "Demande de devis" : "Quote request",
+    offlineTitle: language === "fr" ? "Mode hors connexion" : "Offline mode",
+    offlineDesc:
+      language === "fr"
+        ? "Vos derniers échanges restent consultables. Les nouveaux messages texte partent en attente de synchronisation."
+        : "Your recent conversations remain available. New text messages stay pending until sync.",
+    cacheThreads:
+      language === "fr"
+        ? "Échanges chargés depuis le cache local."
+        : "Threads loaded from local cache.",
+    cacheMessages:
+      language === "fr"
+        ? "Messages chargés depuis le cache local."
+        : "Messages loaded from local cache.",
+    pending: language === "fr" ? "En attente" : "Pending",
+    savedOffline:
+      language === "fr"
+        ? "Message enregistré localement. Il sera envoyé dès le retour du réseau."
+        : "Message saved locally. It will be sent when the network returns.",
+    imageOffline:
+      language === "fr"
+        ? "L’envoi d’image reste disponible uniquement en ligne pour le moment."
+        : "Image sending is online-only for now.",
   };
 
   const initials = (name: string | null) =>
@@ -219,7 +279,8 @@ const ClientMessagesList: React.FC = () => {
       .join("")
       .toUpperCase() || "A";
 
-  const fullName = (first?: string | null, last?: string | null) => `${first || ""} ${last || ""}`.trim() || "—";
+  const fullName = (first?: string | null, last?: string | null) =>
+    `${first || ""} ${last || ""}`.trim() || "—";
 
   const formatDate = (iso: string) => {
     const d = new Date(iso);
@@ -262,36 +323,116 @@ const ClientMessagesList: React.FC = () => {
     return t.threadFallback;
   };
 
+  const readQueue = async (): Promise<OfflineQueueItem[]> => {
+    return (await localStore.get<OfflineQueueItem[]>(OFFLINE_QUEUE_KEY)) || [];
+  };
+
+  const addQueueItem = async (item: OfflineQueueItem) => {
+    const queue = await readQueue();
+    await localStore.set(OFFLINE_QUEUE_KEY, [item, ...queue]);
+  };
+
+  const loadCachedMessages = async (contactId: string) => {
+    return (await localStore.get<MessageRow[]>(getMessagesCacheKey(contactId))) || [];
+  };
+
+  const saveCachedMessages = async (contactId: string, items: MessageRow[]) => {
+    await localStore.set(getMessagesCacheKey(contactId), items);
+  };
+
   // Auth user id
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setAuthUserId(data.user?.id ?? null));
-  }, []);
+    let mounted = true;
+
+    const load = async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        const liveUserId = data.user?.id ?? null;
+
+        if (!mounted) return;
+
+        if (liveUserId) {
+          setAuthUserId(liveUserId);
+          return;
+        }
+
+        const cachedUserId = await authCache.getUserId();
+        if (!mounted) return;
+        setAuthUserId(cachedUserId ?? null);
+      } catch {
+        const cachedUserId = await authCache.getUserId();
+        if (!mounted) return;
+        setAuthUserId(cachedUserId ?? null);
+      }
+    };
+
+    if (initialized) {
+      void load();
+    }
+
+    return () => {
+      mounted = false;
+    };
+  }, [initialized]);
 
   // Charger client + threads
   useEffect(() => {
+    let mounted = true;
+
     const load = async () => {
       setContactsLoading(true);
       setContactsError(null);
+      setContactsFromCache(false);
 
       try {
-        const { data: userData, error: userError } = await supabase.auth.getUser();
-        if (userError || !userData?.user) {
+        const currentUserId = authUserId || (await authCache.getUserId());
+
+        if (!currentUserId) {
           throw new Error(language === "fr" ? "Vous devez être connecté." : "You must be logged in.");
+        }
+
+        const clientCacheKey = getClientCacheKey(currentUserId);
+        const contactsCacheKey = getContactsCacheKey(currentUserId);
+
+        const readCache = async () => {
+          const cachedClient = await localStore.get<ClientRow>(clientCacheKey);
+          const cachedContacts = (await localStore.get<ContactRow[]>(contactsCacheKey)) || [];
+
+          if (!mounted) return;
+
+          setClient(cachedClient ?? null);
+          setContacts(cachedContacts);
+          setContactsFromCache(true);
+
+          const firstUnread = cachedContacts.find((x) => isUnreadThread(x));
+          if (cachedContacts.length > 0) {
+            setSelectedContactId(filter === "unread" ? firstUnread?.id ?? cachedContacts[0].id : cachedContacts[0].id);
+          } else {
+            setSelectedContactId(null);
+          }
+        };
+
+        if (!connected) {
+          await readCache();
+          return;
         }
 
         const { data: clientData, error: clientError } = await supabase
           .from("op_clients")
           .select("id, user_id, first_name, last_name, email, phone")
-          .eq("user_id", userData.user.id)
+          .eq("user_id", currentUserId)
           .maybeSingle();
 
         if (clientError) throw clientError;
         if (!clientData) {
-          throw new Error(language === "fr" ? "Aucun profil client associé à ce compte." : "No client profile for this account.");
+          await readCache();
+          return;
         }
 
-        const c = clientData as ClientRow;
-        setClient(c);
+        const currentClient = clientData as ClientRow;
+        if (!mounted) return;
+        setClient(currentClient);
+        await localStore.set(clientCacheKey, currentClient);
 
         const { data: contactsData, error: contactsErr } = await supabase
           .from("op_ouvrier_contacts")
@@ -320,31 +461,54 @@ const ClientMessagesList: React.FC = () => {
             )
           `
           )
-          .eq("client_id", c.id)
+          .eq("client_id", currentClient.id)
           .order("created_at", { ascending: false });
 
         if (contactsErr) throw contactsErr;
 
-        const mapped: ContactRow[] = (contactsData || []).map((row: any) => ({ ...row, worker: row.worker ?? null }));
+        const mapped: ContactRow[] = (contactsData || []).map((row: any) => ({
+          ...row,
+          worker: row.worker ?? null,
+        }));
+
+        if (!mounted) return;
+
         setContacts(mapped);
+        setContactsFromCache(false);
+        await localStore.set(contactsCacheKey, mapped);
 
         const firstUnread = mapped.find((x) => isUnreadThread(x));
         if (mapped.length > 0) {
-          setSelectedContactId(filter === "unread" ? firstUnread?.id ?? mapped[0].id : mapped[0].id);
+          setSelectedContactId((prev) =>
+            prev && mapped.some((item) => item.id === prev)
+              ? prev
+              : filter === "unread"
+              ? firstUnread?.id ?? mapped[0].id
+              : mapped[0].id
+          );
         } else {
           setSelectedContactId(null);
         }
       } catch (e: any) {
         console.error("ClientMessagesList load contacts error", e);
+        if (!mounted) return;
+
         setContactsError(e?.message || t.loadContactsError);
+        setContacts([]);
+        setClient(null);
       } finally {
-        setContactsLoading(false);
+        if (mounted) setContactsLoading(false);
       }
     };
 
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [language]);
+    if (initialized) {
+      void load();
+    }
+
+    return () => {
+      mounted = false;
+    };
+  }, [authUserId, connected, initialized, language, filter]);
 
   const selectedContact = useMemo(
     () => contacts.find((c) => c.id === selectedContactId) || null,
@@ -365,6 +529,8 @@ const ClientMessagesList: React.FC = () => {
     if (!c) return;
     if (!isUnreadThread(c)) return;
 
+    if (!connected) return;
+
     try {
       const { error } = await supabase
         .from("op_ouvrier_contacts")
@@ -373,13 +539,23 @@ const ClientMessagesList: React.FC = () => {
         .in("status", ["new", "unread", "pending"]);
 
       if (!error) {
-        setContacts((prev) => prev.map((x) => (x.id === contactId ? { ...x, status: "read" } : x)));
+        const nextContacts = contacts.map((x) =>
+          x.id === contactId ? { ...x, status: "read" } : x
+        );
+        setContacts(nextContacts);
+
+        const currentUserId = authUserId || (await authCache.getUserId());
+        if (currentUserId) {
+          await localStore.set(getContactsCacheKey(currentUserId), nextContacts);
+        }
       }
     } catch {}
   };
 
-  // Charger messages du thread (avec fallback si media_* absents)
+  // Charger messages du thread
   useEffect(() => {
+    let mounted = true;
+
     const loadMessages = async () => {
       if (!selectedContactId) {
         setMessages([]);
@@ -388,39 +564,79 @@ const ClientMessagesList: React.FC = () => {
 
       setMessagesLoading(true);
       setMessagesError(null);
+      setMessagesFromCache(false);
 
       try {
-        const attempt1 = await supabase
-          .from("op_client_worker_messages")
-          .select("id, contact_id, worker_id, client_id, sender_role, message, media_type, media_path, created_at")
-          .eq("contact_id", selectedContactId)
-          .order("created_at", { ascending: true });
+        const readCacheOnly = async () => {
+          const cached = await loadCachedMessages(selectedContactId);
+          if (!mounted) return;
+          setMessages(cached);
+          setMessagesFromCache(true);
+        };
 
-        if (!attempt1.error) {
-          setMessages((attempt1.data || []) as MessageRow[]);
+        if (!connected) {
+          await readCacheOnly();
           return;
         }
 
-        const attempt2 = await supabase
+        const attempt1 = await supabase
           .from("op_client_worker_messages")
-          .select("id, contact_id, worker_id, client_id, sender_role, message, created_at")
+          .select(
+            "id, contact_id, worker_id, client_id, sender_role, message, media_type, media_path, created_at"
+          )
           .eq("contact_id", selectedContactId)
           .order("created_at", { ascending: true });
 
-        if (attempt2.error) throw attempt2.error;
-        setMessages((attempt2.data || []) as MessageRow[]);
+        let serverMessages: MessageRow[] = [];
+
+        if (!attempt1.error) {
+          serverMessages = (attempt1.data || []) as MessageRow[];
+        } else {
+          const attempt2 = await supabase
+            .from("op_client_worker_messages")
+            .select("id, contact_id, worker_id, client_id, sender_role, message, created_at")
+            .eq("contact_id", selectedContactId)
+            .order("created_at", { ascending: true });
+
+          if (attempt2.error) throw attempt2.error;
+          serverMessages = (attempt2.data || []) as MessageRow[];
+        }
+
+        const cached = await loadCachedMessages(selectedContactId);
+        const pendingOnly = cached.filter((m) => m.sync_status === "pending");
+        const serverIds = new Set(serverMessages.map((m) => m.id));
+
+        const merged = [...serverMessages, ...pendingOnly.filter((m) => !serverIds.has(m.id))].sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+
+        if (!mounted) return;
+
+        setMessages(merged);
+        setMessagesFromCache(false);
+        await saveCachedMessages(selectedContactId, merged);
       } catch (e) {
         console.error("ClientMessagesList load messages error", e);
-        setMessagesError(t.loadMessagesError);
+        if (!mounted) return;
+
+        const cached = await loadCachedMessages(selectedContactId);
+        setMessages(cached);
+        setMessagesFromCache(true);
+        if (!cached.length) {
+          setMessagesError(t.loadMessagesError);
+        }
       } finally {
-        setMessagesLoading(false);
+        if (mounted) setMessagesLoading(false);
       }
     };
 
-    loadMessages();
-  }, [selectedContactId, language]);
+    void loadMessages();
 
-  // ✅ Signed URLs on render
+    return () => {
+      mounted = false;
+    };
+  }, [selectedContactId, connected, language]);
+
   useEffect(() => {
     const paths = Array.from(new Set(messages.map((m) => m.media_path).filter(Boolean))) as string[];
     if (paths.length === 0) return;
@@ -441,7 +657,6 @@ const ClientMessagesList: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.map((m) => `${m.id}:${m.media_path ?? ""}`).join("|")]);
 
-  // Recalage sélection quand filtre change
   useEffect(() => {
     if (displayedContacts.length === 0) {
       setSelectedContactId(null);
@@ -451,6 +666,15 @@ const ClientMessagesList: React.FC = () => {
     if (!stillVisible) setSelectedContactId(displayedContacts[0].id);
   }, [filter, displayedContacts, selectedContactId]);
 
+  const persistMessageLocally = async (contactId: string, nextMessage: MessageRow) => {
+    const cached = await loadCachedMessages(contactId);
+    const merged = [...cached, nextMessage].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    await saveCachedMessages(contactId, merged);
+    setMessages(merged);
+  };
+
   const handleSend = async () => {
     if (!client || !selectedContact || !newMessage.trim()) return;
 
@@ -459,6 +683,44 @@ const ClientMessagesList: React.FC = () => {
     setMessagesError(null);
 
     try {
+      if (!connected) {
+        const localMessage: MessageRow = {
+          id: createOfflineId("local_msg"),
+          contact_id: selectedContact.id,
+          worker_id: selectedContact.worker_id,
+          client_id: client.id,
+          sender_role: "client",
+          message: content,
+          created_at: new Date().toISOString(),
+          sync_status: "pending",
+        };
+
+        await persistMessageLocally(selectedContact.id, localMessage);
+
+        await addQueueItem({
+          id: createOfflineId("queue"),
+          action_type: "SEND_CLIENT_MESSAGE",
+          table_name: "op_client_worker_messages",
+          payload_json: {
+            local_message_id: localMessage.id,
+            user_id: authUserId,
+            contact_id: selectedContact.id,
+            worker_id: selectedContact.worker_id,
+            client_id: client.id,
+            sender_role: "client",
+            message: content,
+            created_at: localMessage.created_at,
+          },
+          created_at: localMessage.created_at,
+          status: "pending",
+          retry_count: 0,
+        });
+
+        setNewMessage("");
+        setMessagesError(t.savedOffline);
+        return;
+      }
+
       const payload = {
         contact_id: selectedContact.id,
         worker_id: selectedContact.worker_id,
@@ -475,21 +737,31 @@ const ClientMessagesList: React.FC = () => {
 
       if (error) throw error;
 
-      setMessages((prev) => [...prev, data as MessageRow]);
+      const nextMessage = { ...(data as MessageRow), sync_status: "synced" as const };
+      await persistMessageLocally(selectedContact.id, nextMessage);
       setNewMessage("");
     } catch (e) {
       console.error("ClientMessagesList send error", e);
-      setMessagesError(language === "fr" ? "Impossible d'envoyer votre message." : "Unable to send your message.");
+      setMessagesError(
+        language === "fr"
+          ? "Impossible d'envoyer votre message."
+          : "Unable to send your message."
+      );
     } finally {
       setSending(false);
     }
   };
 
-  // ✅ Envoi image
   const [sendingImage, setSendingImage] = useState(false);
 
   const handleSendImage = async () => {
     if (!client || !selectedContact) return;
+
+    if (!connected) {
+      setMessagesError(t.imageOffline);
+      return;
+    }
+
     if (!authUserId) {
       setMessagesError(language === "fr" ? "Vous devez être connecté." : "You must be logged in.");
       return;
@@ -517,7 +789,9 @@ const ClientMessagesList: React.FC = () => {
       const { data, error } = await supabase
         .from("op_client_worker_messages")
         .insert(payload)
-        .select("id, contact_id, worker_id, client_id, sender_role, message, media_type, media_path, created_at")
+        .select(
+          "id, contact_id, worker_id, client_id, sender_role, message, media_type, media_path, created_at"
+        )
         .single();
 
       if (error) {
@@ -529,7 +803,8 @@ const ClientMessagesList: React.FC = () => {
         );
       }
 
-      setMessages((prev) => [...prev, data as MessageRow]);
+      const nextMessage = { ...(data as MessageRow), sync_status: "synced" as const };
+      await persistMessageLocally(selectedContact.id, nextMessage);
 
       if (data?.media_path) {
         const url = await createSignedUrl(data.media_path);
@@ -537,13 +812,17 @@ const ClientMessagesList: React.FC = () => {
       }
     } catch (e: any) {
       console.error("ClientMessagesList send image error", e);
-      setMessagesError(e?.message || (language === "fr" ? "Impossible d'envoyer l'image." : "Unable to send image."));
+      setMessagesError(
+        e?.message || (language === "fr" ? "Impossible d'envoyer l'image." : "Unable to send image.")
+      );
     } finally {
       setSendingImage(false);
     }
   };
 
-  const workerName = selectedContact?.worker ? fullName(selectedContact.worker.first_name, selectedContact.worker.last_name) : "—";
+  const workerName = selectedContact?.worker
+    ? fullName(selectedContact.worker.first_name, selectedContact.worker.last_name)
+    : "—";
   const workerPhone = selectedContact?.worker?.phone || null;
   const workerEmail = selectedContact?.worker?.email || null;
 
@@ -551,11 +830,38 @@ const ClientMessagesList: React.FC = () => {
     <div className="min-h-screen bg-slate-50 py-6">
       <div className="max-w-7xl mx-auto px-4">
         <div className="mb-3">
-          <Button type="button" variant="ghost" className="gap-2 text-slate-700" onClick={() => navigate("/espace-client")}>
+          <Button
+            type="button"
+            variant="ghost"
+            className="gap-2 text-slate-700"
+            onClick={() => navigate("/espace-client")}
+          >
             <ArrowLeft className="w-4 h-4" />
             {t.backToClientSpace}
           </Button>
         </div>
+
+        {!connected && initialized && (
+          <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+            <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <div className="font-medium">{t.offlineTitle}</div>
+              <div className="text-xs text-amber-800 mt-1">{t.offlineDesc}</div>
+            </div>
+          </div>
+        )}
+
+        {contactsFromCache && (
+          <div className="mb-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+            {t.cacheThreads}
+          </div>
+        )}
+
+        {messagesFromCache && selectedContactId && (
+          <div className="mb-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+            {t.cacheMessages}
+          </div>
+        )}
 
         <h1 className="text-2xl font-bold text-slate-900 mb-4">{t.title}</h1>
 
@@ -568,7 +874,9 @@ const ClientMessagesList: React.FC = () => {
                   type="button"
                   onClick={() => setFilter("all")}
                   className={`px-3 py-1 text-xs font-medium rounded-full ${
-                    filter === "all" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    filter === "all"
+                      ? "bg-blue-600 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                   }`}
                 >
                   {t.all}
@@ -578,14 +886,18 @@ const ClientMessagesList: React.FC = () => {
                   type="button"
                   onClick={() => setFilter("unread")}
                   className={`px-3 py-1 text-xs font-medium rounded-full inline-flex items-center gap-2 ${
-                    filter === "unread" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    filter === "unread"
+                      ? "bg-blue-600 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                   }`}
                 >
                   {t.unread}
                   {unreadCount > 0 && (
                     <span
                       className={`text-[10px] px-2 py-0.5 rounded-full ${
-                        filter === "unread" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"
+                        filter === "unread"
+                          ? "bg-white/20 text-white"
+                          : "bg-slate-200 text-slate-700"
                       }`}
                     >
                       {unreadCount}
@@ -599,6 +911,7 @@ const ClientMessagesList: React.FC = () => {
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden">
               {contactsLoading && <div className="p-4 text-sm text-slate-500">{t.loadingContacts}</div>}
+
               {contactsError && (
                 <div className="p-4 text-sm text-red-600">
                   {t.loadContactsError}
@@ -608,7 +921,9 @@ const ClientMessagesList: React.FC = () => {
               )}
 
               {!contactsLoading && !contactsError && displayedContacts.length === 0 && (
-                <div className="p-4 text-sm text-slate-500">{filter === "unread" ? t.noUnread : t.noContacts}</div>
+                <div className="p-4 text-sm text-slate-500">
+                  {filter === "unread" ? t.noUnread : t.noContacts}
+                </div>
               )}
 
               {!contactsLoading && !contactsError && displayedContacts.length > 0 && (
@@ -660,7 +975,11 @@ const ClientMessagesList: React.FC = () => {
           <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:col-span-6">
             <div className="px-4 py-3 border-b border-slate-100">
               <div className="text-sm font-semibold text-slate-900">{t.aboutWorker}</div>
-              {selectedContact && <div className="text-xs text-slate-500 mt-1">{t.since} {formatDate(selectedContact.created_at)}</div>}
+              {selectedContact && (
+                <div className="text-xs text-slate-500 mt-1">
+                  {t.since} {formatDate(selectedContact.created_at)}
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 py-3">
@@ -668,7 +987,9 @@ const ClientMessagesList: React.FC = () => {
 
               {selectedContact && (
                 <>
-                  <div className="text-center text-[11px] text-slate-400 mb-4">{formatDate(selectedContact.created_at)}</div>
+                  <div className="text-center text-[11px] text-slate-400 mb-4">
+                    {formatDate(selectedContact.created_at)}
+                  </div>
 
                   {selectedContact.message && (
                     <div className="mb-4 flex justify-end">
@@ -680,58 +1001,70 @@ const ClientMessagesList: React.FC = () => {
                   )}
 
                   {messagesLoading && <div className="text-sm text-slate-500">{t.loadingMessages}</div>}
+
                   {messagesError && (
                     <div className="text-sm text-red-600 mb-2 flex items-center gap-2">
                       <Info className="w-4 h-4" />
-                      {t.loadMessagesError}
+                      {messagesError}
                     </div>
                   )}
 
-                  {!messagesLoading && !messagesError && messages.map((m) => {
-                    const isClient = m.sender_role === "client";
-                    const hasImage = (m.media_type || "") === "image" && !!m.media_path;
-                    const imgUrl = hasImage && m.media_path ? signedUrlByPath[m.media_path] : null;
+                  {!messagesLoading &&
+                    messages.map((m) => {
+                      const isClient = m.sender_role === "client";
+                      const hasImage = (m.media_type || "") === "image" && !!m.media_path;
+                      const imgUrl = hasImage && m.media_path ? signedUrlByPath[m.media_path] : null;
 
-                    return (
-                      <div key={m.id} className={`mb-3 flex ${isClient ? "justify-end" : "justify-start"}`}>
-                        <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
-                          isClient ? "bg-blue-600 text-white rounded-br-sm" : "bg-slate-100 text-slate-800 rounded-bl-sm"
-                        }`}>
-                          <div className="text-[10px] opacity-80 mb-1">
-                            {isClient ? t.you : t.workerLabel} • {formatDateTime(m.created_at)}
-                          </div>
-
-                          {hasImage ? (
-                            <div className="space-y-2">
-                              {!imgUrl ? (
-                                <div className="flex items-center gap-2 text-xs opacity-90">
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                  {language === "fr" ? "Chargement de l’image…" : "Loading image…"}
-                                </div>
-                              ) : (
-                                <a href={imgUrl} target="_blank" rel="noreferrer">
-                                  <img
-                                    src={imgUrl}
-                                    alt="image"
-                                    className="max-w-[240px] sm:max-w-[320px] rounded-xl border border-white/20"
-                                    loading="lazy"
-                                  />
-                                </a>
+                      return (
+                        <div key={m.id} className={`mb-3 flex ${isClient ? "justify-end" : "justify-start"}`}>
+                          <div
+                            className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
+                              isClient
+                                ? "bg-blue-600 text-white rounded-br-sm"
+                                : "bg-slate-100 text-slate-800 rounded-bl-sm"
+                            }`}
+                          >
+                            <div className="text-[10px] opacity-80 mb-1 flex items-center gap-2 flex-wrap">
+                              <span>
+                                {isClient ? t.you : t.workerLabel} • {formatDateTime(m.created_at)}
+                              </span>
+                              {m.sync_status === "pending" && (
+                                <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-medium">
+                                  {t.pending}
+                                </span>
                               )}
-                              {m.message?.trim() ? <div className="whitespace-pre-line">{m.message}</div> : null}
                             </div>
-                          ) : (
-                            <div className="whitespace-pre-line">{m.message}</div>
-                          )}
+
+                            {hasImage ? (
+                              <div className="space-y-2">
+                                {!imgUrl ? (
+                                  <div className="flex items-center gap-2 text-xs opacity-90">
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    {language === "fr" ? "Chargement de l’image…" : "Loading image…"}
+                                  </div>
+                                ) : (
+                                  <a href={imgUrl} target="_blank" rel="noreferrer">
+                                    <img
+                                      src={imgUrl}
+                                      alt="image"
+                                      className="max-w-[240px] sm:max-w-[320px] rounded-xl border border-white/20"
+                                      loading="lazy"
+                                    />
+                                  </a>
+                                )}
+                                {m.message?.trim() ? <div className="whitespace-pre-line">{m.message}</div> : null}
+                              </div>
+                            ) : (
+                              <div className="whitespace-pre-line">{m.message}</div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                 </>
               )}
             </div>
 
-            {/* ✅ Composer */}
             <div className="border-t border-slate-100 px-4 py-3">
               <Textarea
                 rows={2}
@@ -748,8 +1081,8 @@ const ClientMessagesList: React.FC = () => {
                   variant="outline"
                   className="rounded-full"
                   onClick={handleSendImage}
-                  disabled={!selectedContact || sending || sendingImage}
-                  title={t.image}
+                  disabled={!selectedContact || sending || sendingImage || !connected}
+                  title={!connected ? t.imageOffline : t.image}
                 >
                   {sendingImage ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -769,7 +1102,7 @@ const ClientMessagesList: React.FC = () => {
                   disabled={!selectedContact || !newMessage.trim() || sending || sendingImage}
                 >
                   <Send className="w-4 h-4" />
-                  {t.send}
+                  {!connected ? t.pending : t.send}
                 </Button>
               </div>
             </div>
@@ -781,7 +1114,9 @@ const ClientMessagesList: React.FC = () => {
               <div className="text-sm font-semibold text-slate-900">{workerName}</div>
               {selectedContact && (
                 <div className="text-[11px] text-slate-400">
-                  {language === "fr" ? `Dernière activité: ${formatDate(selectedContact.created_at)}` : `Last activity: ${formatDate(selectedContact.created_at)}`}
+                  {language === "fr"
+                    ? `Dernière activité: ${formatDate(selectedContact.created_at)}`
+                    : `Last activity: ${formatDate(selectedContact.created_at)}`}
                 </div>
               )}
             </div>
@@ -792,18 +1127,35 @@ const ClientMessagesList: React.FC = () => {
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2">
                   <Phone className="w-4 h-4 text-slate-400" />
-                  {workerPhone ? <a href={`tel:${workerPhone}`} className="text-slate-800">{workerPhone}</a> : <span className="text-slate-400">—</span>}
+                  {workerPhone ? (
+                    <a href={`tel:${workerPhone}`} className="text-slate-800">
+                      {workerPhone}
+                    </a>
+                  ) : (
+                    <span className="text-slate-400">—</span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
                   <Mail className="w-4 h-4 text-slate-400" />
-                  {workerEmail ? <a href={`mailto:${workerEmail}`} className="text-slate-800">{workerEmail}</a> : <span className="text-slate-400">—</span>}
+                  {workerEmail ? (
+                    <a href={`mailto:${workerEmail}`} className="text-slate-800">
+                      {workerEmail}
+                    </a>
+                  ) : (
+                    <span className="text-slate-400">—</span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
                   <MessageCircle className="w-4 h-4 text-slate-400" />
                   {workerPhone ? (
-                    <a href={phoneToWhatsappUrl(workerPhone, newMessage)} target="_blank" rel="noopener noreferrer" className="text-slate-800">
+                    <a
+                      href={phoneToWhatsappUrl(workerPhone, newMessage)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-slate-800"
+                    >
                       WhatsApp
                     </a>
                   ) : (
@@ -817,10 +1169,14 @@ const ClientMessagesList: React.FC = () => {
               <div className="text-xs font-semibold text-slate-700 mb-1">{t.workerNameLabel}</div>
               <div className="text-sm text-slate-800">{workerName}</div>
 
-              {selectedContact?.worker?.profession && <div className="mt-2 text-xs text-slate-500">{selectedContact.worker.profession}</div>}
+              {selectedContact?.worker?.profession && (
+                <div className="mt-2 text-xs text-slate-500">{selectedContact.worker.profession}</div>
+              )}
 
               <div className="mt-2 text-xs text-slate-500">
-                {[selectedContact?.worker?.city, selectedContact?.worker?.commune, selectedContact?.worker?.district].filter(Boolean).join(" • ")}
+                {[selectedContact?.worker?.city, selectedContact?.worker?.commune, selectedContact?.worker?.district]
+                  .filter(Boolean)
+                  .join(" • ")}
               </div>
             </div>
           </div>
@@ -828,8 +1184,10 @@ const ClientMessagesList: React.FC = () => {
 
         {messagesError && (
           <div className="mt-4 bg-red-600 text-white text-sm px-4 py-3 rounded-lg max-w-lg ml-auto">
-            <div className="font-semibold">{language === "fr" ? "Erreur de chargement" : "Loading error"}</div>
-            <div>{t.loadMessagesError}</div>
+            <div className="font-semibold">
+              {language === "fr" ? "Erreur de chargement" : "Loading error"}
+            </div>
+            <div>{messagesError}</div>
           </div>
         )}
       </div>
