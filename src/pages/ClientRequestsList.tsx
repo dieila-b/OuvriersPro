@@ -6,6 +6,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useNetworkStatus } from "@/services/networkService";
 import { localStore } from "@/services/localStore";
 import { authCache } from "@/services/authCache";
+import { syncService, type OfflineQueueItem } from "@/services/syncService";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,22 +30,7 @@ type ClientRequest = {
   sync_status?: "pending" | "synced";
 };
 
-type OfflineQueueItem = {
-  id: string;
-  action_type:
-    | "CREATE_CONTACT_REQUEST"
-    | "ADD_FAVORITE"
-    | "REMOVE_FAVORITE"
-    | "SEND_CLIENT_MESSAGE";
-  table_name: "op_ouvrier_contacts" | "op_ouvrier_favorites" | "op_client_worker_messages";
-  payload_json: Record<string, any>;
-  created_at: string;
-  status: "pending";
-  retry_count: number;
-};
-
 const REQUESTS_CACHE_PREFIX = "cached_client_requests";
-const OFFLINE_QUEUE_KEY = "offline_queue_v1";
 
 const getRequestsCacheKey = (userId?: string | null) =>
   userId ? `${REQUESTS_CACHE_PREFIX}:${userId}` : REQUESTS_CACHE_PREFIX;
@@ -77,7 +63,6 @@ const ClientRequestsList: React.FC = () => {
     statusDone: language === "fr" ? "Terminée" : "Completed",
     statusUnknown: language === "fr" ? "Statut inconnu" : "Unknown status",
     sentOn: language === "fr" ? "Envoyée le" : "Sent on",
-    worker: language === "fr" ? "Ouvrier" : "Worker",
 
     offlineTitle: language === "fr" ? "Mode hors connexion" : "Offline mode",
     offlineDesc:
@@ -93,11 +78,6 @@ const ClientRequestsList: React.FC = () => {
         ? "En attente de synchronisation"
         : "Pending synchronization",
     pendingShort: language === "fr" ? "En attente" : "Pending",
-    synced: language === "fr" ? "Synchronisée" : "Synced",
-  };
-
-  const readQueue = async (): Promise<OfflineQueueItem[]> => {
-    return (await localStore.get<OfflineQueueItem[]>(OFFLINE_QUEUE_KEY)) || [];
   };
 
   const loadCachedRequests = async (userId: string): Promise<ClientRequest[]> => {
@@ -115,6 +95,10 @@ const ClientRequestsList: React.FC = () => {
     }));
   };
 
+  const readQueue = async (): Promise<OfflineQueueItem[]> => {
+    return await syncService.getQueue();
+  };
+
   const getPendingOfflineRequests = async (userId: string): Promise<ClientRequest[]> => {
     const queue = await readQueue();
 
@@ -122,7 +106,9 @@ const ClientRequestsList: React.FC = () => {
       .filter(
         (item) =>
           item.action_type === "CREATE_CONTACT_REQUEST" &&
-          item.status === "pending" &&
+          (item.status === "pending" ||
+            item.status === "processing" ||
+            item.status === "failed") &&
           String(item.payload_json?.user_id || "") === String(userId)
       )
       .map((item) => ({
@@ -143,20 +129,12 @@ const ClientRequestsList: React.FC = () => {
     const offlineMessage = String(offlineReq.message || "").trim();
     const serverMessage = String(serverReq.message || "").trim();
 
-    const offlineOrigin = String(offlineReq.origin || "").trim().toLowerCase();
-    const serverOrigin = String(serverReq.origin || "").trim().toLowerCase();
-
     const offlineTime = offlineReq.created_at ? new Date(offlineReq.created_at).getTime() : 0;
     const serverTime = serverReq.created_at ? new Date(serverReq.created_at).getTime() : 0;
 
     const timeCloseEnough = Math.abs(serverTime - offlineTime) <= 10 * 60 * 1000;
 
-    return (
-      offlineWorker === serverWorker &&
-      offlineMessage === serverMessage &&
-      offlineOrigin !== "web" &&
-      timeCloseEnough
-    );
+    return offlineWorker === serverWorker && offlineMessage === serverMessage && timeCloseEnough;
   };
 
   const mergeRequests = (serverItems: ClientRequest[], pendingItems: ClientRequest[]) => {
@@ -189,7 +167,11 @@ const ClientRequestsList: React.FC = () => {
       const readLocalOnly = async () => {
         const cached = await loadCachedRequests(currentUserId);
         const pending = await getPendingOfflineRequests(currentUserId);
-        const merged = mergeRequests(cached.filter((r) => r.sync_status !== "pending"), pending);
+
+        const merged = mergeRequests(
+          cached.filter((r) => r.sync_status !== "pending"),
+          pending
+        );
 
         setRequests(merged);
         setFromCache(true);
@@ -228,10 +210,14 @@ const ClientRequestsList: React.FC = () => {
       console.error(err);
 
       const currentUserId = await authCache.getUserId();
+
       if (currentUserId) {
         const cached = await loadCachedRequests(currentUserId);
         const pending = await getPendingOfflineRequests(currentUserId);
-        const merged = mergeRequests(cached.filter((r) => r.sync_status !== "pending"), pending);
+        const merged = mergeRequests(
+          cached.filter((r) => r.sync_status !== "pending"),
+          pending
+        );
 
         setRequests(merged);
         setFromCache(true);
@@ -319,6 +305,7 @@ const ClientRequestsList: React.FC = () => {
         </Badge>
       );
     }
+
     if (value === "in_progress" || value === "en_cours") {
       return (
         <Badge variant="outline" className="border-amber-500 text-amber-600">
@@ -326,6 +313,7 @@ const ClientRequestsList: React.FC = () => {
         </Badge>
       );
     }
+
     if (value === "done" || value === "terminee") {
       return (
         <Badge variant="outline" className="border-emerald-500 text-emerald-600">
@@ -455,11 +443,11 @@ const ClientRequestsList: React.FC = () => {
                         <span className="text-[11px] uppercase tracking-wide text-amber-700 font-medium">
                           {text.pendingShort}
                         </span>
-                      ) : req.origin && (
+                      ) : req.origin ? (
                         <span className="text-[11px] uppercase tracking-wide text-slate-400">
                           {req.origin}
                         </span>
-                      )}
+                      ) : null}
                     </div>
                   </div>
 
