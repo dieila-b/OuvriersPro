@@ -1,8 +1,6 @@
+// src/services/syncService.ts
 import { supabase } from "@/lib/supabase";
 import { localStore } from "@/services/localStore";
-import { networkService } from "@/services/networkService";
-
-export type OfflineQueueStatus = "pending" | "processing" | "done" | "failed";
 
 export type OfflineQueueItem = {
   id: string;
@@ -10,14 +8,18 @@ export type OfflineQueueItem = {
     | "CREATE_CONTACT_REQUEST"
     | "ADD_FAVORITE"
     | "REMOVE_FAVORITE"
-    | "SEND_CLIENT_MESSAGE";
-  table_name: "op_ouvrier_contacts" | "op_ouvrier_favorites" | "op_client_worker_messages";
+    | "SEND_CLIENT_MESSAGE"
+    | "CREATE_WORKER_REVIEW";
+  table_name:
+    | "op_ouvrier_contacts"
+    | "op_ouvrier_favorites"
+    | "op_client_worker_messages"
+    | "op_ouvrier_reviews";
   payload_json: Record<string, any>;
   created_at: string;
-  status: OfflineQueueStatus;
-  retry_count: number;
+  status?: "pending" | "processing" | "failed";
+  retry_count?: number;
   last_error?: string | null;
-  updated_at?: string | null;
 };
 
 type CachedClientRequest = {
@@ -35,7 +37,6 @@ type CachedFavorite = {
   worker_name: string | null;
   profession: string | null;
   created_at: string;
-  pending?: boolean;
 };
 
 type CachedMessage = {
@@ -51,12 +52,21 @@ type CachedMessage = {
   sync_status?: "pending" | "synced";
 };
 
+type CachedWorkerReview = {
+  id: string;
+  worker_id: string;
+  rating: number | null;
+  comment: string | null;
+  created_at: string;
+  client_name: string | null;
+  sync_status?: "pending" | "synced";
+};
+
 const OFFLINE_QUEUE_KEY = "offline_queue_v1";
 const REQUESTS_CACHE_PREFIX = "cached_client_requests";
 const FAVORITES_CACHE_PREFIX = "cached_client_favorites";
 const MESSAGES_CACHE_PREFIX = "cached_client_messages";
-
-const MAX_RETRY_COUNT = 8;
+const WORKER_REVIEWS_CACHE_PREFIX = "cached_worker_reviews";
 
 const getRequestsCacheKey = (userId?: string | null) =>
   userId ? `${REQUESTS_CACHE_PREFIX}:${userId}` : REQUESTS_CACHE_PREFIX;
@@ -67,19 +77,8 @@ const getFavoritesCacheKey = (userId?: string | null) =>
 const getMessagesCacheKey = (contactId?: string | null) =>
   contactId ? `${MESSAGES_CACHE_PREFIX}:${contactId}` : MESSAGES_CACHE_PREFIX;
 
-const nowIso = () => new Date().toISOString();
-
-const normalizeQueueItem = (item: Partial<OfflineQueueItem>): OfflineQueueItem => ({
-  id: String(item.id ?? `queue_${Date.now()}`),
-  action_type: item.action_type as OfflineQueueItem["action_type"],
-  table_name: item.table_name as OfflineQueueItem["table_name"],
-  payload_json: item.payload_json ?? {},
-  created_at: item.created_at ?? nowIso(),
-  status: (item.status as OfflineQueueStatus) ?? "pending",
-  retry_count: Number(item.retry_count ?? 0),
-  last_error: item.last_error ?? null,
-  updated_at: item.updated_at ?? null,
-});
+const getWorkerReviewsCacheKey = (workerId?: string | null) =>
+  workerId ? `${WORKER_REVIEWS_CACHE_PREFIX}:${workerId}` : WORKER_REVIEWS_CACHE_PREFIX;
 
 const extractUserIdFromPayload = (payload: Record<string, any>): string | null => {
   const rawUserId = payload?.user_id;
@@ -94,29 +93,11 @@ const extractUserIdFromPayload = (payload: Record<string, any>): string | null =
 };
 
 const readQueue = async (): Promise<OfflineQueueItem[]> => {
-  const items = (await localStore.get<OfflineQueueItem[]>(OFFLINE_QUEUE_KEY)) || [];
-  return items.map(normalizeQueueItem);
+  return (await localStore.get<OfflineQueueItem[]>(OFFLINE_QUEUE_KEY)) || [];
 };
 
 const writeQueue = async (items: OfflineQueueItem[]) => {
-  await localStore.set(
-    OFFLINE_QUEUE_KEY,
-    items.map((item) => normalizeQueueItem(item))
-  );
-};
-
-const updateQueueItem = async (queueId: string, patch: Partial<OfflineQueueItem>) => {
-  const queue = await readQueue();
-  const next = queue.map((item) =>
-    item.id === queueId
-      ? normalizeQueueItem({
-          ...item,
-          ...patch,
-          updated_at: nowIso(),
-        })
-      : item
-  );
-  await writeQueue(next);
+  await localStore.set(OFFLINE_QUEUE_KEY, items);
 };
 
 const removeQueueItem = async (queueId: string) => {
@@ -124,32 +105,35 @@ const removeQueueItem = async (queueId: string) => {
   await writeQueue(queue.filter((item) => item.id !== queueId));
 };
 
-const markItemProcessing = async (queueId: string) => {
-  await updateQueueItem(queueId, {
-    status: "processing",
-    last_error: null,
-  });
-};
-
-const markItemDone = async (queueId: string) => {
-  await updateQueueItem(queueId, {
-    status: "done",
-    last_error: null,
-  });
-};
-
-const markItemFailed = async (queueId: string, error: unknown) => {
+const updateQueueItem = async (
+  queueId: string,
+  patch: Partial<OfflineQueueItem>
+) => {
   const queue = await readQueue();
-  const current = queue.find((item) => item.id === queueId);
+  const next = queue.map((item) =>
+    item.id === queueId ? { ...item, ...patch } : item
+  );
+  await writeQueue(next);
+};
 
-  const nextRetryCount = Number(current?.retry_count ?? 0) + 1;
-  const terminal = nextRetryCount >= MAX_RETRY_COUNT;
-
-  await updateQueueItem(queueId, {
-    status: terminal ? "failed" : "pending",
-    retry_count: nextRetryCount,
-    last_error: String((error as any)?.message ?? error ?? "Unknown sync error"),
-  });
+const bumpRetryCount = async (queueId: string, error?: unknown) => {
+  const queue = await readQueue();
+  const next = queue.map((item) =>
+    item.id === queueId
+      ? {
+          ...item,
+          retry_count: Number(item.retry_count || 0) + 1,
+          status: "failed" as const,
+          last_error:
+            error instanceof Error
+              ? error.message
+              : typeof error === "string"
+              ? error
+              : "Sync failed",
+        }
+      : item
+  );
+  await writeQueue(next);
 };
 
 const replaceCachedRequestAfterSync = async (
@@ -179,17 +163,11 @@ const replaceCachedFavoriteAfterSync = async (
   const existing = (await localStore.get<CachedFavorite[]>(cacheKey)) || [];
 
   const replaced = existing.map((item) =>
-    item.id === offlineFavoriteId
-      ? { ...syncedFavorite, pending: false }
-      : item.id === syncedFavorite.id
-        ? { ...syncedFavorite, pending: false }
-        : item
+    item.id === offlineFavoriteId ? { ...syncedFavorite } : item
   );
 
   const alreadyExists = replaced.some((item) => item.id === syncedFavorite.id);
-  const finalList = alreadyExists
-    ? replaced
-    : [{ ...syncedFavorite, pending: false }, ...replaced];
+  const finalList = alreadyExists ? replaced : [syncedFavorite, ...replaced];
 
   await localStore.set(cacheKey, finalList);
 };
@@ -222,8 +200,32 @@ const replaceCachedMessageAfterSync = async (
     ? replaced
     : [...replaced, { ...syncedMessage, sync_status: "synced" }];
 
+  merged.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+  await localStore.set(cacheKey, merged);
+};
+
+const replaceCachedReviewAfterSync = async (
+  workerId: string,
+  offlineReviewId: string,
+  syncedReview: CachedWorkerReview
+) => {
+  const cacheKey = getWorkerReviewsCacheKey(workerId);
+  const existing = (await localStore.get<CachedWorkerReview[]>(cacheKey)) || [];
+
+  const replaced = existing.map((item) =>
+    item.id === offlineReviewId
+      ? { ...syncedReview, sync_status: "synced" }
+      : item
+  );
+
+  const alreadyExists = replaced.some((item) => item.id === syncedReview.id);
+  const merged = alreadyExists
+    ? replaced
+    : [{ ...syncedReview, sync_status: "synced" }, ...replaced];
+
   merged.sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 
   await localStore.set(cacheKey, merged);
@@ -301,7 +303,7 @@ const syncCreateContactRequest = async (item: OfflineQueueItem) => {
 
   const syncedRequest: CachedClientRequest = {
     id: insertedContact?.id || payload.id || item.id,
-    created_at: insertedContact?.created_at || nowIso(),
+    created_at: insertedContact?.created_at || new Date().toISOString(),
     worker_name: insertedContact?.worker_name || payload.worker_name || null,
     status: insertedContact?.status || "new",
     message: insertedContact?.message || payload.message || "",
@@ -309,6 +311,7 @@ const syncCreateContactRequest = async (item: OfflineQueueItem) => {
   };
 
   await replaceCachedRequestAfterSync(userId, String(payload.id || ""), syncedRequest);
+  await removeQueueItem(item.id);
 };
 
 const syncAddFavorite = async (item: OfflineQueueItem) => {
@@ -320,7 +323,6 @@ const syncAddFavorite = async (item: OfflineQueueItem) => {
   }
 
   const insertPayload = {
-    user_id: userId,
     worker_id: payload.worker_id,
     worker_name: payload.worker_name ?? null,
     profession: payload.profession ?? null,
@@ -339,8 +341,7 @@ const syncAddFavorite = async (item: OfflineQueueItem) => {
     worker_id: data?.worker_id || payload.worker_id,
     worker_name: data?.worker_name || payload.worker_name || null,
     profession: data?.profession || payload.profession || null,
-    created_at: data?.created_at || payload.created_at || nowIso(),
-    pending: false,
+    created_at: data?.created_at || payload.created_at || new Date().toISOString(),
   };
 
   await replaceCachedFavoriteAfterSync(
@@ -348,6 +349,8 @@ const syncAddFavorite = async (item: OfflineQueueItem) => {
     String(payload.local_favorite_id || payload.id || ""),
     syncedFavorite
   );
+
+  await removeQueueItem(item.id);
 };
 
 const syncRemoveFavorite = async (item: OfflineQueueItem) => {
@@ -358,7 +361,7 @@ const syncRemoveFavorite = async (item: OfflineQueueItem) => {
     throw new Error("Offline favorite removal is missing a resolvable user id.");
   }
 
-  let query = supabase.from("op_ouvrier_favorites").delete().eq("user_id", userId);
+  let query = supabase.from("op_ouvrier_favorites").delete();
 
   if (payload.favorite_id && !String(payload.favorite_id).startsWith("local_")) {
     query = query.eq("id", payload.favorite_id);
@@ -370,6 +373,7 @@ const syncRemoveFavorite = async (item: OfflineQueueItem) => {
   if (error) throw error;
 
   await removeCachedFavoriteAfterSync(userId, String(payload.worker_id || ""));
+  await removeQueueItem(item.id);
 };
 
 const syncSendClientMessage = async (item: OfflineQueueItem) => {
@@ -386,12 +390,14 @@ const syncSendClientMessage = async (item: OfflineQueueItem) => {
     client_id: payload.client_id ?? null,
     sender_role: "client" as const,
     message: payload.message ?? "",
+    media_type: payload.media_type ?? null,
+    media_path: payload.media_path ?? null,
   };
 
   const { data, error } = await supabase
     .from("op_client_worker_messages")
     .insert(insertPayload)
-    .select("id, contact_id, worker_id, client_id, sender_role, message, created_at")
+    .select("id, contact_id, worker_id, client_id, sender_role, message, media_type, media_path, created_at")
     .single();
 
   if (error) throw error;
@@ -403,6 +409,8 @@ const syncSendClientMessage = async (item: OfflineQueueItem) => {
     client_id: data.client_id,
     sender_role: data.sender_role,
     message: data.message,
+    media_type: data.media_type ?? null,
+    media_path: data.media_path ?? null,
     created_at: data.created_at,
     sync_status: "synced",
   };
@@ -412,77 +420,94 @@ const syncSendClientMessage = async (item: OfflineQueueItem) => {
     String(payload.local_message_id || payload.id || ""),
     syncedMessage
   );
+
+  await removeQueueItem(item.id);
 };
 
-async function processQueueItem(item: OfflineQueueItem) {
-  if (
-    item.action_type === "CREATE_CONTACT_REQUEST" &&
-    item.table_name === "op_ouvrier_contacts"
-  ) {
-    await syncCreateContactRequest(item);
-    return;
+const syncCreateWorkerReview = async (item: OfflineQueueItem) => {
+  const payload = item.payload_json || {};
+  const userId = extractUserIdFromPayload(payload);
+  const workerId = String(payload.worker_id || "").trim();
+
+  if (!userId) {
+    throw new Error("Offline review is missing a resolvable user id.");
   }
 
-  if (
-    item.action_type === "ADD_FAVORITE" &&
-    item.table_name === "op_ouvrier_favorites"
-  ) {
-    await syncAddFavorite(item);
-    return;
+  if (!workerId) {
+    throw new Error("Offline review is missing worker_id.");
   }
 
-  if (
-    item.action_type === "REMOVE_FAVORITE" &&
-    item.table_name === "op_ouvrier_favorites"
-  ) {
-    await syncRemoveFavorite(item);
-    return;
+  const insertBase = {
+    client_id: userId,
+    worker_id: workerId,
+    rating: payload.rating ?? null,
+    comment: payload.comment ?? null,
+  };
+
+  let inserted: any = null;
+  let insertError: any = null;
+
+  const attempt1 = await supabase
+    .from("op_ouvrier_reviews")
+    .insert({ ...insertBase, status: "pending" })
+    .select("id, rating, comment, created_at, client_name")
+    .maybeSingle();
+
+  insertError = attempt1.error;
+  inserted = attempt1.data;
+
+  if (insertError && /column .*status/i.test(insertError.message || "")) {
+    const attempt2 = await supabase
+      .from("op_ouvrier_reviews")
+      .insert(insertBase)
+      .select("id, rating, comment, created_at, client_name")
+      .maybeSingle();
+
+    insertError = attempt2.error;
+    inserted = attempt2.data;
   }
 
-  if (
-    item.action_type === "SEND_CLIENT_MESSAGE" &&
-    item.table_name === "op_client_worker_messages"
-  ) {
-    await syncSendClientMessage(item);
-    return;
-  }
+  if (insertError) throw insertError;
 
-  throw new Error(`Unsupported offline action: ${item.action_type}`);
-}
+  const syncedReview: CachedWorkerReview = {
+    id: inserted?.id || payload.local_review_id || item.id,
+    worker_id: workerId,
+    rating: inserted?.rating ?? payload.rating ?? null,
+    comment: inserted?.comment ?? payload.comment ?? null,
+    created_at: inserted?.created_at || payload.created_at || new Date().toISOString(),
+    client_name: inserted?.client_name ?? payload.client_name ?? null,
+    sync_status: "synced",
+  };
+
+  await replaceCachedReviewAfterSync(
+    workerId,
+    String(payload.local_review_id || payload.id || ""),
+    syncedReview
+  );
+
+  await removeQueueItem(item.id);
+};
 
 class SyncService {
   private running = false;
 
   async getQueue(): Promise<OfflineQueueItem[]> {
-    return readQueue();
+    return await readQueue();
   }
 
-  async getPendingCount(): Promise<number> {
+  async enqueue(
+    item: Omit<OfflineQueueItem, "status" | "retry_count" | "last_error">
+  ): Promise<void> {
     const queue = await readQueue();
-    return queue.filter((item) => item.status === "pending" || item.status === "processing").length;
-  }
-
-  async getFailedCount(): Promise<number> {
-    const queue = await readQueue();
-    return queue.filter((item) => item.status === "failed").length;
-  }
-
-  async enqueue(item: Omit<OfflineQueueItem, "status" | "retry_count" | "last_error" | "updated_at">) {
-    const queue = await readQueue();
-    const normalized = normalizeQueueItem({
-      ...item,
-      status: "pending",
-      retry_count: 0,
-      last_error: null,
-      updated_at: nowIso(),
-    });
-    await writeQueue([normalized, ...queue]);
-    return normalized;
-  }
-
-  async clearDone(): Promise<void> {
-    const queue = await readQueue();
-    await writeQueue(queue.filter((item) => item.status !== "done"));
+    await writeQueue([
+      {
+        ...item,
+        status: "pending",
+        retry_count: 0,
+        last_error: null,
+      },
+      ...queue,
+    ]);
   }
 
   async syncNow(): Promise<void> {
@@ -490,34 +515,67 @@ class SyncService {
     this.running = true;
 
     try {
-      const { connected } = networkService.getStatus();
-      if (!connected) return;
-
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) {
-        console.warn("[syncService] getSession warning:", sessionError);
-        return;
-      }
-
+      const { data: sessionData } = await supabase.auth.getSession();
       const sessionUser = sessionData.session?.user ?? null;
+
       if (!sessionUser) return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
 
       const queue = await readQueue();
       if (!queue.length) return;
 
-      const ordered = [...queue]
-        .filter((item) => item.status === "pending" || item.status === "failed")
-        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      const ordered = [...queue].sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
 
       for (const item of ordered) {
         try {
-          await markItemProcessing(item.id);
-          await processQueueItem(item);
-          await markItemDone(item.id);
+          await updateQueueItem(item.id, { status: "processing", last_error: null });
+
+          if (
+            item.action_type === "CREATE_CONTACT_REQUEST" &&
+            item.table_name === "op_ouvrier_contacts"
+          ) {
+            await syncCreateContactRequest(item);
+            continue;
+          }
+
+          if (
+            item.action_type === "ADD_FAVORITE" &&
+            item.table_name === "op_ouvrier_favorites"
+          ) {
+            await syncAddFavorite(item);
+            continue;
+          }
+
+          if (
+            item.action_type === "REMOVE_FAVORITE" &&
+            item.table_name === "op_ouvrier_favorites"
+          ) {
+            await syncRemoveFavorite(item);
+            continue;
+          }
+
+          if (
+            item.action_type === "SEND_CLIENT_MESSAGE" &&
+            item.table_name === "op_client_worker_messages"
+          ) {
+            await syncSendClientMessage(item);
+            continue;
+          }
+
+          if (
+            item.action_type === "CREATE_WORKER_REVIEW" &&
+            item.table_name === "op_ouvrier_reviews"
+          ) {
+            await syncCreateWorkerReview(item);
+            continue;
+          }
+
           await removeQueueItem(item.id);
         } catch (error) {
           console.error("[syncService] item sync failed:", item.id, error);
-          await markItemFailed(item.id, error);
+          await bumpRetryCount(item.id, error);
         }
       }
     } catch (error) {
