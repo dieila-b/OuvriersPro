@@ -1,10 +1,11 @@
 // src/pages/ClientDashboard.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { useNetworkStatus } from "@/services/networkService";
 import { authCache } from "@/services/authCache";
+import { localStore } from "@/services/localStore";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,8 @@ import {
   ArrowLeft,
   WifiOff,
   RefreshCw,
+  Clock3,
+  CheckCircle2,
 } from "lucide-react";
 
 type ClientInfo = {
@@ -60,6 +63,22 @@ type ReviewReplyRow = {
   created_at: string;
 };
 
+type OfflineQueueItem = {
+  id: string;
+  action_type:
+    | "CREATE_CONTACT_REQUEST"
+    | "ADD_FAVORITE"
+    | "REMOVE_FAVORITE"
+    | "SEND_CLIENT_MESSAGE";
+  table_name: "op_ouvrier_contacts" | "op_ouvrier_favorites" | "op_client_worker_messages";
+  payload_json: Record<string, any>;
+  created_at: string;
+  status: "pending";
+  retry_count: number;
+};
+
+const OFFLINE_QUEUE_KEY = "offline_queue_v1";
+
 const ClientDashboard: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
@@ -78,6 +97,11 @@ const ClientDashboard: React.FC = () => {
   const [replyText, setReplyText] = useState("");
   const [replySending, setReplySending] = useState(false);
   const [repliesByReview, setRepliesByReview] = useState<Record<string, ReviewReplyRow[]>>({});
+
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  const [pendingMessagesCount, setPendingMessagesCount] = useState(0);
+
+  const reconcileTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -103,21 +127,11 @@ const ClientDashboard: React.FC = () => {
           role?: string | null;
         }>();
 
-        const fullName =
-          profile?.full_name ??
-          cachedProfile?.full_name ??
-          metaFullName ??
-          null;
+        const fullName = profile?.full_name ?? cachedProfile?.full_name ?? metaFullName ?? null;
 
-        const email =
-          user?.email ??
-          cachedProfile?.email ??
-          null;
+        const email = user?.email ?? cachedProfile?.email ?? null;
 
-        const role =
-          profile?.role ??
-          cachedProfile?.role ??
-          "user";
+        const role = profile?.role ?? cachedProfile?.role ?? "user";
 
         setClientInfo({
           fullName,
@@ -207,7 +221,9 @@ const ClientDashboard: React.FC = () => {
         console.error("ClientDashboard loadReviews error", e);
         setReviewsError(
           e?.message ||
-            (language === "fr" ? "Impossible de charger vos avis." : "Unable to load your reviews.")
+            (language === "fr"
+              ? "Impossible de charger vos avis."
+              : "Unable to load your reviews.")
         );
       } finally {
         setReviewsLoading(false);
@@ -216,6 +232,112 @@ const ClientDashboard: React.FC = () => {
 
     void loadReviews();
   }, [clientDb?.id, language, connected]);
+
+  useEffect(() => {
+    const refreshPendingState = async () => {
+      try {
+        const currentUserId = user?.id ?? (await authCache.getUserId());
+        const queue = (await localStore.get<OfflineQueueItem[]>(OFFLINE_QUEUE_KEY)) || [];
+
+        if (!currentUserId) {
+          setPendingRequestsCount(0);
+          setPendingMessagesCount(0);
+          return;
+        }
+
+        const requestsCount = queue.filter(
+          (item) =>
+            item.action_type === "CREATE_CONTACT_REQUEST" &&
+            item.status === "pending" &&
+            String(item.payload_json?.user_id || currentUserId) === String(currentUserId)
+        ).length;
+
+        const messagesCount = queue.filter(
+          (item) =>
+            item.action_type === "SEND_CLIENT_MESSAGE" &&
+            item.status === "pending" &&
+            String(item.payload_json?.user_id || currentUserId) === String(currentUserId)
+        ).length;
+
+        setPendingRequestsCount(requestsCount);
+        setPendingMessagesCount(messagesCount);
+      } catch (error) {
+        console.error("[ClientDashboard] refreshPendingState error:", error);
+        setPendingRequestsCount(0);
+        setPendingMessagesCount(0);
+      }
+    };
+
+    if (!initialized || authLoading) return;
+
+    void refreshPendingState();
+
+    const handleRefresh = () => {
+      void refreshPendingState();
+    };
+
+    window.addEventListener("storage", handleRefresh);
+    window.addEventListener("focus", handleRefresh);
+    window.addEventListener("visibilitychange", handleRefresh);
+
+    return () => {
+      window.removeEventListener("storage", handleRefresh);
+      window.removeEventListener("focus", handleRefresh);
+      window.removeEventListener("visibilitychange", handleRefresh);
+    };
+  }, [initialized, authLoading, user?.id]);
+
+  useEffect(() => {
+    const refreshPendingState = async () => {
+      try {
+        const currentUserId = user?.id ?? (await authCache.getUserId());
+        const queue = (await localStore.get<OfflineQueueItem[]>(OFFLINE_QUEUE_KEY)) || [];
+
+        if (!currentUserId) {
+          setPendingRequestsCount(0);
+          setPendingMessagesCount(0);
+          return;
+        }
+
+        const requestsCount = queue.filter(
+          (item) =>
+            item.action_type === "CREATE_CONTACT_REQUEST" &&
+            item.status === "pending" &&
+            String(item.payload_json?.user_id || currentUserId) === String(currentUserId)
+        ).length;
+
+        const messagesCount = queue.filter(
+          (item) =>
+            item.action_type === "SEND_CLIENT_MESSAGE" &&
+            item.status === "pending" &&
+            String(item.payload_json?.user_id || currentUserId) === String(currentUserId)
+        ).length;
+
+        setPendingRequestsCount(requestsCount);
+        setPendingMessagesCount(messagesCount);
+      } catch (error) {
+        console.error("[ClientDashboard] reconcile pending state error:", error);
+      }
+    };
+
+    if (reconcileTimerRef.current != null) {
+      window.clearInterval(reconcileTimerRef.current);
+      reconcileTimerRef.current = null;
+    }
+
+    if (!connected || !initialized || authLoading) return;
+
+    reconcileTimerRef.current = window.setInterval(() => {
+      void refreshPendingState();
+    }, 3500);
+
+    return () => {
+      if (reconcileTimerRef.current != null) {
+        window.clearInterval(reconcileTimerRef.current);
+        reconcileTimerRef.current = null;
+      }
+    };
+  }, [connected, initialized, authLoading, user?.id]);
 
   const handleLogout = async () => {
     try {
@@ -243,7 +365,8 @@ const ClientDashboard: React.FC = () => {
       language === "fr"
         ? "Suivez le statut de vos demandes et l’historique des échanges avec les ouvriers."
         : "Track the status of your requests and history of conversations with workers.",
-    myMessages: language === "fr" ? "Mes échanges avec les ouvriers" : "My conversations with workers",
+    myMessages:
+      language === "fr" ? "Mes échanges avec les ouvriers" : "My conversations with workers",
     myMessagesDesc:
       language === "fr"
         ? "Consultez l’historique de vos messages et coordonnées échangées."
@@ -277,14 +400,30 @@ const ClientDashboard: React.FC = () => {
     sendReply: language === "fr" ? "Envoyer" : "Send",
     published: language === "fr" ? "Publié" : "Published",
     private: language === "fr" ? "Non publié" : "Not published",
-    loadReviewsError: language === "fr" ? "Impossible de charger vos avis." : "Unable to load your reviews.",
+    loadReviewsError:
+      language === "fr"
+        ? "Impossible de charger vos avis."
+        : "Unable to load your reviews.",
     offlineTitle: language === "fr" ? "Mode hors connexion" : "Offline mode",
     offlineDesc:
       language === "fr"
         ? "Vos raccourcis restent accessibles. Certaines sections dynamiques, comme les avis et réponses, nécessitent Internet."
         : "Your shortcuts remain available. Some dynamic sections, like reviews and replies, require internet.",
-    cachedSession:
-      language === "fr" ? "Session locale détectée" : "Local session detected",
+    cachedSession: language === "fr" ? "Session locale détectée" : "Local session detected",
+
+    pendingSync:
+      language === "fr" ? "En attente de synchronisation" : "Pending synchronization",
+    syncedState: language === "fr" ? "Synchronisé" : "Synced",
+    pendingRequestsOne:
+      language === "fr" ? "demande en attente" : "pending request",
+    pendingRequestsMany:
+      language === "fr" ? "demandes en attente" : "pending requests",
+    pendingMessagesOne:
+      language === "fr" ? "message en attente" : "pending message",
+    pendingMessagesMany:
+      language === "fr" ? "messages en attente" : "pending messages",
+    everythingSynced:
+      language === "fr" ? "Aucune action locale en attente." : "No local action pending.",
   };
 
   const displayName =
@@ -383,6 +522,8 @@ const ClientDashboard: React.FC = () => {
     return Math.round((sum / vals.length) * 10) / 10;
   }, [reviews]);
 
+  const hasPendingSync = pendingRequestsCount > 0 || pendingMessagesCount > 0;
+
   if (authLoading || !initialized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -398,7 +539,7 @@ const ClientDashboard: React.FC = () => {
       <div className="max-w-6xl mx-auto px-4 py-8 md:py-10">
         <header className="mb-8 rounded-3xl bg-white/90 border border-slate-100 shadow-sm px-5 py-5 md:px-8 md:py-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-3 mb-3 flex-wrap">
               <Button
                 type="button"
                 variant="ghost"
@@ -428,6 +569,18 @@ const ClientDashboard: React.FC = () => {
                 <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-medium text-amber-700 border border-amber-100">
                   <WifiOff className="h-3.5 w-3.5" />
                   {t.cachedSession}
+                </div>
+              )}
+
+              {hasPendingSync ? (
+                <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-medium text-amber-700 border border-amber-100">
+                  <Clock3 className="h-3.5 w-3.5" />
+                  {t.pendingSync}
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-[11px] font-medium text-sky-700 border border-sky-100">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {t.syncedState}
                 </div>
               )}
             </div>
@@ -468,6 +621,86 @@ const ClientDashboard: React.FC = () => {
           </div>
         )}
 
+        <div className="mb-6 grid gap-3 md:grid-cols-2">
+          <Card className="rounded-2xl border border-slate-100 bg-white/90 p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {t.myRequests}
+                </div>
+                <div className="mt-2 text-2xl font-bold text-slate-900">
+                  {pendingRequestsCount}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {pendingRequestsCount <= 1 ? t.pendingRequestsOne : t.pendingRequestsMany}
+                </div>
+              </div>
+
+              <div
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-medium border ${
+                  pendingRequestsCount > 0
+                    ? "bg-amber-50 text-amber-700 border-amber-100"
+                    : "bg-sky-50 text-sky-700 border-sky-100"
+                }`}
+              >
+                {pendingRequestsCount > 0 ? (
+                  <>
+                    <Clock3 className="h-3.5 w-3.5" />
+                    {t.pendingSync}
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {t.syncedState}
+                  </>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          <Card className="rounded-2xl border border-slate-100 bg-white/90 p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {t.myMessages}
+                </div>
+                <div className="mt-2 text-2xl font-bold text-slate-900">
+                  {pendingMessagesCount}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {pendingMessagesCount <= 1 ? t.pendingMessagesOne : t.pendingMessagesMany}
+                </div>
+              </div>
+
+              <div
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-medium border ${
+                  pendingMessagesCount > 0
+                    ? "bg-amber-50 text-amber-700 border-amber-100"
+                    : "bg-sky-50 text-sky-700 border-sky-100"
+                }`}
+              >
+                {pendingMessagesCount > 0 ? (
+                  <>
+                    <Clock3 className="h-3.5 w-3.5" />
+                    {t.pendingSync}
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {t.syncedState}
+                  </>
+                )}
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {!hasPendingSync && (
+          <div className="mb-6 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+            {t.everythingSynced}
+          </div>
+        )}
+
         <div className="grid gap-6 md:grid-cols-[1.75fr,1.25fr] items-start">
           <div className="space-y-6">
             <Card className="p-6 md:p-7 rounded-3xl bg-white/90 shadow-sm border border-slate-100">
@@ -482,14 +715,45 @@ const ClientDashboard: React.FC = () => {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="relative rounded-2xl border border-slate-100 bg-slate-50/70 p-4 hover:border-pro-blue/60 hover:bg-white transition-shadow transition-colors shadow-xs hover:shadow-md">
+                  {pendingRequestsCount > 0 && (
+                    <div className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700 border border-amber-100">
+                      <Clock3 className="h-3 w-3" />
+                      {pendingRequestsCount}
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-7 h-7 rounded-full bg-pro-blue/10 flex items-center justify-center">
                       <ClipboardList className="w-4 h-4 text-pro-blue" />
                     </div>
                     <h3 className="text-sm font-semibold text-slate-900">{t.myRequests}</h3>
                   </div>
-                  <p className="text-xs text-slate-600 mb-4 leading-relaxed">{t.myRequestsDesc}</p>
-                  <Button asChild variant="outline" size="sm" className="text-xs rounded-full border-slate-200">
+
+                  <p className="text-xs text-slate-600 mb-3 leading-relaxed">{t.myRequestsDesc}</p>
+
+                  <div className="mb-4">
+                    {pendingRequestsCount > 0 ? (
+                      <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-medium text-amber-700 border border-amber-100">
+                        <Clock3 className="h-3.5 w-3.5" />
+                        {pendingRequestsCount}{" "}
+                        {pendingRequestsCount <= 1
+                          ? t.pendingRequestsOne
+                          : t.pendingRequestsMany}
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-[11px] font-medium text-sky-700 border border-sky-100">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        {t.syncedState}
+                      </div>
+                    )}
+                  </div>
+
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="text-xs rounded-full border-slate-200"
+                  >
                     <Link to="/mes-demandes" className="flex items-center gap-1">
                       {t.seeMyRequests}
                       <ArrowRight className="w-3 h-3" />
@@ -498,14 +762,45 @@ const ClientDashboard: React.FC = () => {
                 </div>
 
                 <div className="relative rounded-2xl border border-slate-100 bg-slate-50/70 p-4 hover:border-emerald-500/70 hover:bg-white transition-shadow transition-colors shadow-xs hover:shadow-md">
+                  {pendingMessagesCount > 0 && (
+                    <div className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700 border border-amber-100">
+                      <Clock3 className="h-3 w-3" />
+                      {pendingMessagesCount}
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-7 h-7 rounded-full bg-emerald-50 flex items-center justify-center">
                       <MessageCircle className="w-4 h-4 text-emerald-600" />
                     </div>
                     <h3 className="text-sm font-semibold text-slate-900">{t.myMessages}</h3>
                   </div>
-                  <p className="text-xs text-slate-600 mb-4 leading-relaxed">{t.myMessagesDesc}</p>
-                  <Button asChild variant="outline" size="sm" className="text-xs rounded-full border-slate-200">
+
+                  <p className="text-xs text-slate-600 mb-3 leading-relaxed">{t.myMessagesDesc}</p>
+
+                  <div className="mb-4">
+                    {pendingMessagesCount > 0 ? (
+                      <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-medium text-amber-700 border border-amber-100">
+                        <Clock3 className="h-3.5 w-3.5" />
+                        {pendingMessagesCount}{" "}
+                        {pendingMessagesCount <= 1
+                          ? t.pendingMessagesOne
+                          : t.pendingMessagesMany}
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-[11px] font-medium text-sky-700 border border-sky-100">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        {t.syncedState}
+                      </div>
+                    )}
+                  </div>
+
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="text-xs rounded-full border-slate-200"
+                  >
                     <Link to="/mes-echanges" className="flex items-center gap-1">
                       {t.seeMyMessages}
                       <ArrowRight className="w-3 h-3" />
@@ -521,7 +816,12 @@ const ClientDashboard: React.FC = () => {
                     <h3 className="text-sm font-semibold text-slate-900">{t.myFavorites}</h3>
                   </div>
                   <p className="text-xs text-slate-600 mb-4 leading-relaxed">{t.myFavoritesDesc}</p>
-                  <Button asChild variant="outline" size="sm" className="text-xs rounded-full border-slate-200">
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="text-xs rounded-full border-slate-200"
+                  >
                     <Link to="/mes-favoris" className="flex items-center gap-1">
                       {t.seeMyFavorites}
                       <ArrowRight className="w-3 h-3" />
@@ -587,12 +887,19 @@ const ClientDashboard: React.FC = () => {
                     const wJob = r.worker?.profession || null;
 
                     return (
-                      <div key={r.id} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+                      <div
+                        key={r.id}
+                        className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4"
+                      >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <div className="text-sm font-semibold text-slate-900 truncate">{wName}</div>
-                              {wJob && <span className="text-[11px] text-slate-500 truncate">• {wJob}</span>}
+                              <div className="text-sm font-semibold text-slate-900 truncate">
+                                {wName}
+                              </div>
+                              {wJob && (
+                                <span className="text-[11px] text-slate-500 truncate">• {wJob}</span>
+                              )}
                             </div>
                             <div className="text-[11px] text-slate-400 mt-0.5">
                               {formatDate(r.created_at)} •{" "}
@@ -618,7 +925,9 @@ const ClientDashboard: React.FC = () => {
                           <div className="mt-3">
                             {r.title && <div className="text-sm font-semibold text-slate-900">{r.title}</div>}
                             {r.content && (
-                              <div className="text-sm text-slate-700 mt-1 whitespace-pre-line">{r.content}</div>
+                              <div className="text-sm text-slate-700 mt-1 whitespace-pre-line">
+                                {r.content}
+                              </div>
                             )}
                           </div>
                         )}
@@ -626,11 +935,17 @@ const ClientDashboard: React.FC = () => {
                         {replies.length > 0 && (
                           <div className="mt-3 space-y-2">
                             {replies.map((rep) => (
-                              <div key={rep.id} className="rounded-xl bg-white border border-slate-100 px-3 py-2">
+                              <div
+                                key={rep.id}
+                                className="rounded-xl bg-white border border-slate-100 px-3 py-2"
+                              >
                                 <div className="text-[11px] text-slate-400">
-                                  {language === "fr" ? "Votre réaction" : "Your reply"} • {formatDate(rep.created_at)}
+                                  {language === "fr" ? "Votre réaction" : "Your reply"} •{" "}
+                                  {formatDate(rep.created_at)}
                                 </div>
-                                <div className="text-sm text-slate-700 whitespace-pre-line">{rep.content}</div>
+                                <div className="text-sm text-slate-700 whitespace-pre-line">
+                                  {rep.content}
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -689,7 +1004,9 @@ const ClientDashboard: React.FC = () => {
                   <div>
                     <h2 className="text-sm font-semibold text-slate-900">{t.profileTitle}</h2>
                     <p className="text-xs text-slate-500">{displayName}</p>
-                    {clientInfo?.email && <p className="text-[11px] text-slate-400">{clientInfo.email}</p>}
+                    {clientInfo?.email && (
+                      <p className="text-[11px] text-slate-400">{clientInfo.email}</p>
+                    )}
                   </div>
                 </div>
               </div>
