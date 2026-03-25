@@ -13,6 +13,7 @@ import {
   RefreshCw,
   MessageCircle,
   ClipboardList,
+  Heart,
 } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import {
@@ -73,6 +74,7 @@ const Header = () => {
 
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [pendingMessagesCount, setPendingMessagesCount] = useState(0);
+  const [pendingFavoritesCount, setPendingFavoritesCount] = useState(0);
   const syncPollRef = useRef<number | null>(null);
 
   const cms = (key: string, fallbackFr: string, fallbackEn: string) => {
@@ -173,31 +175,38 @@ const Header = () => {
       if (!userId) {
         setPendingRequestsCount(0);
         setPendingMessagesCount(0);
+        setPendingFavoritesCount(0);
         return;
       }
 
       const queue = (await localStore.get<OfflineQueueItem[]>(OFFLINE_QUEUE_KEY)) || [];
 
-      const pendingRequests = queue.filter(
-        (item) =>
-          item.status === "pending" &&
-          item.action_type === "CREATE_CONTACT_REQUEST" &&
-          String(item.payload_json?.user_id || userId) === String(userId)
+      const scopedQueue = queue.filter((item) => {
+        if (item.status !== "pending") return false;
+        const payloadUserId = item.payload_json?.user_id;
+        return String(payloadUserId || userId) === String(userId);
+      });
+
+      const pendingRequests = scopedQueue.filter(
+        (item) => item.action_type === "CREATE_CONTACT_REQUEST"
       ).length;
 
-      const pendingMessages = queue.filter(
-        (item) =>
-          item.status === "pending" &&
-          item.action_type === "SEND_CLIENT_MESSAGE" &&
-          String(item.payload_json?.user_id || userId) === String(userId)
+      const pendingMessages = scopedQueue.filter(
+        (item) => item.action_type === "SEND_CLIENT_MESSAGE"
+      ).length;
+
+      const pendingFavorites = scopedQueue.filter(
+        (item) => item.action_type === "ADD_FAVORITE" || item.action_type === "REMOVE_FAVORITE"
       ).length;
 
       setPendingRequestsCount(pendingRequests);
       setPendingMessagesCount(pendingMessages);
+      setPendingFavoritesCount(pendingFavorites);
     } catch (error) {
       console.error("[Header] refreshSyncSummary error:", error);
       setPendingRequestsCount(0);
       setPendingMessagesCount(0);
+      setPendingFavoritesCount(0);
     }
   }, [resolvedUserId]);
 
@@ -329,7 +338,7 @@ const Header = () => {
     setMobileOpen((v) => !v);
   }, []);
 
-  const totalPending = pendingRequestsCount + pendingMessagesCount;
+  const totalPending = pendingRequestsCount + pendingMessagesCount + pendingFavoritesCount;
   const hasPendingSync = totalPending > 0;
 
   const syncLabel = hasPendingSync
@@ -354,6 +363,13 @@ const Header = () => {
         : `${pendingMessagesCount} message${pendingMessagesCount > 1 ? "s" : ""}`
       : null;
 
+  const syncDetailFavorites =
+    pendingFavoritesCount > 0
+      ? language === "fr"
+        ? `${pendingFavoritesCount} favori${pendingFavoritesCount > 1 ? "s" : ""}`
+        : `${pendingFavoritesCount} favorite${pendingFavoritesCount > 1 ? "s" : ""}`
+      : null;
+
   const DesktopSyncBadge = hasSession ? (
     <div
       className={`hidden lg:inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-medium border whitespace-nowrap ${
@@ -363,7 +379,7 @@ const Header = () => {
       }`}
       title={
         hasPendingSync
-          ? [syncDetailRequests, syncDetailMessages].filter(Boolean).join(" • ")
+          ? [syncDetailRequests, syncDetailMessages, syncDetailFavorites].filter(Boolean).join(" • ")
           : language === "fr"
           ? "Aucune action en attente"
           : "No action pending"
@@ -428,7 +444,7 @@ const Header = () => {
               </div>
             </div>
 
-            {(syncDetailRequests || syncDetailMessages) && (
+            {(syncDetailRequests || syncDetailMessages || syncDetailFavorites) && (
               <div className="mt-2 flex flex-wrap gap-2">
                 {syncDetailRequests && (
                   <div className="inline-flex items-center gap-1 rounded-full bg-slate-50 border border-slate-200 px-2.5 py-1 text-[11px] text-slate-600">
@@ -440,6 +456,12 @@ const Header = () => {
                   <div className="inline-flex items-center gap-1 rounded-full bg-slate-50 border border-slate-200 px-2.5 py-1 text-[11px] text-slate-600">
                     <MessageCircle className="w-3 h-3" />
                     {syncDetailMessages}
+                  </div>
+                )}
+                {syncDetailFavorites && (
+                  <div className="inline-flex items-center gap-1 rounded-full bg-slate-50 border border-slate-200 px-2.5 py-1 text-[11px] text-slate-600">
+                    <Heart className="w-3 h-3" />
+                    {syncDetailFavorites}
                   </div>
                 )}
               </div>
