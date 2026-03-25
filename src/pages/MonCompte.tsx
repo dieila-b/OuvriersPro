@@ -5,6 +5,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { authCache, normalizeRole, type Role } from "@/services/authCache";
 import { useNetworkStatus } from "@/services/networkService";
+import { localStore } from "@/services/localStore";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,27 @@ import {
   ArrowRight,
   User,
   WifiOff,
+  Clock3,
+  MessageCircle,
+  ClipboardList,
+  RefreshCw,
 } from "lucide-react";
+
+type OfflineQueueItem = {
+  id: string;
+  action_type:
+    | "CREATE_CONTACT_REQUEST"
+    | "ADD_FAVORITE"
+    | "REMOVE_FAVORITE"
+    | "SEND_CLIENT_MESSAGE";
+  table_name: "op_ouvrier_contacts" | "op_ouvrier_favorites" | "op_client_worker_messages";
+  payload_json: Record<string, any>;
+  created_at: string;
+  status: "pending";
+  retry_count: number;
+};
+
+const OFFLINE_QUEUE_KEY = "offline_queue_v1";
 
 const MonCompte: React.FC = () => {
   const { language } = useLanguage();
@@ -28,8 +49,12 @@ const MonCompte: React.FC = () => {
   const [cachedRole, setCachedRole] = useState<Role>("user");
   const [cacheReady, setCacheReady] = useState(false);
 
-  // ✅ empêche les boucles / double redirect en dev (React strict mode)
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  const [pendingMessagesCount, setPendingMessagesCount] = useState(0);
+  const [syncStateReady, setSyncStateReady] = useState(false);
+
   const redirectedRef = useRef(false);
+  const reconcileTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -62,8 +87,6 @@ const MonCompte: React.FC = () => {
 
   const hasKnownSession = Boolean(user || cachedUserId);
 
-  // ✅ Si l'utilisateur est déjà connecté => rediriger vers son espace
-  // ✅ Offline-safe : on utilise aussi le cache local si besoin
   useEffect(() => {
     if (redirectedRef.current) return;
     if (loading || !cacheReady || !initialized) return;
@@ -83,6 +106,116 @@ const MonCompte: React.FC = () => {
     navigate("/espace-client", { replace: true });
   }, [loading, cacheReady, initialized, hasKnownSession, resolvedRole, navigate]);
 
+  useEffect(() => {
+    const refreshSyncState = async () => {
+      try {
+        const currentUserId = user?.id ?? cachedUserId ?? (await authCache.getUserId());
+
+        if (!currentUserId) {
+          setPendingRequestsCount(0);
+          setPendingMessagesCount(0);
+          setSyncStateReady(true);
+          return;
+        }
+
+        const queue = (await localStore.get<OfflineQueueItem[]>(OFFLINE_QUEUE_KEY)) || [];
+
+        const requestCount = queue.filter(
+          (item) =>
+            item.action_type === "CREATE_CONTACT_REQUEST" &&
+            item.status === "pending" &&
+            String(item.payload_json?.user_id || currentUserId) === String(currentUserId)
+        ).length;
+
+        const messageCount = queue.filter(
+          (item) =>
+            item.action_type === "SEND_CLIENT_MESSAGE" &&
+            item.status === "pending" &&
+            String(item.payload_json?.user_id || currentUserId) === String(currentUserId)
+        ).length;
+
+        setPendingRequestsCount(requestCount);
+        setPendingMessagesCount(messageCount);
+      } catch (error) {
+        console.error("[MonCompte] refreshSyncState error:", error);
+        setPendingRequestsCount(0);
+        setPendingMessagesCount(0);
+      } finally {
+        setSyncStateReady(true);
+      }
+    };
+
+    if (!initialized || !cacheReady) return;
+    void refreshSyncState();
+
+    const handleRefresh = () => {
+      void refreshSyncState();
+    };
+
+    window.addEventListener("storage", handleRefresh);
+    window.addEventListener("focus", handleRefresh);
+    window.addEventListener("visibilitychange", handleRefresh);
+
+    return () => {
+      window.removeEventListener("storage", handleRefresh);
+      window.removeEventListener("focus", handleRefresh);
+      window.removeEventListener("visibilitychange", handleRefresh);
+    };
+  }, [initialized, cacheReady, user?.id, cachedUserId]);
+
+  useEffect(() => {
+    const refreshSyncState = async () => {
+      try {
+        const currentUserId = user?.id ?? cachedUserId ?? (await authCache.getUserId());
+
+        if (!currentUserId) {
+          setPendingRequestsCount(0);
+          setPendingMessagesCount(0);
+          return;
+        }
+
+        const queue = (await localStore.get<OfflineQueueItem[]>(OFFLINE_QUEUE_KEY)) || [];
+
+        const requestCount = queue.filter(
+          (item) =>
+            item.action_type === "CREATE_CONTACT_REQUEST" &&
+            item.status === "pending" &&
+            String(item.payload_json?.user_id || currentUserId) === String(currentUserId)
+        ).length;
+
+        const messageCount = queue.filter(
+          (item) =>
+            item.action_type === "SEND_CLIENT_MESSAGE" &&
+            item.status === "pending" &&
+            String(item.payload_json?.user_id || currentUserId) === String(currentUserId)
+        ).length;
+
+        setPendingRequestsCount(requestCount);
+        setPendingMessagesCount(messageCount);
+      } catch (error) {
+        console.error("[MonCompte] reconcile sync state error:", error);
+      }
+    };
+
+    if (reconcileTimerRef.current != null) {
+      window.clearInterval(reconcileTimerRef.current);
+      reconcileTimerRef.current = null;
+    }
+
+    if (!connected || !initialized || !cacheReady) return;
+
+    reconcileTimerRef.current = window.setInterval(() => {
+      void refreshSyncState();
+    }, 3500);
+
+    return () => {
+      if (reconcileTimerRef.current != null) {
+        window.clearInterval(reconcileTimerRef.current);
+        reconcileTimerRef.current = null;
+      }
+    };
+  }, [connected, initialized, cacheReady, user?.id, cachedUserId]);
+
   const text = useMemo(() => {
     return {
       title: language === "fr" ? "Mon compte" : "My account",
@@ -98,9 +231,7 @@ const MonCompte: React.FC = () => {
           : "Whether you are a provider, individual or company, use the same button to log in.",
       loginBtn: language === "fr" ? "Se connecter" : "Log in",
       orLabel:
-        language === "fr"
-          ? "— ou créer un nouveau compte —"
-          : "— or create a new account —",
+        language === "fr" ? "— ou créer un nouveau compte —" : "— or create a new account —",
       newAccountTitle:
         language === "fr" ? "Créer un nouveau compte" : "Create a new account",
 
@@ -121,19 +252,51 @@ const MonCompte: React.FC = () => {
         language === "fr"
           ? "Commencez par créer le même compte que les clients. Depuis votre espace, vous pourrez ensuite activer votre profil prestataire, choisir votre forfait et gagner en visibilité auprès des clients."
           : "Start by creating the same account as clients. From your dashboard, you can then activate your provider profile, choose a plan and increase your visibility with clients.",
+
+      offlineMode:
+        language === "fr" ? "Mode hors connexion actif." : "Offline mode is active.",
+      syncSummaryTitle:
+        language === "fr" ? "État de synchronisation" : "Synchronization status",
+      pendingSync:
+        language === "fr" ? "En attente de synchronisation" : "Pending synchronization",
+      synced:
+        language === "fr" ? "Synchronisé" : "Synced",
+      requests:
+        language === "fr" ? "Demandes" : "Requests",
+      messages:
+        language === "fr" ? "Messages" : "Messages",
+      pendingRequestOne:
+        language === "fr" ? "demande en attente" : "pending request",
+      pendingRequestMany:
+        language === "fr" ? "demandes en attente" : "pending requests",
+      pendingMessageOne:
+        language === "fr" ? "message en attente" : "pending message",
+      pendingMessageMany:
+        language === "fr" ? "messages en attente" : "pending messages",
+      allSynced:
+        language === "fr"
+          ? "Aucune action locale en attente."
+          : "No local action pending.",
+      localSummary:
+        language === "fr"
+          ? "Cet état reflète immédiatement les demandes et messages conservés localement sur cet appareil."
+          : "This status immediately reflects requests and messages stored locally on this device.",
     };
   }, [language]);
 
-  // ✅ Pendant le chargement auth/cache, on évite un flash de contenu
-  if (loading || !cacheReady || !initialized) {
+  const totalPending = pendingRequestsCount + pendingMessagesCount;
+  const hasPending = totalPending > 0;
+
+  if (loading || !cacheReady || !initialized || !syncStateReady) {
     return (
       <div className="min-h-[55vh] w-full flex items-center justify-center bg-white">
-        <div className="text-sm text-slate-600">Chargement…</div>
+        <div className="text-sm text-slate-600">
+          {language === "fr" ? "Chargement…" : "Loading..."}
+        </div>
       </div>
     );
   }
 
-  // ✅ Si user connecté ou connu localement, on affiche un fallback léger
   if (hasKnownSession) {
     return (
       <div className="min-h-[55vh] w-full flex items-center justify-center bg-white">
@@ -148,28 +311,120 @@ const MonCompte: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-slate-50 to-slate-100">
       <div className="max-w-5xl mx-auto px-4 py-10">
-        {/* En-tête */}
         <header className="mb-8">
           <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-xs font-medium text-slate-500 shadow-sm border border-slate-100 mb-3">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
             {language === "fr" ? "Espace sécurisé ProxiServices" : "Secure ProxiServices space"}
           </div>
+
           <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">{text.title}</h1>
           <p className="text-sm md:text-base text-slate-600">{text.subtitle}</p>
 
-          {initialized && !connected && (
-            <div className="mt-4 inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              <WifiOff className="h-4 w-4" />
-              <span>
-                {language === "fr"
-                  ? "Mode hors connexion actif."
-                  : "Offline mode is active."}
-              </span>
+          <div className="mt-4 flex flex-wrap gap-3">
+            {initialized && !connected && (
+              <div className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <WifiOff className="h-4 w-4" />
+                <span>{text.offlineMode}</span>
+              </div>
+            )}
+
+            <div
+              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm border ${
+                hasPending
+                  ? "border-amber-200 bg-amber-50 text-amber-900"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-900"
+              }`}
+            >
+              {hasPending ? <Clock3 className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+              <span>{hasPending ? text.pendingSync : text.synced}</span>
             </div>
-          )}
+          </div>
         </header>
 
-        {/* Bloc connexion existant */}
+        <Card className="mb-8 p-5 md:p-6 border-slate-200 shadow-sm bg-white/90 rounded-2xl">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <h2 className="text-base md:text-lg font-semibold text-slate-900">
+                  {text.syncSummaryTitle}
+                </h2>
+                <p className="text-sm text-slate-600 mt-1">{text.localSummary}</p>
+              </div>
+
+              <div
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold border ${
+                  hasPending
+                    ? "border-amber-200 bg-amber-50 text-amber-700"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                }`}
+              >
+                {hasPending ? <RefreshCw className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                {hasPending ? text.pendingSync : text.synced}
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-9 w-9 rounded-full bg-pro-blue/10 flex items-center justify-center">
+                      <ClipboardList className="w-4 h-4 text-pro-blue" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">{text.requests}</div>
+                      <div className="text-xs text-slate-500">
+                        {pendingRequestsCount <= 1 ? text.pendingRequestOne : text.pendingRequestMany}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    className={`rounded-full px-3 py-1 text-xs font-semibold border ${
+                      pendingRequestsCount > 0
+                        ? "border-amber-200 bg-amber-50 text-amber-700"
+                        : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    }`}
+                  >
+                    {pendingRequestsCount > 0 ? pendingRequestsCount : text.synced}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-9 w-9 rounded-full bg-emerald-50 flex items-center justify-center">
+                      <MessageCircle className="w-4 h-4 text-emerald-600" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">{text.messages}</div>
+                      <div className="text-xs text-slate-500">
+                        {pendingMessagesCount <= 1 ? text.pendingMessageOne : text.pendingMessageMany}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    className={`rounded-full px-3 py-1 text-xs font-semibold border ${
+                      pendingMessagesCount > 0
+                        ? "border-amber-200 bg-amber-50 text-amber-700"
+                        : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    }`}
+                  >
+                    {pendingMessagesCount > 0 ? pendingMessagesCount : text.synced}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {!hasPending && (
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                {text.allSynced}
+              </div>
+            )}
+          </div>
+        </Card>
+
         <Card className="mb-8 p-6 md:p-7 border-slate-200 shadow-sm bg-white/90 rounded-2xl">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
@@ -177,9 +432,7 @@ const MonCompte: React.FC = () => {
                 <div className="h-9 w-9 rounded-full bg-pro-blue/10 flex items-center justify-center">
                   <LogIn className="w-4 h-4 text-pro-blue" />
                 </div>
-                <h2 className="text-lg font-semibold text-slate-900">
-                  {text.alreadyHaveAccount}
-                </h2>
+                <h2 className="text-lg font-semibold text-slate-900">{text.alreadyHaveAccount}</h2>
               </div>
               <p className="text-sm text-slate-600">{text.loginHint}</p>
             </div>
@@ -196,14 +449,12 @@ const MonCompte: React.FC = () => {
           </div>
         </Card>
 
-        {/* séparateur */}
         <div className="my-6 flex items-center justify-center gap-4 text-xs uppercase tracking-wide text-slate-400">
           <span className="h-px flex-1 bg-slate-200" />
           {text.orLabel}
           <span className="h-px flex-1 bg-slate-200" />
         </div>
 
-        {/* Bloc création de compte */}
         <Card className="p-6 md:p-7 border-slate-200 shadow-sm bg-white/90 rounded-2xl">
           <div className="flex items-center justify-between mb-5 gap-3">
             <div>
@@ -223,7 +474,6 @@ const MonCompte: React.FC = () => {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-[2.1fr,1.4fr] items-start">
-            {/* Carte compte Client / Prestataire */}
             <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 md:p-6 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 rounded-full bg-pro-blue/10 flex items-center justify-center">
@@ -241,12 +491,9 @@ const MonCompte: React.FC = () => {
                 </div>
               </div>
 
-              <p className="text-sm text-slate-600 mb-5 leading-relaxed">
-                {text.clientAccountDesc}
-              </p>
+              <p className="text-sm text-slate-600 mb-5 leading-relaxed">{text.clientAccountDesc}</p>
 
               <div className="grid gap-3 sm:grid-cols-2 mb-6">
-                {/* Colonne "Je cherche un service" */}
                 <div className="rounded-xl bg-white border border-slate-200/80 p-3.5 hover:border-pro-blue/40 hover:shadow-sm transition">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="h-7 w-7 rounded-full bg-pro-blue/10 flex items-center justify-center">
@@ -280,7 +527,6 @@ const MonCompte: React.FC = () => {
                   </ul>
                 </div>
 
-                {/* Colonne "Je suis prestataire" */}
                 <div className="rounded-xl bg-white border border-slate-200/80 p-3.5 hover:border-amber-400/60 hover:shadow-sm transition">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="h-7 w-7 rounded-full bg-amber-50 flex items-center justify-center">
@@ -330,7 +576,6 @@ const MonCompte: React.FC = () => {
               </Button>
             </div>
 
-            {/* Info pour les prestataires */}
             <div className="rounded-2xl border border-dashed border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5 md:p-6">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center">
@@ -340,9 +585,7 @@ const MonCompte: React.FC = () => {
                   {text.workerInfoTitle}
                 </h3>
               </div>
-              <p className="text-sm text-slate-700 mb-4 leading-relaxed">
-                {text.workerInfoText}
-              </p>
+              <p className="text-sm text-slate-700 mb-4 leading-relaxed">{text.workerInfoText}</p>
               <ul className="space-y-1.5 text-xs text-slate-600">
                 <li>
                   •{" "}
