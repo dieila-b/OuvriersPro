@@ -24,8 +24,6 @@ import {
   Heart,
   Loader2,
 } from "lucide-react";
-
-// ✅ Hook global UI
 import { useUiMode } from "@/hooks/useUiMode";
 
 type WorkerProfile = {
@@ -119,8 +117,6 @@ const WorkerDetail: React.FC = () => {
   const workerId = (params.workerId as string) || (params.id as string);
 
   const { connected, initialized } = useNetworkStatus();
-
-  // ✅ UI global
   const { isMobileUI } = useUiMode();
 
   const [worker, setWorker] = useState<WorkerProfile | null>(null);
@@ -128,11 +124,9 @@ const WorkerDetail: React.FC = () => {
   const [workerError, setWorkerError] = useState<string | null>(null);
   const [usedWorkerCache, setUsedWorkerCache] = useState(false);
 
-  // Auth
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [viewerRole, setViewerRole] = useState<ViewerRole>(null);
 
-  // Favoris
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteId, setFavoriteId] = useState<string | null>(null);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
@@ -140,7 +134,6 @@ const WorkerDetail: React.FC = () => {
   const [favoriteError, setFavoriteError] = useState<string | null>(null);
   const [favoritesLoadedFromCache, setFavoritesLoadedFromCache] = useState(false);
 
-  // Formulaire de contact
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [clientEmail, setClientEmail] = useState("");
@@ -153,7 +146,6 @@ const WorkerDetail: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
-  // Avis
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviewsError, setReviewsError] = useState<string | null>(null);
@@ -162,24 +154,20 @@ const WorkerDetail: React.FC = () => {
   const [submitReviewLoading, setSubmitReviewLoading] = useState(false);
   const [usedReviewsCache, setUsedReviewsCache] = useState(false);
 
-  // Votes
   const [myVoteByReviewId, setMyVoteByReviewId] = useState<Record<string, VoteType | null>>({});
   const [countsByReviewId, setCountsByReviewId] = useState<
     Record<string, { like: number; useful: number; not_useful: number }>
   >({});
   const [voteError, setVoteError] = useState<string | null>(null);
 
-  // Photos
   const [photos, setPhotos] = useState<WorkerPhoto[]>([]);
   const [photosLoading, setPhotosLoading] = useState(false);
   const [photosError, setPhotosError] = useState<string | null>(null);
   const [usedPhotosCache, setUsedPhotosCache] = useState(false);
 
-  // ✅ Modals seulement
   const [contactOpen, setContactOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
 
-  // ✅ Empêcher le scroll du body quand une modale est ouverte
   useEffect(() => {
     const opened = contactOpen || galleryOpen;
     if (!opened) return;
@@ -334,14 +322,22 @@ const WorkerDetail: React.FC = () => {
     };
   }, [language]);
 
-  // Auth user id
   useEffect(() => {
     let mounted = true;
 
     const load = async () => {
       try {
+        const cachedUserId = await authCache.getUserId();
+
+        if (!connected) {
+          if (!mounted) return;
+          setAuthUserId(cachedUserId ?? null);
+          return;
+        }
+
         const { data } = await supabase.auth.getUser();
         const liveUserId = data.user?.id ?? null;
+
         if (!mounted) return;
 
         if (liveUserId) {
@@ -349,8 +345,6 @@ const WorkerDetail: React.FC = () => {
           return;
         }
 
-        const cachedUserId = await authCache.getUserId();
-        if (!mounted) return;
         setAuthUserId(cachedUserId ?? null);
       } catch {
         const cachedUserId = await authCache.getUserId();
@@ -363,18 +357,25 @@ const WorkerDetail: React.FC = () => {
       void load();
     }
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_evt, session) => {
       if (!mounted) return;
-      setAuthUserId(session?.user?.id ?? null);
+
+      if (session?.user?.id) {
+        setAuthUserId(session.user.id);
+        return;
+      }
+
+      const cachedUserId = await authCache.getUserId();
+      if (!mounted) return;
+      setAuthUserId(cachedUserId ?? null);
     });
 
     return () => {
       mounted = false;
       sub.subscription.unsubscribe();
     };
-  }, [initialized]);
+  }, [initialized, connected]);
 
-  // Détecter le rôle
   useEffect(() => {
     let cancelled = false;
 
@@ -385,7 +386,20 @@ const WorkerDetail: React.FC = () => {
       }
 
       if (!connected) {
-        if (!cancelled) setViewerRole(null);
+        const cachedRole = await authCache.getRole();
+        if (cancelled) return;
+
+        if (cachedRole === "client") {
+          setViewerRole("client");
+          return;
+        }
+
+        if (cachedRole === "worker") {
+          setViewerRole("worker");
+          return;
+        }
+
+        setViewerRole(null);
         return;
       }
 
@@ -416,9 +430,36 @@ const WorkerDetail: React.FC = () => {
           return;
         }
 
+        const cachedRole = await authCache.getRole();
+        if (cancelled) return;
+
+        if (cachedRole === "client") {
+          setViewerRole("client");
+          return;
+        }
+
+        if (cachedRole === "worker") {
+          setViewerRole("worker");
+          return;
+        }
+
         setViewerRole(null);
       } catch (e) {
         console.error("detectRole error", e);
+
+        const cachedRole = await authCache.getRole();
+        if (cancelled) return;
+
+        if (cachedRole === "client") {
+          setViewerRole("client");
+          return;
+        }
+
+        if (cachedRole === "worker") {
+          setViewerRole("worker");
+          return;
+        }
+
         setViewerRole(null);
       }
     };
@@ -430,7 +471,6 @@ const WorkerDetail: React.FC = () => {
     };
   }, [authUserId, connected]);
 
-  // Profil ouvrier
   useEffect(() => {
     const loadWorker = async () => {
       if (!workerId) {
@@ -531,7 +571,6 @@ const WorkerDetail: React.FC = () => {
     }
   }, [workerId, language, connected, initialized]);
 
-  // Favoris
   useEffect(() => {
     let cancelled = false;
 
@@ -578,7 +617,6 @@ const WorkerDetail: React.FC = () => {
     };
   }, [authUserId, connected, initialized, workerId, tFavorite.cacheLoaded]);
 
-  // Avis
   const fetchReviews = async (wid: string) => {
     setReviewsLoading(true);
     setReviewsError(null);
@@ -646,10 +684,8 @@ const WorkerDetail: React.FC = () => {
   useEffect(() => {
     if (!workerId || !initialized) return;
     void fetchReviews(workerId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workerId, language, connected, initialized]);
 
-  // Photos
   useEffect(() => {
     const loadPhotos = async () => {
       if (!workerId) return;
@@ -779,10 +815,13 @@ const WorkerDetail: React.FC = () => {
         ) / 10
       : 0;
 
-  const canReportWorker = Boolean(authUserId) && (!worker?.user_id || worker.user_id !== authUserId);
+  const canReportWorker =
+    Boolean(authUserId) &&
+    viewerRole !== "worker" &&
+    (!worker?.user_id || worker.user_id !== authUserId);
+
   const reportTargetId = (worker?.user_id ?? worker?.id) as string;
 
-  // Votes
   const loadVotesAndCounts = async () => {
     const reviewIds = reviews.map((r) => r.id);
     if (reviewIds.length === 0) {
@@ -835,7 +874,6 @@ const WorkerDetail: React.FC = () => {
   useEffect(() => {
     setVoteError(null);
     void loadVotesAndCounts().catch((e) => console.error("loadVotesAndCounts error", e));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reviewsKey, authUserId, connected]);
 
   const toggleVote = async (reviewId: string, voteType: VoteType) => {
@@ -1218,7 +1256,6 @@ const WorkerDetail: React.FC = () => {
     }
   };
 
-  // Review submit
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!worker) return;
@@ -1372,7 +1409,6 @@ const WorkerDetail: React.FC = () => {
           </div>
         )}
 
-        {/* ✅ CTA sticky (mobile uniquement) */}
         {isMobileUI && (
           <div className="fixed left-0 right-0 bottom-0 z-40 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <div className="max-w-6xl mx-auto space-y-2">
@@ -1453,12 +1489,7 @@ const WorkerDetail: React.FC = () => {
                       {language === "fr" ? "avis" : "reviews"}
                     </div>
                     <div className="text-[11px] text-slate-400">
-                      {reviews.length}{" "}
-                      {language === "fr"
-                        ? "avis"
-                        : reviews.length <= 1
-                        ? "review"
-                        : "reviews"}
+                      {reviews.length} {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
                     </div>
                   </div>
 
@@ -1483,7 +1514,6 @@ const WorkerDetail: React.FC = () => {
               </div>
             </div>
 
-            {/* Google Maps */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-1">{tMap.title}</h2>
               <p className="text-xs text-slate-500 mb-3">{tMap.subtitle}</p>
@@ -1532,7 +1562,6 @@ const WorkerDetail: React.FC = () => {
               )}
             </div>
 
-            {/* À propos */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-2">
                 {language === "fr" ? "À propos" : "About"}
@@ -1545,7 +1574,6 @@ const WorkerDetail: React.FC = () => {
               </p>
             </div>
 
-            {/* Avis clients */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-1">
                 {language === "fr" ? "Avis clients" : "Customer reviews"}
@@ -1571,8 +1599,7 @@ const WorkerDetail: React.FC = () => {
                   </span>
                 </div>
                 <span className="text-xs text-slate-500">
-                  {reviews.length}{" "}
-                  {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
+                  {reviews.length} {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
                 </span>
               </div>
 
@@ -1643,8 +1670,8 @@ const WorkerDetail: React.FC = () => {
                               !connected
                                 ? tVotes.offline
                                 : !authUserId
-                                ? tVotes.mustLogin
-                                : undefined
+                                  ? tVotes.mustLogin
+                                  : undefined
                             }
                           >
                             {tVotes.like} ({counts.like})
@@ -1660,8 +1687,8 @@ const WorkerDetail: React.FC = () => {
                               !connected
                                 ? tVotes.offline
                                 : !authUserId
-                                ? tVotes.mustLogin
-                                : undefined
+                                  ? tVotes.mustLogin
+                                  : undefined
                             }
                           >
                             {tVotes.useful} ({counts.useful})
@@ -1677,8 +1704,8 @@ const WorkerDetail: React.FC = () => {
                               !connected
                                 ? tVotes.offline
                                 : !authUserId
-                                ? tVotes.mustLogin
-                                : undefined
+                                  ? tVotes.mustLogin
+                                  : undefined
                             }
                           >
                             {tVotes.notUseful} ({counts.not_useful})
@@ -1733,14 +1760,13 @@ const WorkerDetail: React.FC = () => {
                       ? "Envoi de l’avis..."
                       : "Sending review..."
                     : language === "fr"
-                    ? "Envoyer l’avis"
-                    : "Submit review"}
+                      ? "Envoyer l’avis"
+                      : "Submit review"}
                 </Button>
               </form>
             </div>
           </div>
 
-          {/* Colonne droite */}
           <div className="w-full lg:w-[360px] space-y-4">
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-3">
@@ -1854,7 +1880,6 @@ const WorkerDetail: React.FC = () => {
           </div>
         </div>
 
-        {/* ✅ CONTACT MODAL */}
         {contactOpen && (
           <div className="fixed inset-0 z-50">
             <div className="absolute inset-0 bg-black/40" onClick={closeContact} />
@@ -2028,15 +2053,15 @@ const WorkerDetail: React.FC = () => {
                             ? "Envoi de la demande..."
                             : "Enregistrement local..."
                           : connected
-                          ? "Sending request..."
-                          : "Saving locally..."
+                            ? "Sending request..."
+                            : "Saving locally..."
                         : language === "fr"
-                        ? connected
-                          ? "Envoyer la demande"
-                          : "Enregistrer hors ligne"
-                        : connected
-                        ? "Send request"
-                        : "Save offline"}
+                          ? connected
+                            ? "Envoyer la demande"
+                            : "Enregistrer hors ligne"
+                          : connected
+                            ? "Send request"
+                            : "Save offline"}
                     </Button>
                   </form>
 
@@ -2046,8 +2071,8 @@ const WorkerDetail: React.FC = () => {
                         ? "Vos données sont uniquement transmises à ce professionnel."
                         : "Votre demande sera conservée localement sur cet appareil."
                       : connected
-                      ? "Your data is only shared with this professional."
-                      : "Your request will be kept locally on this device."}
+                        ? "Your data is only shared with this professional."
+                        : "Your request will be kept locally on this device."}
                   </p>
                 </div>
               </div>
@@ -2055,7 +2080,6 @@ const WorkerDetail: React.FC = () => {
           </div>
         )}
 
-        {/* ✅ GALLERY MODAL */}
         {galleryOpen && (
           <div className="fixed inset-0 z-50">
             <div className="absolute inset-0 bg-black/40" onClick={closeGallery} />
