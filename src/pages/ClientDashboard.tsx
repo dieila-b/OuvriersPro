@@ -1,5 +1,5 @@
 // src/pages/ClientDashboard.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
@@ -78,6 +78,18 @@ type OfflineQueueItem = {
 };
 
 const OFFLINE_QUEUE_KEY = "offline_queue_v1";
+const CLIENT_DB_CACHE_KEY_PREFIX = "cached_client_db_row";
+const CLIENT_REVIEWS_CACHE_KEY_PREFIX = "cached_client_reviews";
+const CLIENT_REPLIES_CACHE_KEY_PREFIX = "cached_client_review_replies";
+
+const getClientDbCacheKey = (userId?: string | null) =>
+  userId ? `${CLIENT_DB_CACHE_KEY_PREFIX}:${userId}` : CLIENT_DB_CACHE_KEY_PREFIX;
+
+const getClientReviewsCacheKey = (clientId?: string | null) =>
+  clientId ? `${CLIENT_REVIEWS_CACHE_KEY_PREFIX}:${clientId}` : CLIENT_REVIEWS_CACHE_KEY_PREFIX;
+
+const getClientRepliesCacheKey = (clientId?: string | null) =>
+  clientId ? `${CLIENT_REPLIES_CACHE_KEY_PREFIX}:${clientId}` : CLIENT_REPLIES_CACHE_KEY_PREFIX;
 
 const ClientDashboard: React.FC = () => {
   const { language } = useLanguage();
@@ -102,256 +114,6 @@ const ClientDashboard: React.FC = () => {
   const [pendingMessagesCount, setPendingMessagesCount] = useState(0);
 
   const reconcileTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const cachedUserId = await authCache.getUserId();
-        const userId = user?.id ?? cachedUserId ?? null;
-
-        if (!userId) {
-          setClientInfo(null);
-          setClientDb(null);
-          return;
-        }
-
-        const metaFullName =
-          (user?.user_metadata?.full_name as string | undefined) ||
-          (user?.user_metadata?.name as string | undefined) ||
-          null;
-
-        const cachedProfile = await authCache.getProfile<{
-          id: string;
-          full_name?: string | null;
-          email?: string | null;
-          role?: string | null;
-        }>();
-
-        const fullName = profile?.full_name ?? cachedProfile?.full_name ?? metaFullName ?? null;
-
-        const email = user?.email ?? cachedProfile?.email ?? null;
-
-        const role = profile?.role ?? cachedProfile?.role ?? "user";
-
-        setClientInfo({
-          fullName,
-          email,
-          role,
-        });
-
-        if (!connected) {
-          setClientDb(null);
-          return;
-        }
-
-        const { data: c, error: cErr } = await supabase
-          .from("op_clients")
-          .select("id, user_id")
-          .eq("user_id", userId)
-          .maybeSingle();
-
-        if (cErr) throw cErr;
-        setClientDb((c as DbClientRow) ?? null);
-      } catch (err) {
-        console.error("Erreur chargement utilisateur client:", err);
-        setClientInfo(null);
-        setClientDb(null);
-      } finally {
-        setLoadingUser(false);
-      }
-    };
-
-    if (!authLoading && initialized) {
-      void loadUser();
-    }
-  }, [authLoading, initialized, connected, user, profile]);
-
-  useEffect(() => {
-    const loadReviews = async () => {
-      if (!connected) {
-        setReviews([]);
-        setRepliesByReview({});
-        setReviewsLoading(false);
-        setReviewsError(null);
-        return;
-      }
-
-      if (!clientDb?.id) {
-        setReviews([]);
-        return;
-      }
-
-      setReviewsLoading(true);
-      setReviewsError(null);
-
-      try {
-        const { data, error } = await supabase
-          .from("op_worker_client_reviews")
-          .select(
-            `
-            id,
-            worker_id,
-            client_id,
-            rating,
-            title,
-            content,
-            is_published,
-            created_at,
-            worker:op_ouvriers (
-              id,
-              first_name,
-              last_name,
-              profession
-            )
-          `
-          )
-          .eq("client_id", clientDb.id)
-          .order("created_at", { ascending: false });
-
-        if (error) throw error;
-
-        const list = (data || []) as any[];
-        const mapped: ReviewRow[] = list.map((r) => ({
-          ...r,
-          worker: r.worker ?? null,
-        }));
-
-        setReviews(mapped);
-      } catch (e: any) {
-        console.error("ClientDashboard loadReviews error", e);
-        setReviewsError(
-          e?.message ||
-            (language === "fr"
-              ? "Impossible de charger vos avis."
-              : "Unable to load your reviews.")
-        );
-      } finally {
-        setReviewsLoading(false);
-      }
-    };
-
-    void loadReviews();
-  }, [clientDb?.id, language, connected]);
-
-  useEffect(() => {
-    const refreshPendingState = async () => {
-      try {
-        const currentUserId = user?.id ?? (await authCache.getUserId());
-        const queue = (await localStore.get<OfflineQueueItem[]>(OFFLINE_QUEUE_KEY)) || [];
-
-        if (!currentUserId) {
-          setPendingRequestsCount(0);
-          setPendingMessagesCount(0);
-          return;
-        }
-
-        const requestsCount = queue.filter(
-          (item) =>
-            item.action_type === "CREATE_CONTACT_REQUEST" &&
-            item.status === "pending" &&
-            String(item.payload_json?.user_id || currentUserId) === String(currentUserId)
-        ).length;
-
-        const messagesCount = queue.filter(
-          (item) =>
-            item.action_type === "SEND_CLIENT_MESSAGE" &&
-            item.status === "pending" &&
-            String(item.payload_json?.user_id || currentUserId) === String(currentUserId)
-        ).length;
-
-        setPendingRequestsCount(requestsCount);
-        setPendingMessagesCount(messagesCount);
-      } catch (error) {
-        console.error("[ClientDashboard] refreshPendingState error:", error);
-        setPendingRequestsCount(0);
-        setPendingMessagesCount(0);
-      }
-    };
-
-    if (!initialized || authLoading) return;
-
-    void refreshPendingState();
-
-    const handleRefresh = () => {
-      void refreshPendingState();
-    };
-
-    window.addEventListener("storage", handleRefresh);
-    window.addEventListener("focus", handleRefresh);
-    window.addEventListener("visibilitychange", handleRefresh);
-
-    return () => {
-      window.removeEventListener("storage", handleRefresh);
-      window.removeEventListener("focus", handleRefresh);
-      window.removeEventListener("visibilitychange", handleRefresh);
-    };
-  }, [initialized, authLoading, user?.id]);
-
-  useEffect(() => {
-    const refreshPendingState = async () => {
-      try {
-        const currentUserId = user?.id ?? (await authCache.getUserId());
-        const queue = (await localStore.get<OfflineQueueItem[]>(OFFLINE_QUEUE_KEY)) || [];
-
-        if (!currentUserId) {
-          setPendingRequestsCount(0);
-          setPendingMessagesCount(0);
-          return;
-        }
-
-        const requestsCount = queue.filter(
-          (item) =>
-            item.action_type === "CREATE_CONTACT_REQUEST" &&
-            item.status === "pending" &&
-            String(item.payload_json?.user_id || currentUserId) === String(currentUserId)
-        ).length;
-
-        const messagesCount = queue.filter(
-          (item) =>
-            item.action_type === "SEND_CLIENT_MESSAGE" &&
-            item.status === "pending" &&
-            String(item.payload_json?.user_id || currentUserId) === String(currentUserId)
-        ).length;
-
-        setPendingRequestsCount(requestsCount);
-        setPendingMessagesCount(messagesCount);
-      } catch (error) {
-        console.error("[ClientDashboard] reconcile pending state error:", error);
-      }
-    };
-
-    if (reconcileTimerRef.current != null) {
-      window.clearInterval(reconcileTimerRef.current);
-      reconcileTimerRef.current = null;
-    }
-
-    if (!connected || !initialized || authLoading) return;
-
-    reconcileTimerRef.current = window.setInterval(() => {
-      void refreshPendingState();
-    }, 3500);
-
-    return () => {
-      if (reconcileTimerRef.current != null) {
-        window.clearInterval(reconcileTimerRef.current);
-        reconcileTimerRef.current = null;
-      }
-    };
-  }, [connected, initialized, authLoading, user?.id]);
-
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.error("Erreur de déconnexion:", err);
-    } finally {
-      navigate("/", { replace: true });
-    }
-  };
-
-  const handleBack = () => {
-    navigate("/", { replace: true });
-  };
 
   const t = {
     title: language === "fr" ? "Espace client / particulier" : "Client / individual space",
@@ -404,12 +166,20 @@ const ClientDashboard: React.FC = () => {
       language === "fr"
         ? "Impossible de charger vos avis."
         : "Unable to load your reviews.",
+    replyError:
+      language === "fr"
+        ? "Impossible d’envoyer votre réponse."
+        : "Unable to send your reply.",
     offlineTitle: language === "fr" ? "Mode hors connexion" : "Offline mode",
     offlineDesc:
       language === "fr"
         ? "Vos raccourcis restent accessibles. Certaines sections dynamiques, comme les avis et réponses, nécessitent Internet."
         : "Your shortcuts remain available. Some dynamic sections, like reviews and replies, require internet.",
     cachedSession: language === "fr" ? "Session locale détectée" : "Local session detected",
+    cachedReviews:
+      language === "fr"
+        ? "Avis chargés depuis le cache local."
+        : "Reviews loaded from local cache.",
 
     pendingSync:
       language === "fr" ? "En attente de synchronisation" : "Pending synchronization",
@@ -424,6 +194,292 @@ const ClientDashboard: React.FC = () => {
       language === "fr" ? "messages en attente" : "pending messages",
     everythingSynced:
       language === "fr" ? "Aucune action locale en attente." : "No local action pending.",
+  };
+
+  const getResolvedUserId = useCallback(async () => {
+    return user?.id ?? (await authCache.getUserId());
+  }, [user?.id]);
+
+  const refreshPendingState = useCallback(async () => {
+    try {
+      const currentUserId = await getResolvedUserId();
+      const queue = (await localStore.get<OfflineQueueItem[]>(OFFLINE_QUEUE_KEY)) || [];
+
+      if (!currentUserId) {
+        setPendingRequestsCount(0);
+        setPendingMessagesCount(0);
+        return;
+      }
+
+      const requestsCount = queue.filter(
+        (item) =>
+          item.action_type === "CREATE_CONTACT_REQUEST" &&
+          item.status === "pending" &&
+          String(item.payload_json?.user_id || currentUserId) === String(currentUserId)
+      ).length;
+
+      const messagesCount = queue.filter(
+        (item) =>
+          item.action_type === "SEND_CLIENT_MESSAGE" &&
+          item.status === "pending" &&
+          String(item.payload_json?.user_id || currentUserId) === String(currentUserId)
+      ).length;
+
+      setPendingRequestsCount(requestsCount);
+      setPendingMessagesCount(messagesCount);
+    } catch (error) {
+      console.error("[ClientDashboard] refreshPendingState error:", error);
+      setPendingRequestsCount(0);
+      setPendingMessagesCount(0);
+    }
+  }, [getResolvedUserId]);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const cachedUserId = await authCache.getUserId();
+        const userId = user?.id ?? cachedUserId ?? null;
+
+        if (!userId) {
+          setClientInfo(null);
+          setClientDb(null);
+          return;
+        }
+
+        const metaFullName =
+          (user?.user_metadata?.full_name as string | undefined) ||
+          (user?.user_metadata?.name as string | undefined) ||
+          null;
+
+        const cachedProfile = await authCache.getProfile<{
+          id: string;
+          full_name?: string | null;
+          email?: string | null;
+          role?: string | null;
+        }>();
+
+        const fullName = profile?.full_name ?? cachedProfile?.full_name ?? metaFullName ?? null;
+        const email = user?.email ?? cachedProfile?.email ?? null;
+        const role = profile?.role ?? cachedProfile?.role ?? "user";
+
+        setClientInfo({
+          fullName,
+          email,
+          role,
+        });
+
+        const clientDbCacheKey = getClientDbCacheKey(userId);
+        const cachedClientDb = await localStore.get<DbClientRow>(clientDbCacheKey);
+
+        if (!connected) {
+          setClientDb(cachedClientDb ?? null);
+          return;
+        }
+
+        const { data: c, error: cErr } = await supabase
+          .from("op_clients")
+          .select("id, user_id")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (cErr) {
+          if (cachedClientDb) {
+            setClientDb(cachedClientDb);
+            return;
+          }
+          throw cErr;
+        }
+
+        const resolvedClientDb = (c as DbClientRow) ?? null;
+        setClientDb(resolvedClientDb);
+
+        if (resolvedClientDb) {
+          await localStore.set(clientDbCacheKey, resolvedClientDb);
+        }
+      } catch (err) {
+        console.error("Erreur chargement utilisateur client:", err);
+        setClientInfo(null);
+        setClientDb(null);
+      } finally {
+        setLoadingUser(false);
+      }
+    };
+
+    if (!authLoading && initialized) {
+      void loadUser();
+    }
+  }, [authLoading, initialized, connected, user, profile]);
+
+  useEffect(() => {
+    const loadReviews = async () => {
+      if (!clientDb?.id) {
+        setReviews([]);
+        setRepliesByReview({});
+        setReviewsLoading(false);
+        setReviewsError(null);
+        return;
+      }
+
+      const reviewsCacheKey = getClientReviewsCacheKey(clientDb.id);
+      const repliesCacheKey = getClientRepliesCacheKey(clientDb.id);
+
+      const readCache = async () => {
+        const cachedReviews = (await localStore.get<ReviewRow[]>(reviewsCacheKey)) || [];
+        const cachedReplies =
+          (await localStore.get<Record<string, ReviewReplyRow[]>>(repliesCacheKey)) || {};
+
+        setReviews(cachedReviews);
+        setRepliesByReview(cachedReplies);
+      };
+
+      if (!connected) {
+        await readCache();
+        setReviewsLoading(false);
+        setReviewsError(null);
+        return;
+      }
+
+      setReviewsLoading(true);
+      setReviewsError(null);
+
+      try {
+        const { data, error } = await supabase
+          .from("op_worker_client_reviews")
+          .select(
+            `
+            id,
+            worker_id,
+            client_id,
+            rating,
+            title,
+            content,
+            is_published,
+            created_at,
+            worker:op_ouvriers (
+              id,
+              first_name,
+              last_name,
+              profession
+            )
+          `
+          )
+          .eq("client_id", clientDb.id)
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+
+        const list = (data || []) as any[];
+        const mapped: ReviewRow[] = list.map((r) => ({
+          ...r,
+          worker: r.worker ?? null,
+        }));
+
+        setReviews(mapped);
+        await localStore.set(reviewsCacheKey, mapped);
+
+        const reviewIds = mapped.map((r) => r.id).filter(Boolean);
+
+        if (reviewIds.length === 0) {
+          setRepliesByReview({});
+          await localStore.set(repliesCacheKey, {});
+          return;
+        }
+
+        const { data: repliesData, error: repliesErr } = await supabase
+          .from("op_worker_client_review_replies")
+          .select("id, review_id, client_id, content, created_at")
+          .eq("client_id", clientDb.id)
+          .in("review_id", reviewIds)
+          .order("created_at", { ascending: true });
+
+        if (repliesErr) throw repliesErr;
+
+        const replies = (repliesData || []) as ReviewReplyRow[];
+        const grouped: Record<string, ReviewReplyRow[]> = {};
+
+        for (const rep of replies) {
+          const reviewId = rep.review_id || "";
+          if (!reviewId) continue;
+          if (!grouped[reviewId]) grouped[reviewId] = [];
+          grouped[reviewId].push(rep);
+        }
+
+        setRepliesByReview(grouped);
+        await localStore.set(repliesCacheKey, grouped);
+      } catch (e: any) {
+        console.error("ClientDashboard loadReviews error", e);
+
+        await readCache();
+
+        setReviewsError(
+          e?.message ||
+            (language === "fr"
+              ? "Impossible de charger vos avis."
+              : "Unable to load your reviews.")
+        );
+      } finally {
+        setReviewsLoading(false);
+      }
+    };
+
+    void loadReviews();
+  }, [clientDb?.id, language, connected]);
+
+  useEffect(() => {
+    if (!initialized || authLoading) return;
+
+    void refreshPendingState();
+
+    const handleRefresh = () => {
+      void refreshPendingState();
+    };
+
+    window.addEventListener("storage", handleRefresh);
+    window.addEventListener("focus", handleRefresh);
+    window.addEventListener("visibilitychange", handleRefresh);
+
+    return () => {
+      window.removeEventListener("storage", handleRefresh);
+      window.removeEventListener("focus", handleRefresh);
+      window.removeEventListener("visibilitychange", handleRefresh);
+    };
+  }, [initialized, authLoading, refreshPendingState]);
+
+  useEffect(() => {
+    if (reconcileTimerRef.current != null) {
+      window.clearInterval(reconcileTimerRef.current);
+      reconcileTimerRef.current = null;
+    }
+
+    if (!connected || !initialized || authLoading) return;
+
+    reconcileTimerRef.current = window.setInterval(() => {
+      void refreshPendingState();
+    }, 3500);
+
+    return () => {
+      if (reconcileTimerRef.current != null) {
+        window.clearInterval(reconcileTimerRef.current);
+        reconcileTimerRef.current = null;
+      }
+    };
+  }, [connected, initialized, authLoading, refreshPendingState]);
+
+  const handleLogout = async () => {
+    try {
+      try {
+        await supabase.auth.signOut();
+      } catch (err) {
+        console.error("Erreur de déconnexion:", err);
+      }
+      await authCache.clear();
+    } finally {
+      navigate("/", { replace: true });
+    }
+  };
+
+  const handleBack = () => {
+    navigate("/", { replace: true });
   };
 
   const displayName =
@@ -457,6 +513,7 @@ const ClientDashboard: React.FC = () => {
 
   const openReply = async (reviewId: string) => {
     if (!connected) return;
+    if (!clientDb?.id) return;
 
     setReplyOpenFor(reviewId);
     setReplyText("");
@@ -470,10 +527,23 @@ const ClientDashboard: React.FC = () => {
 
       if (error) throw error;
 
-      setRepliesByReview((prev) => ({
-        ...prev,
-        [reviewId]: (data || []) as ReviewReplyRow[],
-      }));
+      const replies = (data || []) as ReviewReplyRow[];
+
+      setRepliesByReview((prev) => {
+        const next = {
+          ...prev,
+          [reviewId]: replies,
+        };
+        return next;
+      });
+
+      const repliesCacheKey = getClientRepliesCacheKey(clientDb.id);
+      const currentCache =
+        (await localStore.get<Record<string, ReviewReplyRow[]>>(repliesCacheKey)) || {};
+      await localStore.set(repliesCacheKey, {
+        ...currentCache,
+        [reviewId]: replies,
+      });
     } catch (e) {
       console.warn("Unable to load replies for review", reviewId, e);
     }
@@ -503,13 +573,28 @@ const ClientDashboard: React.FC = () => {
 
       if (error) throw error;
 
-      setRepliesByReview((prev) => ({
-        ...prev,
-        [replyOpenFor]: [...(prev[replyOpenFor] || []), data as ReviewReplyRow],
-      }));
+      const insertedReply = data as ReviewReplyRow;
+
+      setRepliesByReview((prev) => {
+        const next = {
+          ...prev,
+          [replyOpenFor]: [...(prev[replyOpenFor] || []), insertedReply],
+        };
+        return next;
+      });
+
+      const repliesCacheKey = getClientRepliesCacheKey(clientDb.id);
+      const currentCache =
+        (await localStore.get<Record<string, ReviewReplyRow[]>>(repliesCacheKey)) || {};
+      await localStore.set(repliesCacheKey, {
+        ...currentCache,
+        [replyOpenFor]: [...(currentCache[replyOpenFor] || []), insertedReply],
+      });
+
       setReplyText("");
     } catch (e) {
       console.error("sendReply error", e);
+      setReviewsError(t.replyError);
     } finally {
       setReplySending(false);
     }
@@ -839,7 +924,9 @@ const ClientDashboard: React.FC = () => {
                 </div>
 
                 <div className="text-right">
-                  <div className="text-xs text-slate-500">{language === "fr" ? "Moyenne" : "Average"}</div>
+                  <div className="text-xs text-slate-500">
+                    {language === "fr" ? "Moyenne" : "Average"}
+                  </div>
                   <div className="flex items-center justify-end gap-1 text-sm font-semibold text-slate-900">
                     <Star className="w-4 h-4 text-orange-500" />
                     {avgRating ?? "—"}
@@ -848,13 +935,21 @@ const ClientDashboard: React.FC = () => {
               </div>
 
               {!connected && (
-                <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
-                  <RefreshCw className="mt-0.5 h-4 w-4 shrink-0" />
-                  <div className="text-xs">
-                    {language === "fr"
-                      ? "Les avis et réponses nécessitent une connexion Internet."
-                      : "Reviews and replies require an internet connection."}
+                <div className="mb-4 space-y-3">
+                  <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+                    <RefreshCw className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="text-xs">
+                      {language === "fr"
+                        ? "Les avis et réponses nécessitent une connexion Internet pour être mis à jour."
+                        : "Reviews and replies require an internet connection to refresh."}
+                    </div>
                   </div>
+
+                  {reviews.length > 0 && (
+                    <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+                      {t.cachedReviews}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -874,11 +969,11 @@ const ClientDashboard: React.FC = () => {
                 </div>
               )}
 
-              {!reviewsLoading && !reviewsError && reviews.length === 0 && connected && (
+              {!reviewsLoading && reviews.length === 0 && (
                 <div className="text-sm text-slate-500">{t.reviewsEmpty}</div>
               )}
 
-              {!reviewsLoading && !reviewsError && reviews.length > 0 && connected && (
+              {!reviewsLoading && reviews.length > 0 && (
                 <div className="space-y-3">
                   {reviews.map((r) => {
                     const isOpen = replyOpenFor === r.id;
@@ -958,12 +1053,13 @@ const ClientDashboard: React.FC = () => {
                             size="sm"
                             className="rounded-full text-xs border-slate-200"
                             onClick={() => (isOpen ? setReplyOpenFor(null) : openReply(r.id))}
+                            disabled={!connected}
                           >
                             {t.reviewReply}
                           </Button>
                         </div>
 
-                        {isOpen && (
+                        {isOpen && connected && (
                           <div className="mt-3 rounded-2xl border border-slate-100 bg-white p-3">
                             <Textarea
                               rows={3}
