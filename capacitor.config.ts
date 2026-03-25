@@ -6,11 +6,6 @@ const config: CapacitorConfig = {
   webDir: "dist",
   bundledWebRuntime: false,
 
-  server: {
-    url: "https://0513bd25-b532-4ad1-87bd-d54c9a943029.lovableproject.com",
-    cleartext: true,
-  },
-
   android: {
     allowMixedContent: true,
     webContentsDebuggingEnabled: true,
