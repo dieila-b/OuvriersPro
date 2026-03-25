@@ -5,6 +5,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { useNetworkStatus } from "@/services/networkService";
 import { localStore } from "@/services/localStore";
+import { authCache } from "@/services/authCache";
+import { favoritesRepository } from "@/services/favoritesRepository";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,8 @@ import {
   ChevronUp,
   WifiOff,
   Database,
+  Heart,
+  Loader2,
 } from "lucide-react";
 
 type DbWorker = {
@@ -94,6 +98,14 @@ type SearchPayload = {
   lat?: string;
   lng?: string;
   near?: string;
+};
+
+type FavoriteItem = {
+  id: string;
+  worker_id: string;
+  worker_name: string | null;
+  profession: string | null;
+  created_at: string;
 };
 
 const DEFAULT_MAX_PRICE = 300000;
@@ -380,6 +392,10 @@ const WorkerSearchSection: React.FC = () => {
 
   const [session, setSession] = useState<any>(null);
 
+  const [favoriteMap, setFavoriteMap] = useState<Record<string, FavoriteItem>>({});
+  const [favoriteLoadingByWorkerId, setFavoriteLoadingByWorkerId] = useState<Record<string, boolean>>({});
+  const [favoriteCacheLoaded, setFavoriteCacheLoaded] = useState(false);
+
   useEffect(() => {
     let mounted = true;
 
@@ -605,6 +621,50 @@ const WorkerSearchSection: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language, connected, initialized]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadFavorites = async () => {
+      setFavoriteCacheLoaded(false);
+
+      const userId = session?.user?.id || (await authCache.getUserId());
+      if (!userId) {
+        if (!cancelled) {
+          setFavoriteMap({});
+          setFavoriteCacheLoaded(false);
+        }
+        return;
+      }
+
+      try {
+        const result = await favoritesRepository.loadFavorites(userId, connected);
+        if (cancelled) return;
+
+        const nextMap = (result.items || []).reduce<Record<string, FavoriteItem>>((acc, item) => {
+          acc[item.worker_id] = item as FavoriteItem;
+          return acc;
+        }, {});
+
+        setFavoriteMap(nextMap);
+        setFavoriteCacheLoaded(result.fromCache);
+      } catch (err) {
+        console.error("[WorkerSearchSection] loadFavorites error:", err);
+        if (!cancelled) {
+          setFavoriteMap({});
+          setFavoriteCacheLoaded(false);
+        }
+      }
+    };
+
+    if (initialized) {
+      void loadFavorites();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id, connected, initialized]);
 
   const applyExternalFilters = (f: Filters) => {
     applyingExternalRef.current = true;
@@ -1031,6 +1091,40 @@ const WorkerSearchSection: React.FC = () => {
     "Results loaded from local cache."
   );
 
+  const favAdd = cms("search.favorites.add", "Ajouter aux favoris", "Add to favourites");
+  const favRemove = cms("search.favorites.remove", "Retirer des favoris", "Remove from favourites");
+  const favAddedOnline = cms(
+    "search.favorites.added_online",
+    "Prestataire ajouté aux favoris.",
+    "Provider added to favourites."
+  );
+  const favRemovedOnline = cms(
+    "search.favorites.removed_online",
+    "Prestataire retiré des favoris.",
+    "Provider removed from favourites."
+  );
+  const favAddedOffline = cms(
+    "search.favorites.added_offline",
+    "Favori enregistré hors ligne. Synchronisation automatique au retour du réseau.",
+    "Favourite saved offline. It will sync automatically when back online."
+  );
+  const favRemovedOffline = cms(
+    "search.favorites.removed_offline",
+    "Retrait enregistré hors ligne. Synchronisation automatique au retour du réseau.",
+    "Offline removal saved. It will sync automatically when back online."
+  );
+  const favUpdating = cms("search.favorites.updating", "Mise à jour...", "Updating...");
+  const favLoginRequiredTitle = cms(
+    "search.favorites.login_title",
+    "Connexion requise",
+    "Login required"
+  );
+  const favLoginRequiredDesc = cms(
+    "search.favorites.login_desc",
+    "Connectez-vous pour gérer vos favoris.",
+    "Sign in to manage your favourites."
+  );
+
   const hasAnyGeoWorkers = useMemo(
     () => workers.some((w) => w.latitude != null && w.longitude != null),
     [workers]
@@ -1120,6 +1214,86 @@ const WorkerSearchSection: React.FC = () => {
     }
   }, [cacheUpdatedAt, language]);
 
+  const isWorkerFavorite = (workerId: string) => !!favoriteMap[workerId];
+
+  const toggleFavorite = async (worker: WorkerCard) => {
+    const userId = session?.user?.id || (await authCache.getUserId());
+
+    if (!userId) {
+      toast({
+        title: favLoginRequiredTitle,
+        description: favLoginRequiredDesc,
+      });
+
+      window.setTimeout(() => {
+        navigate(`/login?redirect=${encodeURIComponent(`/ouvrier/${worker.id}`)}`, { replace: false });
+      }, 450);
+      return;
+    }
+
+    setFavoriteLoadingByWorkerId((prev) => ({ ...prev, [worker.id]: true }));
+
+    try {
+      const existing = favoriteMap[worker.id];
+
+      if (existing) {
+        await favoritesRepository.removeFavorite({
+          userId,
+          connected,
+          workerId: worker.id,
+          favoriteId: existing.id,
+        });
+
+        setFavoriteMap((prev) => {
+          const next = { ...prev };
+          delete next[worker.id];
+          return next;
+        });
+
+        toast({
+          title: language === "fr" ? "Favoris" : "Favourites",
+          description: connected ? favRemovedOnline : favRemovedOffline,
+        });
+      } else {
+        const result = await favoritesRepository.addFavorite({
+          userId,
+          connected,
+          workerId: worker.id,
+          workerName: worker.name,
+          profession: worker.job || null,
+        });
+
+        const nextItem: FavoriteItem = {
+          id: result.id,
+          worker_id: worker.id,
+          worker_name: worker.name,
+          profession: worker.job || null,
+          created_at: new Date().toISOString(),
+        };
+
+        setFavoriteMap((prev) => ({ ...prev, [worker.id]: nextItem }));
+
+        toast({
+          title: language === "fr" ? "Favoris" : "Favourites",
+          description: connected ? favAddedOnline : favAddedOffline,
+        });
+      }
+    } catch (error: any) {
+      console.error("[WorkerSearchSection] toggleFavorite error:", error);
+      toast({
+        title: language === "fr" ? "Erreur" : "Error",
+        description:
+          error?.message ||
+          (language === "fr"
+            ? "Impossible de mettre à jour les favoris."
+            : "Unable to update favourites."),
+        variant: "destructive",
+      });
+    } finally {
+      setFavoriteLoadingByWorkerId((prev) => ({ ...prev, [worker.id]: false }));
+    }
+  };
+
   return (
     <section
       ref={sectionRef}
@@ -1139,7 +1313,7 @@ const WorkerSearchSection: React.FC = () => {
           </div>
         )}
 
-        {usedOfflineCache && (
+        {(usedOfflineCache || favoriteCacheLoaded) && (
           <div className="mb-4 flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
             <Database className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
@@ -1566,164 +1740,224 @@ const WorkerSearchSection: React.FC = () => {
 
             {applied.view === "list" && filteredWorkers.length > 0 && (
               <div className="space-y-4">
-                {filteredWorkers.map((w) => (
-                  <div
-                    key={w.id}
-                    className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_22px_54px_rgba(15,23,42,0.10)]"
-                  >
-                    <div className="bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-4 sm:px-5 sm:py-5">
-                      <div className="flex items-start gap-4">
-                        <div className="relative shrink-0">
-                          <div className="rounded-full bg-gradient-to-br from-blue-200 via-blue-300 to-blue-600 p-[3px] shadow-[0_14px_28px_rgba(37,99,235,0.22)]">
-                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-sm font-bold text-blue-700 sm:h-20 sm:w-20 sm:text-lg">
-                              {getInitials(w.name)}
+                {filteredWorkers.map((w) => {
+                  const isFav = isWorkerFavorite(w.id);
+                  const favLoading = !!favoriteLoadingByWorkerId[w.id];
+
+                  return (
+                    <div
+                      key={w.id}
+                      className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_22px_54px_rgba(15,23,42,0.10)]"
+                    >
+                      <div className="bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-4 sm:px-5 sm:py-5">
+                        <div className="flex items-start gap-4">
+                          <div className="relative shrink-0">
+                            <div className="rounded-full bg-gradient-to-br from-blue-200 via-blue-300 to-blue-600 p-[3px] shadow-[0_14px_28px_rgba(37,99,235,0.22)]">
+                              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-sm font-bold text-blue-700 sm:h-20 sm:w-20 sm:text-lg">
+                                {getInitials(w.name)}
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="min-w-0">
-                              <h3 className="truncate text-[20px] font-bold tracking-tight text-slate-900 sm:text-[28px]">
-                                {w.name}
-                              </h3>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <h3 className="truncate text-[20px] font-bold tracking-tight text-slate-900 sm:text-[28px]">
+                                  {w.name}
+                                </h3>
 
-                              <div className="mt-1.5 truncate text-sm text-slate-600 sm:text-base">
-                                {getWorkerSubtitle(w)}
+                                <div className="mt-1.5 truncate text-sm text-slate-600 sm:text-base">
+                                  {getWorkerSubtitle(w)}
+                                </div>
+                              </div>
+
+                              <div className="shrink-0 text-left sm:text-right">
+                                <div className="text-[20px] font-bold tracking-tight text-blue-700 sm:text-[28px]">
+                                  {formatCurrency(w.hourlyRate, w.currency)}
+                                </div>
+                                <div className="mt-1 text-xs text-slate-500">{perHourLabel}</div>
                               </div>
                             </div>
 
-                            <div className="shrink-0 text-left sm:text-right">
-                              <div className="text-[20px] font-bold tracking-tight text-blue-700 sm:text-[28px]">
-                                {formatCurrency(w.hourlyRate, w.currency)}
+                            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-slate-500 sm:text-sm">
+                              <span className="inline-flex min-w-0 items-center gap-1.5">
+                                <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                <span className="truncate max-w-[360px]">{getWorkerMetaLine(w)}</span>
+                              </span>
+
+                              {applied.near && appliedHasCoords && (
+                                <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-blue-700">
+                                  {distanceLabel}:
+                                  <span className="font-semibold">
+                                    {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
+                                  </span>
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                                <div className="flex items-center gap-0.5">{renderStars(w.rating)}</div>
+
+                                <span className="inline-flex items-center gap-1">
+                                  <Star className="h-3.5 w-3.5 text-slate-400" />
+                                  <span className="font-medium text-slate-700">
+                                    {w.rating.toFixed(1)} ({w.ratingCount})
+                                  </span>
+                                </span>
+
+                                <span>
+                                  {w.experienceYears} {yearsSuffix}
+                                </span>
                               </div>
-                              <div className="mt-1 text-xs text-slate-500">{perHourLabel}</div>
+
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className={`h-11 rounded-2xl px-4 text-sm font-semibold ${
+                                    isFav
+                                      ? "border-rose-200 text-rose-600 hover:bg-rose-50"
+                                      : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                                  }`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void toggleFavorite(w);
+                                  }}
+                                  disabled={favLoading}
+                                  title={isFav ? favRemove : favAdd}
+                                >
+                                  {favLoading ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Heart className={`h-4 w-4 ${isFav ? "fill-rose-500 text-rose-500" : ""}`} />
+                                  )}
+                                </Button>
+
+                                <Button
+                                  size="sm"
+                                  className="h-11 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 px-5 text-sm font-semibold text-white shadow-[0_12px_26px_rgba(37,99,235,0.22)] hover:from-blue-700 hover:to-blue-700"
+                                  onClick={() => goToWorkerProfile(w.id)}
+                                >
+                                  {contactLabel}
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-
-                          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-slate-500 sm:text-sm">
-                            <span className="inline-flex min-w-0 items-center gap-1.5">
-                              <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                              <span className="truncate max-w-[360px]">{getWorkerMetaLine(w)}</span>
-                            </span>
-
-                            {applied.near && appliedHasCoords && (
-                              <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-blue-700">
-                                {distanceLabel}:
-                                <span className="font-semibold">
-                                  {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
-                                </span>
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                              <div className="flex items-center gap-0.5">{renderStars(w.rating)}</div>
-
-                              <span className="inline-flex items-center gap-1">
-                                <Star className="h-3.5 w-3.5 text-slate-400" />
-                                <span className="font-medium text-slate-700">
-                                  {w.rating.toFixed(1)} ({w.ratingCount})
-                                </span>
-                              </span>
-
-                              <span>
-                                {w.experienceYears} {yearsSuffix}
-                              </span>
-                            </div>
-
-                            <Button
-                              size="sm"
-                              className="h-11 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 px-5 text-sm font-semibold text-white shadow-[0_12px_26px_rgba(37,99,235,0.22)] hover:from-blue-700 hover:to-blue-700"
-                              onClick={() => goToWorkerProfile(w.id)}
-                            >
-                              {contactLabel}
-                            </Button>
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="h-[3px] w-full bg-gradient-to-r from-blue-100 via-blue-300 to-blue-100" />
-                  </div>
-                ))}
+                      <div className="h-[3px] w-full bg-gradient-to-r from-blue-100 via-blue-300 to-blue-100" />
+                    </div>
+                  );
+                })}
               </div>
             )}
 
             {applied.view === "grid" && filteredWorkers.length > 0 && (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
-                {filteredWorkers.map((w) => (
-                  <div
-                    key={w.id}
-                    className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_46px_rgba(15,23,42,0.10)]"
-                  >
-                    <div className="bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-4">
-                      <div className="flex items-start gap-3">
-                        <div className="relative shrink-0">
-                          <div className="rounded-full bg-gradient-to-br from-blue-200 via-blue-300 to-blue-600 p-[2.5px] shadow-[0_12px_24px_rgba(37,99,235,0.20)]">
-                            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-sm font-bold text-blue-700">
-                              {getInitials(w.name)}
-                            </div>
-                          </div>
-                        </div>
+                {filteredWorkers.map((w) => {
+                  const isFav = isWorkerFavorite(w.id);
+                  const favLoading = !!favoriteLoadingByWorkerId[w.id];
 
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <h3 className="truncate text-[17px] font-bold tracking-tight text-slate-900">
-                                {w.name}
-                              </h3>
-                              <div className="mt-1 truncate text-xs text-slate-600">
-                                {getWorkerSubtitle(w)}
-                              </div>
-                            </div>
-
-                            <div className="shrink-0 text-right">
-                              <div className="text-[16px] font-bold tracking-tight text-blue-700">
-                                {formatCurrency(w.hourlyRate, w.currency)}
+                  return (
+                    <div
+                      key={w.id}
+                      className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_46px_rgba(15,23,42,0.10)]"
+                    >
+                      <div className="bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-4">
+                        <div className="flex items-start gap-3">
+                          <div className="relative shrink-0">
+                            <div className="rounded-full bg-gradient-to-br from-blue-200 via-blue-300 to-blue-600 p-[2.5px] shadow-[0_12px_24px_rgba(37,99,235,0.20)]">
+                              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-sm font-bold text-blue-700">
+                                {getInitials(w.name)}
                               </div>
                             </div>
                           </div>
 
-                          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500">
-                            <MapPin className="h-3 w-3 shrink-0 text-slate-400" />
-                            <span className="truncate max-w-[200px]">{getWorkerMetaLine(w)}</span>
-                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <h3 className="truncate text-[17px] font-bold tracking-tight text-slate-900">
+                                  {w.name}
+                                </h3>
+                                <div className="mt-1 truncate text-xs text-slate-600">
+                                  {getWorkerSubtitle(w)}
+                                </div>
+                              </div>
 
-                          <div className="mt-3 flex flex-col gap-3">
-                            <div>
-                              <div className="flex items-center gap-0.5">{renderStars(w.rating)}</div>
-                              <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-                                <span className="font-medium">
-                                  {w.rating.toFixed(1)} ({w.ratingCount})
-                                </span>
-                                <span>
-                                  {w.experienceYears} {yearsSuffix}
-                                </span>
-                                {applied.near && appliedHasCoords && (
-                                  <span className="text-blue-700">
-                                    {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
+                              <div className="shrink-0 text-right">
+                                <div className="text-[16px] font-bold tracking-tight text-blue-700">
+                                  {formatCurrency(w.hourlyRate, w.currency)}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500">
+                              <MapPin className="h-3 w-3 shrink-0 text-slate-400" />
+                              <span className="truncate max-w-[200px]">{getWorkerMetaLine(w)}</span>
+                            </div>
+
+                            <div className="mt-3 flex flex-col gap-3">
+                              <div>
+                                <div className="flex items-center gap-0.5">{renderStars(w.rating)}</div>
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                                  <span className="font-medium">
+                                    {w.rating.toFixed(1)} ({w.ratingCount})
                                   </span>
-                                )}
+                                  <span>
+                                    {w.experienceYears} {yearsSuffix}
+                                  </span>
+                                  {applied.near && appliedHasCoords && (
+                                    <span className="text-blue-700">
+                                      {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className={`h-10 min-w-10 rounded-xl px-3 ${
+                                    isFav
+                                      ? "border-rose-200 text-rose-600 hover:bg-rose-50"
+                                      : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                                  }`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void toggleFavorite(w);
+                                  }}
+                                  disabled={favLoading}
+                                  title={isFav ? favRemove : favAdd}
+                                >
+                                  {favLoading ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Heart className={`h-4 w-4 ${isFav ? "fill-rose-500 text-rose-500" : ""}`} />
+                                  )}
+                                </Button>
+
+                                <Button
+                                  size="sm"
+                                  className="h-10 flex-1 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 text-[12px] font-semibold text-white shadow-[0_10px_22px_rgba(37,99,235,0.22)] hover:from-blue-700 hover:to-blue-700"
+                                  onClick={() => goToWorkerProfile(w.id)}
+                                >
+                                  {contactLabel}
+                                </Button>
                               </div>
                             </div>
-
-                            <Button
-                              size="sm"
-                              className="h-10 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 text-[12px] font-semibold text-white shadow-[0_10px_22px_rgba(37,99,235,0.22)] hover:from-blue-700 hover:to-blue-700"
-                              onClick={() => goToWorkerProfile(w.id)}
-                            >
-                              {contactLabel}
-                            </Button>
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="h-[2px] w-full bg-gradient-to-r from-blue-100 via-blue-300 to-blue-100" />
-                  </div>
-                ))}
+                      <div className="h-[2px] w-full bg-gradient-to-r from-blue-100 via-blue-300 to-blue-100" />
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
