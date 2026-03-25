@@ -173,7 +173,8 @@ async function uploadChatImage(params: {
   const fileName = `${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
   const storagePath = `contacts/${contactId}/${senderUserId}/${fileName}`;
 
-  const { error: upErr } = await supabase.storage
+  const { error: upErr } = await supabase
+    .storage
     .from(BUCKET_CHAT)
     .upload(storagePath, blob, { contentType: mimeType, upsert: false });
 
@@ -222,6 +223,7 @@ const ClientMessagesList: React.FC = () => {
 
   const [signedUrlByPath, setSignedUrlByPath] = useState<Record<string, string>>({});
   const signingInFlightRef = useRef<Record<string, boolean>>({});
+  const reconcileTimerRef = useRef<number | null>(null);
 
   const t = {
     backToClientSpace: language === "fr" ? "Retour à l’espace client" : "Back to client space",
@@ -349,6 +351,7 @@ const ClientMessagesList: React.FC = () => {
 
     for (const item of items) {
       const existing = map.get(item.id);
+
       if (!existing) {
         map.set(item.id, item);
         continue;
@@ -393,6 +396,71 @@ const ClientMessagesList: React.FC = () => {
       }));
   };
 
+  const areMessagesLikelySame = (pendingMsg: MessageRow, serverMsg: MessageRow) => {
+    if (pendingMsg.sender_role !== "client" || serverMsg.sender_role !== "client") return false;
+    if ((pendingMsg.contact_id || "") !== (serverMsg.contact_id || "")) return false;
+    if ((pendingMsg.worker_id || "") !== (serverMsg.worker_id || "")) return false;
+    if ((pendingMsg.client_id || "") !== (serverMsg.client_id || "")) return false;
+
+    const pendingText = (pendingMsg.message || "").trim();
+    const serverText = (serverMsg.message || "").trim();
+
+    if (pendingText !== serverText) return false;
+    if ((pendingMsg.media_type || null) !== (serverMsg.media_type || null)) return false;
+
+    const pendingTime = new Date(pendingMsg.created_at).getTime();
+    const serverTime = new Date(serverMsg.created_at).getTime();
+    const diff = Math.abs(serverTime - pendingTime);
+
+    return diff <= 5 * 60 * 1000;
+  };
+
+  const reconcilePendingAgainstServer = async (
+    contactId: string,
+    serverMessages: MessageRow[]
+  ): Promise<MessageRow[]> => {
+    const queue = await readQueue();
+    const queuedLocalIds = new Set(
+      queue
+        .filter(
+          (item) =>
+            item.action_type === "SEND_CLIENT_MESSAGE" &&
+            item.status === "pending" &&
+            item.payload_json?.contact_id === contactId
+        )
+        .map((item) => String(item.payload_json?.local_message_id || item.id))
+    );
+
+    const cached = await loadCachedMessages(contactId);
+    const result: MessageRow[] = [];
+
+    for (const msg of cached) {
+      if (msg.sync_status !== "pending") {
+        result.push(msg);
+        continue;
+      }
+
+      const stillQueued = queuedLocalIds.has(msg.id);
+
+      if (stillQueued) {
+        result.push(msg);
+        continue;
+      }
+
+      const matchedServer = serverMessages.some((serverMsg) => areMessagesLikelySame(msg, serverMsg));
+
+      if (!matchedServer) {
+        result.push(msg);
+      }
+    }
+
+    return mergeAndDeduplicateMessages([
+      ...result.filter((m) => m.sync_status !== "pending"),
+      ...serverMessages.map((m) => ({ ...m, sync_status: "synced" as const })),
+      ...result.filter((m) => m.sync_status === "pending"),
+    ]);
+  };
+
   const refreshPendingMessagesForCurrentThread = async (contactId: string) => {
     const cached = await loadCachedMessages(contactId);
     const pending = await loadPendingQueueMessagesForContact(contactId);
@@ -404,6 +472,54 @@ const ClientMessagesList: React.FC = () => {
 
     if (selectedContactId === contactId) {
       setMessages(merged);
+    }
+  };
+
+  const fetchServerMessagesForContact = async (contactId: string): Promise<MessageRow[]> => {
+    const attempt1 = await supabase
+      .from("op_client_worker_messages")
+      .select(
+        "id, contact_id, worker_id, client_id, sender_role, message, media_type, media_path, created_at"
+      )
+      .eq("contact_id", contactId)
+      .order("created_at", { ascending: true });
+
+    if (!attempt1.error) {
+      return ((attempt1.data || []) as MessageRow[]).map((m) => ({
+        ...m,
+        sync_status: "synced",
+      }));
+    }
+
+    const attempt2 = await supabase
+      .from("op_client_worker_messages")
+      .select("id, contact_id, worker_id, client_id, sender_role, message, created_at")
+      .eq("contact_id", contactId)
+      .order("created_at", { ascending: true });
+
+    if (attempt2.error) throw attempt2.error;
+
+    return ((attempt2.data || []) as MessageRow[]).map((m) => ({
+      ...m,
+      sync_status: "synced",
+    }));
+  };
+
+  const reconcileThreadFromServer = async (contactId: string) => {
+    if (!connected || !contactId) return;
+
+    try {
+      const serverMessages = await fetchServerMessagesForContact(contactId);
+      const merged = await reconcilePendingAgainstServer(contactId, serverMessages);
+
+      await saveCachedMessages(contactId, merged);
+
+      if (selectedContactId === contactId) {
+        setMessages(merged);
+        setMessagesFromCache(false);
+      }
+    } catch (e) {
+      console.warn("[ClientMessagesPage] reconcileThreadFromServer error", e);
     }
   };
 
@@ -653,37 +769,8 @@ const ClientMessagesList: React.FC = () => {
           return;
         }
 
-        const attempt1 = await supabase
-          .from("op_client_worker_messages")
-          .select(
-            "id, contact_id, worker_id, client_id, sender_role, message, media_type, media_path, created_at"
-          )
-          .eq("contact_id", selectedContactId)
-          .order("created_at", { ascending: true });
-
-        let serverMessages: MessageRow[] = [];
-
-        if (!attempt1.error) {
-          serverMessages = ((attempt1.data || []) as MessageRow[]).map((m) => ({
-            ...m,
-            sync_status: "synced",
-          }));
-        } else {
-          const attempt2 = await supabase
-            .from("op_client_worker_messages")
-            .select("id, contact_id, worker_id, client_id, sender_role, message, created_at")
-            .eq("contact_id", selectedContactId)
-            .order("created_at", { ascending: true });
-
-          if (attempt2.error) throw attempt2.error;
-          serverMessages = ((attempt2.data || []) as MessageRow[]).map((m) => ({
-            ...m,
-            sync_status: "synced",
-          }));
-        }
-
-        const pendingQueueItems = await loadPendingQueueMessagesForContact(selectedContactId);
-        const merged = mergeAndDeduplicateMessages([...serverMessages, ...pendingQueueItems]);
+        const serverMessages = await fetchServerMessagesForContact(selectedContactId);
+        const merged = await reconcilePendingAgainstServer(selectedContactId, serverMessages);
 
         if (!mounted) return;
 
@@ -750,18 +837,44 @@ const ClientMessagesList: React.FC = () => {
   useEffect(() => {
     if (!selectedContactId) return;
 
-    const onStorageSync = () => {
-      void refreshPendingMessagesForCurrentThread(selectedContactId);
+    const onSyncSignal = () => {
+      if (!connected) {
+        void refreshPendingMessagesForCurrentThread(selectedContactId);
+        return;
+      }
+      void reconcileThreadFromServer(selectedContactId);
     };
 
-    window.addEventListener("storage", onStorageSync);
-    window.addEventListener("focus", onStorageSync);
+    window.addEventListener("storage", onSyncSignal);
+    window.addEventListener("focus", onSyncSignal);
+    window.addEventListener("visibilitychange", onSyncSignal);
 
     return () => {
-      window.removeEventListener("storage", onStorageSync);
-      window.removeEventListener("focus", onStorageSync);
+      window.removeEventListener("storage", onSyncSignal);
+      window.removeEventListener("focus", onSyncSignal);
+      window.removeEventListener("visibilitychange", onSyncSignal);
     };
-  }, [selectedContactId]);
+  }, [selectedContactId, connected]);
+
+  useEffect(() => {
+    if (!selectedContactId || !connected) return;
+
+    if (reconcileTimerRef.current != null) {
+      window.clearInterval(reconcileTimerRef.current);
+      reconcileTimerRef.current = null;
+    }
+
+    reconcileTimerRef.current = window.setInterval(() => {
+      void reconcileThreadFromServer(selectedContactId);
+    }, 4000);
+
+    return () => {
+      if (reconcileTimerRef.current != null) {
+        window.clearInterval(reconcileTimerRef.current);
+        reconcileTimerRef.current = null;
+      }
+    };
+  }, [selectedContactId, connected]);
 
   const persistMessageLocally = async (contactId: string, nextMessage: MessageRow) => {
     const cached = await loadCachedMessages(contactId);
@@ -836,6 +949,8 @@ const ClientMessagesList: React.FC = () => {
       const nextMessage = { ...(data as MessageRow), sync_status: "synced" as const };
       await persistMessageLocally(selectedContact.id, nextMessage);
       setNewMessage("");
+
+      void reconcileThreadFromServer(selectedContact.id);
     } catch (e) {
       console.error("ClientMessagesList send error", e);
       setMessagesError(
@@ -906,6 +1021,8 @@ const ClientMessagesList: React.FC = () => {
         const url = await createSignedUrl(data.media_path);
         if (url) setSignedUrlByPath((prev) => ({ ...prev, [data.media_path as string]: url }));
       }
+
+      void reconcileThreadFromServer(selectedContact.id);
     } catch (e: any) {
       console.error("ClientMessagesList send image error", e);
       setMessagesError(
