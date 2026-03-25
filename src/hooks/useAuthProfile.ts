@@ -12,9 +12,14 @@ interface OpUserProfile {
   full_name: string | null;
   phone: string | null;
   role: UserRole;
+  email?: string | null;
 }
 
-const PROFILE_CACHE_KEY = "cached_op_user_profile";
+const PROFILE_CACHE_KEY_PREFIX = "cached_op_user_profile";
+
+function getProfileCacheKey(userId?: string | null) {
+  return userId ? `${PROFILE_CACHE_KEY_PREFIX}:${userId}` : PROFILE_CACHE_KEY_PREFIX;
+}
 
 function normalizeProfileRole(role: any): UserRole {
   const normalized = normalizeRole(role);
@@ -25,8 +30,10 @@ function normalizeProfileRole(role: any): UserRole {
 
 async function readCachedProfile(userId: string): Promise<OpUserProfile | null> {
   try {
+    const cacheKey = getProfileCacheKey(userId);
+
     const [cachedProfile, cachedAuthProfile, cachedRole] = await Promise.all([
-      localStore.get<OpUserProfile>(PROFILE_CACHE_KEY),
+      localStore.get<OpUserProfile>(cacheKey),
       authCache.getProfile<OpUserProfile>(),
       authCache.getRole(),
     ]);
@@ -49,6 +56,7 @@ async function readCachedProfile(userId: string): Promise<OpUserProfile | null> 
       id: userId,
       full_name: null,
       phone: null,
+      email: null,
       role: normalizeProfileRole(cachedRole ?? "user"),
     };
   } catch (error) {
@@ -59,12 +67,23 @@ async function readCachedProfile(userId: string): Promise<OpUserProfile | null> 
 
 async function persistProfile(profile: OpUserProfile) {
   try {
+    const cacheKey = getProfileCacheKey(profile.id);
+
     await Promise.all([
-      localStore.set(PROFILE_CACHE_KEY, profile),
+      localStore.set(cacheKey, profile),
       authCache.saveUser(profile.id, normalizeProfileRole(profile.role), profile),
     ]);
   } catch (error) {
     console.warn("[useAuthProfile] persistProfile warning:", error);
+  }
+}
+
+async function clearProfileCache(userId?: string | null) {
+  try {
+    if (!userId) return;
+    await localStore.remove(getProfileCacheKey(userId));
+  } catch (error) {
+    console.warn("[useAuthProfile] clearProfileCache warning:", error);
   }
 }
 
@@ -77,7 +96,7 @@ async function fetchProfile(userId: string): Promise<OpUserProfile | null> {
 
   const { data, error } = await supabase
     .from("op_users")
-    .select("id, full_name, phone, role")
+    .select("id, full_name, phone, role, email")
     .eq("id", userId)
     .maybeSingle();
 
@@ -116,34 +135,77 @@ export function useAuthProfile() {
       if (mountedRef.current) fn();
     };
 
-    const clearLocalAuth = async () => {
+    const clearLocalAuth = async (userId?: string | null) => {
       try {
         await Promise.all([
           authCache.clear(),
-          localStore.remove(PROFILE_CACHE_KEY),
+          clearProfileCache(userId),
         ]);
       } catch (error) {
         console.warn("[useAuthProfile] clearLocalAuth warning:", error);
       }
     };
 
-    const applySession = async (session: Session | null) => {
-      const seq = ++seqRef.current;
-      const u = session?.user ?? null;
+    const applyCachedUser = async () => {
+      const cachedUserId = await authCache.getUserId();
 
-      safe(() => setUser(u));
-
-      if (!u) {
-        if (!mountedRef.current || seq !== seqRef.current) return;
-
-        await clearLocalAuth();
-
+      if (!cachedUserId) {
         safe(() => {
+          setUser(null);
           setProfile(null);
           setLoading(false);
         });
         return;
       }
+
+      const cachedProfile = await readCachedProfile(cachedUserId);
+
+      safe(() => {
+        setUser(null);
+        setProfile(cachedProfile);
+        setLoading(false);
+      });
+    };
+
+    const applySession = async (session: Session | null) => {
+      const seq = ++seqRef.current;
+      const u = session?.user ?? null;
+      const { connected } = networkService.getStatus();
+
+      if (!u) {
+        if (!connected) {
+          await applyCachedUser();
+          return;
+        }
+
+        const cachedUserId = await authCache.getUserId();
+
+        if (cachedUserId) {
+          const cachedProfile = await readCachedProfile(cachedUserId);
+
+          if (!mountedRef.current || seq !== seqRef.current) return;
+
+          safe(() => {
+            setUser(null);
+            setProfile(cachedProfile);
+            setLoading(false);
+          });
+          return;
+        }
+
+        if (!mountedRef.current || seq !== seqRef.current) return;
+
+        await clearLocalAuth();
+
+        safe(() => {
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+        });
+        return;
+      }
+
+      safe(() => setUser(u));
 
       const metaRole = normalizeProfileRole(
         u.user_metadata?.role ?? u.app_metadata?.role ?? null
@@ -168,6 +230,7 @@ export function useAuthProfile() {
             (u.user_metadata?.name as string | undefined) ??
             null,
           phone: (u.user_metadata?.phone as string | undefined) ?? null,
+          email: u.email ?? null,
           role: metaRole,
         } satisfies OpUserProfile);
 
@@ -182,35 +245,20 @@ export function useAuthProfile() {
     const bootstrap = async () => {
       safe(() => setLoading(true));
 
+      const { connected } = networkService.getStatus();
+
+      if (!connected) {
+        await applyCachedUser();
+        return;
+      }
+
       const { data, error } = await supabase.auth.getSession();
 
       if (!mountedRef.current) return;
 
       if (error) {
         console.warn("[useAuthProfile] getSession error:", error);
-
-        try {
-          const cachedUserId = await authCache.getUserId();
-
-          if (cachedUserId) {
-            const cachedProfile = await readCachedProfile(cachedUserId);
-
-            safe(() => {
-              setUser(null);
-              setProfile(cachedProfile);
-              setLoading(false);
-            });
-            return;
-          }
-        } catch (cacheError) {
-          console.warn("[useAuthProfile] bootstrap cache fallback warning:", cacheError);
-        }
-
-        safe(() => {
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
-        });
+        await applyCachedUser();
         return;
       }
 
@@ -229,14 +277,21 @@ export function useAuthProfile() {
 
       if (!status.connected) return;
       if (!mountedRef.current) return;
-      if (!user?.id) return;
 
       const currentSeq = ++seqRef.current;
 
       safe(() => setLoading(true));
 
       void (async () => {
-        const refreshed = await fetchProfile(user.id);
+        const liveUserId = user?.id ?? (await authCache.getUserId());
+
+        if (!liveUserId) {
+          if (!mountedRef.current || currentSeq !== seqRef.current) return;
+          safe(() => setLoading(false));
+          return;
+        }
+
+        const refreshed = await fetchProfile(liveUserId);
 
         if (!mountedRef.current || currentSeq !== seqRef.current) return;
 
@@ -252,7 +307,7 @@ export function useAuthProfile() {
       listener.subscription.unsubscribe();
       unsubscribeNetwork();
     };
-  }, [user?.id]);
+  }, []);
 
   const flags = useMemo(() => {
     const role = normalizeProfileRole(profile?.role ?? "user");
