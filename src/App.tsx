@@ -19,7 +19,8 @@ import { Capacitor } from "@capacitor/core";
 import { Loader2 } from "lucide-react";
 
 import { UiModeProvider } from "@/contexts/UiModeContext";
-import { networkService } from "@/services/networkService";
+import { networkService, useNetworkStatus } from "@/services/networkService";
+import { syncService } from "@/services/syncService";
 import OfflineBanner from "@/components/offline/OfflineBanner";
 
 import PrivateRoute from "./components/PrivateRoute";
@@ -332,11 +333,55 @@ function GlobalLinkInterceptor() {
   return null;
 }
 
+function SyncBootstrap() {
+  const { connected, initialized } = useNetworkStatus();
+  const bootedRef = useRef(false);
+
+  useEffect(() => {
+    if (!initialized) return;
+
+    if (!bootedRef.current) {
+      bootedRef.current = true;
+      void syncService.syncNow();
+    }
+  }, [initialized]);
+
+  useEffect(() => {
+    if (!initialized) return;
+    if (!connected) return;
+
+    void syncService.syncNow();
+  }, [connected, initialized]);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void syncService.syncNow();
+      }
+    };
+
+    const onFocus = () => {
+      void syncService.syncNow();
+    };
+
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
+
+  return null;
+}
+
 const AppRoutes = () => (
   <>
     <ScrollManager />
     <AuthAuditLogger />
     <GlobalLinkInterceptor />
+    <SyncBootstrap />
 
     <Suspense fallback={<div className="p-6 text-gray-600">Chargement…</div>}>
       <Routes>
@@ -571,21 +616,9 @@ const App = () => {
       try {
         await networkService.init();
 
-        /**
-         * Important :
-         * on hydrate d'abord la session locale Supabase.
-         * Cela aide à conserver l'accès lorsque l'utilisateur
-         * a déjà été connecté auparavant.
-         */
         const { error } = await supabase.auth.getSession();
         if (error) {
           console.warn("[App] getSession warning:", error.message);
-        }
-
-        const current = networkService.getStatus();
-        if (current.connected) {
-          const { syncService } = await import("@/services/syncService");
-          await syncService.processQueue();
         }
       } catch (error) {
         console.error("[App] boot error:", error);
@@ -596,21 +629,8 @@ const App = () => {
 
     void boot();
 
-    const unsubscribe = networkService.subscribe(() => {
-      const status = networkService.getStatus();
-
-      if (status.connected) {
-        import("@/services/syncService")
-          .then(({ syncService }) => syncService.processQueue())
-          .catch((error) => {
-            console.warn("[App] sync on reconnect warning:", error);
-          });
-      }
-    });
-
     return () => {
       mounted = false;
-      unsubscribe();
       networkService.destroy().catch((error) => {
         console.warn("[App] networkService.destroy warning:", error);
       });
