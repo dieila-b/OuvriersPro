@@ -48,7 +48,7 @@ type ContactRow = {
   created_at: string;
 
   worker?: {
-    id: string;
+    id: string | null;
     first_name: string | null;
     last_name: string | null;
     email: string | null;
@@ -184,9 +184,11 @@ async function uploadChatImage(params: {
 
 async function createSignedUrl(path: string): Promise<string | null> {
   try {
-    const { data, error } = await supabase.storage
+    const { data, error } = await supabase
+      .storage
       .from(BUCKET_CHAT)
       .createSignedUrl(path, SIGNED_URL_TTL);
+
     if (error) return null;
     return data?.signedUrl ?? null;
   } catch {
@@ -229,8 +231,10 @@ const ClientMessagesList: React.FC = () => {
     select: language === "fr" ? "Sélectionner" : "Select",
     loadingContacts: language === "fr" ? "Chargement des échanges…" : "Loading threads…",
     loadingMessages: language === "fr" ? "Chargement des messages…" : "Loading messages…",
-    loadMessagesError: language === "fr" ? "Impossible de charger les messages." : "Unable to load messages.",
-    loadContactsError: language === "fr" ? "Impossible de charger vos échanges." : "Unable to load your threads.",
+    loadMessagesError:
+      language === "fr" ? "Impossible de charger les messages." : "Unable to load messages.",
+    loadContactsError:
+      language === "fr" ? "Impossible de charger vos échanges." : "Unable to load your threads.",
     noContacts: language === "fr" ? "Aucun échange pour le moment." : "No conversation yet.",
     noUnread: language === "fr" ? "Aucun message non lu." : "No unread messages.",
     typeHere: language === "fr" ? "Écrivez votre message" : "Type your message",
@@ -340,6 +344,69 @@ const ClientMessagesList: React.FC = () => {
     await localStore.set(getMessagesCacheKey(contactId), items);
   };
 
+  const mergeAndDeduplicateMessages = (items: MessageRow[]) => {
+    const map = new Map<string, MessageRow>();
+
+    for (const item of items) {
+      const existing = map.get(item.id);
+      if (!existing) {
+        map.set(item.id, item);
+        continue;
+      }
+
+      map.set(item.id, {
+        ...existing,
+        ...item,
+        sync_status:
+          item.sync_status === "pending" || existing.sync_status === "pending"
+            ? "pending"
+            : item.sync_status ?? existing.sync_status ?? "synced",
+      });
+    }
+
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+  };
+
+  const loadPendingQueueMessagesForContact = async (contactId: string): Promise<MessageRow[]> => {
+    const queue = await readQueue();
+
+    return queue
+      .filter(
+        (item) =>
+          item.action_type === "SEND_CLIENT_MESSAGE" &&
+          item.status === "pending" &&
+          item.payload_json?.contact_id === contactId
+      )
+      .map((item) => ({
+        id: String(item.payload_json?.local_message_id || item.id),
+        contact_id: item.payload_json?.contact_id ?? null,
+        worker_id: item.payload_json?.worker_id ?? null,
+        client_id: item.payload_json?.client_id ?? null,
+        sender_role: "client" as const,
+        message: item.payload_json?.message ?? "",
+        created_at: item.payload_json?.created_at || item.created_at,
+        media_type: item.payload_json?.media_type ?? null,
+        media_path: item.payload_json?.media_path ?? null,
+        sync_status: "pending" as const,
+      }));
+  };
+
+  const refreshPendingMessagesForCurrentThread = async (contactId: string) => {
+    const cached = await loadCachedMessages(contactId);
+    const pending = await loadPendingQueueMessagesForContact(contactId);
+
+    const syncedOnly = cached.filter((m) => m.sync_status !== "pending");
+    const merged = mergeAndDeduplicateMessages([...syncedOnly, ...pending]);
+
+    await saveCachedMessages(contactId, merged);
+
+    if (selectedContactId === contactId) {
+      setMessages(merged);
+    }
+  };
+
   // Auth user id
   useEffect(() => {
     let mounted = true;
@@ -406,7 +473,9 @@ const ClientMessagesList: React.FC = () => {
 
           const firstUnread = cachedContacts.find((x) => isUnreadThread(x));
           if (cachedContacts.length > 0) {
-            setSelectedContactId(filter === "unread" ? firstUnread?.id ?? cachedContacts[0].id : cachedContacts[0].id);
+            setSelectedContactId(
+              filter === "unread" ? firstUnread?.id ?? cachedContacts[0].id : cachedContacts[0].id
+            );
           } else {
             setSelectedContactId(null);
           }
@@ -569,8 +638,13 @@ const ClientMessagesList: React.FC = () => {
       try {
         const readCacheOnly = async () => {
           const cached = await loadCachedMessages(selectedContactId);
+          const pendingQueueItems = await loadPendingQueueMessagesForContact(selectedContactId);
+          const merged = mergeAndDeduplicateMessages([...cached, ...pendingQueueItems]);
+
+          await saveCachedMessages(selectedContactId, merged);
+
           if (!mounted) return;
-          setMessages(cached);
+          setMessages(merged);
           setMessagesFromCache(true);
         };
 
@@ -590,7 +664,10 @@ const ClientMessagesList: React.FC = () => {
         let serverMessages: MessageRow[] = [];
 
         if (!attempt1.error) {
-          serverMessages = (attempt1.data || []) as MessageRow[];
+          serverMessages = ((attempt1.data || []) as MessageRow[]).map((m) => ({
+            ...m,
+            sync_status: "synced",
+          }));
         } else {
           const attempt2 = await supabase
             .from("op_client_worker_messages")
@@ -599,16 +676,14 @@ const ClientMessagesList: React.FC = () => {
             .order("created_at", { ascending: true });
 
           if (attempt2.error) throw attempt2.error;
-          serverMessages = (attempt2.data || []) as MessageRow[];
+          serverMessages = ((attempt2.data || []) as MessageRow[]).map((m) => ({
+            ...m,
+            sync_status: "synced",
+          }));
         }
 
-        const cached = await loadCachedMessages(selectedContactId);
-        const pendingOnly = cached.filter((m) => m.sync_status === "pending");
-        const serverIds = new Set(serverMessages.map((m) => m.id));
-
-        const merged = [...serverMessages, ...pendingOnly.filter((m) => !serverIds.has(m.id))].sort(
-          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        );
+        const pendingQueueItems = await loadPendingQueueMessagesForContact(selectedContactId);
+        const merged = mergeAndDeduplicateMessages([...serverMessages, ...pendingQueueItems]);
 
         if (!mounted) return;
 
@@ -620,9 +695,15 @@ const ClientMessagesList: React.FC = () => {
         if (!mounted) return;
 
         const cached = await loadCachedMessages(selectedContactId);
-        setMessages(cached);
+        const pendingQueueItems = await loadPendingQueueMessagesForContact(selectedContactId);
+        const merged = mergeAndDeduplicateMessages([...cached, ...pendingQueueItems]);
+
+        setMessages(merged);
         setMessagesFromCache(true);
-        if (!cached.length) {
+
+        await saveCachedMessages(selectedContactId, merged);
+
+        if (!merged.length) {
           setMessagesError(t.loadMessagesError);
         }
       } finally {
@@ -666,11 +747,25 @@ const ClientMessagesList: React.FC = () => {
     if (!stillVisible) setSelectedContactId(displayedContacts[0].id);
   }, [filter, displayedContacts, selectedContactId]);
 
+  useEffect(() => {
+    if (!selectedContactId) return;
+
+    const onStorageSync = () => {
+      void refreshPendingMessagesForCurrentThread(selectedContactId);
+    };
+
+    window.addEventListener("storage", onStorageSync);
+    window.addEventListener("focus", onStorageSync);
+
+    return () => {
+      window.removeEventListener("storage", onStorageSync);
+      window.removeEventListener("focus", onStorageSync);
+    };
+  }, [selectedContactId]);
+
   const persistMessageLocally = async (contactId: string, nextMessage: MessageRow) => {
     const cached = await loadCachedMessages(contactId);
-    const merged = [...cached, nextMessage].sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
+    const merged = mergeAndDeduplicateMessages([...cached, nextMessage]);
     await saveCachedMessages(contactId, merged);
     setMessages(merged);
   };
@@ -716,6 +811,7 @@ const ClientMessagesList: React.FC = () => {
           retry_count: 0,
         });
 
+        await refreshPendingMessagesForCurrentThread(selectedContact.id);
         setNewMessage("");
         setMessagesError(t.savedOffline);
         return;
@@ -1014,13 +1110,16 @@ const ClientMessagesList: React.FC = () => {
                       const isClient = m.sender_role === "client";
                       const hasImage = (m.media_type || "") === "image" && !!m.media_path;
                       const imgUrl = hasImage && m.media_path ? signedUrlByPath[m.media_path] : null;
+                      const isPending = m.sync_status === "pending";
 
                       return (
                         <div key={m.id} className={`mb-3 flex ${isClient ? "justify-end" : "justify-start"}`}>
                           <div
                             className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
                               isClient
-                                ? "bg-blue-600 text-white rounded-br-sm"
+                                ? isPending
+                                  ? "bg-amber-500 text-white rounded-br-sm"
+                                  : "bg-blue-600 text-white rounded-br-sm"
                                 : "bg-slate-100 text-slate-800 rounded-bl-sm"
                             }`}
                           >
@@ -1028,8 +1127,8 @@ const ClientMessagesList: React.FC = () => {
                               <span>
                                 {isClient ? t.you : t.workerLabel} • {formatDateTime(m.created_at)}
                               </span>
-                              {m.sync_status === "pending" && (
-                                <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-medium">
+                              {isPending && (
+                                <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-medium">
                                   {t.pending}
                                 </span>
                               )}
@@ -1097,7 +1196,11 @@ const ClientMessagesList: React.FC = () => {
 
                 <Button
                   type="button"
-                  className="flex items-center gap-1 bg-orange-500 hover:bg-orange-600 rounded-full"
+                  className={`flex items-center gap-1 rounded-full ${
+                    connected
+                      ? "bg-orange-500 hover:bg-orange-600"
+                      : "bg-amber-500 hover:bg-amber-600"
+                  }`}
                   onClick={handleSend}
                   disabled={!selectedContact || !newMessage.trim() || sending || sendingImage}
                 >
