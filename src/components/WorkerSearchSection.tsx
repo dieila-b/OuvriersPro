@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "re
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/lib/supabase";
+import { useNetworkStatus } from "@/services/networkService";
+import { localStore } from "@/services/localStore";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -20,6 +22,8 @@ import {
   SlidersHorizontal,
   ChevronDown,
   ChevronUp,
+  WifiOff,
+  Database,
 } from "lucide-react";
 
 type DbWorker = {
@@ -94,6 +98,9 @@ type SearchPayload = {
 
 const DEFAULT_MAX_PRICE = 300000;
 const DEFAULT_RADIUS_KM = 10;
+const WORKERS_CACHE_KEY = "cached_workers_list_v1";
+const WORKERS_CACHE_UPDATED_AT_KEY = "cached_workers_list_updated_at_v1";
+const LAST_SEARCH_KEY = "op:last_search";
 
 const getDeviceDefaultView = (): ViewMode => {
   try {
@@ -134,7 +141,7 @@ const haversineKm = (lat1: number, lon1: number, lat2: number, lon2: number) => 
   const dLon = toRad(lon2 - lon1);
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(toRad(dLon * 180 / Math.PI) / 2) ** 2;
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
 
   return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
@@ -222,8 +229,38 @@ function paramsToFilters(searchParams: URLSearchParams): Filters {
   };
 }
 
+const normalizeWorker = (w: DbWorker, cms: (k: string, fr: string, en: string) => string): WorkerCard => {
+  const effectiveRating = (w.computed_average_rating ?? w.average_rating ?? 0) as number;
+  const effectiveCount = (w.computed_rating_count ?? w.rating_count ?? 0) as number;
+
+  const lat = typeof w.latitude === "number" ? w.latitude : null;
+  const lng = typeof w.longitude === "number" ? w.longitude : null;
+
+  return {
+    id: w.id,
+    name:
+      (((w.first_name || "") + (w.last_name ? ` ${w.last_name}` : "")).trim() ||
+        cms("search.worker.fallback_name", "Ouvrier", "Worker")) as string,
+    job: w.profession ?? "",
+    country: w.country ?? "",
+    region: w.region ?? "",
+    city: w.city ?? "",
+    commune: w.commune ?? "",
+    district: w.district ?? "",
+    experienceYears: w.years_experience ?? 0,
+    hourlyRate: w.hourly_rate ?? 0,
+    currency: w.currency ?? "GNF",
+    rating: Number(effectiveRating) || 0,
+    ratingCount: Number(effectiveCount) || 0,
+    latitude: lat,
+    longitude: lng,
+    distanceKm: null,
+  };
+};
+
 const WorkerSearchSection: React.FC = () => {
   const { t, language } = useLanguage();
+  const { connected, initialized } = useNetworkStatus();
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -397,6 +434,9 @@ const WorkerSearchSection: React.FC = () => {
   const [applied, setApplied] = useState<Filters>(() => createDefaultFilters());
   const [draft, setDraft] = useState<Filters>(() => createDefaultFilters());
 
+  const [usedOfflineCache, setUsedOfflineCache] = useState(false);
+  const [cacheUpdatedAt, setCacheUpdatedAt] = useState<string | null>(null);
+
   const applyTimerRef = useRef<number | null>(null);
 
   const clearApplyTimer = () => {
@@ -406,12 +446,32 @@ const WorkerSearchSection: React.FC = () => {
     }
   };
 
+  const persistLastSearchPayload = async (nextApplied: Filters) => {
+    const payload: SearchPayload = {};
+    if (nextApplied.keyword) payload.keyword = nextApplied.keyword;
+    if (nextApplied.district) payload.district = nextApplied.district;
+    if (nextApplied.near) payload.near = "1";
+    if (nextApplied.near && nextApplied.lat != null && nextApplied.lng != null) {
+      payload.lat = String(nextApplied.lat);
+      payload.lng = String(nextApplied.lng);
+    }
+
+    try {
+      await localStore.set(LAST_SEARCH_KEY, payload);
+    } catch {}
+
+    try {
+      sessionStorage.setItem(LAST_SEARCH_KEY, JSON.stringify(payload));
+    } catch {}
+  };
+
   const applyFiltersObject = (nextApplied: Filters, opts?: { immediate?: boolean }) => {
     clearApplyTimer();
 
     const run = () => {
       setApplied(nextApplied);
       setSearchParams(filtersToParams(nextApplied), { replace: true });
+      void persistLastSearchPayload(nextApplied);
       if (isSearchRoute) scrollToResultsTop({ behavior: "auto" });
     };
 
@@ -430,6 +490,23 @@ const WorkerSearchSection: React.FC = () => {
   useEffect(() => () => clearApplyTimer(), []);
 
   useEffect(() => {
+    const readCache = async () => {
+      const cachedWorkers = await localStore.get<WorkerCard[]>(WORKERS_CACHE_KEY);
+      const cachedUpdatedAt = await localStore.get<string>(WORKERS_CACHE_UPDATED_AT_KEY);
+
+      if (cachedWorkers?.length) {
+        setWorkers(cachedWorkers);
+        setUsedOfflineCache(true);
+        setCacheUpdatedAt(cachedUpdatedAt ?? null);
+        return true;
+      }
+
+      setWorkers([]);
+      setUsedOfflineCache(true);
+      setCacheUpdatedAt(cachedUpdatedAt ?? null);
+      return false;
+    };
+
     const fetchFrom = async (source: "op_ouvriers_with_ratings" | "op_ouvriers") => {
       const baseFields = [
         "id",
@@ -466,6 +543,20 @@ const WorkerSearchSection: React.FC = () => {
       setError(null);
 
       try {
+        if (!connected) {
+          const ok = await readCache();
+          if (!ok) {
+            setError(
+              cms(
+                "search.error.offline_no_cache",
+                "Aucune donnée locale disponible pour le moment. Connectez-vous une fois pour synchroniser les prestataires.",
+                "No local data is available yet. Go online once to sync workers."
+              )
+            );
+          }
+          return;
+        }
+
         let res = await fetchFrom("op_ouvriers_with_ratings");
 
         if (res.error) {
@@ -477,55 +568,43 @@ const WorkerSearchSection: React.FC = () => {
 
         const rows = (res.data ?? []) as unknown as DbWorker[];
 
-        const mapped: WorkerCard[] = rows.map((w) => {
-          const effectiveRating = (w.computed_average_rating ?? w.average_rating ?? 0) as number;
-          const effectiveCount = (w.computed_rating_count ?? w.rating_count ?? 0) as number;
-
-          const lat = typeof w.latitude === "number" ? w.latitude : null;
-          const lng = typeof w.longitude === "number" ? w.longitude : null;
-
-          return {
-            id: w.id,
-            name:
-              (((w.first_name || "") + (w.last_name ? ` ${w.last_name}` : "")).trim() ||
-                cms("search.worker.fallback_name", "Ouvrier", "Worker")) as string,
-            job: w.profession ?? "",
-            country: w.country ?? "",
-            region: w.region ?? "",
-            city: w.city ?? "",
-            commune: w.commune ?? "",
-            district: w.district ?? "",
-            experienceYears: w.years_experience ?? 0,
-            hourlyRate: w.hourly_rate ?? 0,
-            currency: w.currency ?? "GNF",
-            rating: Number(effectiveRating) || 0,
-            ratingCount: Number(effectiveCount) || 0,
-            latitude: lat,
-            longitude: lng,
-            distanceKm: null,
-          };
-        });
+        const mapped: WorkerCard[] = rows.map((w) => normalizeWorker(w, cms));
 
         setWorkers(mapped);
+        setUsedOfflineCache(false);
+
+        const syncedAt = new Date().toISOString();
+        setCacheUpdatedAt(syncedAt);
+
+        await Promise.all([
+          localStore.set(WORKERS_CACHE_KEY, mapped),
+          localStore.set(WORKERS_CACHE_UPDATED_AT_KEY, syncedAt),
+        ]);
       } catch (err: any) {
         console.error("WorkerSearchSection fetch error:", err);
 
-        setWorkers([]);
-        setError(
-          cms(
-            "search.error.load_workers",
-            "Impossible de charger les professionnels pour le moment.",
-            "Unable to load professionals at the moment."
-          ) + (err?.message ? ` (${err.message})` : "")
-        );
+        const ok = await readCache();
+
+        if (!ok) {
+          setWorkers([]);
+          setError(
+            cms(
+              "search.error.load_workers",
+              "Impossible de charger les professionnels pour le moment.",
+              "Unable to load professionals at the moment."
+            ) + (err?.message ? ` (${err.message})` : "")
+          );
+        }
       } finally {
         setLoading(false);
       }
     };
 
-    fetchWorkers();
+    if (initialized) {
+      void fetchWorkers();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [language]);
+  }, [language, connected, initialized]);
 
   const applyExternalFilters = (f: Filters) => {
     applyingExternalRef.current = true;
@@ -557,14 +636,17 @@ const WorkerSearchSection: React.FC = () => {
       return;
     }
 
-    const stored = safeParseJson<SearchPayload>(sessionStorage.getItem("op:last_search"));
-    if (stored && (stored.keyword || stored.district || stored.lat || stored.lng || stored.near)) {
+    const storedSession = safeParseJson<SearchPayload>(sessionStorage.getItem(LAST_SEARCH_KEY));
+    if (
+      storedSession &&
+      (storedSession.keyword || storedSession.district || storedSession.lat || storedSession.lng || storedSession.near)
+    ) {
       const next = new URLSearchParams(searchParams);
-      if (stored.keyword) next.set("keyword", stored.keyword);
-      if (stored.district) next.set("district", stored.district);
-      if (stored.near) next.set("near", stored.near);
-      if (stored.lat) next.set("lat", stored.lat);
-      if (stored.lng) next.set("lng", stored.lng);
+      if (storedSession.keyword) next.set("keyword", storedSession.keyword);
+      if (storedSession.district) next.set("district", storedSession.district);
+      if (storedSession.near) next.set("near", storedSession.near);
+      if (storedSession.lat) next.set("lat", storedSession.lat);
+      if (storedSession.lng) next.set("lng", storedSession.lng);
       setSearchParams(next, { replace: true });
       initializedRef.current = true;
       return;
@@ -631,9 +713,31 @@ const WorkerSearchSection: React.FC = () => {
       }
     };
 
+    const onSearchBootstrap = (evt: any) => {
+      const payload: SearchPayload | undefined = evt?.detail;
+      if (!payload) return;
+      if (searchParams.toString()) return;
+
+      const next: Record<string, string> = {};
+      if (payload.keyword) next.keyword = payload.keyword;
+      if (payload.district) next.district = payload.district;
+      if (payload.near) next.near = payload.near;
+      if (payload.lat) next.lat = payload.lat;
+      if (payload.lng) next.lng = payload.lng;
+
+      if (Object.keys(next).length) {
+        setSearchParams(next, { replace: true });
+      }
+    };
+
     window.addEventListener("op:search", onSearch as EventListener);
-    return () => window.removeEventListener("op:search", onSearch as EventListener);
-  }, [setSearchParams, isSearchRoute]);
+    window.addEventListener("op:search-bootstrap", onSearchBootstrap as EventListener);
+
+    return () => {
+      window.removeEventListener("op:search", onSearch as EventListener);
+      window.removeEventListener("op:search-bootstrap", onSearchBootstrap as EventListener);
+    };
+  }, [setSearchParams, isSearchRoute, searchParams]);
 
   const jobs = useMemo(
     () => Array.from(new Set(workers.map((w) => w.job).filter((j) => j && j.trim().length > 0))),
@@ -713,9 +817,21 @@ const WorkerSearchSection: React.FC = () => {
       .map((w) => ({ ...w, distanceKm: computeDistance(w, f) }))
       .filter((w) => {
         const kw = f.keyword.trim().toLowerCase();
-        const matchKeyword =
-          !kw || w.name.toLowerCase().includes(kw) || w.job.toLowerCase().includes(kw);
 
+        const searchPool = [
+          w.name,
+          w.job,
+          w.country,
+          w.region,
+          w.city,
+          w.commune,
+          w.district,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        const matchKeyword = !kw || searchPool.includes(kw);
         const matchJob = f.job === "all" || w.job === f.job;
         const matchPrice = w.hourlyRate <= f.maxPrice;
         const matchRating = w.rating >= f.minRating;
@@ -759,7 +875,13 @@ const WorkerSearchSection: React.FC = () => {
         if (db == null) return -1;
         return da - db;
       });
+      return list;
     }
+
+    list.sort((a, b) => {
+      if (b.rating !== a.rating) return b.rating - a.rating;
+      return a.name.localeCompare(b.name);
+    });
 
     return list;
   }, [workers, applied]);
@@ -771,6 +893,7 @@ const WorkerSearchSection: React.FC = () => {
     setApplied(defaults);
     setSearchParams({}, { replace: true });
     setGeoError(null);
+    void persistLastSearchPayload(defaults);
     window.setTimeout(() => (applyingExternalRef.current = false), 0);
     if (isSearchRoute) scrollToResultsTop({ behavior: "auto" });
   };
@@ -896,6 +1019,18 @@ const WorkerSearchSection: React.FC = () => {
     "Loading professionals..."
   );
 
+  const offlineTitle = cms("search.offline.title", "Mode hors connexion", "Offline mode");
+  const offlineDesc = cms(
+    "search.offline.desc",
+    "Affichage des prestataires synchronisés jusqu’à la dernière connexion.",
+    "Showing workers synced up to the last connection."
+  );
+  const offlineCacheLabel = cms(
+    "search.offline.cache",
+    "Résultats chargés depuis le cache local.",
+    "Results loaded from local cache."
+  );
+
   const hasAnyGeoWorkers = useMemo(
     () => workers.some((w) => w.latitude != null && w.longitude != null),
     [workers]
@@ -948,7 +1083,11 @@ const WorkerSearchSection: React.FC = () => {
   const getWorkerSubtitle = (w: WorkerCard) => {
     const primary = w.job?.trim();
     const location = [w.city, w.commune, w.district].filter(Boolean).join(" • ");
-    return primary || location || cms("search.card.subtitle", "Prestataire qualifié", "Qualified provider");
+    return (
+      primary ||
+      location ||
+      cms("search.card.subtitle", "Prestataire qualifié", "Qualified provider")
+    );
   };
 
   const getWorkerMetaLine = (w: WorkerCard) =>
@@ -966,6 +1105,21 @@ const WorkerSearchSection: React.FC = () => {
     ));
   };
 
+  const formattedCacheDate = useMemo(() => {
+    if (!cacheUpdatedAt) return null;
+    try {
+      return new Date(cacheUpdatedAt).toLocaleString(language === "fr" ? "fr-FR" : "en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return null;
+    }
+  }, [cacheUpdatedAt, language]);
+
   return (
     <section
       ref={sectionRef}
@@ -974,6 +1128,30 @@ const WorkerSearchSection: React.FC = () => {
     >
       <div className="mx-auto w-full px-4 sm:px-6 lg:px-10 2xl:px-16">
         <div ref={topAnchorRef} />
+
+        {!connected && initialized && (
+          <div className="mb-4 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <div className="font-medium">{offlineTitle}</div>
+              <div className="text-xs text-amber-800 mt-1">{offlineDesc}</div>
+            </div>
+          </div>
+        )}
+
+        {usedOfflineCache && (
+          <div className="mb-4 flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            <Database className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <div className="font-medium">{offlineCacheLabel}</div>
+              {formattedCacheDate && (
+                <div className="text-xs text-sky-800 mt-1">
+                  {language === "fr" ? "Dernière synchronisation :" : "Last sync:"} {formattedCacheDate}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="mb-6 overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
           <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
@@ -1450,7 +1628,9 @@ const WorkerSearchSection: React.FC = () => {
                                 </span>
                               </span>
 
-                              <span>{w.experienceYears} {yearsSuffix}</span>
+                              <span>
+                                {w.experienceYears} {yearsSuffix}
+                              </span>
                             </div>
 
                             <Button
@@ -1518,7 +1698,9 @@ const WorkerSearchSection: React.FC = () => {
                                 <span className="font-medium">
                                   {w.rating.toFixed(1)} ({w.ratingCount})
                                 </span>
-                                <span>{w.experienceYears} {yearsSuffix}</span>
+                                <span>
+                                  {w.experienceYears} {yearsSuffix}
+                                </span>
                                 {applied.near && appliedHasCoords && (
                                   <span className="text-blue-700">
                                     {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
