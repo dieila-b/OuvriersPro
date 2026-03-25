@@ -11,8 +11,8 @@ interface OpUserProfile {
   id: string;
   full_name: string | null;
   phone: string | null;
-  role: UserRole;
   email?: string | null;
+  role: UserRole;
 }
 
 const PROFILE_CACHE_KEY_PREFIX = "cached_op_user_profile";
@@ -78,15 +78,6 @@ async function persistProfile(profile: OpUserProfile) {
   }
 }
 
-async function clearProfileCache(userId?: string | null) {
-  try {
-    if (!userId) return;
-    await localStore.remove(getProfileCacheKey(userId));
-  } catch (error) {
-    console.warn("[useAuthProfile] clearProfileCache warning:", error);
-  }
-}
-
 async function fetchProfile(userId: string): Promise<OpUserProfile | null> {
   const { connected } = networkService.getStatus();
 
@@ -135,17 +126,6 @@ export function useAuthProfile() {
       if (mountedRef.current) fn();
     };
 
-    const clearLocalAuth = async (userId?: string | null) => {
-      try {
-        await Promise.all([
-          authCache.clear(),
-          clearProfileCache(userId),
-        ]);
-      } catch (error) {
-        console.warn("[useAuthProfile] clearLocalAuth warning:", error);
-      }
-    };
-
     const applyCachedUser = async () => {
       const cachedUserId = await authCache.getUserId();
 
@@ -179,7 +159,6 @@ export function useAuthProfile() {
         }
 
         const cachedUserId = await authCache.getUserId();
-
         if (cachedUserId) {
           const cachedProfile = await readCachedProfile(cachedUserId);
 
@@ -192,10 +171,6 @@ export function useAuthProfile() {
           });
           return;
         }
-
-        if (!mountedRef.current || seq !== seqRef.current) return;
-
-        await clearLocalAuth();
 
         safe(() => {
           setUser(null);
@@ -211,11 +186,7 @@ export function useAuthProfile() {
         u.user_metadata?.role ?? u.app_metadata?.role ?? null
       );
 
-      try {
-        await authCache.saveUser(u.id, metaRole);
-      } catch (error) {
-        console.warn("[useAuthProfile] save meta role warning:", error);
-      }
+      await authCache.saveUser(u.id, metaRole);
 
       const p = await fetchProfile(u.id);
 
