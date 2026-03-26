@@ -21,7 +21,6 @@ import {
   Loader2,
   WifiOff,
 } from "lucide-react";
-
 import { Capacitor } from "@capacitor/core";
 import { Camera as CapCamera, CameraResultType, CameraSource } from "@capacitor/camera";
 
@@ -114,6 +113,7 @@ async function fileFromWebPick(): Promise<File | null> {
 
 async function blobFromCapacitorCamera(): Promise<{ blob: Blob; mimeType: string } | null> {
   const perm = await CapCamera.requestPermissions();
+
   if (perm.camera !== "granted" && perm.photos !== "granted") {
     throw new Error("Permission caméra/photos refusée");
   }
@@ -136,7 +136,7 @@ async function blobFromCapacitorCamera(): Promise<{ blob: Blob; mimeType: string
 async function uploadChatImage(params: {
   contactId: string;
   senderUserId: string;
-}): Promise<{ storagePath: string; mediaType: "image" }> {
+}): Promise<{ storagePath: string; mediaType: "image" } | null> {
   const { contactId, senderUserId } = params;
 
   let blob: Blob | null = null;
@@ -144,14 +144,14 @@ async function uploadChatImage(params: {
 
   if (Capacitor.isNativePlatform()) {
     const cap = await blobFromCapacitorCamera();
-    if (!cap) throw new Error("Aucune image sélectionnée");
+    if (!cap) return null;
     blob = cap.blob;
     mimeType = cap.mimeType;
   } else {
-    const f = await fileFromWebPick();
-    if (!f) throw new Error("Aucune image sélectionnée");
-    blob = f;
-    mimeType = f.type || "image/jpeg";
+    const file = await fileFromWebPick();
+    if (!file) return null;
+    blob = file;
+    mimeType = file.type || "image/jpeg";
   }
 
   const ext = extFromMime(mimeType);
@@ -172,6 +172,7 @@ async function createSignedUrl(path: string): Promise<string | null> {
     const { data, error } = await supabase.storage
       .from(BUCKET_CHAT)
       .createSignedUrl(path, SIGNED_URL_TTL);
+
     if (error) return null;
     return data?.signedUrl ?? null;
   } catch {
@@ -220,6 +221,12 @@ const ClientMessagesPage: React.FC = () => {
       language === "fr" ? "Impossible de charger les messages." : "Unable to load messages.",
     loadContactsError:
       language === "fr" ? "Impossible de charger vos échanges." : "Unable to load your threads.",
+    sendError:
+      language === "fr" ? "Impossible d'envoyer votre message." : "Unable to send your message.",
+    imageSendError:
+      language === "fr" ? "Impossible d'envoyer l'image." : "Unable to send image.",
+    mustBeLoggedIn:
+      language === "fr" ? "Vous devez être connecté." : "You must be logged in.",
     noContacts:
       language === "fr" ? "Aucun échange pour le moment." : "No conversation yet.",
     noUnread:
@@ -261,8 +268,11 @@ const ClientMessagesPage: React.FC = () => {
       language === "fr"
         ? "L’envoi d’image reste disponible uniquement en ligne pour le moment."
         : "Image sending is online-only for now.",
-    loadingImage:
-      language === "fr" ? "Chargement de l’image…" : "Loading image…",
+    loadingImage: language === "fr" ? "Chargement de l’image…" : "Loading image…",
+    imageDbColumnsError:
+      language === "fr"
+        ? "Impossible d’enregistrer l’image en base. Vérifie que la table op_client_worker_messages contient media_type et media_path."
+        : "Unable to save image in DB. Ensure op_client_worker_messages has media_type and media_path.",
   };
 
   const initials = (name: string | null) =>
@@ -315,6 +325,30 @@ const ClientMessagesPage: React.FC = () => {
     const raw = (contact.message || "").replace(/\s+/g, " ").trim();
     if (raw) return raw;
     return t.threadFallback;
+  };
+
+  const isConnectivityError = (error: unknown) => {
+    if (!connected) return true;
+
+    const msg =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : JSON.stringify(error || "");
+
+    const text = String(msg || "").toLowerCase();
+
+    return (
+      text.includes("failed to fetch") ||
+      text.includes("networkerror") ||
+      text.includes("network request failed") ||
+      text.includes("load failed") ||
+      text.includes("offline") ||
+      text.includes("fetch") ||
+      text.includes("timeout") ||
+      text.includes("timed out")
+    );
   };
 
   const loadCachedMessages = async (contactId: string) => {
@@ -389,7 +423,6 @@ const ClientMessagesPage: React.FC = () => {
     nextContactsOverride?: ContactRow[]
   ) => {
     const nextStatus = computeThreadSyncStatus(threadMessages);
-
     const currentUserId = authUserId || (await authCache.getUserId());
     if (!currentUserId) return;
 
@@ -561,6 +594,60 @@ const ClientMessagesPage: React.FC = () => {
     await localStore.set(getContactsCacheKey(currentUserId), nextContacts);
   };
 
+  const persistMessageLocally = async (contactId: string, nextMessage: MessageRow) => {
+    const cached = await loadCachedMessages(contactId);
+    const merged = mergeAndDeduplicateMessages([...cached, nextMessage]);
+    await saveCachedMessages(contactId, merged);
+    await persistThreadSyncStatusFromMessages(contactId, merged);
+    setMessages(merged);
+  };
+
+  const queueTextMessageOffline = async (params: {
+    contactId: string;
+    workerId: string | null;
+    clientProfileId: string | null;
+    userId: string;
+    message: string;
+  }) => {
+    const { contactId, workerId, clientProfileId, userId, message } = params;
+
+    const localMessage: MessageRow = {
+      id: createOfflineId("local_msg"),
+      contact_id: contactId,
+      worker_id: workerId,
+      client_id: clientProfileId,
+      sender_role: "client",
+      message,
+      created_at: new Date().toISOString(),
+      sync_status: "pending",
+    };
+
+    await persistMessageLocally(contactId, localMessage);
+
+    await syncService.enqueue({
+      id: createOfflineId("queue"),
+      action_type: "SEND_CLIENT_MESSAGE",
+      table_name: "op_client_worker_messages",
+      payload_json: {
+        local_message_id: localMessage.id,
+        user_id: userId,
+        contact_id: contactId,
+        worker_id: workerId,
+        client_id: clientProfileId,
+        sender_role: "client",
+        message,
+        created_at: localMessage.created_at,
+      },
+      created_at: localMessage.created_at,
+    });
+
+    await refreshPendingMessagesForCurrentThread(contactId);
+    await recomputeAllThreadSyncStatuses();
+
+    setNewMessage("");
+    setMessagesError(t.savedOffline);
+  };
+
   useEffect(() => {
     let mounted = true;
 
@@ -607,7 +694,7 @@ const ClientMessagesPage: React.FC = () => {
         const currentUserId = authUserId || (await authCache.getUserId());
 
         if (!currentUserId) {
-          throw new Error(language === "fr" ? "Vous devez être connecté." : "You must be logged in.");
+          throw new Error(t.mustBeLoggedIn);
         }
 
         const clientCacheKey = getClientCacheKey(currentUserId);
@@ -774,7 +861,9 @@ const ClientMessagesPage: React.FC = () => {
           await localStore.set(getContactsCacheKey(currentUserId), nextContacts);
         }
       }
-    } catch {}
+    } catch {
+      // noop
+    }
   };
 
   useEffect(() => {
@@ -859,7 +948,9 @@ const ClientMessagesPage: React.FC = () => {
         signingInFlightRef.current[p] = true;
 
         const url = await createSignedUrl(p);
-        if (url) setSignedUrlByPath((prev) => ({ ...prev, [p]: url }));
+        if (url) {
+          setSignedUrlByPath((prev) => ({ ...prev, [p]: url }));
+        }
 
         signingInFlightRef.current[p] = false;
       }
@@ -872,13 +963,20 @@ const ClientMessagesPage: React.FC = () => {
       setSelectedContactId(null);
       return;
     }
+
     const stillVisible = displayedContacts.some((c) => c.id === selectedContactId);
-    if (!stillVisible) setSelectedContactId(displayedContacts[0].id);
+    if (!stillVisible) {
+      setSelectedContactId(displayedContacts[0].id);
+    }
   }, [filter, displayedContacts, selectedContactId]);
 
   useEffect(() => {
     const onSyncSignal = () => {
       void recomputeAllThreadSyncStatuses();
+
+      if (connected) {
+        void syncService.syncNow();
+      }
 
       if (!selectedContactId) return;
 
@@ -890,16 +988,41 @@ const ClientMessagesPage: React.FC = () => {
       void reconcileThreadFromServer(selectedContactId);
     };
 
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        onSyncSignal();
+      }
+    };
+
     window.addEventListener("storage", onSyncSignal);
     window.addEventListener("focus", onSyncSignal);
-    window.addEventListener("visibilitychange", onSyncSignal);
+    window.addEventListener("online", onSyncSignal);
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       window.removeEventListener("storage", onSyncSignal);
       window.removeEventListener("focus", onSyncSignal);
-      window.removeEventListener("visibilitychange", onSyncSignal);
+      window.removeEventListener("online", onSyncSignal);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [selectedContactId, connected, authUserId, contacts]);
+
+  useEffect(() => {
+    if (!connected || !initialized || !authUserId) return;
+
+    void (async () => {
+      try {
+        await syncService.syncNow();
+        await recomputeAllThreadSyncStatuses();
+
+        if (selectedContactId) {
+          await reconcileThreadFromServer(selectedContactId);
+        }
+      } catch (e) {
+        console.warn("[ClientMessagesPage] initial sync pass failed", e);
+      }
+    })();
+  }, [connected, initialized, authUserId, selectedContactId]);
 
   useEffect(() => {
     if (!connected) return;
@@ -925,65 +1048,36 @@ const ClientMessagesPage: React.FC = () => {
     };
   }, [selectedContactId, connected, authUserId, contacts]);
 
-  const persistMessageLocally = async (contactId: string, nextMessage: MessageRow) => {
-    const cached = await loadCachedMessages(contactId);
-    const merged = mergeAndDeduplicateMessages([...cached, nextMessage]);
-    await saveCachedMessages(contactId, merged);
-    await persistThreadSyncStatusFromMessages(contactId, merged);
-    setMessages(merged);
-  };
-
   const handleSend = async () => {
-    if (!client || !selectedContact || !newMessage.trim()) return;
+    if (!selectedContact || !newMessage.trim()) return;
 
     const content = newMessage.trim();
     setSending(true);
     setMessagesError(null);
 
     try {
+      const resolvedUserId = authUserId || (await authCache.getUserId());
+      if (!resolvedUserId) {
+        throw new Error(t.mustBeLoggedIn);
+      }
+
+      const resolvedClientProfileId = client?.id || selectedContact.client_id || null;
+
       if (!connected) {
-        const localMessage: MessageRow = {
-          id: createOfflineId("local_msg"),
-          contact_id: selectedContact.id,
-          worker_id: selectedContact.worker_id,
-          client_id: client.id,
-          sender_role: "client",
+        await queueTextMessageOffline({
+          contactId: selectedContact.id,
+          workerId: selectedContact.worker_id,
+          clientProfileId: resolvedClientProfileId,
+          userId: resolvedUserId,
           message: content,
-          created_at: new Date().toISOString(),
-          sync_status: "pending",
-        };
-
-        await persistMessageLocally(selectedContact.id, localMessage);
-
-        await syncService.enqueue({
-          id: createOfflineId("queue"),
-          action_type: "SEND_CLIENT_MESSAGE",
-          table_name: "op_client_worker_messages",
-          payload_json: {
-            local_message_id: localMessage.id,
-            user_id: authUserId,
-            contact_id: selectedContact.id,
-            worker_id: selectedContact.worker_id,
-            client_id: client.id,
-            sender_role: "client",
-            message: content,
-            created_at: localMessage.created_at,
-          },
-          created_at: localMessage.created_at,
         });
-
-        await refreshPendingMessagesForCurrentThread(selectedContact.id);
-        await recomputeAllThreadSyncStatuses();
-
-        setNewMessage("");
-        setMessagesError(t.savedOffline);
         return;
       }
 
       const payload = {
         contact_id: selectedContact.id,
         worker_id: selectedContact.worker_id,
-        client_id: client.id,
+        client_id: resolvedClientProfileId,
         sender_role: "client" as const,
         message: content,
       };
@@ -1004,10 +1098,27 @@ const ClientMessagesPage: React.FC = () => {
       void reconcileThreadFromServer(selectedContact.id);
     } catch (e) {
       console.error("ClientMessagesPage send error", e);
+
+      try {
+        const resolvedUserId = authUserId || (await authCache.getUserId());
+        const resolvedClientProfileId = client?.id || selectedContact.client_id || null;
+
+        if (resolvedUserId && selectedContact && isConnectivityError(e)) {
+          await queueTextMessageOffline({
+            contactId: selectedContact.id,
+            workerId: selectedContact.worker_id,
+            clientProfileId: resolvedClientProfileId,
+            userId: resolvedUserId,
+            message: content,
+          });
+          return;
+        }
+      } catch (fallbackError) {
+        console.error("ClientMessagesPage offline fallback failed", fallbackError);
+      }
+
       setMessagesError(
-        language === "fr"
-          ? "Impossible d'envoyer votre message."
-          : "Unable to send your message."
+        e instanceof Error && e.message ? e.message : t.sendError
       );
     } finally {
       setSending(false);
@@ -1015,32 +1126,43 @@ const ClientMessagesPage: React.FC = () => {
   };
 
   const handleSendImage = async () => {
-    if (!client || !selectedContact) return;
+    if (!selectedContact) return;
 
     if (!connected) {
       setMessagesError(t.imageOffline);
       return;
     }
 
-    if (!authUserId) {
-      setMessagesError(language === "fr" ? "Vous devez être connecté." : "You must be logged in.");
+    const resolvedUserId = authUserId || (await authCache.getUserId());
+    if (!resolvedUserId) {
+      setMessagesError(t.mustBeLoggedIn);
       return;
     }
+
+    const resolvedClientProfileId = client?.id || selectedContact.client_id || null;
 
     setSendingImage(true);
     setMessagesError(null);
 
+    let uploadedStoragePath: string | null = null;
+
     try {
       const up = await uploadChatImage({
         contactId: selectedContact.id,
-        senderUserId: authUserId,
+        senderUserId: resolvedUserId,
       });
 
-      const payload: any = {
+      if (!up) {
+        return;
+      }
+
+      uploadedStoragePath = up.storagePath;
+
+      const payload = {
         contact_id: selectedContact.id,
         worker_id: selectedContact.worker_id,
-        client_id: client.id,
-        sender_role: "client",
+        client_id: resolvedClientProfileId,
+        sender_role: "client" as const,
         message: "",
         media_type: up.mediaType,
         media_path: up.storagePath,
@@ -1056,10 +1178,7 @@ const ClientMessagesPage: React.FC = () => {
 
       if (error) {
         throw new Error(
-          (language === "fr"
-            ? "Impossible d’enregistrer l’image en base. Vérifie que la table op_client_worker_messages contient media_type et media_path."
-            : "Unable to save image in DB. Ensure op_client_worker_messages has media_type and media_path.") +
-            (error?.message ? ` (${error.message})` : "")
+          `${t.imageDbColumnsError}${error?.message ? ` (${error.message})` : ""}`
         );
       }
 
@@ -1069,16 +1188,24 @@ const ClientMessagesPage: React.FC = () => {
 
       if (data?.media_path) {
         const url = await createSignedUrl(data.media_path);
-        if (url) setSignedUrlByPath((prev) => ({ ...prev, [data.media_path as string]: url }));
+        if (url) {
+          setSignedUrlByPath((prev) => ({ ...prev, [data.media_path as string]: url }));
+        }
       }
 
       void reconcileThreadFromServer(selectedContact.id);
     } catch (e: any) {
       console.error("ClientMessagesPage send image error", e);
-      setMessagesError(
-        e?.message ||
-          (language === "fr" ? "Impossible d'envoyer l'image." : "Unable to send image.")
-      );
+
+      if (uploadedStoragePath) {
+        try {
+          await supabase.storage.from(BUCKET_CHAT).remove([uploadedStoragePath]);
+        } catch (cleanupError) {
+          console.warn("[ClientMessagesPage] storage cleanup failed", cleanupError);
+        }
+      }
+
+      setMessagesError(e?.message || t.imageSendError);
     } finally {
       setSendingImage(false);
     }
@@ -1087,12 +1214,14 @@ const ClientMessagesPage: React.FC = () => {
   const workerName = selectedContact?.worker
     ? fullName(selectedContact.worker.first_name, selectedContact.worker.last_name)
     : "—";
+
   const workerPhone = selectedContact?.worker?.phone || null;
   const workerEmail = selectedContact?.worker?.email || null;
+  const selectedThreadSyncStatus = selectedContact?.sync_status || "synced";
 
   return (
     <div className="min-h-screen bg-slate-50 py-6">
-      <div className="max-w-7xl mx-auto px-4">
+      <div className="mx-auto max-w-7xl px-4">
         <div className="mb-3">
           <Button
             type="button"
@@ -1100,7 +1229,7 @@ const ClientMessagesPage: React.FC = () => {
             className="gap-2 text-slate-700"
             onClick={() => navigate("/espace-client")}
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="h-4 w-4" />
             {t.backToClientSpace}
           </Button>
         </div>
@@ -1110,7 +1239,7 @@ const ClientMessagesPage: React.FC = () => {
             <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
               <div className="font-medium">{t.offlineTitle}</div>
-              <div className="text-xs text-amber-800 mt-1">{t.offlineDesc}</div>
+              <div className="mt-1 text-xs text-amber-800">{t.offlineDesc}</div>
             </div>
           </div>
         )}
@@ -1127,16 +1256,16 @@ const ClientMessagesPage: React.FC = () => {
           </div>
         )}
 
-        <h1 className="text-2xl font-bold text-slate-900 mb-4">{t.title}</h1>
+        <h1 className="mb-4 text-2xl font-bold text-slate-900">{t.title}</h1>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:col-span-3">
-            <div className="px-4 pt-3 flex items-center gap-3 border-b border-slate-100">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+          <div className="flex flex-col rounded-xl border border-slate-200 bg-white lg:col-span-3">
+            <div className="flex items-center gap-3 border-b border-slate-100 px-4 pt-3">
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setFilter("all")}
-                  className={`px-3 py-1 text-xs font-medium rounded-full ${
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${
                     filter === "all"
                       ? "bg-blue-600 text-white"
                       : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -1148,7 +1277,7 @@ const ClientMessagesPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setFilter("unread")}
-                  className={`px-3 py-1 text-xs font-medium rounded-full inline-flex items-center gap-2 ${
+                  className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
                     filter === "unread"
                       ? "bg-blue-600 text-white"
                       : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -1157,7 +1286,7 @@ const ClientMessagesPage: React.FC = () => {
                   {t.unread}
                   {unreadCount > 0 && (
                     <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full ${
+                      className={`rounded-full px-2 py-0.5 text-[10px] ${
                         filter === "unread"
                           ? "bg-white/20 text-white"
                           : "bg-slate-200 text-slate-700"
@@ -1172,8 +1301,10 @@ const ClientMessagesPage: React.FC = () => {
               <div className="ml-auto text-[11px] text-slate-400">{t.select}</div>
             </div>
 
-            <div className="flex-1 overflow-y-auto overflow-x-hidden">
-              {contactsLoading && <div className="p-4 text-sm text-slate-500">{t.loadingContacts}</div>}
+            <div className="flex-1 overflow-x-hidden overflow-y-auto">
+              {contactsLoading && (
+                <div className="p-4 text-sm text-slate-500">{t.loadingContacts}</div>
+              )}
 
               {contactsError && (
                 <div className="p-4 text-sm text-red-600">
@@ -1203,35 +1334,43 @@ const ClientMessagesPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleSelectThread(c.id)}
-                          className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-slate-100 hover:bg-slate-50 ${
-                            selectedContactId === c.id ? "bg-orange-50 border-l-4 border-l-orange-500" : ""
+                          className={`flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50 ${
+                            selectedContactId === c.id ? "border-l-4 border-l-orange-500 bg-orange-50" : ""
                           }`}
                         >
-                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-xs font-semibold text-slate-600">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
                             {initials(name)}
                           </div>
 
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-2 min-w-0">
-                              <span className="text-sm font-semibold text-slate-900 truncate">{name}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex min-w-0 items-center justify-between gap-2">
+                              <span className="truncate text-sm font-semibold text-slate-900">
+                                {name}
+                              </span>
 
                               <span className="shrink-0 flex items-center gap-2">
                                 {pendingThread ? (
                                   <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
                                     {t.pending}
                                   </span>
-                                ) : unread ? (
-                                  <span className="inline-block w-2 h-2 rounded-full bg-orange-500" />
+                                ) : (
+                                  <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                                    {t.synced}
+                                  </span>
+                                )}
+
+                                {!pendingThread && unread ? (
+                                  <span className="inline-block h-2 w-2 rounded-full bg-orange-500" />
                                 ) : null}
 
                                 <span className="flex items-center gap-1 text-xs text-slate-400">
-                                  <Clock className="w-3 h-3" />
+                                  <Clock className="h-3 w-3" />
                                   {formatDate(c.created_at)}
                                 </span>
                               </span>
                             </div>
 
-                            <div className="text-xs text-slate-500 truncate">{threadTitle}</div>
+                            <div className="truncate text-xs text-slate-500">{threadTitle}</div>
                           </div>
                         </button>
                       </li>
@@ -1242,11 +1381,26 @@ const ClientMessagesPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:col-span-6">
-            <div className="px-4 py-3 border-b border-slate-100">
-              <div className="text-sm font-semibold text-slate-900">{t.aboutWorker}</div>
+          <div className="flex flex-col rounded-xl border border-slate-200 bg-white lg:col-span-6">
+            <div className="border-b border-slate-100 px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold text-slate-900">{t.aboutWorker}</div>
+
+                {selectedContact && (
+                  <span
+                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                      selectedThreadSyncStatus === "pending"
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-emerald-100 text-emerald-700"
+                    }`}
+                  >
+                    {selectedThreadSyncStatus === "pending" ? t.pending : t.synced}
+                  </span>
+                )}
+              </div>
+
               {selectedContact && (
-                <div className="text-xs text-slate-500 mt-1">
+                <div className="mt-1 text-xs text-slate-500">
                   {t.since} {formatDate(selectedContact.created_at)}
                 </div>
               )}
@@ -1257,24 +1411,26 @@ const ClientMessagesPage: React.FC = () => {
 
               {selectedContact && (
                 <>
-                  <div className="text-center text-[11px] text-slate-400 mb-4">
+                  <div className="mb-4 text-center text-[11px] text-slate-400">
                     {formatDate(selectedContact.created_at)}
                   </div>
 
                   {selectedContact.message && (
                     <div className="mb-4 flex justify-end">
-                      <div className="max-w-[85%] rounded-2xl bg-blue-600 text-white px-3 py-2 text-sm rounded-br-sm">
-                        <div className="text-[11px] font-semibold opacity-80 mb-1">{t.you}</div>
+                      <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-blue-600 px-3 py-2 text-sm text-white">
+                        <div className="mb-1 text-[11px] font-semibold opacity-80">{t.you}</div>
                         <div className="whitespace-pre-line">{selectedContact.message}</div>
                       </div>
                     </div>
                   )}
 
-                  {messagesLoading && <div className="text-sm text-slate-500">{t.loadingMessages}</div>}
+                  {messagesLoading && (
+                    <div className="text-sm text-slate-500">{t.loadingMessages}</div>
+                  )}
 
                   {messagesError && (
-                    <div className="text-sm text-red-600 mb-2 flex items-center gap-2">
-                      <Info className="w-4 h-4" />
+                    <div className="mb-2 flex items-center gap-2 text-sm text-red-600">
+                      <Info className="h-4 w-4" />
                       {messagesError}
                     </div>
                   )}
@@ -1287,23 +1443,33 @@ const ClientMessagesPage: React.FC = () => {
                       const isPending = m.sync_status === "pending";
 
                       return (
-                        <div key={m.id} className={`mb-3 flex ${isClient ? "justify-end" : "justify-start"}`}>
+                        <div
+                          key={m.id}
+                          className={`mb-3 flex ${isClient ? "justify-end" : "justify-start"}`}
+                        >
                           <div
                             className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
                               isClient
                                 ? isPending
-                                  ? "bg-amber-500 text-white rounded-br-sm"
-                                  : "bg-blue-600 text-white rounded-br-sm"
-                                : "bg-slate-100 text-slate-800 rounded-bl-sm"
+                                  ? "rounded-br-sm bg-amber-500 text-white"
+                                  : "rounded-br-sm bg-blue-600 text-white"
+                                : "rounded-bl-sm bg-slate-100 text-slate-800"
                             }`}
                           >
-                            <div className="text-[10px] opacity-80 mb-1 flex items-center gap-2 flex-wrap">
+                            <div className="mb-1 flex flex-wrap items-center gap-2 text-[10px] opacity-90">
                               <span>
                                 {isClient ? t.you : t.workerLabel} • {formatDateTime(m.created_at)}
                               </span>
-                              {isPending && (
-                                <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-medium">
-                                  {t.pending}
+
+                              {isClient && (
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                    isPending
+                                      ? "bg-white/20 text-white"
+                                      : "bg-emerald-100 text-emerald-700"
+                                  }`}
+                                >
+                                  {isPending ? t.pending : t.synced}
                                 </span>
                               )}
                             </div>
@@ -1312,7 +1478,7 @@ const ClientMessagesPage: React.FC = () => {
                               <div className="space-y-2">
                                 {!imgUrl ? (
                                   <div className="flex items-center gap-2 text-xs opacity-90">
-                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    <Loader2 className="h-4 w-4 animate-spin" />
                                     {t.loadingImage}
                                   </div>
                                 ) : (
@@ -1320,12 +1486,15 @@ const ClientMessagesPage: React.FC = () => {
                                     <img
                                       src={imgUrl}
                                       alt="image"
-                                      className="max-w-[240px] sm:max-w-[320px] rounded-xl border border-white/20"
+                                      className="max-w-[240px] rounded-xl border border-white/20 sm:max-w-[320px]"
                                       loading="lazy"
                                     />
                                   </a>
                                 )}
-                                {m.message?.trim() ? <div className="whitespace-pre-line">{m.message}</div> : null}
+
+                                {m.message?.trim() ? (
+                                  <div className="whitespace-pre-line">{m.message}</div>
+                                ) : null}
                               </div>
                             ) : (
                               <div className="whitespace-pre-line">{m.message}</div>
@@ -1358,12 +1527,12 @@ const ClientMessagesPage: React.FC = () => {
                   title={!connected ? t.imageOffline : t.image}
                 >
                   {sendingImage ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <>
-                      <Camera className="w-4 h-4 mr-2" />
+                      <Camera className="mr-2 h-4 w-4" />
                       <span className="hidden sm:inline">{t.image}</span>
-                      <ImageIcon className="w-4 h-4 sm:hidden" />
+                      <ImageIcon className="h-4 w-4 sm:hidden" />
                     </>
                   )}
                 </Button>
@@ -1378,15 +1547,15 @@ const ClientMessagesPage: React.FC = () => {
                   onClick={handleSend}
                   disabled={!selectedContact || !newMessage.trim() || sending || sendingImage}
                 >
-                  <Send className="w-4 h-4" />
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   {!connected ? t.pending : t.send}
                 </Button>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 flex flex-col lg:col-span-3">
-            <div className="px-4 py-3 border-b border-slate-100">
+          <div className="flex flex-col rounded-xl border border-slate-200 bg-white lg:col-span-3">
+            <div className="border-b border-slate-100 px-4 py-3">
               <div className="text-sm font-semibold text-slate-900">{workerName}</div>
               {selectedContact && (
                 <div className="text-[11px] text-slate-400">
@@ -1397,12 +1566,12 @@ const ClientMessagesPage: React.FC = () => {
               )}
             </div>
 
-            <div className="px-4 py-3 border-b border-slate-100">
-              <div className="text-xs font-semibold text-slate-700 mb-2">{t.contactInfo}</div>
+            <div className="border-b border-slate-100 px-4 py-3">
+              <div className="mb-2 text-xs font-semibold text-slate-700">{t.contactInfo}</div>
 
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2">
-                  <Phone className="w-4 h-4 text-slate-400" />
+                  <Phone className="h-4 w-4 text-slate-400" />
                   {workerPhone ? (
                     <a href={`tel:${workerPhone}`} className="text-slate-800">
                       {workerPhone}
@@ -1413,7 +1582,7 @@ const ClientMessagesPage: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <Mail className="w-4 h-4 text-slate-400" />
+                  <Mail className="h-4 w-4 text-slate-400" />
                   {workerEmail ? (
                     <a href={`mailto:${workerEmail}`} className="text-slate-800">
                       {workerEmail}
@@ -1424,7 +1593,7 @@ const ClientMessagesPage: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <MessageCircle className="w-4 h-4 text-slate-400" />
+                  <MessageCircle className="h-4 w-4 text-slate-400" />
                   {workerPhone ? (
                     <a
                       href={phoneToWhatsappUrl(workerPhone, newMessage)}
@@ -1442,15 +1611,21 @@ const ClientMessagesPage: React.FC = () => {
             </div>
 
             <div className="px-4 py-3">
-              <div className="text-xs font-semibold text-slate-700 mb-1">{t.workerNameLabel}</div>
+              <div className="mb-1 text-xs font-semibold text-slate-700">{t.workerNameLabel}</div>
               <div className="text-sm text-slate-800">{workerName}</div>
 
               {selectedContact?.worker?.profession && (
-                <div className="mt-2 text-xs text-slate-500">{selectedContact.worker.profession}</div>
+                <div className="mt-2 text-xs text-slate-500">
+                  {selectedContact.worker.profession}
+                </div>
               )}
 
               <div className="mt-2 text-xs text-slate-500">
-                {[selectedContact?.worker?.city, selectedContact?.worker?.commune, selectedContact?.worker?.district]
+                {[
+                  selectedContact?.worker?.city,
+                  selectedContact?.worker?.commune,
+                  selectedContact?.worker?.district,
+                ]
                   .filter(Boolean)
                   .join(" • ")}
               </div>
@@ -1459,7 +1634,7 @@ const ClientMessagesPage: React.FC = () => {
         </div>
 
         {messagesError && (
-          <div className="mt-4 bg-red-600 text-white text-sm px-4 py-3 rounded-lg max-w-lg ml-auto">
+          <div className="mt-4 ml-auto max-w-lg rounded-lg bg-red-600 px-4 py-3 text-sm text-white">
             <div className="font-semibold">
               {language === "fr" ? "Erreur de chargement" : "Loading error"}
             </div>
