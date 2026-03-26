@@ -1,5 +1,5 @@
 // src/pages/ClientRequestsList.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -34,6 +34,13 @@ const REQUESTS_CACHE_PREFIX = "cached_client_requests";
 
 const getRequestsCacheKey = (userId?: string | null) =>
   userId ? `${REQUESTS_CACHE_PREFIX}:${userId}` : REQUESTS_CACHE_PREFIX;
+
+const sortRequestsDesc = (items: ClientRequest[]) =>
+  [...items].sort((a, b) => {
+    const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return tb - ta;
+  });
 
 const ClientRequestsList: React.FC = () => {
   const { language } = useLanguage();
@@ -78,51 +85,94 @@ const ClientRequestsList: React.FC = () => {
         ? "En attente de synchronisation"
         : "Pending synchronization",
     pendingShort: language === "fr" ? "En attente" : "Pending",
+    noLocalSession:
+      language === "fr"
+        ? "Aucune session locale trouvée."
+        : "No local session found.",
+    loadError:
+      language === "fr"
+        ? "Impossible de charger vos demandes."
+        : "Unable to load your requests.",
   };
 
-  const loadCachedRequests = async (userId: string): Promise<ClientRequest[]> => {
+  const loadCachedRequests = useCallback(async (userId: string): Promise<ClientRequest[]> => {
     return (await localStore.get<ClientRequest[]>(getRequestsCacheKey(userId))) || [];
-  };
+  }, []);
 
-  const saveCachedRequests = async (userId: string, items: ClientRequest[]) => {
-    await localStore.set(getRequestsCacheKey(userId), items);
-  };
+  const saveCachedRequests = useCallback(async (userId: string, items: ClientRequest[]) => {
+    await localStore.set(getRequestsCacheKey(userId), sortRequestsDesc(items));
+  }, []);
 
-  const normalizeServerRequests = (items: ClientRequest[]): ClientRequest[] => {
+  const normalizeServerRequests = useCallback((items: ClientRequest[]): ClientRequest[] => {
     return items.map((item) => ({
       ...item,
       sync_status: "synced",
     }));
-  };
+  }, []);
 
-  const readQueue = async (): Promise<OfflineQueueItem[]> => {
+  const readQueue = useCallback(async (): Promise<OfflineQueueItem[]> => {
     return await syncService.getQueue();
-  };
+  }, []);
 
-  const getPendingOfflineRequests = async (userId: string): Promise<ClientRequest[]> => {
-    const queue = await readQueue();
+  const getPendingOfflineRequests = useCallback(
+    async (userId: string): Promise<ClientRequest[]> => {
+      const queue = await readQueue();
 
-    return queue
-      .filter(
-        (item) =>
-          item.action_type === "CREATE_CONTACT_REQUEST" &&
-          (item.status === "pending" ||
-            item.status === "processing" ||
-            item.status === "failed") &&
-          String(item.payload_json?.user_id || "") === String(userId)
-      )
-      .map((item) => ({
-        id: String(item.payload_json?.id || item.id),
-        created_at: item.payload_json?.created_at || item.created_at || null,
-        worker_name: item.payload_json?.worker_name || null,
-        status: "pending_sync",
-        message: item.payload_json?.message || null,
-        origin: item.payload_json?.origin || "offline",
-        sync_status: "pending" as const,
-      }));
-  };
+      return queue
+        .filter(
+          (item) =>
+            item.action_type === "CREATE_CONTACT_REQUEST" &&
+            item.table_name === "op_ouvrier_contacts" &&
+            (item.status === "pending" ||
+              item.status === "processing" ||
+              item.status === "failed") &&
+            String(item.payload_json?.user_id || "") === String(userId)
+        )
+        .map((item) => ({
+          id: String(item.payload_json?.id || item.id),
+          created_at: item.payload_json?.created_at || item.created_at || null,
+          worker_name: item.payload_json?.worker_name || null,
+          status: "pending_sync",
+          message: item.payload_json?.message || null,
+          origin: item.payload_json?.origin || "offline",
+          sync_status: "pending" as const,
+        }));
+    },
+    [readQueue]
+  );
 
-  const areRequestsLikelySame = (offlineReq: ClientRequest, serverReq: ClientRequest) => {
+  const mergePendingRequests = useCallback((items: ClientRequest[]) => {
+    const map = new Map<string, ClientRequest>();
+
+    for (const item of items) {
+      const key = String(item.id || "");
+      if (!key) continue;
+
+      const existing = map.get(key);
+
+      if (!existing) {
+        map.set(key, {
+          ...item,
+          sync_status: "pending",
+          status: item.status || "pending_sync",
+          origin: item.origin || "offline",
+        });
+        continue;
+      }
+
+      map.set(key, {
+        ...existing,
+        ...item,
+        sync_status: "pending",
+        status: item.status || existing.status || "pending_sync",
+        origin: item.origin || existing.origin || "offline",
+      });
+    }
+
+    return sortRequestsDesc(Array.from(map.values()));
+  }, []);
+
+  const areRequestsLikelySame = useCallback((offlineReq: ClientRequest, serverReq: ClientRequest) => {
     const offlineWorker = String(offlineReq.worker_name || "").trim().toLowerCase();
     const serverWorker = String(serverReq.worker_name || "").trim().toLowerCase();
 
@@ -135,51 +185,101 @@ const ClientRequestsList: React.FC = () => {
     const timeCloseEnough = Math.abs(serverTime - offlineTime) <= 10 * 60 * 1000;
 
     return offlineWorker === serverWorker && offlineMessage === serverMessage && timeCloseEnough;
-  };
+  }, []);
 
-  const mergeRequests = (serverItems: ClientRequest[], pendingItems: ClientRequest[]) => {
-    const dedupedPending = pendingItems.filter(
-      (pending) => !serverItems.some((server) => areRequestsLikelySame(pending, server))
-    );
+  const mergeRequests = useCallback(
+    (serverItems: ClientRequest[], pendingItems: ClientRequest[]) => {
+      const dedupedPending = pendingItems.filter(
+        (pending) => !serverItems.some((server) => areRequestsLikelySame(pending, server))
+      );
 
-    return [...dedupedPending, ...serverItems].sort((a, b) => {
-      const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return tb - ta;
-    });
-  };
+      const byId = new Map<string, ClientRequest>();
 
-  const refreshRequests = async () => {
+      for (const item of [...dedupedPending, ...serverItems]) {
+        const key = String(item.id || "");
+        if (!key) continue;
+
+        const existing = byId.get(key);
+
+        if (!existing) {
+          byId.set(key, item);
+          continue;
+        }
+
+        byId.set(key, {
+          ...existing,
+          ...item,
+          sync_status:
+            item.sync_status === "pending" || existing.sync_status === "pending"
+              ? "pending"
+              : item.sync_status ?? existing.sync_status ?? "synced",
+        });
+      }
+
+      return sortRequestsDesc(Array.from(byId.values()));
+    },
+    [areRequestsLikelySame]
+  );
+
+  const resolveCurrentUserId = useCallback(async (): Promise<string | null> => {
+    try {
+      if (connected) {
+        const { data } = await supabase.auth.getUser();
+        const liveUserId = data.user?.id ?? null;
+        if (liveUserId) return liveUserId;
+      }
+    } catch {
+      // noop
+    }
+
+    return (await authCache.getUserId()) ?? null;
+  }, [connected]);
+
+  const resolveClientProfileId = useCallback(async (userId: string): Promise<string | null> => {
+    if (!connected) return null;
+
+    const { data, error } = await supabase
+      .from("op_clients")
+      .select("id")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error && error.code !== "PGRST116") {
+      throw error;
+    }
+
+    return data?.id ?? null;
+  }, [connected]);
+
+  const refreshRequests = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const currentUserId = await authCache.getUserId();
+      const currentUserId = await resolveCurrentUserId();
 
       if (!currentUserId) {
-        throw new Error(
-          language === "fr"
-            ? "Aucune session locale trouvée."
-            : "No local session found."
-        );
+        throw new Error(text.noLocalSession);
       }
 
       const readLocalOnly = async () => {
         const cached = await loadCachedRequests(currentUserId);
-        const pending = await getPendingOfflineRequests(currentUserId);
 
-        const merged = mergeRequests(
-          cached.filter((r) => r.sync_status !== "pending"),
-          pending
+        const cachedPending = cached.filter(
+          (r) => r.sync_status === "pending" || r.status === "pending_sync"
         );
+        const cachedSynced = cached
+          .filter((r) => r.sync_status !== "pending" && r.status !== "pending_sync")
+          .map((r) => ({ ...r, sync_status: "synced" as const }));
+
+        const queuePending = await getPendingOfflineRequests(currentUserId);
+        const localPending = mergePendingRequests([...cachedPending, ...queuePending]);
+
+        const merged = mergeRequests(cachedSynced, localPending);
 
         setRequests(merged);
         setFromCache(true);
-
-        await saveCachedRequests(
-          currentUserId,
-          merged.filter((r) => r.sync_status !== "pending")
-        );
+        await saveCachedRequests(currentUserId, merged);
       };
 
       if (!connected) {
@@ -187,9 +287,23 @@ const ClientRequestsList: React.FC = () => {
         return;
       }
 
+      try {
+        await syncService.syncNow();
+      } catch (syncError) {
+        console.warn("[ClientRequestsList] syncNow failed:", syncError);
+      }
+
+      const clientProfileId = await resolveClientProfileId(currentUserId);
+
+      if (!clientProfileId) {
+        await readLocalOnly();
+        return;
+      }
+
       const { data, error: fetchError } = await supabase
         .from("op_ouvrier_contacts")
         .select("id, created_at, worker_name, status, message, origin")
+        .eq("client_id", clientProfileId)
         .order("created_at", { ascending: false });
 
       if (fetchError) {
@@ -199,71 +313,92 @@ const ClientRequestsList: React.FC = () => {
       }
 
       const serverItems = normalizeServerRequests((data as ClientRequest[]) || []);
-      const pending = await getPendingOfflineRequests(currentUserId);
-      const merged = mergeRequests(serverItems, pending);
+      const cached = await loadCachedRequests(currentUserId);
+      const cachedPending = cached.filter(
+        (r) => r.sync_status === "pending" || r.status === "pending_sync"
+      );
+      const queuePending = await getPendingOfflineRequests(currentUserId);
+      const localPending = mergePendingRequests([...cachedPending, ...queuePending]);
+
+      const merged = mergeRequests(serverItems, localPending);
 
       setRequests(merged);
       setFromCache(false);
-
-      await saveCachedRequests(currentUserId, serverItems);
+      await saveCachedRequests(currentUserId, merged);
     } catch (err: any) {
       console.error(err);
 
-      const currentUserId = await authCache.getUserId();
+      const currentUserId = await resolveCurrentUserId();
 
       if (currentUserId) {
         const cached = await loadCachedRequests(currentUserId);
-        const pending = await getPendingOfflineRequests(currentUserId);
-        const merged = mergeRequests(
-          cached.filter((r) => r.sync_status !== "pending"),
-          pending
+        const cachedPending = cached.filter(
+          (r) => r.sync_status === "pending" || r.status === "pending_sync"
         );
+        const cachedSynced = cached
+          .filter((r) => r.sync_status !== "pending" && r.status !== "pending_sync")
+          .map((r) => ({ ...r, sync_status: "synced" as const }));
+
+        const queuePending = await getPendingOfflineRequests(currentUserId);
+        const localPending = mergePendingRequests([...cachedPending, ...queuePending]);
+        const merged = mergeRequests(cachedSynced, localPending);
 
         setRequests(merged);
         setFromCache(true);
+        await saveCachedRequests(currentUserId, merged);
 
         if (!merged.length) {
-          setError(
-            language === "fr"
-              ? "Impossible de charger vos demandes."
-              : "Unable to load your requests."
-          );
+          setError(err?.message || text.loadError);
         }
       } else {
         setRequests([]);
-        setError(
-          language === "fr"
-            ? "Impossible de charger vos demandes."
-            : "Unable to load your requests."
-        );
+        setError(err?.message || text.loadError);
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    connected,
+    getPendingOfflineRequests,
+    loadCachedRequests,
+    mergePendingRequests,
+    mergeRequests,
+    normalizeServerRequests,
+    resolveClientProfileId,
+    resolveCurrentUserId,
+    saveCachedRequests,
+    text.loadError,
+    text.noLocalSession,
+  ]);
 
   useEffect(() => {
     if (!initialized) return;
     void refreshRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialized, connected, language]);
+  }, [initialized, connected, language, refreshRequests]);
 
   useEffect(() => {
     const onSyncSignal = () => {
       void refreshRequests();
     };
 
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshRequests();
+      }
+    };
+
     window.addEventListener("storage", onSyncSignal);
     window.addEventListener("focus", onSyncSignal);
-    window.addEventListener("visibilitychange", onSyncSignal);
+    window.addEventListener("online", onSyncSignal);
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       window.removeEventListener("storage", onSyncSignal);
       window.removeEventListener("focus", onSyncSignal);
-      window.removeEventListener("visibilitychange", onSyncSignal);
+      window.removeEventListener("online", onSyncSignal);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected, language]);
+  }, [refreshRequests]);
 
   useEffect(() => {
     if (!connected) return;
@@ -283,8 +418,7 @@ const ClientRequestsList: React.FC = () => {
         reconcileTimerRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected, language]);
+  }, [connected, refreshRequests]);
 
   const renderStatus = (req: ClientRequest) => {
     if (req.sync_status === "pending" || req.status === "pending_sync") {
@@ -296,7 +430,7 @@ const ClientRequestsList: React.FC = () => {
       );
     }
 
-    const value = (req.status || "").toLowerCase();
+    const value = (req.status || "").toLowerCase().trim();
 
     if (value === "new" || value === "nouveau") {
       return (
@@ -306,7 +440,12 @@ const ClientRequestsList: React.FC = () => {
       );
     }
 
-    if (value === "in_progress" || value === "en_cours") {
+    if (
+      value === "in_progress" ||
+      value === "en_cours" ||
+      value === "in progress" ||
+      value === "en cours"
+    ) {
       return (
         <Badge variant="outline" className="border-amber-500 text-amber-600">
           {text.statusInProgress}
@@ -314,7 +453,12 @@ const ClientRequestsList: React.FC = () => {
       );
     }
 
-    if (value === "done" || value === "terminee") {
+    if (
+      value === "done" ||
+      value === "terminee" ||
+      value === "terminée" ||
+      value === "completed"
+    ) {
       return (
         <Badge variant="outline" className="border-emerald-500 text-emerald-600">
           {text.statusDone}
@@ -425,7 +569,7 @@ const ClientRequestsList: React.FC = () => {
                       <div className="flex items-center gap-2 mb-1">
                         <Wrench className="w-4 h-4 text-pro-blue" />
                         <span className="font-medium text-slate-900">
-                          {req.worker_name || "Ouvrier"}
+                          {req.worker_name || (language === "fr" ? "Ouvrier" : "Worker")}
                         </span>
                       </div>
 
