@@ -28,6 +28,23 @@ function normalizeProfileRole(role: any): UserRole {
   return "user";
 }
 
+function buildOfflineUser(userId: string, profile?: OpUserProfile | null): User {
+  return {
+    id: userId,
+    aud: "authenticated",
+    role: "authenticated",
+    email: profile?.email ?? undefined,
+    phone: profile?.phone ?? undefined,
+    created_at: new Date(0).toISOString(),
+    app_metadata: {},
+    user_metadata: {
+      full_name: profile?.full_name ?? null,
+      role: profile?.role ?? "user",
+      offline_cached: true,
+    },
+  } as User;
+}
+
 async function readCachedProfile(userId: string): Promise<OpUserProfile | null> {
   try {
     const cacheKey = getProfileCacheKey(userId);
@@ -139,9 +156,10 @@ export function useAuthProfile() {
       }
 
       const cachedProfile = await readCachedProfile(cachedUserId);
+      const offlineUser = buildOfflineUser(cachedUserId, cachedProfile);
 
       safe(() => {
-        setUser(null);
+        setUser(offlineUser);
         setProfile(cachedProfile);
         setLoading(false);
       });
@@ -153,22 +171,23 @@ export function useAuthProfile() {
       const { connected } = networkService.getStatus();
 
       if (!u) {
-        if (!connected) {
-          await applyCachedUser();
-          return;
-        }
-
         const cachedUserId = await authCache.getUserId();
+
         if (cachedUserId) {
           const cachedProfile = await readCachedProfile(cachedUserId);
 
           if (!mountedRef.current || seq !== seqRef.current) return;
 
           safe(() => {
-            setUser(null);
+            setUser(buildOfflineUser(cachedUserId, cachedProfile));
             setProfile(cachedProfile);
             setLoading(false);
           });
+          return;
+        }
+
+        if (!connected) {
+          await applyCachedUser();
           return;
         }
 
@@ -208,6 +227,7 @@ export function useAuthProfile() {
       await persistProfile(resolvedProfile);
 
       safe(() => {
+        setUser(u);
         setProfile(resolvedProfile);
         setLoading(false);
       });
@@ -246,8 +266,12 @@ export function useAuthProfile() {
     const unsubscribeNetwork = networkService.subscribe(() => {
       const status = networkService.getStatus();
 
-      if (!status.connected) return;
       if (!mountedRef.current) return;
+
+      if (!status.connected) {
+        void applyCachedUser();
+        return;
+      }
 
       const currentSeq = ++seqRef.current;
 
@@ -258,7 +282,11 @@ export function useAuthProfile() {
 
         if (!liveUserId) {
           if (!mountedRef.current || currentSeq !== seqRef.current) return;
-          safe(() => setLoading(false));
+          safe(() => {
+            setUser(null);
+            setProfile(null);
+            setLoading(false);
+          });
           return;
         }
 
@@ -267,6 +295,7 @@ export function useAuthProfile() {
         if (!mountedRef.current || currentSeq !== seqRef.current) return;
 
         safe(() => {
+          setUser(buildOfflineUser(liveUserId, refreshed));
           if (refreshed) setProfile(refreshed);
           setLoading(false);
         });
