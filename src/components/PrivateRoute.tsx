@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import type { Session } from "@supabase/supabase-js";
-import { localStore } from "@/services/localStore";
+import { authCache, normalizeRole } from "@/services/authCache";
 import { useNetworkStatus } from "@/services/networkService";
 
 type Role = "user" | "client" | "worker" | "admin";
@@ -16,26 +16,14 @@ type Props = {
   showLoader?: boolean;
 };
 
-const LOCAL_ROLE_KEY = "local_auth_role";
-const LOCAL_USER_ID_KEY = "local_auth_user_id";
-
-/**
- * Normalisation des rôles
- */
-const normalizeRole = (r: any): Role => {
-  const v = String(r ?? "").toLowerCase().trim();
-
+const normalizeEffectiveRole = (r: any): Role => {
+  const v = normalizeRole(r);
   if (v === "admin") return "admin";
-  if (["worker", "ouvrier", "provider", "prestataire"].includes(v)) return "worker";
-  if (["client", "customer"].includes(v)) return "client";
-  if (["user", "particulier"].includes(v)) return "user";
-
+  if (v === "worker") return "worker";
+  if (v === "client") return "client";
   return "user";
 };
 
-/**
- * Vérification autorisation
- */
 function isRoleAllowed(effective: Role, allowed: Role[]) {
   if (allowed.includes(effective)) return true;
 
@@ -67,104 +55,80 @@ export default function PrivateRoute({
       if (mounted) fn();
     };
 
-    /**
-     * Restore OFFLINE session
-     */
-    const restoreLocalSession = async (): Promise<boolean> => {
+    const restoreCachedSession = async (): Promise<boolean> => {
       try {
-        const [uid, role] = await Promise.all([
-          localStore.get<string>(LOCAL_USER_ID_KEY),
-          localStore.get<Role>(LOCAL_ROLE_KEY),
-        ]);
+        const snapshot = await authCache.getSnapshot();
 
         if (!mounted) return false;
 
-        if (uid) {
+        if (snapshot.userId) {
           safe(() => {
-            setSessionUserId(uid);
-            setEffectiveRole(normalizeRole(role));
+            setSessionUserId(snapshot.userId ?? null);
+            setEffectiveRole(normalizeEffectiveRole(snapshot.role));
           });
           return true;
         }
 
         return false;
       } catch (err) {
-        console.warn("[PrivateRoute] restoreLocalSession error:", err);
+        console.warn("[PrivateRoute] restoreCachedSession error:", err);
         return false;
       }
     };
 
-    /**
-     * Save local session (offline-first)
-     */
-    const persistLocalSession = async (userId: string, role: Role) => {
+    const persistCachedSession = async (userId: string, role: Role) => {
       try {
-        await Promise.all([
-          localStore.set(LOCAL_USER_ID_KEY, userId),
-          localStore.set(LOCAL_ROLE_KEY, role),
-        ]);
+        const currentProfile = await authCache.getProfile();
+        await authCache.saveUser(userId, normalizeEffectiveRole(role), currentProfile);
       } catch (err) {
-        console.warn("[PrivateRoute] persistLocalSession error:", err);
+        console.warn("[PrivateRoute] persistCachedSession error:", err);
       }
     };
 
-    /**
-     * Clear session
-     */
-    const clearSession = async () => {
+    const clearResolvedSession = async () => {
       safe(() => {
         setSessionUserId(null);
         setEffectiveRole("user");
       });
 
       try {
-        await Promise.all([
-          localStore.remove(LOCAL_USER_ID_KEY),
-          localStore.remove(LOCAL_ROLE_KEY),
-        ]);
+        await authCache.clear();
       } catch (err) {
-        console.warn("[PrivateRoute] clearSession error:", err);
+        console.warn("[PrivateRoute] clearResolvedSession error:", err);
       }
     };
 
-    /**
-     * Appliquer session
-     */
-    const applySession = async (session: Session | null) => {
-      const user = session?.user;
+    const applyLiveSession = async (session: Session | null) => {
+      const user = session?.user ?? null;
 
-      /**
-       * ❌ Pas de session → fallback local
-       */
       if (!user?.id) {
-        const restored = await restoreLocalSession();
-        if (!restored) {
-          await clearSession();
+        if (!connected) {
+          const restored = await restoreCachedSession();
+          if (!restored) {
+            safe(() => {
+              setSessionUserId(null);
+              setEffectiveRole("user");
+            });
+          }
+          return;
         }
+
+        await clearResolvedSession();
         return;
       }
 
-      /**
-       * ✅ Session valide
-       */
       safe(() => setSessionUserId(user.id));
 
-      const metaRole = normalizeRole(
-        user.user_metadata?.role ?? user.app_metadata?.role
+      const metaRole = normalizeEffectiveRole(
+        user.user_metadata?.role ?? user.app_metadata?.role ?? "user"
       );
 
-      /**
-       * 🔴 OFFLINE → utiliser metadata directement
-       */
-      if (!connected && initialized) {
+      if (!connected) {
         safe(() => setEffectiveRole(metaRole));
-        await persistLocalSession(user.id, metaRole);
+        await persistCachedSession(user.id, metaRole);
         return;
       }
 
-      /**
-       * 🟢 ONLINE → essayer Supabase
-       */
       try {
         const { data, error } = await supabase
           .from("op_users")
@@ -177,57 +141,62 @@ export default function PrivateRoute({
         if (error) {
           console.warn("[PrivateRoute] DB role error:", error);
           safe(() => setEffectiveRole(metaRole));
-          await persistLocalSession(user.id, metaRole);
+          await persistCachedSession(user.id, metaRole);
           return;
         }
 
-        const role = data?.role ? normalizeRole(data.role) : metaRole;
+        const resolvedRole = normalizeEffectiveRole(data?.role ?? metaRole);
 
-        safe(() => setEffectiveRole(role));
-        await persistLocalSession(user.id, role);
+        safe(() => setEffectiveRole(resolvedRole));
+        await persistCachedSession(user.id, resolvedRole);
       } catch (err) {
         console.warn("[PrivateRoute] role fetch exception:", err);
 
         if (!mounted) return;
 
         safe(() => setEffectiveRole(metaRole));
-        await persistLocalSession(user.id, metaRole);
+        await persistCachedSession(user.id, metaRole);
       }
     };
 
-    /**
-     * Boot
-     */
     const boot = async () => {
       safe(() => setLoading(true));
 
       try {
+        if (!connected) {
+          const restored = await restoreCachedSession();
+          if (!restored) {
+            safe(() => {
+              setSessionUserId(null);
+              setEffectiveRole("user");
+            });
+          }
+          return;
+        }
+
         const { data, error } = await supabase.auth.getSession();
 
         if (error) {
           console.warn("[PrivateRoute] getSession error:", error);
-
-          const restored = await restoreLocalSession();
-          if (!restored) await clearSession();
-
+          await clearResolvedSession();
           return;
         }
 
-        await applySession(data.session ?? null);
+        await applyLiveSession(data.session ?? null);
       } finally {
         safe(() => setLoading(false));
       }
     };
 
-    void boot();
+    if (initialized) {
+      void boot();
+    }
 
-    /**
-     * Listener auth
-     */
     const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
       safe(() => setLoading(true));
+
       void (async () => {
-        await applySession(session ?? null);
+        await applyLiveSession(session ?? null);
         safe(() => setLoading(false));
       })();
     });
@@ -238,17 +207,11 @@ export default function PrivateRoute({
     };
   }, [connected, initialized]);
 
-  /**
-   * Autorisation
-   */
   const allowed = useMemo(
     () => isRoleAllowed(effectiveRole, allowedRoles),
     [effectiveRole, allowedRoles]
   );
 
-  /**
-   * Loader
-   */
   if (loading || !initialized) {
     if (!showLoader) return null;
 
@@ -259,9 +222,6 @@ export default function PrivateRoute({
     );
   }
 
-  /**
-   * ❌ Pas connecté
-   */
   if (!sessionUserId) {
     return (
       <Navigate
@@ -272,15 +232,9 @@ export default function PrivateRoute({
     );
   }
 
-  /**
-   * ❌ Pas autorisé
-   */
   if (!allowed) {
     return <Navigate to={forbiddenRedirectTo} replace />;
   }
 
-  /**
-   * ✅ OK
-   */
   return <>{children}</>;
 }
