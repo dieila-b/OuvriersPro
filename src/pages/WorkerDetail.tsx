@@ -24,6 +24,7 @@ import {
   WifiOff,
   Heart,
   Loader2,
+  Clock3,
 } from "lucide-react";
 import { useUiMode } from "@/hooks/useUiMode";
 
@@ -53,6 +54,7 @@ type Review = {
   comment: string | null;
   created_at: string;
   client_name: string | null;
+  sync_status?: "pending" | "synced";
 };
 
 type WorkerPhoto = {
@@ -100,6 +102,44 @@ const getRequestsCacheKey = (userId?: string | null) =>
 
 const createOfflineId = (prefix: string) =>
   `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+const normalizeReview = (row: any): Review => ({
+  id: row.id,
+  rating: row.rating ?? null,
+  comment: row.comment ?? null,
+  created_at: row.created_at,
+  client_name: row.client_name ?? row.name ?? row.author_name ?? null,
+  sync_status: "synced",
+});
+
+const areReviewsLikelySame = (localReview: Review, serverReview: Review) => {
+  const localComment = String(localReview.comment || "").trim();
+  const serverComment = String(serverReview.comment || "").trim();
+  const localRating = Number(localReview.rating || 0);
+  const serverRating = Number(serverReview.rating || 0);
+
+  const localTime = new Date(localReview.created_at).getTime();
+  const serverTime = new Date(serverReview.created_at).getTime();
+
+  return (
+    localRating === serverRating &&
+    localComment === serverComment &&
+    Math.abs(localTime - serverTime) <= 10 * 60 * 1000
+  );
+};
+
+const mergeServerAndPendingReviews = (serverReviews: Review[], cachedReviews: Review[]) => {
+  const pendingOnly = cachedReviews.filter((r) => r.sync_status === "pending");
+
+  const dedupedPending = pendingOnly.filter(
+    (pendingReview) =>
+      !serverReviews.some((serverReview) => areReviewsLikelySame(pendingReview, serverReview))
+  );
+
+  return [...dedupedPending, ...serverReviews].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+};
 
 const WorkerDetail: React.FC = () => {
   const { language } = useLanguage();
@@ -278,6 +318,10 @@ const WorkerDetail: React.FC = () => {
         language === "fr"
           ? "Photos chargées depuis le cache local."
           : "Photos loaded from local cache.",
+      pendingReview:
+        language === "fr"
+          ? "Avis enregistré localement, en attente de synchronisation."
+          : "Review saved locally, pending synchronization.",
     };
   }, [language]);
 
@@ -618,7 +662,10 @@ const WorkerDetail: React.FC = () => {
     const readCache = async () => {
       const cached = await localStore.get<Review[]>(cacheKey);
       if (cached) {
-        setReviews(cached);
+        const normalizedCached = [...cached].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        setReviews(normalizedCached);
         setUsedReviewsCache(true);
         return true;
       }
@@ -648,16 +695,13 @@ const WorkerDetail: React.FC = () => {
           );
         }
       } else {
-        const mapped: Review[] = (data || []).map((r: any) => ({
-          id: r.id,
-          rating: r.rating ?? null,
-          comment: r.comment ?? null,
-          created_at: r.created_at,
-          client_name: r.client_name ?? r.name ?? r.author_name ?? null,
-        }));
-        setReviews(mapped);
+        const serverMapped: Review[] = (data || []).map((r: any) => normalizeReview(r));
+        const cachedReviews = (await localStore.get<Review[]>(cacheKey)) || [];
+        const merged = mergeServerAndPendingReviews(serverMapped, cachedReviews);
+
+        setReviews(merged);
         setUsedReviewsCache(false);
-        await localStore.set(cacheKey, mapped);
+        await localStore.set(cacheKey, merged);
       }
     } catch (e) {
       console.error("fetchReviews error", e);
@@ -814,7 +858,10 @@ const WorkerDetail: React.FC = () => {
   const reportTargetId = (worker?.user_id ?? worker?.id) as string;
 
   const loadVotesAndCounts = async () => {
-    const reviewIds = reviews.map((r) => r.id);
+    const reviewIds = reviews
+      .filter((r) => r.sync_status !== "pending")
+      .map((r) => r.id);
+
     if (reviewIds.length === 0) {
       setMyVoteByReviewId({});
       setCountsByReviewId({});
@@ -875,6 +922,16 @@ const WorkerDetail: React.FC = () => {
 
     if (!authUserId) {
       setVoteError(tVotes.mustLogin);
+      return;
+    }
+
+    const targetReview = reviews.find((r) => r.id === reviewId);
+    if (targetReview?.sync_status === "pending") {
+      setVoteError(
+        language === "fr"
+          ? "Les réactions sont disponibles après synchronisation de l’avis."
+          : "Reactions are available after the review is synchronized."
+      );
       return;
     }
 
@@ -1256,15 +1313,6 @@ const WorkerDetail: React.FC = () => {
     e.preventDefault();
     if (!worker) return;
 
-    if (!connected) {
-      setReviewsError(
-        language === "fr"
-          ? "L’envoi d’un avis nécessite Internet."
-          : "Submitting a review requires internet."
-      );
-      return;
-    }
-
     if (newRating <= 0) {
       setReviewsError(
         language === "fr" ? "Veuillez sélectionner une note." : "Please select a rating."
@@ -1276,6 +1324,64 @@ const WorkerDetail: React.FC = () => {
     setReviewsError(null);
 
     try {
+      const resolvedUserId = authUserId || (await authCache.getUserId());
+
+      if (!resolvedUserId) {
+        throw new Error(
+          language === "fr"
+            ? "Veuillez vous connecter pour laisser un avis."
+            : "Please log in to leave a review."
+        );
+      }
+
+      if (!connected) {
+        const localReviewId = createOfflineId("offline_review");
+        const createdAt = new Date().toISOString();
+
+        const offlineReview: Review = {
+          id: localReviewId,
+          rating: newRating,
+          comment: newComment?.trim() ? newComment.trim() : null,
+          created_at: createdAt,
+          client_name: language === "fr" ? "Vous" : "You",
+          sync_status: "pending",
+        };
+
+        const nextReviews = [offlineReview, ...reviews].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+
+        setReviews(nextReviews);
+        setUsedReviewsCache(true);
+        await localStore.set(getWorkerReviewsCacheKey(worker.id), nextReviews);
+
+        await syncService.enqueue({
+          id: createOfflineId("queue"),
+          action_type: "CREATE_WORKER_REVIEW",
+          table_name: "op_ouvrier_reviews",
+          payload_json: {
+            id: localReviewId,
+            local_review_id: localReviewId,
+            user_id: resolvedUserId,
+            worker_id: worker.id,
+            rating: newRating,
+            comment: newComment?.trim() ? newComment.trim() : null,
+            client_name: language === "fr" ? "Vous" : "You",
+            created_at: createdAt,
+          },
+          created_at: createdAt,
+        });
+
+        setNewRating(0);
+        setNewComment("");
+        setReviewsError(
+          language === "fr"
+            ? "Avis enregistré hors ligne. Il sera synchronisé automatiquement."
+            : "Review saved offline. It will sync automatically."
+        );
+        return;
+      }
+
       const { data: sessionData } = await supabase.auth.getSession();
       const user = sessionData.session?.user ?? null;
 
@@ -1628,16 +1734,32 @@ const WorkerDetail: React.FC = () => {
                     };
 
                     return (
-                      <div key={r.id} className="border border-slate-100 rounded-lg px-3 py-2 text-xs">
-                        <div className="flex items-center justify-between mb-1">
+                      <div
+                        key={r.id}
+                        className={`border rounded-lg px-3 py-2 text-xs ${
+                          r.sync_status === "pending"
+                            ? "border-amber-200 bg-amber-50/50"
+                            : "border-slate-100"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1 gap-2">
                           <span className="font-semibold text-slate-800">
                             {r.client_name || "Client"}
                           </span>
-                          <span className="text-[11px] text-slate-400">
-                            {new Date(r.created_at).toLocaleDateString(
-                              language === "fr" ? "fr-FR" : "en-GB"
+
+                          <div className="flex items-center gap-2">
+                            {r.sync_status === "pending" && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                                <Clock3 className="w-3 h-3" />
+                                {language === "fr" ? "En attente" : "Pending"}
+                              </span>
                             )}
-                          </span>
+                            <span className="text-[11px] text-slate-400">
+                              {new Date(r.created_at).toLocaleDateString(
+                                language === "fr" ? "fr-FR" : "en-GB"
+                              )}
+                            </span>
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-1 mb-1">
@@ -1655,58 +1777,62 @@ const WorkerDetail: React.FC = () => {
 
                         {r.comment && <p className="text-slate-700 whitespace-pre-line">{r.comment}</p>}
 
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            variant={myVote === "like" ? "default" : "outline"}
-                            className="h-8 px-3 text-xs"
-                            onClick={() => toggleVote(r.id, "like")}
-                            disabled={!authUserId || !connected}
-                            title={
-                              !connected
-                                ? tVotes.offline
-                                : !authUserId
+                        {r.sync_status === "pending" ? (
+                          <div className="mt-3 text-[11px] text-amber-700">{tOffline.pendingReview}</div>
+                        ) : (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant={myVote === "like" ? "default" : "outline"}
+                              className="h-8 px-3 text-xs"
+                              onClick={() => toggleVote(r.id, "like")}
+                              disabled={!authUserId || !connected}
+                              title={
+                                !connected
+                                  ? tVotes.offline
+                                  : !authUserId
                                   ? tVotes.mustLogin
                                   : undefined
-                            }
-                          >
-                            {tVotes.like} ({counts.like})
-                          </Button>
+                              }
+                            >
+                              {tVotes.like} ({counts.like})
+                            </Button>
 
-                          <Button
-                            type="button"
-                            variant={myVote === "useful" ? "default" : "outline"}
-                            className="h-8 px-3 text-xs"
-                            onClick={() => toggleVote(r.id, "useful")}
-                            disabled={!authUserId || !connected}
-                            title={
-                              !connected
-                                ? tVotes.offline
-                                : !authUserId
+                            <Button
+                              type="button"
+                              variant={myVote === "useful" ? "default" : "outline"}
+                              className="h-8 px-3 text-xs"
+                              onClick={() => toggleVote(r.id, "useful")}
+                              disabled={!authUserId || !connected}
+                              title={
+                                !connected
+                                  ? tVotes.offline
+                                  : !authUserId
                                   ? tVotes.mustLogin
                                   : undefined
-                            }
-                          >
-                            {tVotes.useful} ({counts.useful})
-                          </Button>
+                              }
+                            >
+                              {tVotes.useful} ({counts.useful})
+                            </Button>
 
-                          <Button
-                            type="button"
-                            variant={myVote === "not_useful" ? "default" : "outline"}
-                            className="h-8 px-3 text-xs"
-                            onClick={() => toggleVote(r.id, "not_useful")}
-                            disabled={!authUserId || !connected}
-                            title={
-                              !connected
-                                ? tVotes.offline
-                                : !authUserId
+                            <Button
+                              type="button"
+                              variant={myVote === "not_useful" ? "default" : "outline"}
+                              className="h-8 px-3 text-xs"
+                              onClick={() => toggleVote(r.id, "not_useful")}
+                              disabled={!authUserId || !connected}
+                              title={
+                                !connected
+                                  ? tVotes.offline
+                                  : !authUserId
                                   ? tVotes.mustLogin
                                   : undefined
-                            }
-                          >
-                            {tVotes.notUseful} ({counts.not_useful})
-                          </Button>
-                        </div>
+                              }
+                            >
+                              {tVotes.notUseful} ({counts.not_useful})
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1724,7 +1850,6 @@ const WorkerDetail: React.FC = () => {
                       type="button"
                       onClick={() => setNewRating(i + 1)}
                       className="focus:outline-none"
-                      disabled={!connected}
                     >
                       <Star
                         className={`w-4 h-4 ${
@@ -1741,23 +1866,29 @@ const WorkerDetail: React.FC = () => {
                   placeholder={language === "fr" ? "Votre avis…" : "Your review…"}
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
-                  disabled={!connected}
                 />
 
                 <Button
                   type="submit"
                   size="sm"
                   className="bg-pro-blue hover:bg-blue-700"
-                  disabled={submitReviewLoading || newRating === 0 || !connected}
-                  title={!connected ? tVotes.offline : undefined}
+                  disabled={submitReviewLoading || newRating === 0}
                 >
                   {submitReviewLoading
                     ? language === "fr"
-                      ? "Envoi de l’avis..."
-                      : "Sending review..."
+                      ? connected
+                        ? "Envoi de l’avis..."
+                        : "Enregistrement local..."
+                      : connected
+                      ? "Sending review..."
+                      : "Saving locally..."
                     : language === "fr"
+                    ? connected
                       ? "Envoyer l’avis"
-                      : "Submit review"}
+                      : "Enregistrer hors ligne"
+                    : connected
+                    ? "Submit review"
+                    : "Save offline"}
                 </Button>
               </form>
             </div>
@@ -2049,15 +2180,15 @@ const WorkerDetail: React.FC = () => {
                             ? "Envoi de la demande..."
                             : "Enregistrement local..."
                           : connected
-                            ? "Sending request..."
-                            : "Saving locally..."
+                          ? "Sending request..."
+                          : "Saving locally..."
                         : language === "fr"
-                          ? connected
-                            ? "Envoyer la demande"
-                            : "Enregistrer hors ligne"
-                          : connected
-                            ? "Send request"
-                            : "Save offline"}
+                        ? connected
+                          ? "Envoyer la demande"
+                          : "Enregistrer hors ligne"
+                        : connected
+                        ? "Send request"
+                        : "Save offline"}
                     </Button>
                   </form>
 
@@ -2067,8 +2198,8 @@ const WorkerDetail: React.FC = () => {
                         ? "Vos données sont uniquement transmises à ce professionnel."
                         : "Votre demande sera conservée localement sur cet appareil."
                       : connected
-                        ? "Your data is only shared with this professional."
-                        : "Your request will be kept locally on this device."}
+                      ? "Your data is only shared with this professional."
+                      : "Your request will be kept locally on this device."}
                   </p>
                 </div>
               </div>
