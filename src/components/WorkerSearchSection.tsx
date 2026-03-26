@@ -32,9 +32,13 @@ import {
 
 type DbWorker = {
   id: string;
+  user_id?: string | null;
   first_name: string | null;
   last_name: string | null;
+  email?: string | null;
+  phone?: string | null;
   profession: string | null;
+  description?: string | null;
   country: string | null;
   region: string | null;
   city: string | null;
@@ -108,11 +112,35 @@ type FavoriteItem = {
   created_at: string;
 };
 
+type WorkerProfileCache = {
+  id: string;
+  user_id: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+  country: string | null;
+  region: string | null;
+  city: string | null;
+  commune: string | null;
+  district: string | null;
+  profession: string | null;
+  description: string | null;
+  hourly_rate: number | null;
+  currency: string | null;
+  latitude: number | null;
+  longitude: number | null;
+};
+
 const DEFAULT_MAX_PRICE = 300000;
 const DEFAULT_RADIUS_KM = 10;
 const WORKERS_CACHE_KEY = "cached_workers_list_v1";
 const WORKERS_CACHE_UPDATED_AT_KEY = "cached_workers_list_updated_at_v1";
 const LAST_SEARCH_KEY = "op:last_search";
+const WORKER_CACHE_KEY_PREFIX = "cached_worker_profile";
+
+const getWorkerCacheKey = (workerId?: string | null) =>
+  workerId ? `${WORKER_CACHE_KEY_PREFIX}:${workerId}` : WORKER_CACHE_KEY_PREFIX;
 
 const getDeviceDefaultView = (): ViewMode => {
   try {
@@ -241,7 +269,10 @@ function paramsToFilters(searchParams: URLSearchParams): Filters {
   };
 }
 
-const normalizeWorker = (w: DbWorker, cms: (k: string, fr: string, en: string) => string): WorkerCard => {
+const normalizeWorker = (
+  w: DbWorker,
+  cms: (k: string, fr: string, en: string) => string
+): WorkerCard => {
   const effectiveRating = (w.computed_average_rating ?? w.average_rating ?? 0) as number;
   const effectiveCount = (w.computed_rating_count ?? w.rating_count ?? 0) as number;
 
@@ -268,6 +299,76 @@ const normalizeWorker = (w: DbWorker, cms: (k: string, fr: string, en: string) =
     longitude: lng,
     distanceKm: null,
   };
+};
+
+const buildWorkerProfileCacheFromDb = (w: DbWorker): WorkerProfileCache => ({
+  id: w.id,
+  user_id: w.user_id ?? null,
+  first_name: w.first_name ?? null,
+  last_name: w.last_name ?? null,
+  email: w.email ?? null,
+  phone: w.phone ?? null,
+  country: w.country ?? null,
+  region: w.region ?? null,
+  city: w.city ?? null,
+  commune: w.commune ?? null,
+  district: w.district ?? null,
+  profession: w.profession ?? null,
+  description: w.description ?? null,
+  hourly_rate: w.hourly_rate ?? null,
+  currency: w.currency ?? null,
+  latitude: typeof w.latitude === "number" ? w.latitude : null,
+  longitude: typeof w.longitude === "number" ? w.longitude : null,
+});
+
+const buildWorkerProfileCacheFromCard = (w: WorkerCard): WorkerProfileCache => {
+  const parts = w.name.trim().split(/\s+/).filter(Boolean);
+
+  return {
+    id: w.id,
+    user_id: null,
+    first_name: parts[0] ?? w.name ?? null,
+    last_name: parts.length > 1 ? parts.slice(1).join(" ") : null,
+    email: null,
+    phone: null,
+    country: w.country ?? null,
+    region: w.region ?? null,
+    city: w.city ?? null,
+    commune: w.commune ?? null,
+    district: w.district ?? null,
+    profession: w.job ?? null,
+    description: null,
+    hourly_rate: w.hourlyRate ?? null,
+    currency: w.currency ?? null,
+    latitude: typeof w.latitude === "number" ? w.latitude : null,
+    longitude: typeof w.longitude === "number" ? w.longitude : null,
+  };
+};
+
+const cacheWorkerProfile = async (profile: WorkerProfileCache) => {
+  const existing = await localStore.get<WorkerProfileCache>(getWorkerCacheKey(profile.id));
+
+  const merged: WorkerProfileCache = {
+    id: profile.id,
+    user_id: profile.user_id ?? existing?.user_id ?? null,
+    first_name: profile.first_name ?? existing?.first_name ?? null,
+    last_name: profile.last_name ?? existing?.last_name ?? null,
+    email: profile.email ?? existing?.email ?? null,
+    phone: profile.phone ?? existing?.phone ?? null,
+    country: profile.country ?? existing?.country ?? null,
+    region: profile.region ?? existing?.region ?? null,
+    city: profile.city ?? existing?.city ?? null,
+    commune: profile.commune ?? existing?.commune ?? null,
+    district: profile.district ?? existing?.district ?? null,
+    profession: profile.profession ?? existing?.profession ?? null,
+    description: profile.description ?? existing?.description ?? null,
+    hourly_rate: profile.hourly_rate ?? existing?.hourly_rate ?? null,
+    currency: profile.currency ?? existing?.currency ?? null,
+    latitude: profile.latitude ?? existing?.latitude ?? null,
+    longitude: profile.longitude ?? existing?.longitude ?? null,
+  };
+
+  await localStore.set(getWorkerCacheKey(profile.id), merged);
 };
 
 const WorkerSearchSection: React.FC = () => {
@@ -393,7 +494,9 @@ const WorkerSearchSection: React.FC = () => {
   const [session, setSession] = useState<any>(null);
 
   const [favoriteMap, setFavoriteMap] = useState<Record<string, FavoriteItem>>({});
-  const [favoriteLoadingByWorkerId, setFavoriteLoadingByWorkerId] = useState<Record<string, boolean>>({});
+  const [favoriteLoadingByWorkerId, setFavoriteLoadingByWorkerId] = useState<
+    Record<string, boolean>
+  >({});
   const [favoriteCacheLoaded, setFavoriteCacheLoaded] = useState(false);
 
   useEffect(() => {
@@ -414,10 +517,11 @@ const WorkerSearchSection: React.FC = () => {
     };
   }, []);
 
-  const goToWorkerProfile = (workerId: string) => {
-    const target = `/ouvrier/${workerId}`;
+  const goToWorkerProfile = async (worker: WorkerCard) => {
+    const target = `/ouvrier/${worker.id}`;
+    const resolvedUserId = session?.user?.id || (await authCache.getUserId());
 
-    if (!session) {
+    if (!resolvedUserId) {
       toast({
         title: cms("auth.login_required.title", "Connexion requise", "Login required"),
         description: cms(
@@ -432,6 +536,12 @@ const WorkerSearchSection: React.FC = () => {
         650
       );
       return;
+    }
+
+    try {
+      await cacheWorkerProfile(buildWorkerProfileCacheFromCard(worker));
+    } catch (err) {
+      console.warn("[WorkerSearchSection] cacheWorkerProfile before navigate warning:", err);
     }
 
     navigate(target);
@@ -526,9 +636,13 @@ const WorkerSearchSection: React.FC = () => {
     const fetchFrom = async (source: "op_ouvriers_with_ratings" | "op_ouvriers") => {
       const baseFields = [
         "id",
+        "user_id",
         "first_name",
         "last_name",
+        "email",
+        "phone",
         "profession",
+        "description",
         "country",
         "region",
         "city",
@@ -595,6 +709,7 @@ const WorkerSearchSection: React.FC = () => {
         await Promise.all([
           localStore.set(WORKERS_CACHE_KEY, mapped),
           localStore.set(WORKERS_CACHE_UPDATED_AT_KEY, syncedAt),
+          ...rows.map((w) => cacheWorkerProfile(buildWorkerProfileCacheFromDb(w))),
         ]);
       } catch (err: any) {
         console.error("WorkerSearchSection fetch error:", err);
@@ -699,7 +814,11 @@ const WorkerSearchSection: React.FC = () => {
     const storedSession = safeParseJson<SearchPayload>(sessionStorage.getItem(LAST_SEARCH_KEY));
     if (
       storedSession &&
-      (storedSession.keyword || storedSession.district || storedSession.lat || storedSession.lng || storedSession.near)
+      (storedSession.keyword ||
+        storedSession.district ||
+        storedSession.lat ||
+        storedSession.lng ||
+        storedSession.near)
     ) {
       const next = new URLSearchParams(searchParams);
       if (storedSession.keyword) next.set("keyword", storedSession.keyword);
@@ -878,15 +997,7 @@ const WorkerSearchSection: React.FC = () => {
       .filter((w) => {
         const kw = f.keyword.trim().toLowerCase();
 
-        const searchPool = [
-          w.name,
-          w.job,
-          w.country,
-          w.region,
-          w.city,
-          w.commune,
-          w.district,
-        ]
+        const searchPool = [w.name, w.job, w.country, w.region, w.city, w.commune, w.district]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
@@ -1092,7 +1203,11 @@ const WorkerSearchSection: React.FC = () => {
   );
 
   const favAdd = cms("search.favorites.add", "Ajouter aux favoris", "Add to favourites");
-  const favRemove = cms("search.favorites.remove", "Retirer des favoris", "Remove from favourites");
+  const favRemove = cms(
+    "search.favorites.remove",
+    "Retirer des favoris",
+    "Remove from favourites"
+  );
   const favAddedOnline = cms(
     "search.favorites.added_online",
     "Prestataire ajouté aux favoris.",
@@ -1113,7 +1228,6 @@ const WorkerSearchSection: React.FC = () => {
     "Retrait enregistré hors ligne. Synchronisation automatique au retour du réseau.",
     "Offline removal saved. It will sync automatically when back online."
   );
-  const favUpdating = cms("search.favorites.updating", "Mise à jour...", "Updating...");
   const favLoginRequiredTitle = cms(
     "search.favorites.login_title",
     "Connexion requise",
@@ -1226,7 +1340,9 @@ const WorkerSearchSection: React.FC = () => {
       });
 
       window.setTimeout(() => {
-        navigate(`/login?redirect=${encodeURIComponent(`/ouvrier/${worker.id}`)}`, { replace: false });
+        navigate(`/login?redirect=${encodeURIComponent(`/ouvrier/${worker.id}`)}`, {
+          replace: false,
+        });
       }, 450);
       return;
     }
@@ -1320,7 +1436,8 @@ const WorkerSearchSection: React.FC = () => {
               <div className="font-medium">{offlineCacheLabel}</div>
               {formattedCacheDate && (
                 <div className="text-xs text-sky-800 mt-1">
-                  {language === "fr" ? "Dernière synchronisation :" : "Last sync:"} {formattedCacheDate}
+                  {language === "fr" ? "Dernière synchronisation :" : "Last sync:"}{" "}
+                  {formattedCacheDate}
                 </div>
               )}
             </div>
@@ -1838,7 +1955,7 @@ const WorkerSearchSection: React.FC = () => {
                                 <Button
                                   size="sm"
                                   className="h-11 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 px-5 text-sm font-semibold text-white shadow-[0_12px_26px_rgba(37,99,235,0.22)] hover:from-blue-700 hover:to-blue-700"
-                                  onClick={() => goToWorkerProfile(w.id)}
+                                  onClick={() => void goToWorkerProfile(w)}
                                 >
                                   {contactLabel}
                                 </Button>
@@ -1944,7 +2061,7 @@ const WorkerSearchSection: React.FC = () => {
                                 <Button
                                   size="sm"
                                   className="h-10 flex-1 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 text-[12px] font-semibold text-white shadow-[0_10px_22px_rgba(37,99,235,0.22)] hover:from-blue-700 hover:to-blue-700"
-                                  onClick={() => goToWorkerProfile(w.id)}
+                                  onClick={() => void goToWorkerProfile(w)}
                                 >
                                   {contactLabel}
                                 </Button>
