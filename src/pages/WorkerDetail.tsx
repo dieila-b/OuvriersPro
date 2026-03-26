@@ -7,7 +7,7 @@ import { useNetworkStatus } from "@/services/networkService";
 import { localStore } from "@/services/localStore";
 import { authCache } from "@/services/authCache";
 import { favoritesRepository } from "@/services/favoritesRepository";
-import { syncService } from "@/services/syncService";
+import { syncService, type OfflineQueueItem } from "@/services/syncService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -112,6 +112,30 @@ const normalizeReview = (row: any): Review => ({
   sync_status: "synced",
 });
 
+const isConnectivityError = (error: unknown, connected: boolean) => {
+  if (!connected) return true;
+
+  const msg =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : JSON.stringify(error || "");
+
+  const text = String(msg || "").toLowerCase();
+
+  return (
+    text.includes("failed to fetch") ||
+    text.includes("networkerror") ||
+    text.includes("network request failed") ||
+    text.includes("load failed") ||
+    text.includes("offline") ||
+    text.includes("fetch") ||
+    text.includes("timeout") ||
+    text.includes("timed out")
+  );
+};
+
 const areReviewsLikelySame = (localReview: Review, serverReview: Review) => {
   const localComment = String(localReview.comment || "").trim();
   const serverComment = String(serverReview.comment || "").trim();
@@ -128,17 +152,45 @@ const areReviewsLikelySame = (localReview: Review, serverReview: Review) => {
   );
 };
 
-const mergeServerAndPendingReviews = (serverReviews: Review[], cachedReviews: Review[]) => {
-  const pendingOnly = cachedReviews.filter((r) => r.sync_status === "pending");
+const sortReviewsDesc = (items: Review[]) =>
+  [...items].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+const mergePendingReviews = (items: Review[]) => {
+  const map = new Map<string, Review>();
+
+  for (const item of items) {
+    const existing = map.get(item.id);
+
+    if (!existing) {
+      map.set(item.id, {
+        ...item,
+        sync_status: item.sync_status === "pending" ? "pending" : item.sync_status ?? "synced",
+      });
+      continue;
+    }
+
+    map.set(item.id, {
+      ...existing,
+      ...item,
+      sync_status:
+        item.sync_status === "pending" || existing.sync_status === "pending"
+          ? "pending"
+          : item.sync_status ?? existing.sync_status ?? "synced",
+    });
+  }
+
+  return sortReviewsDesc(Array.from(map.values()));
+};
+
+const mergeServerAndPendingReviews = (serverReviews: Review[], localReviews: Review[]) => {
+  const pendingOnly = localReviews.filter((r) => r.sync_status === "pending");
 
   const dedupedPending = pendingOnly.filter(
     (pendingReview) =>
       !serverReviews.some((serverReview) => areReviewsLikelySame(pendingReview, serverReview))
   );
 
-  return [...dedupedPending, ...serverReviews].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  );
+  return sortReviewsDesc([...dedupedPending, ...serverReviews]);
 };
 
 const WorkerDetail: React.FC = () => {
@@ -180,6 +232,7 @@ const WorkerDetail: React.FC = () => {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviewsError, setReviewsError] = useState<string | null>(null);
+  const [reviewsInfo, setReviewsInfo] = useState<string | null>(null);
   const [newRating, setNewRating] = useState(0);
   const [newComment, setNewComment] = useState("");
   const [submitReviewLoading, setSubmitReviewLoading] = useState(false);
@@ -322,6 +375,10 @@ const WorkerDetail: React.FC = () => {
         language === "fr"
           ? "Avis enregistré localement, en attente de synchronisation."
           : "Review saved locally, pending synchronization.",
+      savedReview:
+        language === "fr"
+          ? "Avis enregistré hors ligne. Il sera synchronisé automatiquement."
+          : "Review saved offline. It will sync automatically.",
     };
   }, [language]);
 
@@ -356,6 +413,93 @@ const WorkerDetail: React.FC = () => {
           : "Favourite state loaded from local cache.",
     };
   }, [language]);
+
+  const fullName =
+    (worker?.first_name || "") + (worker?.last_name ? ` ${worker.last_name}` : "");
+
+  const saveReviewsCache = useCallback(async (wid: string, items: Review[]) => {
+    await localStore.set(getWorkerReviewsCacheKey(wid), sortReviewsDesc(items));
+  }, []);
+
+  const loadCachedReviews = useCallback(async (wid: string) => {
+    return (await localStore.get<Review[]>(getWorkerReviewsCacheKey(wid))) || [];
+  }, []);
+
+  const loadPendingQueueReviewsForWorker = useCallback(async (wid: string): Promise<Review[]> => {
+    const queue = await syncService.getQueue();
+
+    return queue
+      .filter(
+        (item: OfflineQueueItem) =>
+          item.action_type === "CREATE_WORKER_REVIEW" &&
+          item.table_name === "op_ouvrier_reviews" &&
+          (item.status === "pending" || item.status === "processing" || item.status === "failed") &&
+          String(item.payload_json?.worker_id || "").trim() === wid
+      )
+      .map((item) => ({
+        id: String(item.payload_json?.local_review_id || item.payload_json?.id || item.id),
+        rating:
+          item.payload_json?.rating == null ? null : Number(item.payload_json?.rating ?? null),
+        comment: item.payload_json?.comment ?? null,
+        created_at: item.payload_json?.created_at || item.created_at,
+        client_name: item.payload_json?.client_name ?? null,
+        sync_status: "pending" as const,
+      }));
+  }, []);
+
+  const queueReviewOffline = useCallback(
+    async (params: {
+      workerId: string;
+      userId: string;
+      rating: number;
+      comment: string | null;
+      clientName: string | null;
+    }) => {
+      const { workerId: wid, userId, rating, comment, clientName } = params;
+
+      const localReviewId = createOfflineId("offline_review");
+      const createdAt = new Date().toISOString();
+
+      const offlineReview: Review = {
+        id: localReviewId,
+        rating,
+        comment,
+        created_at: createdAt,
+        client_name: clientName,
+        sync_status: "pending",
+      };
+
+      const cachedReviews = await loadCachedReviews(wid);
+      const merged = mergePendingReviews([offlineReview, ...cachedReviews]);
+
+      setReviews(merged);
+      setUsedReviewsCache(true);
+      await saveReviewsCache(wid, merged);
+
+      await syncService.enqueue({
+        id: createOfflineId("queue"),
+        action_type: "CREATE_WORKER_REVIEW",
+        table_name: "op_ouvrier_reviews",
+        payload_json: {
+          id: localReviewId,
+          local_review_id: localReviewId,
+          user_id: userId,
+          worker_id: wid,
+          rating,
+          comment,
+          client_name: clientName,
+          created_at: createdAt,
+        },
+        created_at: createdAt,
+      });
+
+      setNewRating(0);
+      setNewComment("");
+      setReviewsInfo(tOffline.savedReview);
+      setReviewsError(null);
+    },
+    [loadCachedReviews, saveReviewsCache, tOffline.savedReview]
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -652,74 +796,79 @@ const WorkerDetail: React.FC = () => {
     };
   }, [authUserId, connected, initialized, workerId, tFavorite.cacheLoaded]);
 
-  const fetchReviews = async (wid: string) => {
-    setReviewsLoading(true);
-    setReviewsError(null);
-    setUsedReviewsCache(false);
+  const fetchReviews = useCallback(
+    async (wid: string) => {
+      setReviewsLoading(true);
+      setReviewsError(null);
+      setUsedReviewsCache(false);
 
-    const cacheKey = getWorkerReviewsCacheKey(wid);
+      const readCache = async () => {
+        const cached = await loadCachedReviews(wid);
+        const pendingFromQueue = await loadPendingQueueReviewsForWorker(wid);
+        const mergedLocal = mergePendingReviews([...cached, ...pendingFromQueue]);
 
-    const readCache = async () => {
-      const cached = await localStore.get<Review[]>(cacheKey);
-      if (cached) {
-        const normalizedCached = [...cached].sort(
-          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-        setReviews(normalizedCached);
+        if (mergedLocal.length > 0) {
+          setReviews(mergedLocal);
+          await saveReviewsCache(wid, mergedLocal);
+          setUsedReviewsCache(true);
+          return true;
+        }
+
+        setReviews([]);
         setUsedReviewsCache(true);
-        return true;
-      }
-      setReviews([]);
-      setUsedReviewsCache(true);
-      return false;
-    };
+        return false;
+      };
 
-    try {
-      if (!connected) {
-        await readCache();
-        return;
-      }
+      try {
+        if (!connected) {
+          await readCache();
+          return;
+        }
 
-      const { data, error } = await supabase
-        .from("op_ouvrier_reviews")
-        .select("*")
-        .eq("worker_id", wid)
-        .order("created_at", { ascending: false });
+        const { data, error } = await supabase
+          .from("op_ouvrier_reviews")
+          .select("*")
+          .eq("worker_id", wid)
+          .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("loadReviews error", error);
+        if (error) {
+          console.error("loadReviews error", error);
+          const ok = await readCache();
+          if (!ok) {
+            setReviewsError(
+              language === "fr" ? "Impossible de charger les avis." : "Unable to load reviews."
+            );
+          }
+        } else {
+          const serverMapped: Review[] = (data || []).map((r: any) => normalizeReview(r));
+          const cachedReviews = await loadCachedReviews(wid);
+          const pendingFromQueue = await loadPendingQueueReviewsForWorker(wid);
+          const localMerged = mergePendingReviews([...cachedReviews, ...pendingFromQueue]);
+          const merged = mergeServerAndPendingReviews(serverMapped, localMerged);
+
+          setReviews(merged);
+          setUsedReviewsCache(false);
+          await saveReviewsCache(wid, merged);
+        }
+      } catch (e) {
+        console.error("fetchReviews error", e);
         const ok = await readCache();
         if (!ok) {
           setReviewsError(
             language === "fr" ? "Impossible de charger les avis." : "Unable to load reviews."
           );
         }
-      } else {
-        const serverMapped: Review[] = (data || []).map((r: any) => normalizeReview(r));
-        const cachedReviews = (await localStore.get<Review[]>(cacheKey)) || [];
-        const merged = mergeServerAndPendingReviews(serverMapped, cachedReviews);
-
-        setReviews(merged);
-        setUsedReviewsCache(false);
-        await localStore.set(cacheKey, merged);
+      } finally {
+        setReviewsLoading(false);
       }
-    } catch (e) {
-      console.error("fetchReviews error", e);
-      const ok = await readCache();
-      if (!ok) {
-        setReviewsError(
-          language === "fr" ? "Impossible de charger les avis." : "Unable to load reviews."
-        );
-      }
-    } finally {
-      setReviewsLoading(false);
-    }
-  };
+    },
+    [connected, language, loadCachedReviews, loadPendingQueueReviewsForWorker, saveReviewsCache]
+  );
 
   useEffect(() => {
     if (!workerId || !initialized) return;
     void fetchReviews(workerId);
-  }, [workerId, language, connected, initialized]);
+  }, [workerId, initialized, fetchReviews]);
 
   useEffect(() => {
     const loadPhotos = async () => {
@@ -788,8 +937,46 @@ const WorkerDetail: React.FC = () => {
     }
   }, [workerId, language, connected, initialized]);
 
-  const fullName =
-    (worker?.first_name || "") + (worker?.last_name ? ` ${worker.last_name}` : "");
+  useEffect(() => {
+    if (!workerId || !initialized) return;
+
+    const onSyncSignal = () => {
+      if (!workerId) return;
+
+      if (connected) {
+        void (async () => {
+          try {
+            await syncService.syncNow();
+          } catch (e) {
+            console.warn("[WorkerDetail] syncNow failed", e);
+          } finally {
+            await fetchReviews(workerId);
+          }
+        })();
+        return;
+      }
+
+      void fetchReviews(workerId);
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        onSyncSignal();
+      }
+    };
+
+    window.addEventListener("focus", onSyncSignal);
+    window.addEventListener("online", onSyncSignal);
+    window.addEventListener("storage", onSyncSignal);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", onSyncSignal);
+      window.removeEventListener("online", onSyncSignal);
+      window.removeEventListener("storage", onSyncSignal);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [workerId, connected, initialized, fetchReviews]);
 
   const location = [
     worker?.country,
@@ -1322,6 +1509,9 @@ const WorkerDetail: React.FC = () => {
 
     setSubmitReviewLoading(true);
     setReviewsError(null);
+    setReviewsInfo(null);
+
+    const trimmedComment = newComment?.trim() ? newComment.trim() : null;
 
     try {
       const resolvedUserId = authUserId || (await authCache.getUserId());
@@ -1335,50 +1525,13 @@ const WorkerDetail: React.FC = () => {
       }
 
       if (!connected) {
-        const localReviewId = createOfflineId("offline_review");
-        const createdAt = new Date().toISOString();
-
-        const offlineReview: Review = {
-          id: localReviewId,
+        await queueReviewOffline({
+          workerId: worker.id,
+          userId: resolvedUserId,
           rating: newRating,
-          comment: newComment?.trim() ? newComment.trim() : null,
-          created_at: createdAt,
-          client_name: language === "fr" ? "Vous" : "You",
-          sync_status: "pending",
-        };
-
-        const nextReviews = [offlineReview, ...reviews].sort(
-          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-
-        setReviews(nextReviews);
-        setUsedReviewsCache(true);
-        await localStore.set(getWorkerReviewsCacheKey(worker.id), nextReviews);
-
-        await syncService.enqueue({
-          id: createOfflineId("queue"),
-          action_type: "CREATE_WORKER_REVIEW",
-          table_name: "op_ouvrier_reviews",
-          payload_json: {
-            id: localReviewId,
-            local_review_id: localReviewId,
-            user_id: resolvedUserId,
-            worker_id: worker.id,
-            rating: newRating,
-            comment: newComment?.trim() ? newComment.trim() : null,
-            client_name: language === "fr" ? "Vous" : "You",
-            created_at: createdAt,
-          },
-          created_at: createdAt,
+          comment: trimmedComment,
+          clientName: language === "fr" ? "Vous" : "You",
         });
-
-        setNewRating(0);
-        setNewComment("");
-        setReviewsError(
-          language === "fr"
-            ? "Avis enregistré hors ligne. Il sera synchronisé automatiquement."
-            : "Review saved offline. It will sync automatically."
-        );
         return;
       }
 
@@ -1397,7 +1550,7 @@ const WorkerDetail: React.FC = () => {
         client_id: user.id,
         worker_id: worker.id,
         rating: newRating,
-        comment: newComment?.trim() ? newComment.trim() : null,
+        comment: trimmedComment,
       };
 
       const payloadWithStatus = { ...payloadBase, status: "pending" };
@@ -1410,6 +1563,7 @@ const WorkerDetail: React.FC = () => {
         .insert(payloadWithStatus)
         .select("id")
         .maybeSingle();
+
       insertError = attempt1.error;
       inserted = attempt1.data;
 
@@ -1419,6 +1573,7 @@ const WorkerDetail: React.FC = () => {
           .insert(payloadBase)
           .select("id")
           .maybeSingle();
+
         insertError = attempt2.error;
         inserted = attempt2.data;
       }
@@ -1437,7 +1592,25 @@ const WorkerDetail: React.FC = () => {
       setNewComment("");
     } catch (err: any) {
       console.error(err);
-      setReviewsError(err.message || "Error");
+
+      try {
+        const resolvedUserId = authUserId || (await authCache.getUserId());
+
+        if (resolvedUserId && isConnectivityError(err, connected)) {
+          await queueReviewOffline({
+            workerId: worker.id,
+            userId: resolvedUserId,
+            rating: newRating,
+            comment: trimmedComment,
+            clientName: language === "fr" ? "Vous" : "You",
+          });
+          return;
+        }
+      } catch (fallbackError) {
+        console.error("review offline fallback failed", fallbackError);
+      }
+
+      setReviewsError(err?.message || "Error");
     } finally {
       setSubmitReviewLoading(false);
     }
@@ -1693,6 +1866,12 @@ const WorkerDetail: React.FC = () => {
                 </div>
               )}
 
+              {reviewsInfo && (
+                <div className="mb-2 text-xs text-sky-700 bg-sky-50 border border-sky-100 rounded px-3 py-2">
+                  {reviewsInfo}
+                </div>
+              )}
+
               <div className="flex items-center gap-2 mb-3 text-sm">
                 <div className="inline-flex items-center gap-1 text-amber-500">
                   <Star className="w-4 h-4 fill-amber-400" />
@@ -1791,8 +1970,8 @@ const WorkerDetail: React.FC = () => {
                                 !connected
                                   ? tVotes.offline
                                   : !authUserId
-                                  ? tVotes.mustLogin
-                                  : undefined
+                                    ? tVotes.mustLogin
+                                    : undefined
                               }
                             >
                               {tVotes.like} ({counts.like})
@@ -1808,8 +1987,8 @@ const WorkerDetail: React.FC = () => {
                                 !connected
                                   ? tVotes.offline
                                   : !authUserId
-                                  ? tVotes.mustLogin
-                                  : undefined
+                                    ? tVotes.mustLogin
+                                    : undefined
                               }
                             >
                               {tVotes.useful} ({counts.useful})
@@ -1825,8 +2004,8 @@ const WorkerDetail: React.FC = () => {
                                 !connected
                                   ? tVotes.offline
                                   : !authUserId
-                                  ? tVotes.mustLogin
-                                  : undefined
+                                    ? tVotes.mustLogin
+                                    : undefined
                               }
                             >
                               {tVotes.notUseful} ({counts.not_useful})
@@ -1880,15 +2059,15 @@ const WorkerDetail: React.FC = () => {
                         ? "Envoi de l’avis..."
                         : "Enregistrement local..."
                       : connected
-                      ? "Sending review..."
-                      : "Saving locally..."
+                        ? "Sending review..."
+                        : "Saving locally..."
                     : language === "fr"
-                    ? connected
-                      ? "Envoyer l’avis"
-                      : "Enregistrer hors ligne"
-                    : connected
-                    ? "Submit review"
-                    : "Save offline"}
+                      ? connected
+                        ? "Envoyer l’avis"
+                        : "Enregistrer hors ligne"
+                      : connected
+                        ? "Submit review"
+                        : "Save offline"}
                 </Button>
               </form>
             </div>
@@ -2180,15 +2359,15 @@ const WorkerDetail: React.FC = () => {
                             ? "Envoi de la demande..."
                             : "Enregistrement local..."
                           : connected
-                          ? "Sending request..."
-                          : "Saving locally..."
+                            ? "Sending request..."
+                            : "Saving locally..."
                         : language === "fr"
-                        ? connected
-                          ? "Envoyer la demande"
-                          : "Enregistrer hors ligne"
-                        : connected
-                        ? "Send request"
-                        : "Save offline"}
+                          ? connected
+                            ? "Envoyer la demande"
+                            : "Enregistrer hors ligne"
+                          : connected
+                            ? "Send request"
+                            : "Save offline"}
                     </Button>
                   </form>
 
@@ -2198,8 +2377,8 @@ const WorkerDetail: React.FC = () => {
                         ? "Vos données sont uniquement transmises à ce professionnel."
                         : "Votre demande sera conservée localement sur cet appareil."
                       : connected
-                      ? "Your data is only shared with this professional."
-                      : "Your request will be kept locally on this device."}
+                        ? "Your data is only shared with this professional."
+                        : "Your request will be kept locally on this device."}
                   </p>
                 </div>
               </div>
