@@ -103,6 +103,26 @@ const getRequestsCacheKey = (userId?: string | null) =>
 const createOfflineId = (prefix: string) =>
   `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
+const createOfflineFallbackWorker = (workerId: string): WorkerProfile => ({
+  id: workerId,
+  user_id: null,
+  first_name: null,
+  last_name: null,
+  email: null,
+  phone: null,
+  country: null,
+  region: null,
+  city: null,
+  commune: null,
+  district: null,
+  profession: null,
+  description: null,
+  hourly_rate: null,
+  currency: "GNF",
+  latitude: null,
+  longitude: null,
+});
+
 const normalizeReview = (row: any): Review => ({
   id: row.id,
   rating: row.rating ?? null,
@@ -276,6 +296,10 @@ const WorkerDetail: React.FC = () => {
         language === "fr"
           ? "Les réactions nécessitent une connexion Internet."
           : "Reactions require an internet connection.",
+      pendingLocked:
+        language === "fr"
+          ? "Les réactions sont disponibles après synchronisation de l’avis."
+          : "Reactions are available after the review is synchronized.",
     };
   }, [language]);
 
@@ -355,6 +379,10 @@ const WorkerDetail: React.FC = () => {
         language === "fr"
           ? "Affichage du profil synchronisé jusqu’à la dernière connexion."
           : "Showing the profile synced up to the last connection.",
+      profileFallback:
+        language === "fr"
+          ? "Aucun cache détaillé trouvé. Affichage d’une fiche locale minimale pour éviter le blocage hors ligne."
+          : "No detailed cache found. Showing a minimal local card to avoid blocking offline.",
       reviews:
         language === "fr"
           ? "Affichage des avis synchronisés jusqu’à la dernière connexion."
@@ -363,6 +391,10 @@ const WorkerDetail: React.FC = () => {
         language === "fr"
           ? "Profil chargé depuis le cache local."
           : "Profile loaded from local cache.",
+      cacheProfileFallback:
+        language === "fr"
+          ? "Profil partiel généré localement pour l’accès hors ligne."
+          : "Partial profile generated locally for offline access.",
       cacheReviews:
         language === "fr"
           ? "Avis chargés depuis le cache local."
@@ -416,6 +448,9 @@ const WorkerDetail: React.FC = () => {
 
   const fullName =
     (worker?.first_name || "") + (worker?.last_name ? ` ${worker.last_name}` : "");
+
+  const workerDisplayName =
+    fullName.trim() || (language === "fr" ? "Prestataire" : "Provider");
 
   const saveReviewsCache = useCallback(async (wid: string, items: Review[]) => {
     await localStore.set(getWorkerReviewsCacheKey(wid), sortReviewsDesc(items));
@@ -664,6 +699,14 @@ const WorkerDetail: React.FC = () => {
 
       const cacheKey = getWorkerCacheKey(workerId);
 
+      const applyFallbackWorker = async () => {
+        const fallback = createOfflineFallbackWorker(workerId);
+        setWorker(fallback);
+        setUsedWorkerCache(true);
+        setWorkerError(null);
+        await localStore.set(cacheKey, fallback);
+      };
+
       const readCache = async () => {
         const cached = await localStore.get<WorkerProfile>(cacheKey);
         if (cached) {
@@ -679,11 +722,7 @@ const WorkerDetail: React.FC = () => {
         if (!connected) {
           const ok = await readCache();
           if (!ok) {
-            setWorkerError(
-              language === "fr"
-                ? "Profil non disponible hors connexion."
-                : "Profile unavailable offline."
-            );
+            await applyFallbackWorker();
           }
           return;
         }
@@ -718,27 +757,36 @@ const WorkerDetail: React.FC = () => {
           console.error("loadWorker error", error);
           const ok = await readCache();
           if (!ok) {
-            setWorkerError(
-              language === "fr"
-                ? "Impossible de charger le profil de cet ouvrier."
-                : "Unable to load this worker profile."
-            );
+            if (isConnectivityError(error, connected)) {
+              await applyFallbackWorker();
+            } else {
+              setWorkerError(
+                language === "fr"
+                  ? "Impossible de charger le profil de cet ouvrier."
+                  : "Unable to load this worker profile."
+              );
+            }
           }
         } else {
           const nextWorker = data as WorkerProfile;
           setWorker(nextWorker);
           setUsedWorkerCache(false);
+          setWorkerError(null);
           await localStore.set(cacheKey, nextWorker);
         }
       } catch (e) {
         console.error("loadWorker exception", e);
         const ok = await readCache();
         if (!ok) {
-          setWorkerError(
-            language === "fr"
-              ? "Impossible de charger le profil de cet ouvrier."
-              : "Unable to load this worker profile."
-          );
+          if (isConnectivityError(e, connected)) {
+            await applyFallbackWorker();
+          } else {
+            setWorkerError(
+              language === "fr"
+                ? "Impossible de charger le profil de cet ouvrier."
+                : "Unable to load this worker profile."
+            );
+          }
         }
       } finally {
         setLoadingWorker(false);
@@ -1045,9 +1093,7 @@ const WorkerDetail: React.FC = () => {
   const reportTargetId = (worker?.user_id ?? worker?.id) as string;
 
   const loadVotesAndCounts = async () => {
-    const reviewIds = reviews
-      .filter((r) => r.sync_status !== "pending")
-      .map((r) => r.id);
+    const reviewIds = reviews.filter((r) => r.sync_status !== "pending").map((r) => r.id);
 
     if (reviewIds.length === 0) {
       setMyVoteByReviewId({});
@@ -1114,11 +1160,7 @@ const WorkerDetail: React.FC = () => {
 
     const targetReview = reviews.find((r) => r.id === reviewId);
     if (targetReview?.sync_status === "pending") {
-      setVoteError(
-        language === "fr"
-          ? "Les réactions sont disponibles après synchronisation de l’avis."
-          : "Reactions are available after the review is synchronized."
-      );
+      setVoteError(tVotes.pendingLocked);
       return;
     }
 
@@ -1228,7 +1270,7 @@ const WorkerDetail: React.FC = () => {
           userId: resolvedUserId,
           connected,
           workerId: worker.id,
-          workerName: fullName || (language === "fr" ? "Ouvrier" : "Worker"),
+          workerName: workerDisplayName,
           profession: worker.profession ?? null,
         });
 
@@ -1254,7 +1296,7 @@ const WorkerDetail: React.FC = () => {
     favoriteId,
     isFavorite,
     tFavorite,
-    fullName,
+    workerDisplayName,
     language,
     navigate,
   ]);
@@ -1342,7 +1384,7 @@ const WorkerDetail: React.FC = () => {
           client_name: clientName || null,
           client_email: clientEmail || null,
           client_phone: clientPhone || null,
-          worker_name: fullName || null,
+          worker_name: workerDisplayName || null,
           created_at: createdAt,
         };
 
@@ -1357,7 +1399,7 @@ const WorkerDetail: React.FC = () => {
         await addCachedClientRequest(cachedUserId, {
           id: offlineContactId,
           created_at: createdAt,
-          worker_name: fullName || (language === "fr" ? "Ouvrier" : "Worker"),
+          worker_name: workerDisplayName,
           status: "pending_sync",
           message: detailedMessage || "",
           origin: "offline",
@@ -1450,7 +1492,7 @@ const WorkerDetail: React.FC = () => {
         client_name: clientName || null,
         client_email: clientEmail || user.email || null,
         client_phone: clientPhone || null,
-        worker_name: fullName || null,
+        worker_name: workerDisplayName || null,
       };
 
       const { data: insertedContact, error: contactError } = await supabase
@@ -1472,7 +1514,7 @@ const WorkerDetail: React.FC = () => {
       await addCachedClientRequest(userIdForCache, {
         id: insertedContact?.id || createOfflineId("synced_contact"),
         created_at: insertedContact?.created_at || new Date().toISOString(),
-        worker_name: insertedContact?.worker_name || fullName || null,
+        worker_name: insertedContact?.worker_name || workerDisplayName || null,
         status: insertedContact?.status || "new",
         message: insertedContact?.message || detailedMessage || "",
         origin: insertedContact?.origin || "web",
@@ -1637,6 +1679,16 @@ const WorkerDetail: React.FC = () => {
   }
 
   const hasAnyLocation = Boolean(locationQuery) || hasCoords;
+  const isFallbackWorker =
+    !worker.first_name &&
+    !worker.last_name &&
+    !worker.phone &&
+    !worker.email &&
+    !worker.city &&
+    !worker.commune &&
+    !worker.district &&
+    !worker.profession &&
+    !worker.description;
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
@@ -1654,7 +1706,9 @@ const WorkerDetail: React.FC = () => {
             <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
               <div className="font-medium">{tOffline.title}</div>
-              <div className="text-xs text-amber-800 mt-1">{tOffline.profile}</div>
+              <div className="text-xs text-amber-800 mt-1">
+                {isFallbackWorker ? tOffline.profileFallback : tOffline.profile}
+              </div>
             </div>
           </div>
         )}
@@ -1663,7 +1717,7 @@ const WorkerDetail: React.FC = () => {
           <div className="mb-4 space-y-2">
             {usedWorkerCache && (
               <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
-                {tOffline.cacheProfile}
+                {isFallbackWorker ? tOffline.cacheProfileFallback : tOffline.cacheProfile}
               </div>
             )}
             {usedReviewsCache && (
@@ -1705,7 +1759,9 @@ const WorkerDetail: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    <Heart className={`mr-2 h-4 w-4 ${isFavorite ? "fill-rose-500 text-rose-500" : ""}`} />
+                    <Heart
+                      className={`mr-2 h-4 w-4 ${isFavorite ? "fill-rose-500 text-rose-500" : ""}`}
+                    />
                     {isFavorite ? tFavorite.remove : tFavorite.add}
                   </>
                 )}
@@ -1728,20 +1784,16 @@ const WorkerDetail: React.FC = () => {
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-full bg-pro-blue/10 flex items-center justify-center text-pro-blue font-semibold text-lg">
-                    {fullName
-                      ? fullName
-                          .split(" ")
-                          .filter(Boolean)
-                          .slice(0, 2)
-                          .map((n) => n[0])
-                          .join("")
-                          .toUpperCase()
-                      : "OP"}
+                    {workerDisplayName
+                      .split(" ")
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .map((n) => n[0])
+                      .join("")
+                      .toUpperCase() || "OP"}
                   </div>
                   <div>
-                    <h1 className="text-xl font-bold text-slate-900">
-                      {fullName || (language === "fr" ? "Ouvrier" : "Worker")}
-                    </h1>
+                    <h1 className="text-xl font-bold text-slate-900">{workerDisplayName}</h1>
                     {worker.profession && <p className="text-sm text-slate-600">{worker.profession}</p>}
                     {location && (
                       <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500">
@@ -1764,7 +1816,8 @@ const WorkerDetail: React.FC = () => {
                       {language === "fr" ? "avis" : "reviews"}
                     </div>
                     <div className="text-[11px] text-slate-400">
-                      {reviews.length} {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
+                      {reviews.length}{" "}
+                      {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
                     </div>
                   </div>
 
@@ -1880,7 +1933,8 @@ const WorkerDetail: React.FC = () => {
                   </span>
                 </div>
                 <span className="text-xs text-slate-500">
-                  {reviews.length} {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
+                  {reviews.length}{" "}
+                  {language === "fr" ? "avis" : reviews.length <= 1 ? "review" : "reviews"}
                 </span>
               </div>
 
@@ -2191,7 +2245,11 @@ const WorkerDetail: React.FC = () => {
             <div className="absolute inset-0 bg-black/40" onClick={closeContact} />
 
             <div
-              className={isMobileUI ? "absolute inset-x-0 bottom-0" : "absolute inset-0 flex items-center justify-center p-4"}
+              className={
+                isMobileUI
+                  ? "absolute inset-x-0 bottom-0"
+                  : "absolute inset-0 flex items-center justify-center p-4"
+              }
             >
               <div
                 className={[
@@ -2391,7 +2449,11 @@ const WorkerDetail: React.FC = () => {
             <div className="absolute inset-0 bg-black/40" onClick={closeGallery} />
 
             <div
-              className={isMobileUI ? "absolute inset-x-0 bottom-0" : "absolute inset-0 flex items-center justify-center p-4"}
+              className={
+                isMobileUI
+                  ? "absolute inset-x-0 bottom-0"
+                  : "absolute inset-0 flex items-center justify-center p-4"
+              }
             >
               <div
                 className={[
