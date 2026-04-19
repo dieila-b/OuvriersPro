@@ -22,8 +22,31 @@ type SearchPayload = {
   near?: string;
 };
 
+type CachedWorkerProfile = {
+  id: string;
+  user_id: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+  country: string | null;
+  region: string | null;
+  city: string | null;
+  commune: string | null;
+  district: string | null;
+  profession: string | null;
+  description: string | null;
+  hourly_rate: number | null;
+  currency: string | null;
+  latitude: number | null;
+  longitude: number | null;
+};
+
 const LAST_SEARCH_KEY = "op:last_search";
 const SEARCH_BOOTSTRAP_KEY = "op:last_search_bootstrap";
+const SEARCH_RESULTS_CACHE_KEY = "cached_workers_search_results";
+const SEARCH_RESULTS_SYNCED_AT_KEY = "cached_workers_search_results_synced_at";
+const WORKER_CACHE_KEY_PREFIX = "cached_worker_profile";
 
 /**
  * ✅ Native = vrai Capacitor (protocol capacitor/file, ou Capacitor platform != web)
@@ -121,6 +144,163 @@ function useNativeTapToClickFix(enabled: boolean) {
     return () => document.removeEventListener("touchend", onTouchEndCapture, true);
   }, [enabled]);
 }
+
+const getWorkerCacheKey = (workerId?: string | null) =>
+  workerId ? `${WORKER_CACHE_KEY_PREFIX}:${workerId}` : WORKER_CACHE_KEY_PREFIX;
+
+const normalizeNullableString = (value: unknown): string | null => {
+  if (typeof value !== "string") return value == null ? null : String(value);
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
+
+const normalizeNullableNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+};
+
+const pickFirst = (source: Record<string, any>, keys: string[]) => {
+  for (const key of keys) {
+    if (source[key] !== undefined && source[key] !== null) return source[key];
+  }
+  return null;
+};
+
+const normalizeWorkerResultToProfile = (row: Record<string, any>): CachedWorkerProfile | null => {
+  const id = normalizeNullableString(
+    pickFirst(row, ["id", "worker_id", "ouvrier_id", "provider_id"])
+  );
+
+  if (!id) return null;
+
+  const firstName = normalizeNullableString(
+    pickFirst(row, ["first_name", "firstname", "prenom", "given_name"])
+  );
+  const lastName = normalizeNullableString(
+    pickFirst(row, ["last_name", "lastname", "nom", "family_name"])
+  );
+  const fullName = normalizeNullableString(
+    pickFirst(row, ["full_name", "name", "worker_name", "display_name"])
+  );
+
+  const inferredFirstName =
+    firstName ??
+    (fullName ? fullName.split(" ").filter(Boolean).slice(0, 1).join(" ") || null : null);
+
+  const inferredLastName =
+    lastName ??
+    (fullName
+      ? fullName.split(" ").filter(Boolean).slice(1).join(" ").trim() || null
+      : null);
+
+  return {
+    id,
+    user_id: normalizeNullableString(pickFirst(row, ["user_id"])),
+    first_name: inferredFirstName,
+    last_name: inferredLastName,
+    email: normalizeNullableString(pickFirst(row, ["email"])),
+    phone: normalizeNullableString(pickFirst(row, ["phone", "phone_number", "telephone"])),
+    country: normalizeNullableString(pickFirst(row, ["country", "pays"])),
+    region: normalizeNullableString(pickFirst(row, ["region"])),
+    city: normalizeNullableString(pickFirst(row, ["city", "ville"])),
+    commune: normalizeNullableString(pickFirst(row, ["commune"])),
+    district: normalizeNullableString(pickFirst(row, ["district", "quartier"])),
+    profession: normalizeNullableString(
+      pickFirst(row, ["profession", "job_title", "service", "metier"])
+    ),
+    description: normalizeNullableString(pickFirst(row, ["description", "bio", "about"])),
+    hourly_rate: normalizeNullableNumber(
+      pickFirst(row, ["hourly_rate", "rate", "tarif_horaire", "price_per_hour"])
+    ),
+    currency: normalizeNullableString(pickFirst(row, ["currency", "devise"])) ?? "GNF",
+    latitude: normalizeNullableNumber(pickFirst(row, ["latitude", "lat"])),
+    longitude: normalizeNullableNumber(pickFirst(row, ["longitude", "lng", "lon"])),
+  };
+};
+
+const extractWorkersFromUnknownPayload = (payload: unknown): CachedWorkerProfile[] => {
+  if (!payload) return [];
+
+  const candidates: unknown[] = [];
+
+  if (Array.isArray(payload)) {
+    candidates.push(...payload);
+  } else if (typeof payload === "object") {
+    const obj = payload as Record<string, unknown>;
+
+    if (Array.isArray(obj.results)) candidates.push(...obj.results);
+    if (Array.isArray(obj.items)) candidates.push(...obj.items);
+    if (Array.isArray(obj.workers)) candidates.push(...obj.workers);
+    if (Array.isArray(obj.providers)) candidates.push(...obj.providers);
+    if (Array.isArray(obj.data)) candidates.push(...obj.data);
+
+    if (candidates.length === 0 && obj.id) {
+      candidates.push(obj);
+    }
+  }
+
+  const normalized: CachedWorkerProfile[] = [];
+  const seen = new Set<string>();
+
+  for (const item of candidates) {
+    if (!item || typeof item !== "object") continue;
+    const profile = normalizeWorkerResultToProfile(item as Record<string, any>);
+    if (!profile?.id) continue;
+    if (seen.has(profile.id)) continue;
+    seen.add(profile.id);
+    normalized.push(profile);
+  }
+
+  return normalized;
+};
+
+const persistWorkerDetailCache = async (workers: CachedWorkerProfile[]) => {
+  if (!workers.length) return;
+
+  await Promise.all(
+    workers.map(async (worker) => {
+      const key = getWorkerCacheKey(worker.id);
+      const existing = await localStore.get<CachedWorkerProfile>(key);
+
+      const merged: CachedWorkerProfile = {
+        id: worker.id,
+        user_id: worker.user_id ?? existing?.user_id ?? null,
+        first_name: worker.first_name ?? existing?.first_name ?? null,
+        last_name: worker.last_name ?? existing?.last_name ?? null,
+        email: worker.email ?? existing?.email ?? null,
+        phone: worker.phone ?? existing?.phone ?? null,
+        country: worker.country ?? existing?.country ?? null,
+        region: worker.region ?? existing?.region ?? null,
+        city: worker.city ?? existing?.city ?? null,
+        commune: worker.commune ?? existing?.commune ?? null,
+        district: worker.district ?? existing?.district ?? null,
+        profession: worker.profession ?? existing?.profession ?? null,
+        description: worker.description ?? existing?.description ?? null,
+        hourly_rate: worker.hourly_rate ?? existing?.hourly_rate ?? null,
+        currency: worker.currency ?? existing?.currency ?? "GNF",
+        latitude: worker.latitude ?? existing?.latitude ?? null,
+        longitude: worker.longitude ?? existing?.longitude ?? null,
+      };
+
+      await localStore.set(key, merged);
+    })
+  );
+};
+
+const persistSearchResultsSnapshot = async (workers: CachedWorkerProfile[]) => {
+  if (!workers.length) return;
+
+  try {
+    await localStore.set(SEARCH_RESULTS_CACHE_KEY, workers);
+    await localStore.set(SEARCH_RESULTS_SYNCED_AT_KEY, new Date().toISOString());
+  } catch {
+    // ignore
+  }
+};
 
 const Index = () => {
   const { language } = useLanguage();
@@ -312,15 +492,110 @@ const Index = () => {
     if (!restoredSearch) return;
 
     try {
-      window.dispatchEvent(
-        new CustomEvent("op:search-bootstrap", {
-          detail: restoredSearch,
-        })
-      );
+      const alreadyBootstrapped =
+        (() => {
+          try {
+            return sessionStorage.getItem(SEARCH_BOOTSTRAP_KEY) === "1";
+          } catch {
+            return false;
+          }
+        })() && isHomeRoute;
+
+      if (!alreadyBootstrapped) {
+        window.dispatchEvent(
+          new CustomEvent("op:search-bootstrap", {
+            detail: restoredSearch,
+          })
+        );
+
+        try {
+          sessionStorage.setItem(SEARCH_BOOTSTRAP_KEY, "1");
+        } catch {
+          // ignore
+        }
+      }
     } catch {
       // ignore
     }
-  }, [initialized, restoredSearch, hasAnySearchParam]);
+  }, [initialized, restoredSearch, hasAnySearchParam, isHomeRoute]);
+
+  // ✅ alimente automatiquement le cache détail à partir des résultats de recherche
+  useEffect(() => {
+    if (!initialized) return;
+
+    let mounted = true;
+
+    const handleWorkersPayload = async (payload: unknown) => {
+      const workers = extractWorkersFromUnknownPayload(payload);
+      if (!workers.length) return;
+
+      try {
+        await persistWorkerDetailCache(workers);
+        await persistSearchResultsSnapshot(workers);
+      } catch (error) {
+        console.warn("[Index] persist worker detail cache warning:", error);
+      }
+    };
+
+    const onCustomResults = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      void handleWorkersPayload(detail);
+    };
+
+    const onStorageSync = async () => {
+      if (!mounted) return;
+
+      try {
+        const cachedResults = await localStore.get<CachedWorkerProfile[]>(SEARCH_RESULTS_CACHE_KEY);
+        if (cachedResults?.length) {
+          await persistWorkerDetailCache(cachedResults);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    window.addEventListener("op:workers-results", onCustomResults as EventListener);
+    window.addEventListener("op:worker-results", onCustomResults as EventListener);
+    window.addEventListener("op:search-results", onCustomResults as EventListener);
+    window.addEventListener("op:workers-search-results", onCustomResults as EventListener);
+    window.addEventListener("storage", onStorageSync);
+    window.addEventListener("focus", onStorageSync);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener("op:workers-results", onCustomResults as EventListener);
+      window.removeEventListener("op:worker-results", onCustomResults as EventListener);
+      window.removeEventListener("op:search-results", onCustomResults as EventListener);
+      window.removeEventListener("op:workers-search-results", onCustomResults as EventListener);
+      window.removeEventListener("storage", onStorageSync);
+      window.removeEventListener("focus", onStorageSync);
+    };
+  }, [initialized]);
+
+  // ✅ si on a déjà un snapshot local de résultats, on régénère aussi les caches détail au boot offline
+  useEffect(() => {
+    if (!initialized) return;
+
+    let mounted = true;
+
+    const hydrateDetailCacheFromSnapshot = async () => {
+      try {
+        const cachedResults = await localStore.get<CachedWorkerProfile[]>(SEARCH_RESULTS_CACHE_KEY);
+        if (!mounted) return;
+        if (!cachedResults?.length) return;
+        await persistWorkerDetailCache(cachedResults);
+      } catch {
+        // ignore
+      }
+    };
+
+    void hydrateDetailCacheFromSnapshot();
+
+    return () => {
+      mounted = false;
+    };
+  }, [initialized]);
 
   // ✅ Mesure des overlays en haut (header + barres sticky/fixed)
   const getTopOverlayOffset = () => {
