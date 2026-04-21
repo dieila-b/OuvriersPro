@@ -87,6 +87,7 @@ const WORKER_CACHE_KEY_PREFIX = "cached_worker_profile";
 const WORKER_REVIEWS_CACHE_KEY_PREFIX = "cached_worker_reviews";
 const WORKER_PHOTOS_CACHE_KEY_PREFIX = "cached_worker_photos";
 const REQUESTS_CACHE_PREFIX = "cached_client_requests";
+const WORKER_CACHE_WARM_EVENT = "op:worker-profile-cached";
 
 const getWorkerCacheKey = (workerId?: string | null) =>
   workerId ? `${WORKER_CACHE_KEY_PREFIX}:${workerId}` : WORKER_CACHE_KEY_PREFIX;
@@ -121,6 +122,26 @@ const createOfflineFallbackWorker = (workerId: string): WorkerProfile => ({
   currency: "GNF",
   latitude: null,
   longitude: null,
+});
+
+const normalizeWorkerProfile = (row: any, workerId: string): WorkerProfile => ({
+  id: row?.id || workerId,
+  user_id: row?.user_id ?? null,
+  first_name: row?.first_name ?? null,
+  last_name: row?.last_name ?? null,
+  email: row?.email ?? null,
+  phone: row?.phone ?? null,
+  country: row?.country ?? null,
+  region: row?.region ?? null,
+  city: row?.city ?? null,
+  commune: row?.commune ?? null,
+  district: row?.district ?? null,
+  profession: row?.profession ?? null,
+  description: row?.description ?? null,
+  hourly_rate: row?.hourly_rate ?? null,
+  currency: row?.currency ?? "GNF",
+  latitude: typeof row?.latitude === "number" ? row.latitude : null,
+  longitude: typeof row?.longitude === "number" ? row.longitude : null,
 });
 
 const normalizeReview = (row: any): Review => ({
@@ -685,6 +706,28 @@ const WorkerDetail: React.FC = () => {
     };
   }, [authUserId, connected]);
 
+  const loadWorkerFromCacheFirst = useCallback(
+    async (wid: string) => {
+      const cacheKey = getWorkerCacheKey(wid);
+      const cached = await localStore.get<WorkerProfile>(cacheKey);
+
+      if (cached) {
+        setWorker(normalizeWorkerProfile(cached, wid));
+        setUsedWorkerCache(true);
+        setWorkerError(null);
+        return true;
+      }
+
+      const fallback = createOfflineFallbackWorker(wid);
+      setWorker(fallback);
+      setUsedWorkerCache(true);
+      setWorkerError(null);
+      await localStore.set(cacheKey, fallback);
+      return false;
+    },
+    []
+  );
+
   useEffect(() => {
     const loadWorker = async () => {
       if (!workerId) {
@@ -695,38 +738,17 @@ const WorkerDetail: React.FC = () => {
 
       setLoadingWorker(true);
       setWorkerError(null);
-      setUsedWorkerCache(false);
 
       const cacheKey = getWorkerCacheKey(workerId);
 
-      const applyFallbackWorker = async () => {
-        const fallback = createOfflineFallbackWorker(workerId);
-        setWorker(fallback);
-        setUsedWorkerCache(true);
-        setWorkerError(null);
-        await localStore.set(cacheKey, fallback);
-      };
+      await loadWorkerFromCacheFirst(workerId);
 
-      const readCache = async () => {
-        const cached = await localStore.get<WorkerProfile>(cacheKey);
-        if (cached) {
-          setWorker(cached);
-          setUsedWorkerCache(true);
-          setWorkerError(null);
-          return true;
-        }
-        return false;
-      };
+      if (!connected) {
+        setLoadingWorker(false);
+        return;
+      }
 
       try {
-        if (!connected) {
-          const ok = await readCache();
-          if (!ok) {
-            await applyFallbackWorker();
-          }
-          return;
-        }
-
         const { data, error } = await supabase
           .from("op_ouvriers")
           .select(
@@ -755,11 +777,10 @@ const WorkerDetail: React.FC = () => {
 
         if (error || !data) {
           console.error("loadWorker error", error);
-          const ok = await readCache();
-          if (!ok) {
-            if (isConnectivityError(error, connected)) {
-              await applyFallbackWorker();
-            } else {
+
+          if (!isConnectivityError(error, connected)) {
+            const cached = await localStore.get<WorkerProfile>(cacheKey);
+            if (!cached) {
               setWorkerError(
                 language === "fr"
                   ? "Impossible de charger le profil de cet ouvrier."
@@ -768,7 +789,7 @@ const WorkerDetail: React.FC = () => {
             }
           }
         } else {
-          const nextWorker = data as WorkerProfile;
+          const nextWorker = normalizeWorkerProfile(data, workerId);
           setWorker(nextWorker);
           setUsedWorkerCache(false);
           setWorkerError(null);
@@ -776,11 +797,10 @@ const WorkerDetail: React.FC = () => {
         }
       } catch (e) {
         console.error("loadWorker exception", e);
-        const ok = await readCache();
-        if (!ok) {
-          if (isConnectivityError(e, connected)) {
-            await applyFallbackWorker();
-          } else {
+
+        if (!isConnectivityError(e, connected)) {
+          const cached = await localStore.get<WorkerProfile>(cacheKey);
+          if (!cached) {
             setWorkerError(
               language === "fr"
                 ? "Impossible de charger le profil de cet ouvrier."
@@ -796,7 +816,28 @@ const WorkerDetail: React.FC = () => {
     if (initialized) {
       void loadWorker();
     }
-  }, [workerId, language, connected, initialized]);
+  }, [workerId, language, connected, initialized, loadWorkerFromCacheFirst]);
+
+  useEffect(() => {
+    if (!workerId) return;
+
+    const onWorkerCacheWarm = async (evt: Event) => {
+      const custom = evt as CustomEvent<{ workerId?: string }>;
+      if (custom.detail?.workerId !== workerId) return;
+
+      const cached = await localStore.get<WorkerProfile>(getWorkerCacheKey(workerId));
+      if (cached) {
+        setWorker(normalizeWorkerProfile(cached, workerId));
+        setUsedWorkerCache(true);
+        setWorkerError(null);
+      }
+    };
+
+    window.addEventListener(WORKER_CACHE_WARM_EVENT, onWorkerCacheWarm as EventListener);
+    return () => {
+      window.removeEventListener(WORKER_CACHE_WARM_EVENT, onWorkerCacheWarm as EventListener);
+    };
+  }, [workerId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -855,21 +896,24 @@ const WorkerDetail: React.FC = () => {
         const pendingFromQueue = await loadPendingQueueReviewsForWorker(wid);
         const mergedLocal = mergePendingReviews([...cached, ...pendingFromQueue]);
 
+        setReviews(mergedLocal);
+        setUsedReviewsCache(true);
+
         if (mergedLocal.length > 0) {
-          setReviews(mergedLocal);
           await saveReviewsCache(wid, mergedLocal);
-          setUsedReviewsCache(true);
           return true;
         }
 
-        setReviews([]);
-        setUsedReviewsCache(true);
         return false;
       };
 
       try {
+        const hadLocal = await readCache();
+
         if (!connected) {
-          await readCache();
+          if (!hadLocal) {
+            setReviews([]);
+          }
           return;
         }
 
@@ -881,8 +925,7 @@ const WorkerDetail: React.FC = () => {
 
         if (error) {
           console.error("loadReviews error", error);
-          const ok = await readCache();
-          if (!ok) {
+          if (!hadLocal && !isConnectivityError(error, connected)) {
             setReviewsError(
               language === "fr" ? "Impossible de charger les avis." : "Unable to load reviews."
             );
@@ -900,8 +943,8 @@ const WorkerDetail: React.FC = () => {
         }
       } catch (e) {
         console.error("fetchReviews error", e);
-        const ok = await readCache();
-        if (!ok) {
+        const hadLocal = await readCache();
+        if (!hadLocal && !isConnectivityError(e, connected)) {
           setReviewsError(
             language === "fr" ? "Impossible de charger les avis." : "Unable to load reviews."
           );
@@ -941,8 +984,10 @@ const WorkerDetail: React.FC = () => {
       };
 
       try {
+        const hadLocal = await readCache();
+
         if (!connected) {
-          await readCache();
+          if (!hadLocal) setPhotos([]);
           return;
         }
 
@@ -955,8 +1000,7 @@ const WorkerDetail: React.FC = () => {
 
         if (error) {
           console.error("loadPhotos error", error);
-          const ok = await readCache();
-          if (!ok) {
+          if (!hadLocal && !isConnectivityError(error, connected)) {
             setPhotosError(
               language === "fr" ? "Impossible de charger les photos." : "Unable to load photos."
             );
@@ -969,8 +1013,8 @@ const WorkerDetail: React.FC = () => {
         }
       } catch (e) {
         console.error("loadPhotos exception", e);
-        const ok = await readCache();
-        if (!ok) {
+        const hadLocal = await readCache();
+        if (!hadLocal && !isConnectivityError(e, connected)) {
           setPhotosError(
             language === "fr" ? "Impossible de charger les photos." : "Unable to load photos."
           );
@@ -1668,27 +1712,29 @@ const WorkerDetail: React.FC = () => {
     );
   }
 
-  if (workerError || !worker) {
+  if (workerError && !worker) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
         <div className="max-w-md bg-white border border-slate-200 rounded-xl p-6 shadow-sm text-sm text-red-600">
-          {workerError || (language === "fr" ? "Ouvrier introuvable." : "Worker not found.")}
+          {workerError}
         </div>
       </div>
     );
   }
 
+  const resolvedWorker = worker ?? createOfflineFallbackWorker(workerId || "unknown");
+
   const hasAnyLocation = Boolean(locationQuery) || hasCoords;
   const isFallbackWorker =
-    !worker.first_name &&
-    !worker.last_name &&
-    !worker.phone &&
-    !worker.email &&
-    !worker.city &&
-    !worker.commune &&
-    !worker.district &&
-    !worker.profession &&
-    !worker.description;
+    !resolvedWorker.first_name &&
+    !resolvedWorker.last_name &&
+    !resolvedWorker.phone &&
+    !resolvedWorker.email &&
+    !resolvedWorker.city &&
+    !resolvedWorker.commune &&
+    !resolvedWorker.district &&
+    !resolvedWorker.profession &&
+    !resolvedWorker.description;
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
@@ -1794,7 +1840,9 @@ const WorkerDetail: React.FC = () => {
                   </div>
                   <div>
                     <h1 className="text-xl font-bold text-slate-900">{workerDisplayName}</h1>
-                    {worker.profession && <p className="text-sm text-slate-600">{worker.profession}</p>}
+                    {resolvedWorker.profession && (
+                      <p className="text-sm text-slate-600">{resolvedWorker.profession}</p>
+                    )}
                     {location && (
                       <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500">
                         <MapPin className="w-3 h-3" />
@@ -1830,8 +1878,10 @@ const WorkerDetail: React.FC = () => {
 
                   <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                     <div className="text-sm font-semibold text-slate-900">
-                      {worker.hourly_rate != null
-                        ? `${worker.hourly_rate.toLocaleString()} ${worker.currency || "GNF"}`
+                      {resolvedWorker.hourly_rate != null
+                        ? `${resolvedWorker.hourly_rate.toLocaleString()} ${
+                            resolvedWorker.currency || "GNF"
+                          }`
                         : "—"}
                     </div>
                     <div className="text-[11px] text-slate-500">
@@ -1861,9 +1911,11 @@ const WorkerDetail: React.FC = () => {
                     )}
 
                     <div className="text-xs text-slate-500">
-                      {hasCoords && worker.latitude != null && worker.longitude != null ? (
+                      {hasCoords &&
+                      resolvedWorker.latitude != null &&
+                      resolvedWorker.longitude != null ? (
                         <span className="font-medium text-slate-700">
-                          {worker.latitude.toFixed(6)}, {worker.longitude.toFixed(6)}
+                          {resolvedWorker.latitude.toFixed(6)}, {resolvedWorker.longitude.toFixed(6)}
                         </span>
                       ) : (
                         <span className="font-medium text-slate-700">{locationQuery}</span>
@@ -1895,7 +1947,7 @@ const WorkerDetail: React.FC = () => {
                 {language === "fr" ? "À propos" : "About"}
               </h2>
               <p className="text-sm text-slate-700 whitespace-pre-line">
-                {worker.description ||
+                {resolvedWorker.description ||
                   (language === "fr"
                     ? "Aucune description fournie pour le moment."
                     : "No description provided yet.")}
@@ -2011,7 +2063,9 @@ const WorkerDetail: React.FC = () => {
                         {r.comment && <p className="text-slate-700 whitespace-pre-line">{r.comment}</p>}
 
                         {r.sync_status === "pending" ? (
-                          <div className="mt-3 text-[11px] text-amber-700">{tOffline.pendingReview}</div>
+                          <div className="mt-3 text-[11px] text-amber-700">
+                            {tOffline.pendingReview}
+                          </div>
                         ) : (
                           <div className="mt-3 flex flex-wrap gap-2">
                             <Button
@@ -2198,19 +2252,19 @@ const WorkerDetail: React.FC = () => {
               </div>
 
               <div className="space-y-2 text-xs">
-                {worker.phone && (
+                {resolvedWorker.phone && (
                   <Button variant="outline" size="sm" className="w-full justify-start" asChild>
-                    <a href={`tel:${worker.phone}`}>
+                    <a href={`tel:${resolvedWorker.phone}`}>
                       <Phone className="w-3 h-3 mr-2" />
-                      {worker.phone}
+                      {resolvedWorker.phone}
                     </a>
                   </Button>
                 )}
-                {worker.email && (
+                {resolvedWorker.email && (
                   <Button variant="outline" size="sm" className="w-full justify-start" asChild>
-                    <a href={`mailto:${worker.email}`}>
+                    <a href={`mailto:${resolvedWorker.email}`}>
                       <Mail className="w-3 h-3 mr-2" />
-                      {worker.email}
+                      {resolvedWorker.email}
                     </a>
                   </Button>
                 )}
