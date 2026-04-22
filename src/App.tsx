@@ -110,18 +110,8 @@ const isNativeRuntime = () => {
   } catch {}
 
   try {
-    const host = window.location?.hostname ?? "";
-    if (host === "localhost") return true;
-
     const ua = navigator?.userAgent ?? "";
     if (ua.includes("wv") || ua.includes("Capacitor")) return true;
-
-    if (
-      window.location?.protocol === "https:" &&
-      /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)
-    ) {
-      return true;
-    }
   } catch {}
 
   return false;
@@ -605,25 +595,75 @@ function AppBootLoader() {
   );
 }
 
+const BOOT_MIN_LOADER_MS = 350;
+const BOOT_MAX_BLOCKING_MS = 1800;
+
 const App = () => {
   const queryClient = useAppQueryClient();
   const [bootReady, setBootReady] = useState(false);
 
   useEffect(() => {
     let mounted = true;
+    const startedAt = Date.now();
+
+    const finishBoot = () => {
+      if (!mounted) return;
+
+      const elapsed = Date.now() - startedAt;
+      const remaining = Math.max(0, BOOT_MIN_LOADER_MS - elapsed);
+
+      window.setTimeout(() => {
+        if (mounted) setBootReady(true);
+      }, remaining);
+    };
+
+    const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T | null> => {
+      return await Promise.race<T | null>([
+        promise,
+        new Promise<null>((resolve) => window.setTimeout(() => resolve(null), timeoutMs)),
+      ]);
+    };
 
     const boot = async () => {
-      try {
-        await networkService.init();
+      const hardTimeout = window.setTimeout(() => {
+        console.warn("[App] boot forced ready after timeout");
+        finishBoot();
+      }, BOOT_MAX_BLOCKING_MS);
 
-        const { error } = await supabase.auth.getSession();
-        if (error) {
-          console.warn("[App] getSession warning:", error.message);
-        }
+      try {
+        const initPromise = networkService
+          .init()
+          .then(() => {
+            console.log("[App] networkService initialized");
+            return true;
+          })
+          .catch((error) => {
+            console.warn("[App] networkService.init warning:", error);
+            return false;
+          });
+
+        const sessionPromise = supabase.auth
+          .getSession()
+          .then(({ error }) => {
+            if (error) {
+              console.warn("[App] getSession warning:", error.message);
+            }
+            return true;
+          })
+          .catch((error) => {
+            console.warn("[App] getSession exception:", error);
+            return false;
+          });
+
+        await Promise.all([
+          withTimeout(initPromise, BOOT_MAX_BLOCKING_MS - 200),
+          withTimeout(sessionPromise, 1200),
+        ]);
       } catch (error) {
         console.error("[App] boot error:", error);
       } finally {
-        if (mounted) setBootReady(true);
+        window.clearTimeout(hardTimeout);
+        finishBoot();
       }
     };
 
@@ -631,6 +671,7 @@ const App = () => {
 
     return () => {
       mounted = false;
+
       networkService.destroy().catch((error) => {
         console.warn("[App] networkService.destroy warning:", error);
       });
