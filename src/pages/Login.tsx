@@ -1,4 +1,3 @@
-// src/pages/Login.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -22,16 +21,13 @@ function safeRedirectPath(raw: string | null) {
   if (!raw) return null;
   let v = raw.trim();
 
-  // ✅ accepte "#/xxx" (HashRouter) et normalise -> "/xxx"
   if (v.startsWith("#/")) v = v.slice(1);
   if (v.startsWith("#")) v = v.slice(1);
 
-  // ✅ sécurité: on n'autorise que les chemins internes
   if (!v.startsWith("/")) return null;
   if (v.startsWith("//")) return null;
   if (v.toLowerCase().startsWith("/http")) return null;
 
-  // ✅ évite le double hash déjà présent dans certains cas
   if (v.startsWith("/#/")) v = v.replace("/#/", "/");
   if (v.includes("#/#/")) v = v.replace("#/#/", "#/");
 
@@ -61,6 +57,7 @@ const Login: React.FC = () => {
   const [checkingSession, setCheckingSession] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const redirectParam = useMemo(() => safeRedirectPath(searchParams.get("redirect")), [searchParams]);
@@ -68,7 +65,6 @@ const Login: React.FC = () => {
   const goAfterLogin = (role: string, redirect?: string | null) => {
     const normalizedRole = normalizeRole(role);
 
-    // redirect explicite autorisé uniquement pour clients/users
     if (redirect && normalizedRole !== "admin" && normalizedRole !== "worker") {
       navigate(redirect, { replace: true });
       return;
@@ -100,7 +96,6 @@ const Login: React.FC = () => {
         if (data.session?.user) {
           const user = data.session.user;
 
-          // essaie de relire le rôle local d'abord pour accélérer le boot offline
           const cachedRole = await localStore.get<Role>(LOCAL_ROLE_KEY);
           if (!mounted) return;
 
@@ -125,16 +120,32 @@ const Login: React.FC = () => {
     };
   }, [navigate, redirectParam]);
 
+  useEffect(() => {
+    if (!initialized) return;
+
+    if (!connected) {
+      setInfo(
+        language === "fr"
+          ? "Mode hors connexion actif. Si une session locale existe déjà, l’accès sera rétabli automatiquement dès sa détection."
+          : "Offline mode is active. If a local session already exists, access will be restored automatically as soon as it is detected."
+      );
+      return;
+    }
+
+    setInfo(null);
+  }, [connected, initialized, language]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
     setError(null);
+    setInfo(null);
 
     if (initialized && !connected) {
-      setError(
+      setInfo(
         language === "fr"
-          ? "Connexion Internet requise pour vous connecter. Si vous vous êtes déjà connecté auparavant, revenez quand la session locale est encore active."
-          : "An internet connection is required to sign in. If you already signed in before, come back when the local session is still active."
+          ? "Connexion Internet requise pour ouvrir une nouvelle session. Revenez en ligne puis réessayez."
+          : "An internet connection is required to start a new session. Please reconnect and try again."
       );
       return;
     }
@@ -171,7 +182,6 @@ const Login: React.FC = () => {
         user.user_metadata?.role ?? user.app_metadata?.role ?? null
       );
 
-      // 2) Récupérer / créer le profil dans op_users
       let { data: profile, error: profileError } = await supabase
         .from("op_users")
         .select("id, role, full_name")
@@ -200,7 +210,6 @@ const Login: React.FC = () => {
         resolvedRole = normalizeRole(profile.role);
       }
 
-      // persistance locale pour aider le mode offline-safe
       await Promise.all([
         localStore.set(LOCAL_USER_ID_KEY, userId),
         localStore.set(LOCAL_ROLE_KEY, resolvedRole),
@@ -213,7 +222,7 @@ const Login: React.FC = () => {
       const rawMessage = String(err?.message ?? "").toLowerCase();
 
       if (rawMessage.includes("failed to fetch") || rawMessage.includes("network")) {
-        setError(
+        setInfo(
           language === "fr"
             ? "Connexion impossible sans Internet. Vérifiez votre réseau puis réessayez."
             : "Unable to sign in without internet. Please check your connection and try again."
@@ -258,11 +267,11 @@ const Login: React.FC = () => {
           )}
 
           {initialized && !connected && (
-            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            <p className="mt-3 text-xs text-slate-500">
               {language === "fr"
-                ? "Vous êtes hors connexion. Une nouvelle connexion nécessite Internet, mais une session déjà enregistrée peut encore permettre l’accès."
-                : "You are offline. A new sign-in requires internet, but a previously saved session may still allow access."}
-            </div>
+                ? "Mode hors connexion actif."
+                : "Offline mode is active."}
+            </p>
           )}
         </CardHeader>
 
@@ -295,6 +304,12 @@ const Login: React.FC = () => {
               />
             </div>
 
+            {info && (
+              <div className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                {info}
+              </div>
+            )}
+
             {error && (
               <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
                 {error}
@@ -304,7 +319,7 @@ const Login: React.FC = () => {
             <div className="space-y-2">
               <Button
                 type="submit"
-                disabled={loading || (initialized && !connected)}
+                disabled={loading}
                 className="w-full bg-pro-blue hover:bg-blue-700"
               >
                 {loading
@@ -312,11 +327,16 @@ const Login: React.FC = () => {
                     ? "Connexion..."
                     : "Signing in..."
                   : language === "fr"
-                  ? "Se connecter"
-                  : "Sign in"}
+                    ? "Se connecter"
+                    : "Sign in"}
               </Button>
 
-              <Button type="button" variant="outline" className="w-full" onClick={() => navigate("/")}>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => navigate("/")}
+              >
                 {language === "fr" ? "Retour à l'accueil" : "Back to home"}
               </Button>
             </div>
