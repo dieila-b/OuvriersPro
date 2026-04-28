@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNetworkStatus } from "@/services/networkService";
 import { localStore } from "@/services/localStore";
-import { WifiOff } from "lucide-react";
 
 import Header from "@/components/Header";
 import HeroSection from "@/components/HeroSection";
@@ -47,36 +46,24 @@ const SEARCH_BOOTSTRAP_KEY = "op:last_search_bootstrap";
 const SEARCH_RESULTS_CACHE_KEY = "cached_workers_search_results";
 const SEARCH_RESULTS_SYNCED_AT_KEY = "cached_workers_search_results_synced_at";
 const WORKER_CACHE_KEY_PREFIX = "cached_worker_profile";
+const WORKER_CACHE_WARM_EVENT = "op:worker-profile-cached";
 
-/**
- * ✅ Native = vrai Capacitor (protocol capacitor/file, ou Capacitor platform != web)
- * ❌ IMPORTANT: on NE considère JAMAIS "localhost" comme natif sur le Web.
- */
 function isNativeRuntime(): boolean {
   try {
     const p = window.location?.protocol ?? "";
     if (p === "capacitor:" || p === "file:") return true;
-  } catch {
-    // ignore
-  }
+  } catch {}
 
   try {
     const cap = (window as any)?.Capacitor;
     if (cap?.isNativePlatform?.()) return true;
     const gp = cap?.getPlatform?.();
     if (gp && gp !== "web") return true;
-  } catch {
-    // ignore
-  }
+  } catch {}
 
   return false;
 }
 
-/**
- * ✅ Fix “tap qui ne clique pas” sur Android WebView (UNIQUEMENT NATIF)
- * - convertit touchend -> click sur élément cliquable
- * - anti double-fire
- */
 function useNativeTapToClickFix(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
@@ -135,9 +122,7 @@ function useNativeTapToClickFix(enabled: boolean) {
             view: window,
           })
         );
-      } catch {
-        // ignore
-      }
+      } catch {}
     };
 
     document.addEventListener("touchend", onTouchEndCapture, true);
@@ -180,28 +165,22 @@ const normalizeWorkerResultToProfile = (row: Record<string, any>): CachedWorkerP
   const firstName = normalizeNullableString(
     pickFirst(row, ["first_name", "firstname", "prenom", "given_name"])
   );
+
   const lastName = normalizeNullableString(
     pickFirst(row, ["last_name", "lastname", "nom", "family_name"])
   );
+
   const fullName = normalizeNullableString(
     pickFirst(row, ["full_name", "name", "worker_name", "display_name"])
   );
 
-  const inferredFirstName =
-    firstName ??
-    (fullName ? fullName.split(" ").filter(Boolean).slice(0, 1).join(" ") || null : null);
-
-  const inferredLastName =
-    lastName ??
-    (fullName
-      ? fullName.split(" ").filter(Boolean).slice(1).join(" ").trim() || null
-      : null);
+  const nameParts = fullName?.split(" ").filter(Boolean) ?? [];
 
   return {
     id,
     user_id: normalizeNullableString(pickFirst(row, ["user_id"])),
-    first_name: inferredFirstName,
-    last_name: inferredLastName,
+    first_name: firstName ?? nameParts.slice(0, 1).join(" ") || null,
+    last_name: lastName ?? nameParts.slice(1).join(" ") || null,
     email: normalizeNullableString(pickFirst(row, ["email"])),
     phone: normalizeNullableString(pickFirst(row, ["phone", "phone_number", "telephone"])),
     country: normalizeNullableString(pickFirst(row, ["country", "pays"])),
@@ -210,11 +189,11 @@ const normalizeWorkerResultToProfile = (row: Record<string, any>): CachedWorkerP
     commune: normalizeNullableString(pickFirst(row, ["commune"])),
     district: normalizeNullableString(pickFirst(row, ["district", "quartier"])),
     profession: normalizeNullableString(
-      pickFirst(row, ["profession", "job_title", "service", "metier"])
+      pickFirst(row, ["profession", "job_title", "service", "metier", "job"])
     ),
     description: normalizeNullableString(pickFirst(row, ["description", "bio", "about"])),
     hourly_rate: normalizeNullableNumber(
-      pickFirst(row, ["hourly_rate", "rate", "tarif_horaire", "price_per_hour"])
+      pickFirst(row, ["hourly_rate", "hourlyRate", "rate", "tarif_horaire", "price_per_hour"])
     ),
     currency: normalizeNullableString(pickFirst(row, ["currency", "devise"])) ?? "GNF",
     latitude: normalizeNullableNumber(pickFirst(row, ["latitude", "lat"])),
@@ -248,9 +227,11 @@ const extractWorkersFromUnknownPayload = (payload: unknown): CachedWorkerProfile
 
   for (const item of candidates) {
     if (!item || typeof item !== "object") continue;
+
     const profile = normalizeWorkerResultToProfile(item as Record<string, any>);
     if (!profile?.id) continue;
     if (seen.has(profile.id)) continue;
+
     seen.add(profile.id);
     normalized.push(profile);
   }
@@ -287,6 +268,14 @@ const persistWorkerDetailCache = async (workers: CachedWorkerProfile[]) => {
       };
 
       await localStore.set(key, merged);
+
+      try {
+        window.dispatchEvent(
+          new CustomEvent(WORKER_CACHE_WARM_EVENT, {
+            detail: { workerId: worker.id },
+          })
+        );
+      } catch {}
     })
   );
 };
@@ -297,9 +286,7 @@ const persistSearchResultsSnapshot = async (workers: CachedWorkerProfile[]) => {
   try {
     await localStore.set(SEARCH_RESULTS_CACHE_KEY, workers);
     await localStore.set(SEARCH_RESULTS_SYNCED_AT_KEY, new Date().toISOString());
-  } catch {
-    // ignore
-  }
+  } catch {}
 };
 
 const Index = () => {
@@ -319,10 +306,6 @@ const Index = () => {
   const [isWorker, setIsWorker] = useState(false);
   const [restoredSearch, setRestoredSearch] = useState<SearchPayload | null>(null);
 
-  /**
-   * ✅ Détecter si l'utilisateur connecté est un ouvrier (table op_ouvriers)
-   * - on utilise getSession() => pas de AuthSessionMissingError
-   */
   useEffect(() => {
     let mounted = true;
 
@@ -336,12 +319,7 @@ const Index = () => {
 
         if (!mounted) return;
 
-        if (!user) {
-          setIsWorker(false);
-          return;
-        }
-
-        if (!connected) {
+        if (!user || !connected) {
           setIsWorker(false);
           return;
         }
@@ -369,9 +347,7 @@ const Index = () => {
       }
     };
 
-    if (initialized) {
-      void checkWorker();
-    }
+    if (initialized) void checkWorker();
 
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
       void checkWorker();
@@ -403,16 +379,15 @@ const Index = () => {
   }, [location.search]);
 
   const hasAnySearchParam = useMemo(() => {
-    return (
-      !!searchPayload.keyword ||
-      !!searchPayload.district ||
-      !!searchPayload.lat ||
-      !!searchPayload.lng ||
-      !!searchPayload.near
+    return Boolean(
+      searchPayload.keyword ||
+        searchPayload.district ||
+        searchPayload.lat ||
+        searchPayload.lng ||
+        searchPayload.near
     );
   }, [searchPayload]);
 
-  // ✅ restauration de la dernière recherche locale
   useEffect(() => {
     let mounted = true;
 
@@ -437,55 +412,41 @@ const Index = () => {
       }
     };
 
-    if (initialized) {
-      void restoreLastSearch();
-    }
+    if (initialized) void restoreLastSearch();
 
     return () => {
       mounted = false;
     };
   }, [initialized]);
 
-  // ✅ persistance de la recherche courante
   useEffect(() => {
     const persist = async () => {
       if (!hasAnySearchParam) return;
 
       try {
         await localStore.set(LAST_SEARCH_KEY, searchPayload);
-      } catch {
-        // ignore
-      }
+      } catch {}
 
       try {
         sessionStorage.setItem(LAST_SEARCH_KEY, JSON.stringify(searchPayload));
-      } catch {
-        // ignore
-      }
+      } catch {}
     };
 
     void persist();
   }, [hasAnySearchParam, searchPayload]);
 
-  // ✅ diffuse l’état réseau au composant de recherche
   useEffect(() => {
     if (!initialized) return;
 
     try {
       window.dispatchEvent(
         new CustomEvent("op:network-status", {
-          detail: {
-            connected,
-            initialized,
-          },
+          detail: { connected, initialized },
         })
       );
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, [connected, initialized]);
 
-  // ✅ diffuse la dernière recherche connue au composant de recherche
   useEffect(() => {
     if (!initialized) return;
     if (hasAnySearchParam) return;
@@ -510,16 +471,11 @@ const Index = () => {
 
         try {
           sessionStorage.setItem(SEARCH_BOOTSTRAP_KEY, "1");
-        } catch {
-          // ignore
-        }
+        } catch {}
       }
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, [initialized, restoredSearch, hasAnySearchParam, isHomeRoute]);
 
-  // ✅ alimente automatiquement le cache détail à partir des résultats de recherche
   useEffect(() => {
     if (!initialized) return;
 
@@ -550,9 +506,7 @@ const Index = () => {
         if (cachedResults?.length) {
           await persistWorkerDetailCache(cachedResults);
         }
-      } catch {
-        // ignore
-      }
+      } catch {}
     };
 
     window.addEventListener("op:workers-results", onCustomResults as EventListener);
@@ -561,6 +515,8 @@ const Index = () => {
     window.addEventListener("op:workers-search-results", onCustomResults as EventListener);
     window.addEventListener("storage", onStorageSync);
     window.addEventListener("focus", onStorageSync);
+
+    void onStorageSync();
 
     return () => {
       mounted = false;
@@ -573,7 +529,6 @@ const Index = () => {
     };
   }, [initialized]);
 
-  // ✅ si on a déjà un snapshot local de résultats, on régénère aussi les caches détail au boot offline
   useEffect(() => {
     if (!initialized) return;
 
@@ -584,10 +539,9 @@ const Index = () => {
         const cachedResults = await localStore.get<CachedWorkerProfile[]>(SEARCH_RESULTS_CACHE_KEY);
         if (!mounted) return;
         if (!cachedResults?.length) return;
+
         await persistWorkerDetailCache(cachedResults);
-      } catch {
-        // ignore
-      }
+      } catch {}
     };
 
     void hydrateDetailCacheFromSnapshot();
@@ -597,7 +551,6 @@ const Index = () => {
     };
   }, [initialized]);
 
-  // ✅ Mesure des overlays en haut (header + barres sticky/fixed)
   const getTopOverlayOffset = () => {
     const samplesX = [20, Math.floor(window.innerWidth / 2), window.innerWidth - 20];
     const yProbe = 6;
@@ -617,6 +570,7 @@ const Index = () => {
             maxBottom = Math.max(maxBottom, r.bottom);
           }
         }
+
         cur = cur.parentElement;
       }
     };
@@ -632,7 +586,6 @@ const Index = () => {
     return Math.max(0, Math.round(maxBottom));
   };
 
-  // ✅ 0) /search ou /rechercher -> accueil + #search
   useEffect(() => {
     if (!isSearchRoute) return;
     if (redirectedRef.current) return;
@@ -642,9 +595,7 @@ const Index = () => {
     if (hasAnySearchParam) {
       try {
         sessionStorage.setItem(LAST_SEARCH_KEY, JSON.stringify(searchPayload));
-      } catch {
-        // ignore
-      }
+      } catch {}
 
       void localStore.set(LAST_SEARCH_KEY, searchPayload).catch(() => undefined);
     }
@@ -653,7 +604,6 @@ const Index = () => {
     navigate(target, { replace: true });
   }, [isSearchRoute, hasAnySearchParam, searchPayload, location.search, navigate]);
 
-  // ✅ 1) Accueil + #search + params : notifie WorkerSearchSection
   useEffect(() => {
     if (!isHomeRoute) return;
     if (location.hash !== "#search") return;
@@ -663,12 +613,9 @@ const Index = () => {
 
     try {
       window.dispatchEvent(new CustomEvent("op:search", { detail }));
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, [isHomeRoute, location.hash, hasAnySearchParam, searchPayload, restoredSearch]);
 
-  // ✅ 2) Scroll ancres (#search, #subscription...) sur l’accueil
   useEffect(() => {
     if (!isHomeRoute) return;
     if (!location.hash) return;
@@ -705,10 +652,10 @@ const Index = () => {
     return () => window.clearTimeout(timeout);
   }, [isHomeRoute, location.hash]);
 
-  // ✅ 3) Accueil : remonter en haut si pas d’ancre
   useEffect(() => {
     if (!isHomeRoute) return;
     if (location.hash) return;
+
     window.scrollTo({ top: 0, behavior: "auto" });
   }, [isHomeRoute, location.hash]);
 
@@ -720,24 +667,6 @@ const Index = () => {
       <Header />
 
       <main className="w-full flex-1 min-w-0 relative">
-        {!connected && initialized && (
-          <div className="mx-auto w-full max-w-7xl px-4 pt-4">
-            <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
-              <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
-              <div>
-                <div className="font-medium">
-                  {language === "fr" ? "Mode hors connexion" : "Offline mode"}
-                </div>
-                <div className="text-xs text-amber-800 mt-1">
-                  {language === "fr"
-                    ? "Affichage des prestataires et profils synchronisés jusqu’à la dernière connexion."
-                    : "Showing workers and profiles synced up to the last connection."}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         <HeroSection />
         <FeaturesSection />
 
