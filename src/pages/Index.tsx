@@ -179,8 +179,8 @@ const normalizeWorkerResultToProfile = (row: Record<string, any>): CachedWorkerP
   return {
     id,
     user_id: normalizeNullableString(pickFirst(row, ["user_id"])),
-    first_name: firstName ?? nameParts.slice(0, 1).join(" ") || null,
-    last_name: lastName ?? nameParts.slice(1).join(" ") || null,
+    first_name: firstName ?? (nameParts.slice(0, 1).join(" ") || null),
+    last_name: lastName ?? (nameParts.slice(1).join(" ") || null),
     email: normalizeNullableString(pickFirst(row, ["email"])),
     phone: normalizeNullableString(pickFirst(row, ["phone", "phone_number", "telephone"])),
     country: normalizeNullableString(pickFirst(row, ["country", "pays"])),
