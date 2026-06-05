@@ -7,7 +7,6 @@ import {
   User,
   Menu,
   X,
-  WifiOff,
   Clock3,
   CheckCircle2,
   RefreshCw,
@@ -114,7 +113,11 @@ const Header = () => {
         setRole(nextRole);
 
         const cachedProfile = await authCache.getProfile();
-        await authCache.saveUser(u.id, nextRole, typeof cachedProfile === "undefined" ? undefined : cachedProfile);
+        await authCache.saveUser(
+          u.id,
+          nextRole,
+          typeof cachedProfile === "undefined" ? undefined : cachedProfile
+        );
       } catch (error) {
         console.warn("[Header] refresh auth failed, fallback cache used:", error);
         await applyLocalSnapshot();
@@ -136,7 +139,9 @@ const Header = () => {
           return;
         }
 
-        const metaRole = normalizeRole(user?.user_metadata?.role ?? user?.app_metadata?.role ?? null);
+        const metaRole = normalizeRole(
+          user?.user_metadata?.role ?? user?.app_metadata?.role ?? null
+        );
 
         let nextRole: Role = metaRole;
 
@@ -294,6 +299,7 @@ const Header = () => {
     setMobileOpen((v) => !v);
   }, []);
 
+  // ─── Labels sync (inchangés — utiles pour le badge desktop et menu mobile) ───
   const syncLabel = hasPendingSync
     ? language === "fr"
       ? `${totalPending} en attente`
@@ -323,6 +329,8 @@ const Header = () => {
         : `${pendingFavoritesCount} favorite${pendingFavoritesCount > 1 ? "s" : ""}`
       : null;
 
+  // ─── Badge sync desktop : on masque l'icône WifiOff, on affiche seulement
+  //     l'état de synchronisation (pending / synced) sans mention réseau ────────
   const DesktopSyncBadge = hasSession ? (
     <div
       className={`hidden lg:inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-medium border whitespace-nowrap ${
@@ -332,15 +340,15 @@ const Header = () => {
       }`}
       title={
         hasPendingSync
-          ? [syncDetailRequests, syncDetailMessages, syncDetailFavorites].filter(Boolean).join(" • ")
+          ? [syncDetailRequests, syncDetailMessages, syncDetailFavorites]
+              .filter(Boolean)
+              .join(" • ")
           : language === "fr"
             ? "Aucune action en attente"
             : "No action pending"
       }
     >
-      {!connected ? (
-        <WifiOff className="w-3.5 h-3.5" />
-      ) : hasPendingSync ? (
+      {hasPendingSync ? (
         <Clock3 className="w-3.5 h-3.5" />
       ) : (
         <CheckCircle2 className="w-3.5 h-3.5" />
@@ -349,6 +357,8 @@ const Header = () => {
     </div>
   ) : null;
 
+  // ─── Menu mobile : on retire la bannière "Mode hors connexion" et l'icône
+  //     WifiOff du badge — seul l'état pending/synced reste visible ─────────────
   const MobileMenuPanel = mobileOpen ? (
     <div
       className="md:hidden min-w-0 shrink-0 flex items-center gap-2 rounded-2xl px-2 py-1 border shadow-sm"
@@ -390,9 +400,7 @@ const Header = () => {
                     : "bg-emerald-50 text-emerald-700 border-emerald-200"
                 }`}
               >
-                {!connected ? (
-                  <WifiOff className="w-3 h-3" />
-                ) : hasPendingSync ? (
+                {hasPendingSync ? (
                   <RefreshCw className="w-3 h-3" />
                 ) : (
                   <CheckCircle2 className="w-3 h-3" />
@@ -465,6 +473,8 @@ const Header = () => {
           backgroundColor: HEADER_LIGHT_BLUE,
         }}
       >
+        {/* ─── SUPPRIMÉ : bannière "Mode hors connexion" qui s'affichait ici ──── */}
+
         <div
           className="w-full overflow-hidden"
           style={{
@@ -531,7 +541,11 @@ const Header = () => {
                       variant="outline"
                       size="sm"
                       className="rounded-full flex items-center gap-1 whitespace-nowrap bg-white"
-                      aria-label={cms("header.lang.aria", "Changer de langue", "Change language")}
+                      aria-label={cms(
+                        "header.lang.aria",
+                        "Changer de langue",
+                        "Change language"
+                      )}
                       type="button"
                       style={{ touchAction: "manipulation" as any }}
                     >
@@ -540,20 +554,28 @@ const Header = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="bg-white">
-                    <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
+                    <DropdownMenuItem
+                      onClick={() => setLanguage("fr")}
+                      className="cursor-pointer"
+                    >
                       {cms("header.lang.fr", "Français", "French")}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
+                    <DropdownMenuItem
+                      onClick={() => setLanguage("en")}
+                      className="cursor-pointer"
+                    >
                       {cms("header.lang.en", "English", "English")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
 
+              {/* ── Mobile right controls ── */}
               <div
                 className="md:hidden min-w-0 shrink-0 flex items-center gap-2"
                 style={{ backgroundColor: HEADER_LIGHT_BLUE }}
               >
+                {/* ─── Badge sync mobile : WifiOff supprimé, seulement pending/synced ── */}
                 {hasSession && (
                   <div
                     className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold border ${
@@ -563,9 +585,7 @@ const Header = () => {
                     }`}
                     title={syncLabel}
                   >
-                    {!connected ? (
-                      <WifiOff className="w-3 h-3" />
-                    ) : hasPendingSync ? (
+                    {hasPendingSync ? (
                       <Clock3 className="w-3 h-3" />
                     ) : (
                       <CheckCircle2 className="w-3 h-3" />
@@ -587,10 +607,16 @@ const Header = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="bg-white">
-                    <DropdownMenuItem onClick={() => setLanguage("fr")} className="cursor-pointer">
+                    <DropdownMenuItem
+                      onClick={() => setLanguage("fr")}
+                      className="cursor-pointer"
+                    >
                       {cms("header.lang.fr", "Français", "French")}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
+                    <DropdownMenuItem
+                      onClick={() => setLanguage("en")}
+                      className="cursor-pointer"
+                    >
                       {cms("header.lang.en", "English", "English")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
