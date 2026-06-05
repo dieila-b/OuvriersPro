@@ -24,8 +24,6 @@ import {
   SlidersHorizontal,
   ChevronDown,
   ChevronUp,
-  WifiOff,
-  Database,
   Heart,
   Loader2,
 } from "lucide-react";
@@ -396,11 +394,9 @@ const WorkerSearchSection: React.FC = () => {
       const isNative = document.documentElement?.getAttribute("data-ui-native") === "true";
       if (isNative) return true;
     } catch {}
-
     try {
       return window.innerWidth < 1280;
     } catch {}
-
     return false;
   };
 
@@ -409,11 +405,9 @@ const WorkerSearchSection: React.FC = () => {
       const isNative = document.documentElement?.getAttribute("data-ui-native") === "true";
       if (isNative) return true;
     } catch {}
-
     try {
       return window.innerWidth < 768;
     } catch {}
-
     return false;
   };
 
@@ -439,7 +433,6 @@ const WorkerSearchSection: React.FC = () => {
     const consider = (el: Element | null) => {
       if (!el) return;
       let cur: Element | null = el;
-
       while (cur) {
         const cs = window.getComputedStyle(cur as HTMLElement);
         const pos = cs.position;
@@ -497,7 +490,6 @@ const WorkerSearchSection: React.FC = () => {
   const [favoriteLoadingByWorkerId, setFavoriteLoadingByWorkerId] = useState<
     Record<string, boolean>
   >({});
-  const [favoriteCacheLoaded, setFavoriteCacheLoaded] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -560,8 +552,8 @@ const WorkerSearchSection: React.FC = () => {
   const [applied, setApplied] = useState<Filters>(() => createDefaultFilters());
   const [draft, setDraft] = useState<Filters>(() => createDefaultFilters());
 
-  const [usedOfflineCache, setUsedOfflineCache] = useState(false);
-  const [cacheUpdatedAt, setCacheUpdatedAt] = useState<string | null>(null);
+  // ─── SUPPRIMÉ : états usedOfflineCache, cacheUpdatedAt, favoriteCacheLoaded ──
+  // (ils ne servaient qu'à afficher les bannières)
 
   const applyTimerRef = useRef<number | null>(null);
 
@@ -618,18 +610,13 @@ const WorkerSearchSection: React.FC = () => {
   useEffect(() => {
     const readCache = async () => {
       const cachedWorkers = await localStore.get<WorkerCard[]>(WORKERS_CACHE_KEY);
-      const cachedUpdatedAt = await localStore.get<string>(WORKERS_CACHE_UPDATED_AT_KEY);
 
       if (cachedWorkers?.length) {
         setWorkers(cachedWorkers);
-        setUsedOfflineCache(true);
-        setCacheUpdatedAt(cachedUpdatedAt ?? null);
         return true;
       }
 
       setWorkers([]);
-      setUsedOfflineCache(true);
-      setCacheUpdatedAt(cachedUpdatedAt ?? null);
       return false;
     };
 
@@ -674,16 +661,9 @@ const WorkerSearchSection: React.FC = () => {
 
       try {
         if (!connected) {
-          const ok = await readCache();
-          if (!ok) {
-            setError(
-              cms(
-                "search.error.offline_no_cache",
-                "Aucune donnée locale disponible pour le moment. Connectez-vous une fois pour synchroniser les prestataires.",
-                "No local data is available yet. Go online once to sync workers."
-              )
-            );
-          }
+          await readCache();
+          // ─── SUPPRIMÉ : setError quand pas de cache offline ────────────────
+          // On affiche simplement ce qu'on a (liste vide ou cache), sans message
           return;
         }
 
@@ -697,14 +677,11 @@ const WorkerSearchSection: React.FC = () => {
         if (res.error) throw res.error;
 
         const rows = (res.data ?? []) as unknown as DbWorker[];
-
         const mapped: WorkerCard[] = rows.map((w) => normalizeWorker(w, cms));
 
         setWorkers(mapped);
-        setUsedOfflineCache(false);
 
         const syncedAt = new Date().toISOString();
-        setCacheUpdatedAt(syncedAt);
 
         await Promise.all([
           localStore.set(WORKERS_CACHE_KEY, mapped),
@@ -741,14 +718,9 @@ const WorkerSearchSection: React.FC = () => {
     let cancelled = false;
 
     const loadFavorites = async () => {
-      setFavoriteCacheLoaded(false);
-
       const userId = session?.user?.id || (await authCache.getUserId());
       if (!userId) {
-        if (!cancelled) {
-          setFavoriteMap({});
-          setFavoriteCacheLoaded(false);
-        }
+        if (!cancelled) setFavoriteMap({});
         return;
       }
 
@@ -762,13 +734,10 @@ const WorkerSearchSection: React.FC = () => {
         }, {});
 
         setFavoriteMap(nextMap);
-        setFavoriteCacheLoaded(result.fromCache);
+        // ─── SUPPRIMÉ : setFavoriteCacheLoaded ────────────────────────────────
       } catch (err) {
         console.error("[WorkerSearchSection] loadFavorites error:", err);
-        if (!cancelled) {
-          setFavoriteMap({});
-          setFavoriteCacheLoaded(false);
-        }
+        if (!cancelled) setFavoriteMap({});
       }
     };
 
@@ -776,9 +745,7 @@ const WorkerSearchSection: React.FC = () => {
       void loadFavorites();
     }
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [session?.user?.id, connected, initialized]);
 
   const applyExternalFilters = (f: Filters) => {
@@ -885,9 +852,7 @@ const WorkerSearchSection: React.FC = () => {
       if (Object.keys(next).length) {
         setSearchParams(next, { replace: true });
         if (isSearchRoute) {
-          window.setTimeout(() => {
-            scrollToResultsTop({ behavior: "auto" });
-          }, 50);
+          window.setTimeout(() => scrollToResultsTop({ behavior: "auto" }), 50);
         }
       }
     };
@@ -1127,33 +1092,24 @@ const WorkerSearchSection: React.FC = () => {
 
   const jobLabel = cms("search.filters.job.label", "Métier", "Job");
   const jobAll = cms("search.filters.job.all", "Tous les métiers", "All trades");
-
   const priceLabel = cms("search.filters.price.label", "Tarif horaire max", "Max hourly rate");
   const priceNoLimit = cms("search.filters.price.no_limit", "Aucune limite", "No limit");
-
   const ratingLabel = cms("search.filters.rating.label", "Note minimum", "Minimum rating");
   const ratingAny = cms("search.filters.rating.any", "Toutes", "Any");
-
   const regionLabel = cms("search.filters.region.label", "Région", "Region");
   const regionAll = cms("search.filters.region.all", "Toutes les régions", "All regions");
-
   const cityLabel = cms("search.filters.city.label", "Ville", "City");
   const cityAll = cms("search.filters.city.all", "Toutes les villes", "All cities");
-
   const communeLabel = cms("search.filters.commune.label", "Commune", "Commune");
   const communeAll = cms("search.filters.commune.all", "Toutes les communes", "All communes");
-
   const districtLabel = cms("search.filters.district.label", "Quartier", "District");
   const districtAll = cms("search.filters.district.all", "Tous les quartiers", "All districts");
-
   const resetLabel = cms("search.filters.btn_reset", "Réinitialiser", "Reset");
   const hideFiltersLabel = cms("search.filters.hide", "Masquer les filtres", "Hide filters");
   const activeFiltersLabel = cms("search.filters.active_count", "filtres actifs", "active filters");
-
   const viewModeLabel = cms("search.view.label", "Affichage", "View");
   const viewListLabel = cms("search.view.list", "Liste", "List");
   const viewGridLabel = cms("search.view.grid", "Mosaïque", "Grid");
-
   const contactLabel = cms("search.card.btn_contact", "Contacter", "Contact");
   const perHourLabel = cms("search.card.per_hour", "/h", "/h");
   const yearsSuffix = cms("search.card.years_suffix", "ans d'expérience", "years of experience");
@@ -1164,11 +1120,7 @@ const WorkerSearchSection: React.FC = () => {
     "Activez la localisation pour trier et filtrer par distance.",
     "Enable location to sort/filter by distance."
   );
-  const useMyPos = cms(
-    "search.filters.btn_geolocate",
-    "Utiliser ma position",
-    "Use my location"
-  );
+  const useMyPos = cms("search.filters.btn_geolocate", "Utiliser ma position", "Use my location");
   const radiusLabel = cms("search.filters.radius.label", "Rayon", "Radius");
   const kmLabel = cms("search.filters.radius.unit", "km", "km");
 
@@ -1179,7 +1131,7 @@ const WorkerSearchSection: React.FC = () => {
   );
   const noData = cms(
     "search.results.nodata",
-    "Aucun professionnel n’est encore disponible.",
+    "Aucun professionnel n'est encore disponible.",
     "No professionals are available yet."
   );
 
@@ -1190,24 +1142,8 @@ const WorkerSearchSection: React.FC = () => {
     "Loading professionals..."
   );
 
-  const offlineTitle = cms("search.offline.title", "Mode hors connexion", "Offline mode");
-  const offlineDesc = cms(
-    "search.offline.desc",
-    "Affichage des prestataires synchronisés jusqu’à la dernière connexion.",
-    "Showing workers synced up to the last connection."
-  );
-  const offlineCacheLabel = cms(
-    "search.offline.cache",
-    "Résultats chargés depuis le cache local.",
-    "Results loaded from local cache."
-  );
-
   const favAdd = cms("search.favorites.add", "Ajouter aux favoris", "Add to favourites");
-  const favRemove = cms(
-    "search.favorites.remove",
-    "Retirer des favoris",
-    "Remove from favourites"
-  );
+  const favRemove = cms("search.favorites.remove", "Retirer des favoris", "Remove from favourites");
   const favAddedOnline = cms(
     "search.favorites.added_online",
     "Prestataire ajouté aux favoris.",
@@ -1313,32 +1249,13 @@ const WorkerSearchSection: React.FC = () => {
     ));
   };
 
-  const formattedCacheDate = useMemo(() => {
-    if (!cacheUpdatedAt) return null;
-    try {
-      return new Date(cacheUpdatedAt).toLocaleString(language === "fr" ? "fr-FR" : "en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return null;
-    }
-  }, [cacheUpdatedAt, language]);
-
   const isWorkerFavorite = (workerId: string) => !!favoriteMap[workerId];
 
   const toggleFavorite = async (worker: WorkerCard) => {
     const userId = session?.user?.id || (await authCache.getUserId());
 
     if (!userId) {
-      toast({
-        title: favLoginRequiredTitle,
-        description: favLoginRequiredDesc,
-      });
-
+      toast({ title: favLoginRequiredTitle, description: favLoginRequiredDesc });
       window.setTimeout(() => {
         navigate(`/login?redirect=${encodeURIComponent(`/ouvrier/${worker.id}`)}`, {
           replace: false,
@@ -1419,30 +1336,8 @@ const WorkerSearchSection: React.FC = () => {
       <div className="mx-auto w-full px-4 sm:px-6 lg:px-10 2xl:px-16">
         <div ref={topAnchorRef} />
 
-        {!connected && initialized && (
-          <div className="mb-4 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
-            <div>
-              <div className="font-medium">{offlineTitle}</div>
-              <div className="text-xs text-amber-800 mt-1">{offlineDesc}</div>
-            </div>
-          </div>
-        )}
-
-        {(usedOfflineCache || favoriteCacheLoaded) && (
-          <div className="mb-4 flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-            <Database className="mt-0.5 h-4 w-4 shrink-0" />
-            <div>
-              <div className="font-medium">{offlineCacheLabel}</div>
-              {formattedCacheDate && (
-                <div className="text-xs text-sky-800 mt-1">
-                  {language === "fr" ? "Dernière synchronisation :" : "Last sync:"}{" "}
-                  {formattedCacheDate}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        {/* ─── SUPPRIMÉ : bannière "Mode hors connexion" ───────────────────── */}
+        {/* ─── SUPPRIMÉ : bannière "Résultats chargés depuis le cache local" ─ */}
 
         <div className="mb-6 overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
           <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
@@ -1595,9 +1490,17 @@ const WorkerSearchSection: React.FC = () => {
                 compactMobile ? "rounded-[26px] p-3" : "sticky top-[98px] rounded-[30px] p-5"
               }`}
             >
-              <div className={`flex items-start justify-between gap-3 ${compactMobile ? "mb-3" : "mb-5"}`}>
+              <div
+                className={`flex items-start justify-between gap-3 ${
+                  compactMobile ? "mb-3" : "mb-5"
+                }`}
+              >
                 <div>
-                  <h3 className={`${compactMobile ? "text-sm" : "text-base"} font-semibold text-slate-900`}>
+                  <h3
+                    className={`${
+                      compactMobile ? "text-sm" : "text-base"
+                    } font-semibold text-slate-900`}
+                  >
                     {filtersTitle}
                   </h3>
                   <div className="mt-1 text-xs text-slate-500">
@@ -1682,7 +1585,9 @@ const WorkerSearchSection: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-600">{jobLabel}</label>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                    {jobLabel}
+                  </label>
                   <select
                     value={draft.job}
                     onChange={(e) => updateDraft({ job: e.target.value })}
@@ -1698,7 +1603,9 @@ const WorkerSearchSection: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-600">{regionLabel}</label>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                    {regionLabel}
+                  </label>
                   <select
                     value={draft.region}
                     onChange={(e) => {
@@ -1717,7 +1624,9 @@ const WorkerSearchSection: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-600">{cityLabel}</label>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                    {cityLabel}
+                  </label>
                   <select
                     value={draft.city}
                     onChange={(e) => {
@@ -1736,7 +1645,9 @@ const WorkerSearchSection: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-600">{communeLabel}</label>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                    {communeLabel}
+                  </label>
                   <select
                     value={draft.commune}
                     onChange={(e) => {
@@ -1755,7 +1666,9 @@ const WorkerSearchSection: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-600">{districtLabel}</label>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                    {districtLabel}
+                  </label>
                   <select
                     value={draft.district}
                     onChange={(e) => updateDraft({ district: e.target.value })}
@@ -1882,7 +1795,6 @@ const WorkerSearchSection: React.FC = () => {
                                 <h3 className="truncate text-[20px] font-bold tracking-tight text-slate-900 sm:text-[28px]">
                                   {w.name}
                                 </h3>
-
                                 <div className="mt-1.5 truncate text-sm text-slate-600 sm:text-base">
                                   {getWorkerSubtitle(w)}
                                 </div>
@@ -1899,14 +1811,18 @@ const WorkerSearchSection: React.FC = () => {
                             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-slate-500 sm:text-sm">
                               <span className="inline-flex min-w-0 items-center gap-1.5">
                                 <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                                <span className="truncate max-w-[360px]">{getWorkerMetaLine(w)}</span>
+                                <span className="truncate max-w-[360px]">
+                                  {getWorkerMetaLine(w)}
+                                </span>
                               </span>
 
                               {applied.near && appliedHasCoords && (
                                 <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-blue-700">
                                   {distanceLabel}:
                                   <span className="font-semibold">
-                                    {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
+                                    {w.distanceKm == null
+                                      ? "—"
+                                      : formatKm(w.distanceKm, language)}
                                   </span>
                                 </span>
                               )}
@@ -1914,15 +1830,15 @@ const WorkerSearchSection: React.FC = () => {
 
                             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                               <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                                <div className="flex items-center gap-0.5">{renderStars(w.rating)}</div>
-
+                                <div className="flex items-center gap-0.5">
+                                  {renderStars(w.rating)}
+                                </div>
                                 <span className="inline-flex items-center gap-1">
                                   <Star className="h-3.5 w-3.5 text-slate-400" />
                                   <span className="font-medium text-slate-700">
                                     {w.rating.toFixed(1)} ({w.ratingCount})
                                   </span>
                                 </span>
-
                                 <span>
                                   {w.experienceYears} {yearsSuffix}
                                 </span>
@@ -1948,7 +1864,11 @@ const WorkerSearchSection: React.FC = () => {
                                   {favLoading ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                   ) : (
-                                    <Heart className={`h-4 w-4 ${isFav ? "fill-rose-500 text-rose-500" : ""}`} />
+                                    <Heart
+                                      className={`h-4 w-4 ${
+                                        isFav ? "fill-rose-500 text-rose-500" : ""
+                                      }`}
+                                    />
                                   )}
                                 </Button>
 
@@ -2013,12 +1933,16 @@ const WorkerSearchSection: React.FC = () => {
 
                             <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500">
                               <MapPin className="h-3 w-3 shrink-0 text-slate-400" />
-                              <span className="truncate max-w-[200px]">{getWorkerMetaLine(w)}</span>
+                              <span className="truncate max-w-[200px]">
+                                {getWorkerMetaLine(w)}
+                              </span>
                             </div>
 
                             <div className="mt-3 flex flex-col gap-3">
                               <div>
-                                <div className="flex items-center gap-0.5">{renderStars(w.rating)}</div>
+                                <div className="flex items-center gap-0.5">
+                                  {renderStars(w.rating)}
+                                </div>
                                 <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
                                   <span className="font-medium">
                                     {w.rating.toFixed(1)} ({w.ratingCount})
@@ -2028,7 +1952,9 @@ const WorkerSearchSection: React.FC = () => {
                                   </span>
                                   {applied.near && appliedHasCoords && (
                                     <span className="text-blue-700">
-                                      {w.distanceKm == null ? "—" : formatKm(w.distanceKm, language)}
+                                      {w.distanceKm == null
+                                        ? "—"
+                                        : formatKm(w.distanceKm, language)}
                                     </span>
                                   )}
                                 </div>
@@ -2054,7 +1980,11 @@ const WorkerSearchSection: React.FC = () => {
                                   {favLoading ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                   ) : (
-                                    <Heart className={`h-4 w-4 ${isFav ? "fill-rose-500 text-rose-500" : ""}`} />
+                                    <Heart
+                                      className={`h-4 w-4 ${
+                                        isFav ? "fill-rose-500 text-rose-500" : ""
+                                      }`}
+                                    />
                                   )}
                                 </Button>
 
