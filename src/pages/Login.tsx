@@ -57,7 +57,8 @@ const Login: React.FC = () => {
   const [checkingSession, setCheckingSession] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
+
+  // ─── SUPPRIMÉ : état info + useEffect qui affichait le message offline ───────
 
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const redirectParam = useMemo(() => safeRedirectPath(searchParams.get("redirect")), [searchParams]);
@@ -120,35 +121,14 @@ const Login: React.FC = () => {
     };
   }, [navigate, redirectParam]);
 
-  useEffect(() => {
-    if (!initialized) return;
-
-    if (!connected) {
-      setInfo(
-        language === "fr"
-          ? "Mode hors connexion actif. Si une session locale existe déjà, l’accès sera rétabli automatiquement dès sa détection."
-          : "Offline mode is active. If a local session already exists, access will be restored automatically as soon as it is detected."
-      );
-      return;
-    }
-
-    setInfo(null);
-  }, [connected, initialized, language]);
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
     setError(null);
-    setInfo(null);
 
-    if (initialized && !connected) {
-      setInfo(
-        language === "fr"
-          ? "Connexion Internet requise pour ouvrir une nouvelle session. Revenez en ligne puis réessayez."
-          : "An internet connection is required to start a new session. Please reconnect and try again."
-      );
-      return;
-    }
+    // ─── SUPPRIMÉ : blocage avec message info quand offline ──────────────────
+    // On laisse la tentative se faire — si elle échoue pour cause réseau,
+    // l'erreur catch ci-dessous s'en charge silencieusement.
 
     setLoading(true);
 
@@ -221,11 +201,12 @@ const Login: React.FC = () => {
 
       const rawMessage = String(err?.message ?? "").toLowerCase();
 
+      // Erreur réseau : message d'erreur discret sans mention "offline"
       if (rawMessage.includes("failed to fetch") || rawMessage.includes("network")) {
-        setInfo(
+        setError(
           language === "fr"
-            ? "Connexion impossible sans Internet. Vérifiez votre réseau puis réessayez."
-            : "Unable to sign in without internet. Please check your connection and try again."
+            ? "Connexion impossible. Vérifiez votre réseau puis réessayez."
+            : "Unable to sign in. Please check your connection and try again."
         );
       } else {
         setError(
@@ -266,13 +247,7 @@ const Login: React.FC = () => {
             </p>
           )}
 
-          {initialized && !connected && (
-            <p className="mt-3 text-xs text-slate-500">
-              {language === "fr"
-                ? "Mode hors connexion actif."
-                : "Offline mode is active."}
-            </p>
-          )}
+          {/* ─── SUPPRIMÉ : "Mode hors connexion actif." dans le header ──────── */}
         </CardHeader>
 
         <CardContent>
@@ -304,11 +279,7 @@ const Login: React.FC = () => {
               />
             </div>
 
-            {info && (
-              <div className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-                {info}
-              </div>
-            )}
+            {/* ─── SUPPRIMÉ : bloc amber {info && ...} ─────────────────────── */}
 
             {error && (
               <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
