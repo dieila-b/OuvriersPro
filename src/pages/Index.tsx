@@ -435,17 +435,7 @@ const Index = () => {
     void persist();
   }, [hasAnySearchParam, searchPayload]);
 
-  useEffect(() => {
-    if (!initialized) return;
-
-    try {
-      window.dispatchEvent(
-        new CustomEvent("op:network-status", {
-          detail: { connected, initialized },
-        })
-      );
-    } catch {}
-  }, [connected, initialized]);
+  // ─── SUPPRIMÉ : dispatch op:network-status (déclenchait les bannières offline) ───
 
   useEffect(() => {
     if (!initialized) return;
