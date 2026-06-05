@@ -9,7 +9,7 @@ import WorkerPhotosManager from "@/components/WorkerPhotosManager";
 import WorkerPortfolioManager from "@/components/WorkerPortfolioManager";
 import { useNavigate } from "react-router-dom";
 import { WorkerLocationEditor } from "@/components/workers/WorkerLocationEditor";
-import { Home, LogOut, WifiOff } from "lucide-react";
+import { Home, LogOut } from "lucide-react";
 import WorkerAvatarSection from "@/components/workers/WorkerAvatarSection";
 import { authCache } from "@/services/authCache";
 import { localStore } from "@/services/localStore";
@@ -62,7 +62,6 @@ const WorkerDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
-
   const [contacts, setContacts] = useState<WorkerContact[]>([]);
 
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -77,9 +76,7 @@ const WorkerDashboard: React.FC = () => {
   const [requestsCount, setRequestsCount] = useState<number>(0);
   const [responseRate, setResponseRate] = useState<number>(0);
 
-  const handleGoHome = () => {
-    navigate("/", { replace: false });
-  };
+  const handleGoHome = () => navigate("/", { replace: false });
 
   const handleLogout = async () => {
     try {
@@ -110,34 +107,22 @@ const WorkerDashboard: React.FC = () => {
 
       try {
         const cachedAuth = await authCache.getSnapshot();
-        const cachedProfile = await localStore.get<WorkerProfile>(WORKER_DASHBOARD_CACHE_KEYS.PROFILE);
-        const cachedContacts = (await localStore.get<WorkerContact[]>(WORKER_DASHBOARD_CACHE_KEYS.CONTACTS)) ?? [];
+        const cachedProfile = await localStore.get<WorkerProfile>(
+          WORKER_DASHBOARD_CACHE_KEYS.PROFILE
+        );
+        const cachedContacts =
+          (await localStore.get<WorkerContact[]>(WORKER_DASHBOARD_CACHE_KEYS.CONTACTS)) ?? [];
 
         if (!connected) {
           if (!isMounted) return;
 
-          if (!cachedAuth.userId) {
-            setError(
-              language === "fr"
-                ? "Vous devez être connecté au moins une fois sur cet appareil pour accéder à cet espace hors connexion."
-                : "You must have signed in at least once on this device to access this area offline."
-            );
-            setLoading(false);
-            return;
+          // ─── SUPPRIMÉ : messages d'erreur offline ───────────────────────────
+          // On affiche le cache si disponible, sinon un écran vide sans message
+          if (cachedProfile) {
+            setProfile(cachedProfile);
+            setContacts(cachedContacts);
           }
-
-          if (!cachedProfile) {
-            setError(
-              language === "fr"
-                ? "Profil prestataire non disponible hors connexion. Reconnectez-vous une fois pour synchroniser vos données."
-                : "Worker profile unavailable offline. Reconnect once to sync your data."
-            );
-            setLoading(false);
-            return;
-          }
-
-          setProfile(cachedProfile);
-          setContacts(cachedContacts);
+          // Pas de setError — l'app reste silencieuse hors connexion
           setLoading(false);
           return;
         }
@@ -162,28 +147,9 @@ const WorkerDashboard: React.FC = () => {
         const { data: worker, error: workerError } = await supabase
           .from("op_ouvriers")
           .select(
-            `
-            id,
-            user_id,
-            first_name,
-            last_name,
-            email,
-            phone,
-            country,
-            region,
-            city,
-            commune,
-            district,
-            profession,
-            description,
-            plan_code,
-            status,
-            hourly_rate,
-            currency,
-            latitude,
-            longitude,
-            created_at
-          `
+            `id, user_id, first_name, last_name, email, phone, country, region, city,
+             commune, district, profession, description, plan_code, status, hourly_rate,
+             currency, latitude, longitude, created_at`
           )
           .eq("user_id", effectiveUserId)
           .maybeSingle();
@@ -250,8 +216,11 @@ const WorkerDashboard: React.FC = () => {
       } catch (e: any) {
         console.error("[WorkerDashboard] fetchData error", e);
 
-        const cachedProfile = await localStore.get<WorkerProfile>(WORKER_DASHBOARD_CACHE_KEYS.PROFILE);
-        const cachedContacts = (await localStore.get<WorkerContact[]>(WORKER_DASHBOARD_CACHE_KEYS.CONTACTS)) ?? [];
+        const cachedProfile = await localStore.get<WorkerProfile>(
+          WORKER_DASHBOARD_CACHE_KEYS.PROFILE
+        );
+        const cachedContacts =
+          (await localStore.get<WorkerContact[]>(WORKER_DASHBOARD_CACHE_KEYS.CONTACTS)) ?? [];
 
         if (!isMounted) return;
 
@@ -338,13 +307,8 @@ const WorkerDashboard: React.FC = () => {
         setRequestsCount(totalRequests);
         setResponseRate(rate);
 
-        if (!connected) {
-          setStatsError(
-            language === "fr"
-              ? "Statistiques affichées à partir des dernières données synchronisées."
-              : "Statistics shown from the last synced data."
-          );
-        } else {
+        // ─── SUPPRIMÉ : statsError sur !connected ────────────────────────────
+        if (connected) {
           setStatsError(
             language === "fr"
               ? "Impossible de charger les statistiques."
@@ -453,28 +417,9 @@ const WorkerDashboard: React.FC = () => {
         .update(payload)
         .eq("id", profile.id)
         .select(
-          `
-          id,
-          user_id,
-          first_name,
-          last_name,
-          email,
-          phone,
-          country,
-          region,
-          city,
-          commune,
-          district,
-          profession,
-          description,
-          plan_code,
-          status,
-          hourly_rate,
-          currency,
-          latitude,
-          longitude,
-          created_at
-        `
+          `id, user_id, first_name, last_name, email, phone, country, region, city,
+           commune, district, profession, description, plan_code, status, hourly_rate,
+           currency, latitude, longitude, created_at`
         )
         .maybeSingle();
 
@@ -490,9 +435,7 @@ const WorkerDashboard: React.FC = () => {
         setProfile(newProfile);
         setEditProfile(newProfile);
         setProfileUpdateSuccess(
-          language === "fr"
-            ? "Profil mis à jour avec succès."
-            : "Profile updated successfully."
+          language === "fr" ? "Profil mis à jour avec succès." : "Profile updated successfully."
         );
         setIsEditingProfile(false);
         await localStore.set(WORKER_DASHBOARD_CACHE_KEYS.PROFILE, newProfile);
@@ -525,7 +468,7 @@ const WorkerDashboard: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
         <div className="max-w-md bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-          <div className="text-sm text-red-600 mb-3">{error}</div>
+          {error && <div className="text-sm text-red-600 mb-3">{error}</div>}
           <Button onClick={() => navigate("/")} className="bg-pro-blue hover:bg-blue-700">
             {language === "fr" ? "Retour à l'accueil" : "Return to home"}
           </Button>
@@ -534,7 +477,8 @@ const WorkerDashboard: React.FC = () => {
     );
   }
 
-  const fullName = (profile.first_name || "") + (profile.last_name ? ` ${profile.last_name}` : "");
+  const fullName =
+    (profile.first_name || "") + (profile.last_name ? ` ${profile.last_name}` : "");
   const displayProfile = isEditingProfile && editProfile ? editProfile : profile;
 
   return (
@@ -551,22 +495,27 @@ const WorkerDashboard: React.FC = () => {
                 : "Manage your profile and follow your stats."}
             </p>
 
-            {!connected && (
-              <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700">
-                <WifiOff className="w-3.5 h-3.5" />
-                {language === "fr"
-                  ? "Mode hors connexion : dernières données synchronisées affichées"
-                  : "Offline mode: showing last synced data"}
-              </div>
-            )}
+            {/* ─── SUPPRIMÉ : badge "Mode hors connexion" amber ──────────────── */}
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={handleGoHome} className="gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleGoHome}
+                className="gap-2"
+              >
                 <Home className="w-4 h-4" />
                 {language === "fr" ? "Accueil" : "Home"}
               </Button>
 
-              <Button type="button" size="sm" variant="destructive" onClick={handleLogout} className="gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                onClick={handleLogout}
+                className="gap-2"
+              >
                 <LogOut className="w-4 h-4" />
                 {language === "fr" ? "Déconnexion" : "Sign out"}
               </Button>
@@ -734,7 +683,13 @@ const WorkerDashboard: React.FC = () => {
                       {language === "fr" ? "Localisation (texte)" : "Location (text)"}
                     </div>
                     <div className="font-medium text-slate-900">
-                      {[profile.country, profile.region, profile.city, profile.commune, profile.district]
+                      {[
+                        profile.country,
+                        profile.region,
+                        profile.city,
+                        profile.commune,
+                        profile.district,
+                      ]
                         .filter(Boolean)
                         .join(" • ") || "—"}
                     </div>
@@ -753,7 +708,9 @@ const WorkerDashboard: React.FC = () => {
 
                   <div className="md:col-span-2">
                     <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Description de vos services" : "Services description"}
+                      {language === "fr"
+                        ? "Description de vos services"
+                        : "Services description"}
                     </div>
                     <div className="text-slate-800 whitespace-pre-line">
                       {profile.description || "—"}
@@ -871,7 +828,11 @@ const WorkerDashboard: React.FC = () => {
                     </div>
                     <Input
                       type="number"
-                      value={displayProfile.hourly_rate != null ? String(displayProfile.hourly_rate) : ""}
+                      value={
+                        displayProfile.hourly_rate != null
+                          ? String(displayProfile.hourly_rate)
+                          : ""
+                      }
                       onChange={(e) =>
                         handleEditField(
                           "hourly_rate",
@@ -893,7 +854,9 @@ const WorkerDashboard: React.FC = () => {
 
                   <div className="md:col-span-2">
                     <div className="text-xs text-slate-500">
-                      {language === "fr" ? "Description de vos services" : "Services description"}
+                      {language === "fr"
+                        ? "Description de vos services"
+                        : "Services description"}
                     </div>
                     <Textarea
                       rows={4}
@@ -910,10 +873,14 @@ const WorkerDashboard: React.FC = () => {
                 initialLng={profile.longitude}
                 onSaved={(coords) => {
                   setProfile((prev) =>
-                    prev ? { ...prev, latitude: coords.latitude, longitude: coords.longitude } : prev
+                    prev
+                      ? { ...prev, latitude: coords.latitude, longitude: coords.longitude }
+                      : prev
                   );
                   setEditProfile((prev) =>
-                    prev ? { ...prev, latitude: coords.latitude, longitude: coords.longitude } : prev
+                    prev
+                      ? { ...prev, latitude: coords.latitude, longitude: coords.longitude }
+                      : prev
                   );
                 }}
               />
