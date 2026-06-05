@@ -21,7 +21,6 @@ import {
   ExternalLink,
   AlertTriangle,
   X,
-  WifiOff,
   Heart,
   Loader2,
   Clock3,
@@ -246,7 +245,6 @@ const WorkerDetail: React.FC = () => {
   const [worker, setWorker] = useState<WorkerProfile | null>(null);
   const [loadingWorker, setLoadingWorker] = useState(true);
   const [workerError, setWorkerError] = useState<string | null>(null);
-  const [usedWorkerCache, setUsedWorkerCache] = useState(false);
 
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [viewerRole, setViewerRole] = useState<ViewerRole>(null);
@@ -256,7 +254,6 @@ const WorkerDetail: React.FC = () => {
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [favoriteInfo, setFavoriteInfo] = useState<string | null>(null);
   const [favoriteError, setFavoriteError] = useState<string | null>(null);
-  const [favoritesLoadedFromCache, setFavoritesLoadedFromCache] = useState(false);
 
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
@@ -277,7 +274,6 @@ const WorkerDetail: React.FC = () => {
   const [newRating, setNewRating] = useState(0);
   const [newComment, setNewComment] = useState("");
   const [submitReviewLoading, setSubmitReviewLoading] = useState(false);
-  const [usedReviewsCache, setUsedReviewsCache] = useState(false);
 
   const [myVoteByReviewId, setMyVoteByReviewId] = useState<Record<string, VoteType | null>>({});
   const [countsByReviewId, setCountsByReviewId] = useState<
@@ -288,7 +284,6 @@ const WorkerDetail: React.FC = () => {
   const [photos, setPhotos] = useState<WorkerPhoto[]>([]);
   const [photosLoading, setPhotosLoading] = useState(false);
   const [photosError, setPhotosError] = useState<string | null>(null);
-  const [usedPhotosCache, setUsedPhotosCache] = useState(false);
 
   const [contactOpen, setContactOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -305,13 +300,13 @@ const WorkerDetail: React.FC = () => {
 
   const tVotes = useMemo(() => {
     return {
-      like: language === "fr" ? "J’aime" : "Like",
+      like: language === "fr" ? "J'aime" : "Like",
       useful: language === "fr" ? "Utile" : "Useful",
       notUseful: language === "fr" ? "Pas utile" : "Not useful",
       mustLogin: language === "fr" ? "Connectez-vous pour réagir." : "Log in to react.",
       voteError:
         language === "fr"
-          ? "Impossible d’enregistrer votre réaction."
+          ? "Impossible d'enregistrer votre réaction."
           : "Unable to save your reaction.",
       offline:
         language === "fr"
@@ -319,7 +314,7 @@ const WorkerDetail: React.FC = () => {
           : "Reactions require an internet connection.",
       pendingLocked:
         language === "fr"
-          ? "Les réactions sont disponibles après synchronisation de l’avis."
+          ? "Les réactions sont disponibles après synchronisation de l'avis."
           : "Reactions are available after the review is synchronized.",
     };
   }, [language]);
@@ -329,14 +324,10 @@ const WorkerDetail: React.FC = () => {
       title: language === "fr" ? "Localisation" : "Location",
       subtitle:
         language === "fr"
-          ? "Localisation approximative / zone d’intervention."
+          ? "Localisation approximative / zone d'intervention."
           : "Approximate location / service area.",
       open: language === "fr" ? "Ouvrir dans Google Maps" : "Open in Google Maps",
       missing: language === "fr" ? "Localisation non renseignée." : "Location not provided.",
-      offline:
-        language === "fr"
-          ? "La carte intégrée nécessite Internet. Les informations de localisation restent visibles."
-          : "The embedded map requires internet. Location information remains visible.",
     };
   }, [language]);
 
@@ -360,10 +351,6 @@ const WorkerDetail: React.FC = () => {
         language === "fr"
           ? "Aucune réalisation publiée pour le moment."
           : "No work published yet.",
-      offline:
-        language === "fr"
-          ? "Affichage des photos déjà synchronisées localement."
-          : "Showing photos already synced locally.",
     };
   }, [language]);
 
@@ -378,14 +365,6 @@ const WorkerDetail: React.FC = () => {
       close: language === "fr" ? "Fermer" : "Close",
       sentAutoClose:
         language === "fr" ? "Votre demande a été envoyée. Fermeture…" : "Request sent. Closing…",
-      offline:
-        language === "fr"
-          ? "Vous pouvez enregistrer votre demande hors connexion. Elle sera conservée localement pour synchronisation ultérieure."
-          : "You can save your request offline. It will be stored locally for later sync.",
-      offlineSaved:
-        language === "fr"
-          ? "Demande enregistrée localement. Elle apparaît maintenant dans vos demandes hors ligne."
-          : "Request saved locally. It now appears in your offline requests.",
       loginRequiredOffline:
         language === "fr"
           ? "Vous devez avoir déjà été connecté sur cet appareil pour enregistrer une demande hors ligne."
@@ -395,35 +374,6 @@ const WorkerDetail: React.FC = () => {
 
   const tOffline = useMemo(() => {
     return {
-      title: language === "fr" ? "Mode hors connexion" : "Offline mode",
-      profile:
-        language === "fr"
-          ? "Affichage du profil synchronisé jusqu’à la dernière connexion."
-          : "Showing the profile synced up to the last connection.",
-      profileFallback:
-        language === "fr"
-          ? "Aucun cache détaillé trouvé. Affichage d’une fiche locale minimale pour éviter le blocage hors ligne."
-          : "No detailed cache found. Showing a minimal local card to avoid blocking offline.",
-      reviews:
-        language === "fr"
-          ? "Affichage des avis synchronisés jusqu’à la dernière connexion."
-          : "Showing the reviews synced up to the last connection.",
-      cacheProfile:
-        language === "fr"
-          ? "Profil chargé depuis le cache local."
-          : "Profile loaded from local cache.",
-      cacheProfileFallback:
-        language === "fr"
-          ? "Profil partiel généré localement pour l’accès hors ligne."
-          : "Partial profile generated locally for offline access.",
-      cacheReviews:
-        language === "fr"
-          ? "Avis chargés depuis le cache local."
-          : "Reviews loaded from local cache.",
-      cachePhotos:
-        language === "fr"
-          ? "Photos chargées depuis le cache local."
-          : "Photos loaded from local cache.",
       pendingReview:
         language === "fr"
           ? "Avis enregistré localement, en attente de synchronisation."
@@ -460,10 +410,6 @@ const WorkerDetail: React.FC = () => {
         language === "fr"
           ? "Retrait enregistré hors ligne. Il sera synchronisé automatiquement."
           : "Offline removal saved. It will sync automatically.",
-      cacheLoaded:
-        language === "fr"
-          ? "État des favoris chargé depuis le cache local."
-          : "Favourite state loaded from local cache.",
     };
   }, [language]);
 
@@ -529,7 +475,6 @@ const WorkerDetail: React.FC = () => {
       const merged = mergePendingReviews([offlineReview, ...cachedReviews]);
 
       setReviews(merged);
-      setUsedReviewsCache(true);
       await saveReviewsCache(wid, merged);
 
       await syncService.enqueue({
@@ -624,16 +569,8 @@ const WorkerDetail: React.FC = () => {
         const cachedRole = await authCache.getRole();
         if (cancelled) return;
 
-        if (cachedRole === "client") {
-          setViewerRole("client");
-          return;
-        }
-
-        if (cachedRole === "worker") {
-          setViewerRole("worker");
-          return;
-        }
-
+        if (cachedRole === "client") { setViewerRole("client"); return; }
+        if (cachedRole === "worker") { setViewerRole("worker"); return; }
         setViewerRole(null);
         return;
       }
@@ -647,10 +584,7 @@ const WorkerDetail: React.FC = () => {
 
         if (cancelled) return;
 
-        if (!clientErr && clientRow?.id) {
-          setViewerRole("client");
-          return;
-        }
+        if (!clientErr && clientRow?.id) { setViewerRole("client"); return; }
 
         const { data: workerRow, error: workerErr } = await supabase
           .from("op_ouvriers")
@@ -660,50 +594,26 @@ const WorkerDetail: React.FC = () => {
 
         if (cancelled) return;
 
-        if (!workerErr && workerRow?.id) {
-          setViewerRole("worker");
-          return;
-        }
+        if (!workerErr && workerRow?.id) { setViewerRole("worker"); return; }
 
         const cachedRole = await authCache.getRole();
         if (cancelled) return;
 
-        if (cachedRole === "client") {
-          setViewerRole("client");
-          return;
-        }
-
-        if (cachedRole === "worker") {
-          setViewerRole("worker");
-          return;
-        }
-
+        if (cachedRole === "client") { setViewerRole("client"); return; }
+        if (cachedRole === "worker") { setViewerRole("worker"); return; }
         setViewerRole(null);
       } catch (e) {
         console.error("detectRole error", e);
-
         const cachedRole = await authCache.getRole();
         if (cancelled) return;
-
-        if (cachedRole === "client") {
-          setViewerRole("client");
-          return;
-        }
-
-        if (cachedRole === "worker") {
-          setViewerRole("worker");
-          return;
-        }
-
+        if (cachedRole === "client") { setViewerRole("client"); return; }
+        if (cachedRole === "worker") { setViewerRole("worker"); return; }
         setViewerRole(null);
       }
     };
 
     void detectRole();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [authUserId, connected]);
 
   const loadWorkerFromCacheFirst = useCallback(
@@ -713,14 +623,12 @@ const WorkerDetail: React.FC = () => {
 
       if (cached) {
         setWorker(normalizeWorkerProfile(cached, wid));
-        setUsedWorkerCache(true);
         setWorkerError(null);
         return true;
       }
 
       const fallback = createOfflineFallbackWorker(wid);
       setWorker(fallback);
-      setUsedWorkerCache(true);
       setWorkerError(null);
       await localStore.set(cacheKey, fallback);
       return false;
@@ -752,25 +660,9 @@ const WorkerDetail: React.FC = () => {
         const { data, error } = await supabase
           .from("op_ouvriers")
           .select(
-            `
-            id,
-            user_id,
-            first_name,
-            last_name,
-            email,
-            phone,
-            country,
-            region,
-            city,
-            commune,
-            district,
-            profession,
-            description,
-            hourly_rate,
-            currency,
-            latitude,
-            longitude
-          `
+            `id, user_id, first_name, last_name, email, phone, country, region, city,
+             commune, district, profession, description, hourly_rate, currency,
+             latitude, longitude`
           )
           .eq("id", workerId)
           .maybeSingle();
@@ -791,7 +683,6 @@ const WorkerDetail: React.FC = () => {
         } else {
           const nextWorker = normalizeWorkerProfile(data, workerId);
           setWorker(nextWorker);
-          setUsedWorkerCache(false);
           setWorkerError(null);
           await localStore.set(cacheKey, nextWorker);
         }
@@ -828,7 +719,6 @@ const WorkerDetail: React.FC = () => {
       const cached = await localStore.get<WorkerProfile>(getWorkerCacheKey(workerId));
       if (cached) {
         setWorker(normalizeWorkerProfile(cached, workerId));
-        setUsedWorkerCache(true);
         setWorkerError(null);
       }
     };
@@ -845,7 +735,6 @@ const WorkerDetail: React.FC = () => {
     const loadFavoriteState = async () => {
       setFavoriteError(null);
       setFavoriteInfo(null);
-      setFavoritesLoadedFromCache(false);
 
       if (!initialized || !workerId) return;
 
@@ -865,11 +754,6 @@ const WorkerDetail: React.FC = () => {
         const match = result.items.find((item) => item.worker_id === workerId) || null;
         setIsFavorite(!!match);
         setFavoriteId(match?.id ?? null);
-        setFavoritesLoadedFromCache(result.fromCache);
-
-        if (result.fromCache) {
-          setFavoriteInfo(tFavorite.cacheLoaded);
-        }
       } catch (error) {
         console.error("[WorkerDetail] loadFavoriteState error:", error);
         if (cancelled) return;
@@ -879,17 +763,13 @@ const WorkerDetail: React.FC = () => {
     };
 
     void loadFavoriteState();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [authUserId, connected, initialized, workerId, tFavorite.cacheLoaded]);
+    return () => { cancelled = true; };
+  }, [authUserId, connected, initialized, workerId]);
 
   const fetchReviews = useCallback(
     async (wid: string) => {
       setReviewsLoading(true);
       setReviewsError(null);
-      setUsedReviewsCache(false);
 
       const readCache = async () => {
         const cached = await loadCachedReviews(wid);
@@ -897,7 +777,6 @@ const WorkerDetail: React.FC = () => {
         const mergedLocal = mergePendingReviews([...cached, ...pendingFromQueue]);
 
         setReviews(mergedLocal);
-        setUsedReviewsCache(true);
 
         if (mergedLocal.length > 0) {
           await saveReviewsCache(wid, mergedLocal);
@@ -938,7 +817,6 @@ const WorkerDetail: React.FC = () => {
           const merged = mergeServerAndPendingReviews(serverMapped, localMerged);
 
           setReviews(merged);
-          setUsedReviewsCache(false);
           await saveReviewsCache(wid, merged);
         }
       } catch (e) {
@@ -967,7 +845,6 @@ const WorkerDetail: React.FC = () => {
 
       setPhotosLoading(true);
       setPhotosError(null);
-      setUsedPhotosCache(false);
 
       const cacheKey = getWorkerPhotosCacheKey(workerId);
 
@@ -975,11 +852,9 @@ const WorkerDetail: React.FC = () => {
         const cached = await localStore.get<WorkerPhoto[]>(cacheKey);
         if (cached) {
           setPhotos(cached);
-          setUsedPhotosCache(true);
           return true;
         }
         setPhotos([]);
-        setUsedPhotosCache(true);
         return false;
       };
 
@@ -1008,7 +883,6 @@ const WorkerDetail: React.FC = () => {
         } else {
           const nextPhotos = (data || []) as WorkerPhoto[];
           setPhotos(nextPhotos);
-          setUsedPhotosCache(false);
           await localStore.set(cacheKey, nextPhotos);
         }
       } catch (e) {
@@ -1192,15 +1066,8 @@ const WorkerDetail: React.FC = () => {
   }, [reviewsKey, authUserId, connected]);
 
   const toggleVote = async (reviewId: string, voteType: VoteType) => {
-    if (!connected) {
-      setVoteError(tVotes.offline);
-      return;
-    }
-
-    if (!authUserId) {
-      setVoteError(tVotes.mustLogin);
-      return;
-    }
+    if (!connected) { setVoteError(tVotes.offline); return; }
+    if (!authUserId) { setVoteError(tVotes.mustLogin); return; }
 
     const targetReview = reviews.find((r) => r.id === reviewId);
     if (targetReview?.sync_status === "pending") {
@@ -1450,7 +1317,9 @@ const WorkerDetail: React.FC = () => {
           sync_status: "pending",
         });
 
-        setSubmitSuccess(tContact.offlineSaved);
+        setSubmitSuccess(
+          language === "fr" ? "Votre demande a été envoyée." : "Your request was sent."
+        );
         resetContactForm();
 
         window.setTimeout(() => {
@@ -1668,7 +1537,7 @@ const WorkerDetail: React.FC = () => {
         console.error("insert review error", insertError);
         throw new Error(
           language === "fr"
-            ? "Impossible d’enregistrer votre avis."
+            ? "Impossible d'enregistrer votre avis."
             : "Unable to save your review."
         );
       }
@@ -1725,16 +1594,6 @@ const WorkerDetail: React.FC = () => {
   const resolvedWorker = worker ?? createOfflineFallbackWorker(workerId || "unknown");
 
   const hasAnyLocation = Boolean(locationQuery) || hasCoords;
-  const isFallbackWorker =
-    !resolvedWorker.first_name &&
-    !resolvedWorker.last_name &&
-    !resolvedWorker.phone &&
-    !resolvedWorker.email &&
-    !resolvedWorker.city &&
-    !resolvedWorker.commune &&
-    !resolvedWorker.district &&
-    !resolvedWorker.profession &&
-    !resolvedWorker.description;
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
@@ -1747,42 +1606,8 @@ const WorkerDetail: React.FC = () => {
           ← {language === "fr" ? "Retour" : "Back"}
         </button>
 
-        {!connected && (
-          <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
-            <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
-            <div>
-              <div className="font-medium">{tOffline.title}</div>
-              <div className="text-xs text-amber-800 mt-1">
-                {isFallbackWorker ? tOffline.profileFallback : tOffline.profile}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {(usedWorkerCache || usedReviewsCache || usedPhotosCache || favoritesLoadedFromCache) && (
-          <div className="mb-4 space-y-2">
-            {usedWorkerCache && (
-              <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
-                {isFallbackWorker ? tOffline.cacheProfileFallback : tOffline.cacheProfile}
-              </div>
-            )}
-            {usedReviewsCache && (
-              <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
-                {tOffline.cacheReviews}
-              </div>
-            )}
-            {usedPhotosCache && (
-              <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
-                {tOffline.cachePhotos}
-              </div>
-            )}
-            {favoritesLoadedFromCache && (
-              <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
-                {tFavorite.cacheLoaded}
-              </div>
-            )}
-          </div>
-        )}
+        {/* ─── SUPPRIMÉ : bannière "Mode hors connexion" ───────────────────── */}
+        {/* ─── SUPPRIMÉ : bannières "Profil/Avis/Photos chargés depuis le cache" */}
 
         {isMobileUI && (
           <div className="fixed left-0 right-0 bottom-0 z-40 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -1826,6 +1651,8 @@ const WorkerDetail: React.FC = () => {
 
         <div className={`flex flex-col lg:flex-row gap-6 ${isMobileUI ? "pb-32" : "pb-0"}`}>
           <div className="flex-1 space-y-4">
+
+            {/* ── Carte profil ── */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -1892,6 +1719,7 @@ const WorkerDetail: React.FC = () => {
               </div>
             </div>
 
+            {/* ── Localisation ── */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-1">{tMap.title}</h2>
               <p className="text-xs text-slate-500 mb-3">{tMap.subtitle}</p>
@@ -1923,11 +1751,9 @@ const WorkerDetail: React.FC = () => {
                     </div>
                   </div>
 
-                  {!connected ? (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-800">
-                      {tMap.offline}
-                    </div>
-                  ) : (
+                  {/* ─── SUPPRIMÉ : bannière offline carte ───────────────────────── */}
+                  {/* La carte s'affiche uniquement quand on est connecté, sans message */}
+                  {connected && googleMapsEmbedUrl && (
                     <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
                       <iframe
                         title="Google Maps"
@@ -1942,6 +1768,7 @@ const WorkerDetail: React.FC = () => {
               )}
             </div>
 
+            {/* ── À propos ── */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-2">
                 {language === "fr" ? "À propos" : "About"}
@@ -1954,16 +1781,13 @@ const WorkerDetail: React.FC = () => {
               </p>
             </div>
 
+            {/* ── Avis clients ── */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-1">
                 {language === "fr" ? "Avis clients" : "Customer reviews"}
               </h2>
 
-              {!connected && (
-                <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  {tOffline.reviews}
-                </div>
-              )}
+              {/* ─── SUPPRIMÉ : bannière offline avis ────────────────────────── */}
 
               {reviewsError && (
                 <div className="mb-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
@@ -2060,7 +1884,9 @@ const WorkerDetail: React.FC = () => {
                           ))}
                         </div>
 
-                        {r.comment && <p className="text-slate-700 whitespace-pre-line">{r.comment}</p>}
+                        {r.comment && (
+                          <p className="text-slate-700 whitespace-pre-line">{r.comment}</p>
+                        )}
 
                         {r.sync_status === "pending" ? (
                           <div className="mt-3 text-[11px] text-amber-700">
@@ -2163,24 +1989,17 @@ const WorkerDetail: React.FC = () => {
                 >
                   {submitReviewLoading
                     ? language === "fr"
-                      ? connected
-                        ? "Envoi de l’avis..."
-                        : "Enregistrement local..."
-                      : connected
-                        ? "Sending review..."
-                        : "Saving locally..."
+                      ? connected ? "Envoi de l'avis..." : "Enregistrement local..."
+                      : connected ? "Sending review..." : "Saving locally..."
                     : language === "fr"
-                      ? connected
-                        ? "Envoyer l’avis"
-                        : "Enregistrer hors ligne"
-                      : connected
-                        ? "Submit review"
-                        : "Save offline"}
+                      ? connected ? "Envoyer l'avis" : "Enregistrer hors ligne"
+                      : connected ? "Submit review" : "Save offline"}
                 </Button>
               </form>
             </div>
           </div>
 
+          {/* ── Colonne droite ── */}
           <div className="w-full lg:w-[360px] space-y-4">
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-800 mb-3">
@@ -2294,6 +2113,7 @@ const WorkerDetail: React.FC = () => {
           </div>
         </div>
 
+        {/* ── Modal contact ── */}
         {contactOpen && (
           <div className="fixed inset-0 z-50">
             <div className="absolute inset-0 bg-black/40" onClick={closeContact} />
@@ -2326,11 +2146,7 @@ const WorkerDetail: React.FC = () => {
                 </div>
 
                 <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-                  {!connected && (
-                    <div className="mb-3 text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded px-3 py-2">
-                      {tContact.offline}
-                    </div>
-                  )}
+                  {/* ─── SUPPRIMÉ : bannière offline formulaire contact ─────── */}
 
                   {submitError && (
                     <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
@@ -2455,7 +2271,7 @@ const WorkerDetail: React.FC = () => {
                       />
                       <label htmlFor="share-consent-modal" className="text-slate-500">
                         {language === "fr"
-                          ? "J’accepte que mes coordonnées soient transmises à cet ouvrier."
+                          ? "J'accepte que mes coordonnées soient transmises à cet ouvrier."
                           : "I agree that my contact details are shared with this worker."}
                       </label>
                     </div>
@@ -2467,19 +2283,11 @@ const WorkerDetail: React.FC = () => {
                     >
                       {submitting
                         ? language === "fr"
-                          ? connected
-                            ? "Envoi de la demande..."
-                            : "Enregistrement local..."
-                          : connected
-                            ? "Sending request..."
-                            : "Saving locally..."
+                          ? connected ? "Envoi de la demande..." : "Enregistrement local..."
+                          : connected ? "Sending request..." : "Saving locally..."
                         : language === "fr"
-                          ? connected
-                            ? "Envoyer la demande"
-                            : "Enregistrer hors ligne"
-                          : connected
-                            ? "Send request"
-                            : "Save offline"}
+                          ? connected ? "Envoyer la demande" : "Enregistrer hors ligne"
+                          : connected ? "Send request" : "Save offline"}
                     </Button>
                   </form>
 
@@ -2498,6 +2306,7 @@ const WorkerDetail: React.FC = () => {
           </div>
         )}
 
+        {/* ── Modal galerie ── */}
         {galleryOpen && (
           <div className="fixed inset-0 z-50">
             <div className="absolute inset-0 bg-black/40" onClick={closeGallery} />
@@ -2530,11 +2339,7 @@ const WorkerDetail: React.FC = () => {
                 </div>
 
                 <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-                  {!connected && (
-                    <div className="mb-3 text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded px-3 py-2">
-                      {tGallery.offline}
-                    </div>
-                  )}
+                  {/* ─── SUPPRIMÉ : bannière offline galerie ─────────────────── */}
 
                   {photosError && (
                     <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
