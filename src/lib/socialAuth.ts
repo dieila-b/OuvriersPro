@@ -1,13 +1,11 @@
 // src/lib/socialAuth.ts
-// Service centralisé pour l'authentification Google et Facebook
-// Compatible Capacitor (Android + iOS) et Web
+// Authentification sociale Google + Facebook via Supabase OAuth
+// Fonctionne sur Android, iOS et Web sans plugin natif Google
 
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/lib/supabase";
 
 const SUPABASE_URL = "https://bvezcivihjpscatsgrvu.supabase.co";
-const GOOGLE_WEB_CLIENT_ID =
-  "394551300935-s1sc90e6tsaj2b9lmg6u28f4bl573o5s.apps.googleusercontent.com";
 
 // ─── Détection plateforme ────────────────────────────────────────────────────
 const isNative = (): boolean => {
@@ -18,113 +16,70 @@ const isNative = (): boolean => {
   }
 };
 
-// ─── GOOGLE ──────────────────────────────────────────────────────────────────
+// URL de redirect selon la plateforme
+const getRedirectUrl = (): string => {
+  if (isNative()) {
+    // Sur mobile natif : deep link vers l'app
+    return "com.proxiservices.app://auth/callback";
+  }
+  // Sur web : page callback locale
+  return `${window.location.origin}/auth/callback`;
+};
 
-export const signInWithGoogle = async (): Promise<{
-  error: string | null;
-}> => {
+// ─── GOOGLE (OAuth web — sans plugin natif) ──────────────────────────────────
+export const signInWithGoogle = async (): Promise<{ error: string | null }> => {
   try {
-    if (isNative()) {
-      // ── Capacitor natif (Android / iOS) ──
-      const { GoogleAuth } = await import("@codetrix-studio/capacitor-google-auth");
-
-      await GoogleAuth.initialize({
-        clientId: GOOGLE_WEB_CLIENT_ID,
-        scopes: ["profile", "email"],
-        grantOfflineAccess: true,
-      });
-
-      const googleUser = await GoogleAuth.signIn();
-      const idToken = googleUser?.authentication?.idToken;
-
-      if (!idToken) {
-        return { error: "Impossible de récupérer le token Google." };
-      }
-
-      const { error } = await supabase.auth.signInWithIdToken({
-        provider: "google",
-        token: idToken,
-      });
-
-      if (error) return { error: error.message };
-      return { error: null };
-    } else {
-      // ── Web browser ──
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: {
-            access_type: "offline",
-            prompt: "consent",
-          },
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: getRedirectUrl(),
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
         },
-      });
+        skipBrowserRedirect: false,
+      },
+    });
 
-      if (error) return { error: error.message };
-      return { error: null };
-    }
+    if (error) return { error: error.message };
+    return { error: null };
   } catch (err: any) {
     console.error("[socialAuth] Google error:", err);
-    // Annulation par l'utilisateur = pas une erreur à afficher
-    if (
-      err?.error === "popup_closed_by_user" ||
-      err?.message?.includes("cancelled") ||
-      err?.message?.includes("canceled") ||
-      err?.code === "12501" // Android: sign-in cancelled
-    ) {
-      return { error: null };
-    }
     return { error: err?.message ?? "Erreur lors de la connexion Google." };
   }
 };
 
-// ─── FACEBOOK ────────────────────────────────────────────────────────────────
-
-export const signInWithFacebook = async (): Promise<{
-  error: string | null;
-}> => {
+// ─── FACEBOOK (OAuth web) ────────────────────────────────────────────────────
+export const signInWithFacebook = async (): Promise<{ error: string | null }> => {
   try {
     if (isNative()) {
       // ── Capacitor natif (Android / iOS) ──
       const { FacebookLogin } = await import("@capacitor-community/facebook-login");
 
-      const FACEBOOK_PERMISSIONS = ["email", "public_profile"];
+      const result = await FacebookLogin.login({
+        permissions: ["email", "public_profile"],
+      });
 
-      const result = await FacebookLogin.login({ permissions: FACEBOOK_PERMISSIONS });
-
-      if (result.accessToken?.token == null) {
+      if (!result.accessToken?.token) {
         return { error: null }; // annulé par l'utilisateur
       }
 
-      const accessToken = result.accessToken.token;
-
+      // Échange du token Facebook avec Supabase
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "facebook",
         options: {
-          // On passe le token via l'URL de callback Supabase
-          redirectTo: `${SUPABASE_URL}/auth/v1/callback`,
+          redirectTo: getRedirectUrl(),
         },
       });
 
-      // Alternative : échange direct du token Facebook avec Supabase
-      if (error) {
-        // Fallback : signInWithIdToken si disponible
-        const fbResponse = await fetch(
-          `https://graph.facebook.com/me?fields=id,name,email&access_token=${accessToken}`
-        );
-        if (!fbResponse.ok) return { error: "Erreur Facebook Graph API." };
-
-        return { error: null };
-      }
-
+      if (error) return { error: error.message };
       return { error: null };
     } else {
       // ── Web browser ──
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "facebook",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: getRedirectUrl(),
           scopes: "email,public_profile",
         },
       });
@@ -145,8 +100,7 @@ export const signInWithFacebook = async (): Promise<{
   }
 };
 
-// ─── Callback OAuth (web) ─────────────────────────────────────────────────────
-// À utiliser dans src/pages/AuthCallback.tsx
+// ─── Callback OAuth ───────────────────────────────────────────────────────────
 export const handleOAuthCallback = async (): Promise<{
   role: string | null;
   error: string | null;
@@ -176,7 +130,12 @@ export const handleOAuthCallback = async (): Promise<{
     if (!profile) {
       const { data: inserted } = await supabase
         .from("op_users")
-        .insert({ id: userId, email: userEmail, full_name: fullName || null, role: "user" })
+        .insert({
+          id: userId,
+          email: userEmail,
+          full_name: fullName || null,
+          role: "user",
+        })
         .select("id, role")
         .maybeSingle();
       profile = inserted;
