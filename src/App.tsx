@@ -55,6 +55,7 @@ const WorkerDetail = lazyRetry(() => import("./pages/WorkerDetail"));
 const Login = lazyRetry(() => import("./pages/Login"));
 const Register = lazyRetry(() => import("./pages/Register"));
 const MonCompte = lazyRetry(() => import("./pages/MonCompte"));
+const AuthCallback = lazyRetry(() => import("./pages/AuthCallback")); // ← NOUVEAU
 
 const Forfaits = lazyRetry(() => import("./pages/Forfaits"));
 const Faq = lazyRetry(() => import("./pages/Faq"));
@@ -266,8 +267,6 @@ function AuthAuditLogger() {
 
 /**
  * Intercepteur global (Natif uniquement)
- * - Intercepte les <a href="/..."> pour les router en SPA via navigate()
- * - Evite les reload/404
  */
 function GlobalLinkInterceptor() {
   const navigate = useNavigate();
@@ -382,17 +381,29 @@ const AppRoutes = () => (
         <Route path="/rechercher" element={<Index />} />
 
         <Route path="/forfaits" element={<Forfaits />} />
-
         <Route path="/faq" element={<Faq />} />
         <Route path="/aide" element={<Faq />} />
-
         <Route path="/a-propos" element={<About />} />
         <Route path="/partenaires" element={<Partners />} />
-
         <Route path="/conditions" element={<Terms />} />
         <Route path="/confidentialite" element={<Privacy />} />
         <Route path="/cookies" element={<CookiesPolicy />} />
 
+        {/* ── Auth ──────────────────────────────────────────────────────── */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+
+        {/* ── Callback OAuth Google / Facebook (web) ────────────────────── */}
+        <Route path="/auth/callback" element={<AuthCallback />} />
+
+        <Route path="/inscription" element={<Navigate to="/register" replace />} />
+        <Route path="/signup" element={<Navigate to="/register" replace />} />
+        <Route path="/sign-up" element={<Navigate to="/register" replace />} />
+        <Route path="/creer-profil" element={<Navigate to="/register" replace />} />
+        <Route path="/creation-profil" element={<Navigate to="/register" replace />} />
+        <Route path="/creer-mon-profil" element={<Navigate to="/register" replace />} />
+
+        {/* ── Mon compte ────────────────────────────────────────────────── */}
         <Route
           path="/mon-compte"
           element={
@@ -402,16 +413,7 @@ const AppRoutes = () => (
           }
         />
 
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-
-        <Route path="/inscription" element={<Navigate to="/register" replace />} />
-        <Route path="/signup" element={<Navigate to="/register" replace />} />
-        <Route path="/sign-up" element={<Navigate to="/register" replace />} />
-        <Route path="/creer-profil" element={<Navigate to="/register" replace />} />
-        <Route path="/creation-profil" element={<Navigate to="/register" replace />} />
-        <Route path="/creer-mon-profil" element={<Navigate to="/register" replace />} />
-
+        {/* ── Inscription ouvrier ───────────────────────────────────────── */}
         <Route
           path="/forfaits/inscription-ouvrier"
           element={<Navigate to="/inscription-ouvrier" replace />}
@@ -420,7 +422,6 @@ const AppRoutes = () => (
           path="/forfaits/inscription-ouvrier/*"
           element={<Navigate to="/inscription-ouvrier" replace />}
         />
-
         <Route path="/devenir-prestataire" element={<InscriptionOuvrier />} />
         <Route
           path="/devenir-prestataire/*"
@@ -430,13 +431,13 @@ const AppRoutes = () => (
           path="/forfaits/devenir-prestataire"
           element={<Navigate to="/inscription-ouvrier" replace />}
         />
-
         <Route path="/inscription-ouvrier" element={<InscriptionOuvrier />} />
         <Route
           path="/inscription-ouvrier/*"
           element={<Navigate to="/inscription-ouvrier" replace />}
         />
 
+        {/* ── Profil ouvrier public ─────────────────────────────────────── */}
         <Route
           path="/ouvrier/:id"
           element={
@@ -446,6 +447,7 @@ const AppRoutes = () => (
           }
         />
 
+        {/* ── Espace client ─────────────────────────────────────────────── */}
         <Route
           path="/espace-client"
           element={
@@ -495,6 +497,7 @@ const AppRoutes = () => (
           }
         />
 
+        {/* ── Espace ouvrier ────────────────────────────────────────────── */}
         <Route
           path="/espace-ouvrier"
           element={
@@ -528,6 +531,7 @@ const AppRoutes = () => (
           }
         />
 
+        {/* ── Admin ─────────────────────────────────────────────────────── */}
         <Route
           path="/admin"
           element={
@@ -585,7 +589,7 @@ function AppBootLoader() {
           <Loader2 className="h-6 w-6 animate-spin text-slate-700" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-slate-900">Initialisation de l’application</p>
+          <p className="text-sm font-semibold text-slate-900">Initialisation de l'application</p>
           <p className="text-xs text-slate-500">
             Vérification de la session locale et du réseau…
           </p>
