@@ -39,7 +39,6 @@ const normalizeRole = (r: any): Role => {
   return "user";
 };
 
-// ── Icône Google ──────────────────────────────────────────────────────────────
 const GoogleIcon = () => (
   <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" aria-hidden="true">
     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -49,21 +48,12 @@ const GoogleIcon = () => (
   </svg>
 );
 
-// ── Icône Facebook ────────────────────────────────────────────────────────────
 const FacebookIcon = () => (
   <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" aria-hidden="true" fill="#1877F2">
     <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
   </svg>
 );
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Crée ou récupère le profil dans op_users et retourne le rôle résolu.
- * Pour les connexions sociales :
- *  - "user" (client) → accès direct, informations remontées en admin
- *  - "worker" → redirigé vers complétion de profil, validation admin requise
- */
 const resolveUserProfile = async (
   userId: string,
   userEmail: string,
@@ -77,7 +67,6 @@ const resolveUserProfile = async (
     .maybeSingle();
 
   if (!profile) {
-    // Première connexion : création du profil
     const { data: inserted } = await supabase
       .from("op_users")
       .insert({
@@ -107,15 +96,12 @@ const Login: React.FC = () => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [facebookLoading, setFacebookLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Onglet sélectionné : "client" ou "worker"
   const [loginTab, setLoginTab] = useState<"client" | "worker">("client");
 
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const redirectParam = useMemo(() => safeRedirectPath(searchParams.get("redirect")), [searchParams]);
 
   const goAfterLogin = (role: Role, redirect?: string | null, needsProfileCompletion = false) => {
-    // Ouvrier sans profil complet → page de complétion
     if (role === "worker" && needsProfileCompletion) {
       navigate("/inscription-ouvrier?social=1", { replace: true });
       return;
@@ -129,19 +115,38 @@ const Login: React.FC = () => {
     else navigate("/espace-client", { replace: true });
   };
 
-  // Vérification session existante
+  // ── Vérification session avec timeout pour éviter le blocage offline ───────
   useEffect(() => {
     let mounted = true;
+
     (async () => {
       try {
-        const { data, error } = await supabase.auth.getSession();
+        // Timeout 3 secondes — évite le blocage si pas de réseau
+        const sessionResult = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+        ]);
+
         if (!mounted) return;
+
+        // Timeout atteint → pas de session, afficher le formulaire
+        if (!sessionResult) return;
+
+        const { data, error } = sessionResult;
         if (error) { console.warn("[Login] getSession:", error); return; }
+
         if (data.session?.user) {
           const user = data.session.user;
+
+          // D'abord le cache local — plus rapide
           const cachedRole = await localStore.get<Role>(LOCAL_ROLE_KEY);
           if (!mounted) return;
-          if (cachedRole) { goAfterLogin(cachedRole, redirectParam); return; }
+
+          if (cachedRole) {
+            goAfterLogin(cachedRole, redirectParam);
+            return;
+          }
+
           goAfterLogin(
             normalizeRole(user.user_metadata?.role ?? user.app_metadata?.role ?? null),
             redirectParam
@@ -151,6 +156,7 @@ const Login: React.FC = () => {
         if (mounted) setCheckingSession(false);
       }
     })();
+
     return () => { mounted = false; };
   }, [navigate, redirectParam]);
 
@@ -176,7 +182,9 @@ const Login: React.FC = () => {
       const metaRole = normalizeRole(user.user_metadata?.role ?? user.app_metadata?.role ?? null);
       const fullName = (user.user_metadata?.full_name as string) || (user.user_metadata?.name as string) || "";
 
-      const resolvedRole = await resolveUserProfile(user.id, user.email ?? normalizedEmail, fullName, metaRole);
+      const resolvedRole = await resolveUserProfile(
+        user.id, user.email ?? normalizedEmail, fullName, metaRole
+      );
 
       await Promise.all([
         localStore.set(LOCAL_USER_ID_KEY, user.id),
@@ -201,7 +209,7 @@ const Login: React.FC = () => {
     }
   };
 
-  // ── Connexion sociale (Google / Facebook) ─────────────────────────────────
+  // ── Connexion sociale ──────────────────────────────────────────────────────
   const handleSocialLogin = async (provider: "google" | "facebook") => {
     setError(null);
     if (provider === "google") setGoogleLoading(true);
@@ -214,21 +222,18 @@ const Login: React.FC = () => {
 
       if (error) { setError(error); return; }
 
+      // Web OAuth → redirection automatique, pas besoin de vérifier la session ici
+      // Natif → vérifier la session après retour
       const { data } = await supabase.auth.getSession();
-      if (!data.session?.user) return; // Web OAuth → redirection automatique
+      if (!data.session?.user) return;
 
       const user = data.session.user;
       const metaRole = normalizeRole(user.user_metadata?.role ?? user.app_metadata?.role ?? "user");
       const fullName = (user.user_metadata?.full_name as string) || (user.user_metadata?.name as string) || "";
-
-      // Pour les ouvriers connectés via social : forcer le rôle worker
       const intendedRole: Role = loginTab === "worker" ? "worker" : "user";
 
       const resolvedRole = await resolveUserProfile(
-        user.id,
-        user.email ?? "",
-        fullName,
-        intendedRole
+        user.id, user.email ?? "", fullName, intendedRole
       );
 
       await Promise.all([
@@ -236,7 +241,6 @@ const Login: React.FC = () => {
         localStore.set(LOCAL_ROLE_KEY, resolvedRole),
       ]);
 
-      // Ouvrier connecté via social → complétion de profil obligatoire
       const needsCompletion = resolvedRole === "worker";
       goAfterLogin(resolvedRole, redirectParam, needsCompletion);
     } finally {
@@ -247,11 +251,13 @@ const Login: React.FC = () => {
 
   const anyLoading = loading || googleLoading || facebookLoading;
 
+  // ── Écran de vérification de session ──────────────────────────────────────
   if (checkingSession) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
         <Card className="w-full max-w-md shadow-lg">
           <CardContent className="py-10 text-center text-slate-600">
+            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3 text-slate-400" />
             {language === "fr" ? "Vérification de votre session..." : "Checking your session..."}
           </CardContent>
         </Card>
@@ -275,7 +281,7 @@ const Login: React.FC = () => {
 
         <CardContent className="space-y-5 pt-2">
 
-          {/* ── Onglets Client / Ouvrier ───────────────────────────────────── */}
+          {/* ── Onglets Client / Ouvrier ── */}
           <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1 gap-1">
             <button
               type="button"
@@ -301,7 +307,6 @@ const Login: React.FC = () => {
             </button>
           </div>
 
-          {/* Message informatif selon l'onglet */}
           {loginTab === "worker" && (
             <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
               {language === "fr"
@@ -310,7 +315,7 @@ const Login: React.FC = () => {
             </div>
           )}
 
-          {/* ── Boutons sociaux ───────────────────────────────────────────── */}
+          {/* ── Boutons sociaux ── */}
           <div className="space-y-3">
             <Button
               type="button"
@@ -343,7 +348,7 @@ const Login: React.FC = () => {
             </Button>
           </div>
 
-          {/* ── Séparateur ────────────────────────────────────────────────── */}
+          {/* ── Séparateur ── */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t border-slate-200" />
@@ -355,7 +360,7 @@ const Login: React.FC = () => {
             </div>
           </div>
 
-          {/* ── Formulaire email/mot de passe ─────────────────────────────── */}
+          {/* ── Formulaire email ── */}
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
