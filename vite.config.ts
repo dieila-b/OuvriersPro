@@ -47,6 +47,16 @@ export default defineConfig(() => {
       reportCompressedSize: true,
       chunkSizeWarningLimit: 800,
       rollupOptions: {
+        // ── Plugins natifs Capacitor exclus du build web ──────────────────
+        external: (id) => {
+          if (typeof id !== "string") return false;
+          // Externaliser uniquement en production web (pas en natif)
+          const nativeOnly = [
+            "@capacitor-community/facebook-login",
+            "@codetrix-studio/capacitor-google-auth",
+          ];
+          return nativeOnly.some((pkg) => id === pkg || id.startsWith(pkg + "/"));
+        },
         output: {
           manualChunks: {
             react: ["react", "react-dom"],
