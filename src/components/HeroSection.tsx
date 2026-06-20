@@ -141,40 +141,33 @@ const HeroSection = () => {
 
     try {
       if (native) {
-        const geoPlugin =
-          (window as any)?.Capacitor?.Plugins?.Geolocation ||
-          (window as any)?.CapacitorCustomPlatform?.Plugins?.Geolocation;
-
-        if (!geoPlugin) {
-          throw new Error("PLUGIN_UNAVAILABLE");
-        }
+        // ── Import dynamique du plugin officiel @capacitor/geolocation ──────
+        const { Geolocation } = await import("@capacitor/geolocation");
 
         try {
-          if (typeof geoPlugin.checkPermissions === "function") {
-            const permissions = await geoPlugin.checkPermissions();
-            const granted =
-              permissions?.location === "granted" ||
-              permissions?.coarseLocation === "granted";
+          const permissions = await Geolocation.checkPermissions();
+          const granted =
+            permissions?.location === "granted" ||
+            permissions?.coarseLocation === "granted";
 
-            if (!granted && typeof geoPlugin.requestPermissions === "function") {
-              const requested = await geoPlugin.requestPermissions();
-              const nowGranted =
-                requested?.location === "granted" ||
-                requested?.coarseLocation === "granted";
+          if (!granted) {
+            const requested = await Geolocation.requestPermissions();
+            const nowGranted =
+              requested?.location === "granted" ||
+              requested?.coarseLocation === "granted";
 
-              if (!nowGranted) {
-                throw new Error("PERMISSION_DENIED");
-              }
+            if (!nowGranted) {
+              throw new Error("PERMISSION_DENIED");
             }
           }
-        } catch (permErr) {
+        } catch (permErr: any) {
+          if (permErr?.message === "PERMISSION_DENIED") throw permErr;
           console.error("Permission error:", permErr);
         }
 
-        const pos = await geoPlugin.getCurrentPosition({
+        const pos = await Geolocation.getCurrentPosition({
           enableHighAccuracy: true,
           timeout: 15000,
-          maximumAge: 0,
         });
 
         setGeo({
@@ -463,3 +456,4 @@ const HeroSection = () => {
 };
 
 export default HeroSection;
+
